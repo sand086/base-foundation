@@ -453,7 +453,7 @@ export const TollBoothCatalog = () => {
           </div>
           <div className="flex flex-col justify-center">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Promedio Full
+              Full
             </p>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tighter leading-none mt-0.5">
               {formatCurrency(kpis.avgFull)}
@@ -471,7 +471,7 @@ export const TollBoothCatalog = () => {
           </div>
           <div className="flex flex-col justify-center">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Prom. Sencillo
+              Sencillo
             </p>
             <p className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono tracking-tighter leading-none mt-0.5">
               {formatCurrency(kpis.avgSencillo)}
@@ -533,7 +533,7 @@ export const TollBoothCatalog = () => {
             <Button
               variant="destructive"
               size="lg"
-              className="h-11 shadow-lg shadow-destructive/20 animate-in fade-in zoom-in duration-200 w-full sm:w-auto"
+              className="h-11 sm:w-auto flex-shrink-0 sm:px-12"
               onClick={() => setBulkDeleteDialogOpen(true)}
             >
               <Trash2 className="h-4 w-4 mr-2" /> Eliminar ({selectedRows.size})

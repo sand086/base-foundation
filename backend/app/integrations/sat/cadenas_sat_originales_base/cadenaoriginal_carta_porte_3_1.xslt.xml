@@ -1,763 +1,762 @@
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml"><head><meta name="viewport" content="width=device-width" /><title>https://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xslt</title><link rel="stylesheet" type="text/css" href="resource://content-accessible/viewsource.css" /></head><body id="viewsource" style="tab-size: 4"><span id="line1"><span></span><span class="pi">&lt;?xml version="1.0" encoding="utf-8"?&gt;</span><span>
-</span></span><span id="line2"><span></span><span>&lt;<span class="start-tag">xsl:stylesheet</span> <span class="attribute-name">version</span>="<a class="attribute-value">2.0</a>" <span class="attribute-name">xmlns:xsl</span>="<a class="attribute-value">http://www.w3.org/1999/XSL/Transform</a>" <span class="attribute-name">xmlns:xs</span>="<a class="attribute-value">http://www.w3.org/2001/XMLSchema</a>" <span class="attribute-name">xmlns:fn</span>="<a class="attribute-value">http://www.w3.org/2005/xpath-functions</a>" <span class="attribute-name">xmlns:cartaporte31</span>="<a class="attribute-value">http://www.sat.gob.mx/CartaPorte31</a>"&gt;</span><span>
-</span></span><span id="line3"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:CartaPorte</a>"&gt;</span><span>
-</span></span><span id="line4"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo CartaPorte--&gt;</span><span>
-</span></span><span id="line5"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line6"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Version</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line7"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line8"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line9"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@IdCCP</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line10"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line11"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line12"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TranspInternac</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line13"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line14"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line15"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@EntradaSalidaMerc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line16"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line17"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line18"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PaisOrigenDestino</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line19"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line20"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line21"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ViaEntradaSalida</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line22"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line23"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line24"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TotalDistRec</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line25"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line26"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line27"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RegistroISTMO</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line28"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line29"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line30"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UbicacionPoloOrigen</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line31"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line32"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line33"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UbicacionPoloDestino</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line34"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line35"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia --&gt;</span><span>
-</span></span><span id="line36"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:RegimenesAduaneros</a>"&gt;</span><span>
-</span></span><span id="line37"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line38"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line39"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Ubicaciones</a>"&gt;</span><span>
-</span></span><span id="line40"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line41"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line42"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Mercancias</a>"&gt;</span><span>
-</span></span><span id="line43"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line44"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line45"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:FiguraTransporte</a>"&gt;</span><span>
-</span></span><span id="line46"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line47"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line48"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line49"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia RegimenesAduaneros--&gt;</span><span>
-</span></span><span id="line50"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:RegimenesAduaneros</a>"&gt;</span><span>
-</span></span><span id="line51"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de RegimenAduaneroCCP--&gt;</span><span>
-</span></span><span id="line52"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:RegimenAduaneroCCP</a>"&gt;</span><span>
-</span></span><span id="line53"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line54"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line55"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line56"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia RegimenAduaneroCCP--&gt;</span><span>
-</span></span><span id="line57"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:RegimenAduaneroCCP</a>"&gt;</span><span>
-</span></span><span id="line58"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo Ubicacion--&gt;</span><span>
-</span></span><span id="line59"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line60"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RegimenAduanero</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line61"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line62"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line63"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Ubicaciones--&gt;</span><span>
-</span></span><span id="line64"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Ubicaciones</a>"&gt;</span><span>
-</span></span><span id="line65"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de Ubicacion--&gt;</span><span>
-</span></span><span id="line66"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Ubicacion</a>"&gt;</span><span>
-</span></span><span id="line67"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line68"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line69"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line70"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Ubicacion--&gt;</span><span>
-</span></span><span id="line71"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Ubicacion</a>"&gt;</span><span>
-</span></span><span id="line72"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo Ubicacion--&gt;</span><span>
-</span></span><span id="line73"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line74"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoUbicacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line75"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line76"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line77"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@IDUbicacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line78"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line79"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line80"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RFCRemitenteDestinatario</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line81"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line82"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line83"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreRemitenteDestinatario</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line84"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line85"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line86"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumRegIdTrib</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line87"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line88"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line89"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ResidenciaFiscal</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line90"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line91"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line92"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumEstacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line93"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line94"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line95"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreEstacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line96"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line97"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line98"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NavegacionTrafico</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line99"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line100"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line101"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@FechaHoraSalidaLlegada</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line102"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line103"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line104"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoEstacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line105"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line106"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line107"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DistanciaRecorrida</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line108"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line109"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Domicilio--&gt;</span><span>
-</span></span><span id="line110"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Domicilio</a>"&gt;</span><span>
-</span></span><span id="line111"><span>			</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Domicilio--&gt;</span><span>
-</span></span><span id="line112"><span>			</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line113"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line114"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Calle</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line115"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line116"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line117"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroExterior</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line118"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line119"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line120"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroInterior</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line121"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line122"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line123"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Colonia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line124"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line125"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line126"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Localidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line127"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line128"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line129"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Referencia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line130"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line131"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line132"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Municipio</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line133"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line134"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line135"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Estado</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line136"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line137"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line138"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Pais</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line139"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line140"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line141"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CodigoPostal</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line142"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line143"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line144"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line145"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Origen--&gt;</span><span>
-</span></span><span id="line146"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Mercancias</a>"&gt;</span><span>
-</span></span><span id="line147"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:Mercancias--&gt;</span><span>
-</span></span><span id="line148"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line149"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoBrutoTotal</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line150"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line151"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line152"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UnidadPeso</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line153"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line154"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line155"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoNetoTotal</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line156"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line157"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line158"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumTotalMercancias</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line159"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line160"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line161"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CargoPorTasacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line162"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line163"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line164"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@LogisticaInversaRecoleccionDevolucion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line165"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line166"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Mercancia--&gt;</span><span>
-</span></span><span id="line167"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Mercancia</a>"&gt;</span><span>
-</span></span><span id="line168"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line169"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line170"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Autotransporte--&gt;</span><span>
-</span></span><span id="line171"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Autotransporte</a>"&gt;</span><span>
-</span></span><span id="line172"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line173"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line174"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:TransporteMaritimo--&gt;</span><span>
-</span></span><span id="line175"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:TransporteMaritimo</a>"&gt;</span><span>
-</span></span><span id="line176"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line177"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line178"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:TransporteAereo--&gt;</span><span>
-</span></span><span id="line179"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:TransporteAereo</a>"&gt;</span><span>
-</span></span><span id="line180"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line181"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line182"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:TransporteFerroviario--&gt;</span><span>
-</span></span><span id="line183"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:TransporteFerroviario</a>"&gt;</span><span>
-</span></span><span id="line184"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line185"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line186"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line187"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Mercancia--&gt;</span><span>
-</span></span><span id="line188"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Mercancia</a>"&gt;</span><span>
-</span></span><span id="line189"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:Mercancia--&gt;</span><span>
-</span></span><span id="line190"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line191"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@BienesTransp</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line192"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line193"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line194"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ClaveSTCC</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line195"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line196"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line197"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Descripcion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line198"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line199"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line200"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Cantidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line201"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line202"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line203"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ClaveUnidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line204"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line205"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line206"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Unidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line207"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line208"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line209"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Dimensiones</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line210"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line211"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line212"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@MaterialPeligroso</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line213"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line214"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line215"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CveMaterialPeligroso</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line216"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line217"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line218"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Embalaje</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line219"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line220"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line221"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DescripEmbalaje</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line222"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line223"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line224"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@SectorCOFEPRIS</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line225"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line226"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line227"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreIngredienteActivo</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line228"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line229"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line230"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NomQuimico</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line231"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line232"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line233"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DenominacionGenericaProd</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line234"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line235"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line236"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DenominacionDistintivaProd</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line237"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line238"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line239"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Fabricante</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line240"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line241"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line242"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@FechaCaducidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line243"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line244"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line245"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@LoteMedicamento</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line246"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line247"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line248"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@FormaFarmaceutica</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line249"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line250"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line251"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CondicionesEspTransp</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line252"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line253"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line254"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RegistroSanitarioFolioAutorizacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line255"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line256"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line257"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PermisoImportacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line258"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line259"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line260"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@FolioImpoVUCEM</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line261"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line262"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line263"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumCAS</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line264"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line265"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line266"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RazonSocialEmpImp</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line267"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line268"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line269"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumRegSanPlagCOFEPRIS</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line270"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line271"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line272"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DatosFabricante</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line273"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line274"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line275"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DatosFormulador</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line276"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line277"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line278"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DatosMaquilador</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line279"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line280"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line281"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UsoAutorizado</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line282"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line283"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line284"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoEnKg</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line285"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line286"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line287"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ValorMercancia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line288"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line289"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line290"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Moneda</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line291"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line292"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line293"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@FraccionArancelaria</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line294"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line295"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line296"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UUIDComercioExt</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line297"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line298"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line299"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoMateria</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line300"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line301"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line302"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DescripcionMateria</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line303"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line304"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:DocumentacionAduanera--&gt;</span><span>
-</span></span><span id="line305"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:DocumentacionAduanera</a>"&gt;</span><span>
-</span></span><span id="line306"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line307"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line308"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:GuiasIdentificacion--&gt;</span><span>
-</span></span><span id="line309"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:GuiasIdentificacion</a>"&gt;</span><span>
-</span></span><span id="line310"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line311"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line312"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:CantidadTransporta--&gt;</span><span>
-</span></span><span id="line313"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:CantidadTransporta</a>"&gt;</span><span>
-</span></span><span id="line314"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line315"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line316"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:DetalleMercancia--&gt;</span><span>
-</span></span><span id="line317"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:DetalleMercancia</a>"&gt;</span><span>
-</span></span><span id="line318"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line319"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line320"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line321"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia DocumentacionAduanera--&gt;</span><span>
-</span></span><span id="line322"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:DocumentacionAduanera</a>"&gt;</span><span>
-</span></span><span id="line323"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line324"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line325"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoDocumento</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line326"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line327"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line328"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPedimento</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line329"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line330"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line331"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@IdentDocAduanero</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line332"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line333"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line334"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RFCImpo</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line335"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line336"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line337"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia GuiasIdentificacion--&gt;</span><span>
-</span></span><span id="line338"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:GuiasIdentificacion</a>"&gt;</span><span>
-</span></span><span id="line339"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line340"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line341"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroGuiaIdentificacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line342"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line343"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line344"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@DescripGuiaIdentificacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line345"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line346"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line347"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoGuiaIdentificacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line348"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line349"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line350"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia CantidadTransporta--&gt;</span><span>
-</span></span><span id="line351"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:CantidadTransporta</a>"&gt;</span><span>
-</span></span><span id="line352"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line353"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line354"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Cantidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line355"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line356"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line357"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@IDOrigen</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line358"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line359"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line360"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@IDDestino</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line361"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line362"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line363"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CvesTransporte</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line364"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line365"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line366"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia DetalleMercancia--&gt;</span><span>
-</span></span><span id="line367"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:DetalleMercancia</a>"&gt;</span><span>
-</span></span><span id="line368"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line369"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line370"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UnidadPesoMerc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line371"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line372"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line373"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoBruto</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line374"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line375"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line376"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoNeto</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line377"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line378"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line379"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoTara</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line380"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line381"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line382"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPiezas</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line383"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line384"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line385"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Autotransporte--&gt;</span><span>
-</span></span><span id="line386"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Autotransporte</a>"&gt;</span><span>
-</span></span><span id="line387"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:Autotransporte--&gt;</span><span>
-</span></span><span id="line388"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line389"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PermSCT</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line390"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line391"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line392"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPermisoSCT</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line393"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line394"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:IdentificacionVehicular--&gt;</span><span>
-</span></span><span id="line395"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:IdentificacionVehicular</a>"&gt;</span><span>
-</span></span><span id="line396"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line397"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line398"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Seguros--&gt;</span><span>
-</span></span><span id="line399"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Seguros</a>"&gt;</span><span>
-</span></span><span id="line400"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line401"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line402"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Remolques--&gt;</span><span>
-</span></span><span id="line403"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Remolques</a>"&gt;</span><span>
-</span></span><span id="line404"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line405"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line406"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line407"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia IdentificacionVehicular--&gt;</span><span>
-</span></span><span id="line408"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:IdentificacionVehicular</a>"&gt;</span><span>
-</span></span><span id="line409"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line410"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line411"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ConfigVehicular</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line412"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line413"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line414"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoBrutoVehicular</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line415"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line416"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line417"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PlacaVM</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line418"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line419"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line420"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@AnioModeloVM</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line421"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line422"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line423"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Seguros--&gt;</span><span>
-</span></span><span id="line424"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Seguros</a>"&gt;</span><span>
-</span></span><span id="line425"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line426"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line427"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@AseguraRespCivil</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line428"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line429"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line430"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PolizaRespCivil</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line431"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line432"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line433"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@AseguraMedAmbiente</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line434"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line435"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line436"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PolizaMedAmbiente</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line437"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line438"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line439"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@AseguraCarga</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line440"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line441"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line442"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PolizaCarga</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line443"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line444"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line445"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PrimaSeguro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line446"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line447"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line448"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Remolques--&gt;</span><span>
-</span></span><span id="line449"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Remolques</a>"&gt;</span><span>
-</span></span><span id="line450"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Remolque--&gt;</span><span>
-</span></span><span id="line451"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Remolque</a>"&gt;</span><span>
-</span></span><span id="line452"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line453"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line454"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line455"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Remolque--&gt;</span><span>
-</span></span><span id="line456"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Remolque</a>"&gt;</span><span>
-</span></span><span id="line457"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line458"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line459"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@SubTipoRem</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line460"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line461"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line462"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Placa</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line463"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line464"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line465"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia TransporteMaritimo--&gt;</span><span>
-</span></span><span id="line466"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:TransporteMaritimo</a>"&gt;</span><span>
-</span></span><span id="line467"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:TransporteMaritimo--&gt;</span><span>
-</span></span><span id="line468"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line469"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PermSCT</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line470"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line471"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line472"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPermisoSCT</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line473"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line474"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line475"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreAseg</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line476"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line477"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line478"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPolizaSeguro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line479"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line480"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line481"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoEmbarcacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line482"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line483"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line484"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Matricula</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line485"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line486"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line487"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroOMI</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line488"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line489"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line490"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@AnioEmbarcacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line491"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line492"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line493"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreEmbarc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line494"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line495"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line496"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NacionalidadEmbarc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line497"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line498"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line499"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@UnidadesDeArqBruto</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line500"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line501"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line502"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoCarga</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line503"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line504"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line505"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Eslora</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line506"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line507"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line508"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Manga</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line509"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line510"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line511"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Calado</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line512"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line513"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line514"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Puntal</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line515"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line516"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line517"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@LineaNaviera</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line518"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line519"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line520"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreAgenteNaviero</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line521"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line522"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line523"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumAutorizacionNaviero</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line524"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line525"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line526"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumViaje</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line527"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line528"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line529"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumConocEmbarc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line530"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line531"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line532"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PermisoTempNavegacion</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line533"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line534"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Contenedor--&gt;</span><span>
-</span></span><span id="line535"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Contenedor</a>"&gt;</span><span>
-</span></span><span id="line536"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line537"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line538"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line539"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Contenedor--&gt;</span><span>
-</span></span><span id="line540"><span>		</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Contenedor</a>"&gt;</span><span>
-</span></span><span id="line541"><span>			</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Contenedor--&gt;</span><span>
-</span></span><span id="line542"><span>			</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line543"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line544"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoContenedor</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line545"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line546"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line547"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@MatriculaContenedor</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line548"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line549"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line550"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPrecinto</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line551"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line552"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line553"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@IdCCPRelacionado</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line554"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line555"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line556"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PlacaVMCCP</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line557"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line558"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line559"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@FechaCertificacionCCP</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line560"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line561"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:RemolquesCCP--&gt;</span><span>
-</span></span><span id="line562"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:RemolquesCCP</a>"&gt;</span><span>
-</span></span><span id="line563"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line564"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line565"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line566"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia RemolquesCCP--&gt;</span><span>
-</span></span><span id="line567"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:RemolquesCCP</a>"&gt;</span><span>
-</span></span><span id="line568"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:RemolqueCCP--&gt;</span><span>
-</span></span><span id="line569"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:RemolqueCCP</a>"&gt;</span><span>
-</span></span><span id="line570"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line571"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line572"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line573"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia RemolqueCCP--&gt;</span><span>
-</span></span><span id="line574"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:RemolqueCCP</a>"&gt;</span><span>
-</span></span><span id="line575"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line576"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line577"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@SubTipoRemCCP</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line578"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line579"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line580"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PlacaCCP</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line581"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line582"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line583"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia TransporteAereo--&gt;</span><span>
-</span></span><span id="line584"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:TransporteAereo</a>"&gt;</span><span>
-</span></span><span id="line585"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:TransporteAereo--&gt;</span><span>
-</span></span><span id="line586"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line587"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PermSCT</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line588"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line589"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line590"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPermisoSCT</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line591"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line592"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line593"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@MatriculaAeronave</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line594"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line595"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line596"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreAseg</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line597"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line598"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line599"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPolizaSeguro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line600"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line601"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line602"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroGuia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line603"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line604"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line605"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@LugarContrato</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line606"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line607"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line608"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CodigoTransportista</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line609"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line610"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line611"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RFCEmbarcador</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line612"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line613"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line614"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumRegIdTribEmbarc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line615"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line616"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line617"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ResidenciaFiscalEmbarc</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line618"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line619"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line620"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreEmbarcador</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line621"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line622"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line623"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia TransporteFerroviario--&gt;</span><span>
-</span></span><span id="line624"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:TransporteFerroviario</a>"&gt;</span><span>
-</span></span><span id="line625"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:TransporteFerroviario--&gt;</span><span>
-</span></span><span id="line626"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line627"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoDeServicio</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line628"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line629"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line630"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoDeTrafico</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line631"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line632"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line633"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreAseg</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line634"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line635"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line636"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumPolizaSeguro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line637"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line638"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:DerechosDePaso--&gt;</span><span>
-</span></span><span id="line639"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:DerechosDePaso</a>"&gt;</span><span>
-</span></span><span id="line640"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line641"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line642"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Carro--&gt;</span><span>
-</span></span><span id="line643"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Carro</a>"&gt;</span><span>
-</span></span><span id="line644"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line645"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line646"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line647"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia DerechosDePaso--&gt;</span><span>
-</span></span><span id="line648"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:DerechosDePaso</a>"&gt;</span><span>
-</span></span><span id="line649"><span>		</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line650"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line651"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoDerechoDePaso</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line652"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line653"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line654"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@KilometrajePagado</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line655"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line656"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line657"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Carro--&gt;</span><span>
-</span></span><span id="line658"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:Carro</a>"&gt;</span><span>
-</span></span><span id="line659"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:Carro--&gt;</span><span>
-</span></span><span id="line660"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line661"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoCarro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line662"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line663"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line664"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@MatriculaCarro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line665"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line666"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line667"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@GuiaCarro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line668"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line669"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line670"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ToneladasNetasCarro</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line671"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line672"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:Contenedor --&gt;</span><span>
-</span></span><span id="line673"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Contenedor </a>"&gt;</span><span>
-</span></span><span id="line674"><span>			</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia Contenedor--&gt;</span><span>
-</span></span><span id="line675"><span>			</span><span class="comment">&lt;!--  Iniciamos el manejo de los nodos dependientes --&gt;</span><span>
-</span></span><span id="line676"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line677"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoContenedor</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line678"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line679"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line680"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoContenedorVacio</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line681"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line682"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line683"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@PesoNetoMercancia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line684"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line685"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line686"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line687"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia FiguraTransporte--&gt;</span><span>
-</span></span><span id="line688"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:FiguraTransporte</a>"&gt;</span><span>
-</span></span><span id="line689"><span>		</span><span class="comment">&lt;!--Manejador de nodos tipo cartaporte31:FiguraTransporte--&gt;</span><span>
-</span></span><span id="line690"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:TiposFigura--&gt;</span><span>
-</span></span><span id="line691"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:TiposFigura </a>"&gt;</span><span>
-</span></span><span id="line692"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line693"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line694"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line695"><span>	</span><span class="comment">&lt;!--  Iniciamos el manejo de los elementos hijo en la secuencia TiposFigura--&gt;</span><span>
-</span></span><span id="line696"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:TiposFigura</a>"&gt;</span><span>
-</span></span><span id="line697"><span>		</span><span class="comment">&lt;!--  Iniciamos el tratamiento de los atributos de cartaporte31:TiposFigura--&gt;</span><span>
-</span></span><span id="line698"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line699"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@TipoFigura</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line700"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line701"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line702"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@RFCFigura</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line703"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line704"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line705"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumLicencia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line706"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line707"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line708"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NombreFigura</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line709"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line710"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line711"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumRegIdTribFigura</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line712"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line713"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line714"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ResidenciaFiscalFigura</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line715"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line716"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:PartesTransporte</a>"&gt;</span><span>
-</span></span><span id="line717"><span>			</span><span>&lt;<span class="start-tag">xsl:apply-templates</span> <span class="attribute-name">select</span>="<a class="attribute-value">.</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line718"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line719"><span>		</span><span class="comment">&lt;!--   Iniciamos el tratamiento de los atributos de cartaporte31:Domicilio  --&gt;</span><span>
-</span></span><span id="line720"><span>		</span><span>&lt;<span class="start-tag">xsl:for-each</span> <span class="attribute-name">select</span>="<a class="attribute-value">./cartaporte31:Domicilio </a>"&gt;</span><span>
-</span></span><span id="line721"><span>			</span><span class="comment">&lt;!--   Iniciamos el manejo de los elementos hijo en la secuencia Domicilio --&gt;</span><span>
-</span></span><span id="line722"><span>			</span><span class="comment">&lt;!--   Iniciamos el manejo de los nodos dependientes  --&gt;</span><span>
-</span></span><span id="line723"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line724"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Calle</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line725"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line726"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line727"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroExterior</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line728"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line729"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line730"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@NumeroInterior</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line731"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line732"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line733"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Colonia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line734"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line735"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line736"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Localidad</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line737"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line738"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line739"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Referencia</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line740"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line741"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Opcional</a>"&gt;</span><span>
-</span></span><span id="line742"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Municipio</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line743"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line744"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line745"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Estado</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line746"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line747"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line748"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@Pais</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line749"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line750"><span>			</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line751"><span>				</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@CodigoPostal</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line752"><span>			</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line753"><span>		</span><span>&lt;/<span class="end-tag">xsl:for-each</span>&gt;</span><span>
-</span></span><span id="line754"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line755"><span>	</span><span class="comment">&lt;!--   Iniciamos el manejo de los elementos hijo en la secuencia PartesTransporte --&gt;</span><span>
-</span></span><span id="line756"><span>	</span><span>&lt;<span class="start-tag">xsl:template</span> <span class="attribute-name">match</span>="<a class="attribute-value">cartaporte31:PartesTransporte</a>"&gt;</span><span>
-</span></span><span id="line757"><span>		</span><span class="comment">&lt;!-- Manejador de nodos tipo cartaporte31:PartesTransporte --&gt;</span><span>
-</span></span><span id="line758"><span>		</span><span>&lt;<span class="start-tag">xsl:call-template</span> <span class="attribute-name">name</span>="<a class="attribute-value">Requerido</a>"&gt;</span><span>
-</span></span><span id="line759"><span>			</span><span>&lt;<span class="start-tag">xsl:with-param</span> <span class="attribute-name">name</span>="<a class="attribute-value">valor</a>" <span class="attribute-name">select</span>="<a class="attribute-value">./@ParteTransporte</a>"<span>/</span>&gt;</span><span>
-</span></span><span id="line760"><span>		</span><span>&lt;/<span class="end-tag">xsl:call-template</span>&gt;</span><span>
-</span></span><span id="line761"><span>	</span><span>&lt;/<span class="end-tag">xsl:template</span>&gt;</span><span>
-</span></span><span id="line762"><span></span><span>&lt;/<span class="end-tag">xsl:stylesheet</span>&gt;</span><span></span></span></body></html>
+<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:fn="http://www.w3.org/2005/xpath-functions" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31">
+	<xsl:template match="cartaporte31:CartaPorte">
+		<!--Manejador de nodos tipo CartaPorte-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@Version"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@IdCCP"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TranspInternac"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@EntradaSalidaMerc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PaisOrigenDestino"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@ViaEntradaSalida"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@TotalDistRec"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@RegistroISTMO"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@UbicacionPoloOrigen"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@UbicacionPoloDestino"/>
+		</xsl:call-template>
+		<!--  Iniciamos el manejo de los elementos hijo en la secuencia -->
+		<xsl:for-each select="./cartaporte31:RegimenesAduaneros">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<xsl:for-each select="./cartaporte31:Ubicaciones">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<xsl:for-each select="./cartaporte31:Mercancias">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<xsl:for-each select="./cartaporte31:FiguraTransporte">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia RegimenesAduaneros-->
+	<xsl:template match="cartaporte31:RegimenesAduaneros">
+		<!--  Iniciamos el tratamiento de los atributos de RegimenAduaneroCCP-->
+		<xsl:for-each select="./cartaporte31:RegimenAduaneroCCP">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia RegimenAduaneroCCP-->
+	<xsl:template match="cartaporte31:RegimenAduaneroCCP">
+		<!--Manejador de nodos tipo Ubicacion-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@RegimenAduanero"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Ubicaciones-->
+	<xsl:template match="cartaporte31:Ubicaciones">
+		<!--  Iniciamos el tratamiento de los atributos de Ubicacion-->
+		<xsl:for-each select="./cartaporte31:Ubicacion">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Ubicacion-->
+	<xsl:template match="cartaporte31:Ubicacion">
+		<!--Manejador de nodos tipo Ubicacion-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoUbicacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@IDUbicacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@RFCRemitenteDestinatario"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreRemitenteDestinatario"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumRegIdTrib"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@ResidenciaFiscal"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumEstacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreEstacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NavegacionTrafico"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@FechaHoraSalidaLlegada"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@TipoEstacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DistanciaRecorrida"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Domicilio-->
+		<xsl:for-each select="./cartaporte31:Domicilio">
+			<!--  Iniciamos el manejo de los elementos hijo en la secuencia Domicilio-->
+			<!--  Iniciamos el manejo de los nodos dependientes -->
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Calle"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@NumeroExterior"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@NumeroInterior"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Colonia"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Localidad"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Referencia"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Municipio"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@Estado"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@Pais"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@CodigoPostal"/>
+			</xsl:call-template>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Origen-->
+	<xsl:template match="cartaporte31:Mercancias">
+		<!--Manejador de nodos tipo cartaporte31:Mercancias-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoBrutoTotal"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@UnidadPeso"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PesoNetoTotal"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumTotalMercancias"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@CargoPorTasacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@LogisticaInversaRecoleccionDevolucion"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Mercancia-->
+		<xsl:for-each select="./cartaporte31:Mercancia">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Autotransporte-->
+		<xsl:for-each select="./cartaporte31:Autotransporte">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:TransporteMaritimo-->
+		<xsl:for-each select="./cartaporte31:TransporteMaritimo">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:TransporteAereo-->
+		<xsl:for-each select="./cartaporte31:TransporteAereo">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:TransporteFerroviario-->
+		<xsl:for-each select="./cartaporte31:TransporteFerroviario">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Mercancia-->
+	<xsl:template match="cartaporte31:Mercancia">
+		<!--Manejador de nodos tipo cartaporte31:Mercancia-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@BienesTransp"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@ClaveSTCC"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@Descripcion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@Cantidad"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@ClaveUnidad"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Unidad"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Dimensiones"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@MaterialPeligroso"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@CveMaterialPeligroso"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Embalaje"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DescripEmbalaje"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@SectorCOFEPRIS"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreIngredienteActivo"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NomQuimico"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DenominacionGenericaProd"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DenominacionDistintivaProd"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Fabricante"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@FechaCaducidad"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@LoteMedicamento"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@FormaFarmaceutica"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@CondicionesEspTransp"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@RegistroSanitarioFolioAutorizacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PermisoImportacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@FolioImpoVUCEM"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumCAS"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@RazonSocialEmpImp"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumRegSanPlagCOFEPRIS"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DatosFabricante"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DatosFormulador"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DatosMaquilador"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@UsoAutorizado"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoEnKg"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@ValorMercancia"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Moneda"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@FraccionArancelaria"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@UUIDComercioExt"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@TipoMateria"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@DescripcionMateria"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:DocumentacionAduanera-->
+		<xsl:for-each select="./cartaporte31:DocumentacionAduanera">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:GuiasIdentificacion-->
+		<xsl:for-each select="./cartaporte31:GuiasIdentificacion">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:CantidadTransporta-->
+		<xsl:for-each select="./cartaporte31:CantidadTransporta">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:DetalleMercancia-->
+		<xsl:for-each select="./cartaporte31:DetalleMercancia">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia DocumentacionAduanera-->
+	<xsl:template match="cartaporte31:DocumentacionAduanera">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoDocumento"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumPedimento"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@IdentDocAduanero"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@RFCImpo"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia GuiasIdentificacion-->
+	<xsl:template match="cartaporte31:GuiasIdentificacion">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumeroGuiaIdentificacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@DescripGuiaIdentificacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoGuiaIdentificacion"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia CantidadTransporta-->
+	<xsl:template match="cartaporte31:CantidadTransporta">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@Cantidad"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@IDOrigen"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@IDDestino"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@CvesTransporte"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia DetalleMercancia-->
+	<xsl:template match="cartaporte31:DetalleMercancia">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@UnidadPesoMerc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoBruto"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoNeto"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoTara"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumPiezas"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Autotransporte-->
+	<xsl:template match="cartaporte31:Autotransporte">
+		<!--Manejador de nodos tipo cartaporte31:Autotransporte-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PermSCT"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumPermisoSCT"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:IdentificacionVehicular-->
+		<xsl:for-each select="./cartaporte31:IdentificacionVehicular">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Seguros-->
+		<xsl:for-each select="./cartaporte31:Seguros">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Remolques-->
+		<xsl:for-each select="./cartaporte31:Remolques">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia IdentificacionVehicular-->
+	<xsl:template match="cartaporte31:IdentificacionVehicular">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@ConfigVehicular"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PesoBrutoVehicular"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PlacaVM"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@AnioModeloVM"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Seguros-->
+	<xsl:template match="cartaporte31:Seguros">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@AseguraRespCivil"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PolizaRespCivil"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@AseguraMedAmbiente"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PolizaMedAmbiente"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@AseguraCarga"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PolizaCarga"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PrimaSeguro"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Remolques-->
+	<xsl:template match="cartaporte31:Remolques">
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Remolque-->
+		<xsl:for-each select="./cartaporte31:Remolque">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Remolque-->
+	<xsl:template match="cartaporte31:Remolque">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@SubTipoRem"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@Placa"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia TransporteMaritimo-->
+	<xsl:template match="cartaporte31:TransporteMaritimo">
+		<!--Manejador de nodos tipo cartaporte31:TransporteMaritimo-->
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PermSCT"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumPermisoSCT"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreAseg"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumPolizaSeguro"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoEmbarcacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@Matricula"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumeroOMI"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@AnioEmbarcacion"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreEmbarc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NacionalidadEmbarc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@UnidadesDeArqBruto"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoCarga"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Eslora"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Manga"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Calado"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@Puntal"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@LineaNaviera"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NombreAgenteNaviero"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumAutorizacionNaviero"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumViaje"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumConocEmbarc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@PermisoTempNavegacion"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Contenedor-->
+		<xsl:for-each select="./cartaporte31:Contenedor">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Contenedor-->
+		<xsl:template match="cartaporte31:Contenedor">
+			<!--  Iniciamos el manejo de los elementos hijo en la secuencia Contenedor-->
+			<!--  Iniciamos el manejo de los nodos dependientes -->
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@TipoContenedor"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@MatriculaContenedor"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@NumPrecinto"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@IdCCPRelacionado"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@PlacaVMCCP"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@FechaCertificacionCCP"/>
+			</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:RemolquesCCP-->
+		<xsl:for-each select="./cartaporte31:RemolquesCCP">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia RemolquesCCP-->
+	<xsl:template match="cartaporte31:RemolquesCCP">
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:RemolqueCCP-->
+		<xsl:for-each select="./cartaporte31:RemolqueCCP">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia RemolqueCCP-->
+	<xsl:template match="cartaporte31:RemolqueCCP">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@SubTipoRemCCP"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PlacaCCP"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia TransporteAereo-->
+	<xsl:template match="cartaporte31:TransporteAereo">
+		<!--Manejador de nodos tipo cartaporte31:TransporteAereo-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@PermSCT"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumPermisoSCT"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@MatriculaAeronave"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreAseg"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumPolizaSeguro"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NumeroGuia"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@LugarContrato"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@CodigoTransportista"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@RFCEmbarcador"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumRegIdTribEmbarc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@ResidenciaFiscalEmbarc"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreEmbarcador"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia TransporteFerroviario-->
+	<xsl:template match="cartaporte31:TransporteFerroviario">
+		<!--Manejador de nodos tipo cartaporte31:TransporteFerroviario-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoDeServicio"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoDeTrafico"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NombreAseg"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumPolizaSeguro"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:DerechosDePaso-->
+		<xsl:for-each select="./cartaporte31:DerechosDePaso">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Carro-->
+		<xsl:for-each select="./cartaporte31:Carro">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia DerechosDePaso-->
+	<xsl:template match="cartaporte31:DerechosDePaso">
+		<!--  Iniciamos el manejo de los nodos dependientes -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoDerechoDePaso"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@KilometrajePagado"/>
+		</xsl:call-template>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia Carro-->
+	<xsl:template match="cartaporte31:Carro">
+		<!--Manejador de nodos tipo cartaporte31:Carro-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoCarro"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@MatriculaCarro"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@GuiaCarro"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@ToneladasNetasCarro"/>
+		</xsl:call-template>
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:Contenedor -->
+		<xsl:for-each select="./cartaporte31:Contenedor ">
+			<!--  Iniciamos el manejo de los elementos hijo en la secuencia Contenedor-->
+			<!--  Iniciamos el manejo de los nodos dependientes -->
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@TipoContenedor"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@PesoContenedorVacio"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@PesoNetoMercancia"/>
+			</xsl:call-template>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia FiguraTransporte-->
+	<xsl:template match="cartaporte31:FiguraTransporte">
+		<!--Manejador de nodos tipo cartaporte31:FiguraTransporte-->
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:TiposFigura-->
+		<xsl:for-each select="./cartaporte31:TiposFigura ">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+	</xsl:template>
+	<!--  Iniciamos el manejo de los elementos hijo en la secuencia TiposFigura-->
+	<xsl:template match="cartaporte31:TiposFigura">
+		<!--  Iniciamos el tratamiento de los atributos de cartaporte31:TiposFigura-->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@TipoFigura"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@RFCFigura"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumLicencia"/>
+		</xsl:call-template>
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@NombreFigura"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@NumRegIdTribFigura"/>
+		</xsl:call-template>
+		<xsl:call-template name="Opcional">
+			<xsl:with-param name="valor" select="./@ResidenciaFiscalFigura"/>
+		</xsl:call-template>
+		<xsl:for-each select="./cartaporte31:PartesTransporte">
+			<xsl:apply-templates select="."/>
+		</xsl:for-each>
+		<!--   Iniciamos el tratamiento de los atributos de cartaporte31:Domicilio  -->
+		<xsl:for-each select="./cartaporte31:Domicilio ">
+			<!--   Iniciamos el manejo de los elementos hijo en la secuencia Domicilio -->
+			<!--   Iniciamos el manejo de los nodos dependientes  -->
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Calle"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@NumeroExterior"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@NumeroInterior"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Colonia"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Localidad"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Referencia"/>
+			</xsl:call-template>
+			<xsl:call-template name="Opcional">
+				<xsl:with-param name="valor" select="./@Municipio"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@Estado"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@Pais"/>
+			</xsl:call-template>
+			<xsl:call-template name="Requerido">
+				<xsl:with-param name="valor" select="./@CodigoPostal"/>
+			</xsl:call-template>
+		</xsl:for-each>
+	</xsl:template>
+	<!--   Iniciamos el manejo de los elementos hijo en la secuencia PartesTransporte -->
+	<xsl:template match="cartaporte31:PartesTransporte">
+		<!-- Manejador de nodos tipo cartaporte31:PartesTransporte -->
+		<xsl:call-template name="Requerido">
+			<xsl:with-param name="valor" select="./@ParteTransporte"/>
+		</xsl:call-template>
+	</xsl:template>
+</xsl:stylesheet>

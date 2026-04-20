@@ -24,7 +24,7 @@ const buttonVariants = cva(
         warning:
           "bg-amber-500 dark:bg-amber-600 text-white shadow-[0_4px_15px_rgba(245,158,11,0.2)] border-none hover:bg-amber-600 dark:hover:bg-amber-700",
         destructive:
-          "bg-slate-900 dark:bg-slate-950 text-rose-500 border border-rose-500/30 shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:bg-rose-600 hover:text-white hover:border-rose-600 hover:shadow-[0_0_20px_rgba(225,29,72,0.4)]",
+          "bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/20 border-none haptic-press font-black uppercase tracking-widest text-[10px] sm:text-xs rounded-xl dark:bg-rose-600 dark:hover:bg-rose-700",
         outline:
           "border-2 border-slate-200 dark:border-white/10 bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-brand-navy dark:hover:text-white",
         ghost:

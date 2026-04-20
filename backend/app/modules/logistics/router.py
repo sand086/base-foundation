@@ -1017,10 +1017,21 @@ def dispatch_trip(
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    trip_data = payload.model_dump(exclude={"initial_leg"}, exclude_unset=True)
+    # 🚀 Ignoramos los campos lógicos del Pydantic para que SQLAlchemy no explote
+    trip_data = payload.model_dump(
+        exclude={
+            "initial_leg",
+            "final_leg",
+            "conoce_ruta_completa",
+            "ocultar_montos_pdf",
+            "is_dummy_stamping",
+        },
+        exclude_unset=True,
+    )
     for key, value in trip_data.items():
         setattr(trip, key, value)
 
+    # 🚀 MOTOR DUAL: GUARDAR LAS PIERNAS DEL VIAJE
     if payload.initial_leg:
         leg_data = payload.initial_leg
         monto_pagar = (trip.tarifa_base or 0) - (
@@ -1055,8 +1066,27 @@ def dispatch_trip(
                 start_date=trip.start_date,
             )
             db.add(new_leg)
-            db.flush()
 
+        # Si eligió 1 TIMBRE (conoce_ruta_completa), creamos de una vez la pierna 2
+        if payload.conoce_ruta_completa and payload.final_leg:
+            leg_final = payload.final_leg
+            if len(trip.legs) > 1:
+                trip.legs[1].unit_id = leg_final.unit_id
+                trip.legs[1].operator_id = leg_final.operator_id
+            else:
+                new_leg_2 = models.TripLeg(
+                    trip_id=trip.id,
+                    leg_type="ruta_carretera",
+                    status="creado",  # Nace en espera en el patio
+                    unit_id=leg_final.unit_id,
+                    operator_id=leg_final.operator_id,
+                    start_date=trip.start_date,
+                )
+                db.add(new_leg_2)
+
+        db.flush()
+
+        # Si el viaje ya salió (en_transito), bloqueamos recursos para que nadie más los use
         if trip.status == "en_transito":
             unit_ids_to_block = [
                 leg_data.unit_id,
@@ -1092,14 +1122,6 @@ def dispatch_trip(
     db.commit()
     db.refresh(trip)
     return trip
-
-
-@router.post("/trips/legs/{leg_id}/reset-audit")
-def reset_audit_endpoint(leg_id: int, db: Session = Depends(get_db)):
-    leg = crud.reset_leg_audit(db, leg_id)
-    if not leg:
-        raise HTTPException(status_code=404, detail="Tramo no encontrado")
-    return {"message": "Registro de detalles revertida exitosamente"}
 
 
 @router.post("/trips/{trip_id}/unhook", response_model=schemas.TripResponse)

@@ -241,11 +241,67 @@ class BillingService:
         )
 
     # =====================================================================
-    # MÉTODOS AUXILIARES RECUPERADOS
+    # MOTOR CRIPTOGRÁFICO DE SELLADO (NUEVO)
+    # =====================================================================
+    def _generar_sello_xslt(self, xml_bytes: bytes) -> tuple[str, str]:
+        """Aplica el XSLT oficial al XML para obtener la Cadena Original y la firma."""
+        # 1. Buscamos el archivo XSLT local que descargaste
+        xslt_local_path = (
+            self.base_path
+            / "app"
+            / "integrations"
+            / "sat"
+            / "cadenas_sat_originales_base"
+            / "cadenaoriginal_4_0.xslt.xml"
+        )
+
+        try:
+            if xslt_local_path.exists():
+                xslt_doc = etree.parse(str(xslt_local_path))
+            else:
+                logger.warning("No se encontró el XSLT local. Conectando al SAT...")
+                xslt_doc = etree.parse(
+                    "http://www.sat.gob.mx/sitio_internet/cfd/4/cadenaoriginal_4_0/cadenaoriginal_4_0.xslt"
+                )
+
+            # 2. Transformar XML -> Cadena Original
+            transform = etree.XSLT(xslt_doc)
+            xml_doc = etree.fromstring(xml_bytes)
+
+            cadena_original_tree = transform(xml_doc)
+            cadena_original = str(cadena_original_tree)
+
+            # Limpiamos basurilla del formato
+            cadena_original = (
+                cadena_original.replace('<?xml version="1.0" encoding="UTF-8"?>', "")
+                .replace("\n", "")
+                .strip()
+            )
+
+            # 3. Leer la llave privada
+            with open(self.path_key, "rb") as f:
+                private_key = load_der_private_key(
+                    f.read(), password=self.key_password.encode()
+                )
+
+            # 4. Encriptar (SHA256) y firmar
+            signature = private_key.sign(
+                cadena_original.encode("utf-8"), padding.PKCS1v15(), hashes.SHA256()
+            )
+            sello_b64 = base64.b64encode(signature).decode("utf-8")
+
+            return sello_b64, cadena_original
+        except Exception as e:
+            logger.error(f"Fallo en motor criptográfico (XSLT/Sello): {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Error generando el Sello SAT: {str(e)}"
+            )
+
+    # =====================================================================
+    # MÉTODOS AUXILIARES
     # =====================================================================
 
     def _obtener_datos_completos(self, viaje_id: int, is_final: bool = False):
-        """Busca toda la información en la BD requerida para la Carta Porte"""
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
@@ -254,7 +310,6 @@ class BillingService:
             self.db.query(ClientModel).filter(ClientModel.id == viaje.client_id).first()
         )
 
-        # Obtenemos el tramo (Leg) para saber qué camión y operador lo hicieron
         tramo = self.db.query(TripLeg).filter(TripLeg.trip_id == viaje_id).first()
         if not tramo:
             raise HTTPException(
@@ -282,7 +337,6 @@ class BillingService:
     def _build_dict_from_models(
         self, viaje, cliente, unidad, operador, r1, r2, is_nominal=False
     ) -> dict:
-        """Arma el diccionario maestro que se inyecta en el XML de Carta Porte"""
         subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
         iva = subtotal * 0.16
         retenciones = subtotal * 0.04
@@ -292,7 +346,6 @@ class BillingService:
             getattr(cliente, "codigo_postal_fiscal", "91808") if cliente else "91808"
         )
 
-        # --- LÓGICA DE UBICACIÓN DINÁMICA CON FALLBACK SEGURO ---
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_cliente)
@@ -303,15 +356,12 @@ class BillingService:
             estado_dest = loc_destino.estado_clave
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
-            # FALLBACK SEGURO: Si el CP del cliente no está en tu BD,
-            # forzamos TODA LA TRÍADA a una combinación válida para no romper el SAT.
             logger.warning(
                 f"CP {cp_cliente} no encontrado en BD. Usando tríada fallback Veracruz."
             )
             cp_cliente = "91808"
             estado_dest = "VER"
             municipio_dest = "193"
-        # -------------------------------------------------
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper().replace("-", "")[:33],
@@ -333,7 +383,7 @@ class BillingService:
                 getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
             ),
             "uso_cfdi": "G03",
-            "total_dist_rec": "100",  # Asignar valor real de distancia si existe
+            "total_dist_rec": "100",
             "peso_bruto": (
                 str(viaje.peso_toneladas * 1000)
                 if viaje and viaje.peso_toneladas
@@ -404,10 +454,12 @@ class BillingService:
         }
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
-        """Conecta con el PAC, envía el XML y devuelve el UUID timbrado"""
         logger.info("Generando XML Carta Porte y enviando al PAC...")
+
+        # 1. Armar XML Base
         xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
 
+        # 2. Inyectar Certificado
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -415,11 +467,21 @@ class BillingService:
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
 
-        xml_sellado = xml_base.replace(
+        xml_con_cert = xml_base.replace(
             "<cfdi:Comprobante",
             f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
         )
 
+        # 3. 🛡️ FIRMAR EL XML OFICIALMENTE CON XSLT 🛡️
+        sello_b64, cadena_original = self._generar_sello_xslt(
+            xml_con_cert.encode("utf-8")
+        )
+
+        xml_sellado = xml_con_cert.replace(
+            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
+        )
+
+        # 4. Enviar al PAC
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
             result = client_zeep.service.timbrar(
@@ -562,7 +624,6 @@ class BillingService:
         facturas_afectadas = []
         total_recibido = Decimal("0.0")
 
-        # Acumuladores Globales del Complemento
         total_retenciones_iva = Decimal("0.0")
         total_traslados_base_iva16 = Decimal("0.0")
         total_traslados_impuesto_iva16 = Decimal("0.0")
@@ -599,7 +660,6 @@ class BillingService:
                     else str(factura.moneda).split(".")[-1]
                 )
 
-            # CÁLCULO PROPORCIONAL DE IMPUESTOS POR FACTURA
             inv_subtotal = (
                 Decimal(str(factura.subtotal)) if factura.subtotal else Decimal("0.0")
             )
@@ -617,18 +677,15 @@ class BillingService:
 
             proporcion = monto_abono / inv_total if inv_total > 0 else Decimal("1.0")
 
-            # Redondeo a 6 decimales para Base e Impuestos DR
             base_dr = (inv_subtotal * proporcion).quantize(Decimal("0.000001"))
             iva_dr = (inv_iva * proporcion).quantize(Decimal("0.000001"))
             ret_dr = (inv_ret * proporcion).quantize(Decimal("0.000001"))
 
-            # Acumulación Global a 2 decimales
             total_retenciones_iva += ret_dr.quantize(Decimal("0.00"))
             total_traslados_base_iva16 += base_dr.quantize(Decimal("0.00"))
             total_traslados_impuesto_iva16 += iva_dr.quantize(Decimal("0.00"))
             total_recibido += monto_abono
 
-            # Obtener serie y folio limpios
             folio_split = str(factura.folio_interno).split("-")
             serie_dr = folio_split[0] if len(folio_split) > 1 else ""
             folio_dr = folio_split[-1]
@@ -665,7 +722,6 @@ class BillingService:
             "%Y-%m-%dT12:00:00"
         )
 
-        # Limpieza estricta del receptor
         nombre_limpio = (
             getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
             .upper()
@@ -692,7 +748,10 @@ class BillingService:
             "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16:.2f}",
         }
 
+        # 1. Armar XML de pago sin sello
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
+
+        # 2. 🛡️ FIRMAR EL XML OFICIALMENTE CON XSLT 🛡️
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
         try:
@@ -883,6 +942,7 @@ class BillingService:
 </cfdi:Comprobante>""".strip()
 
     def _sellar_xml_pago(self, xml_str, d: dict) -> str:
+        # 1. Inyectar Certificado primero
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -890,54 +950,18 @@ class BillingService:
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
 
-        cadena = (
-            f"||4.0|REP|{d['folio']}|{d['fecha']}|{no_certificado}|0|XXX|0|P|01|{self.emisor_cp}|"
-            f"{self.emisor_rfc}|{self.emisor_nombre}|{self.emisor_regimen}|"
-            f"{d['rfc_cliente']}|{d['nombre_cliente']}|{d['cp_cliente']}|{d['regimen_cliente']}|{d['uso_cfdi']}|"
-            f"84111506|1|ACT|Pago|0|0|01|"
-            f"2.0|"
-        )
-
-        has_ret = Decimal(d["total_retenciones_iva"]) > 0
-        has_iva = Decimal(d["total_traslados_base_iva16"]) > 0
-
-        if has_ret:
-            cadena += f"{d['total_retenciones_iva']}|"
-        if has_iva:
-            cadena += f"{d['total_traslados_base_iva16']}|{d['total_traslados_impuesto_iva16']}|"
-
-        cadena += f"{d['monto_total']}|{d['fecha_pago']}|{d['forma_pago']}|MXN|1|{d['monto_total']}|"
-
-        for doc in d["doctos_relacionados"]:
-            cadena += f"{doc['uuid']}|"
-            if doc["serie"]:
-                cadena += f"{doc['serie']}|"
-            cadena += f"{doc['folio']}|{doc['moneda']}|1|1|{doc['saldo_anterior']}|{doc['monto_pagado']}|{doc['saldo_insoluto']}|02|"
-            if doc["tiene_retencion"]:
-                cadena += f"{doc['base_dr']}|002|Tasa|0.040000|{doc['ret_dr']}|"
-            if doc["tiene_iva"]:
-                cadena += f"{doc['base_dr']}|002|Tasa|0.160000|{doc['iva_dr']}|"
-
-        if has_ret:
-            cadena += f"002|{d['total_retenciones_iva']}|"
-        if has_iva:
-            cadena += f"{d['total_traslados_base_iva16']}|002|Tasa|0.160000|{d['total_traslados_impuesto_iva16']}|"
-
-        cadena += "|"
-
-        with open(self.path_key, "rb") as f:
-            private_key = load_der_private_key(
-                f.read(), password=self.key_password.encode()
-            )
-        signature = private_key.sign(
-            cadena.encode("utf-8"), padding.PKCS1v15(), hashes.SHA256()
-        )
-        sello_b64 = base64.b64encode(signature).decode("utf-8")
-
-        return xml_str.replace(
+        xml_con_cert = xml_str.replace(
             "<cfdi:Comprobante",
-            f'<cfdi:Comprobante Sello="{sello_b64}" NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
+            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
         )
+
+        # 2. 🛡️ Generar Sello con XSLT 🛡️
+        sello_b64, _ = self._generar_sello_xslt(xml_con_cert.encode("utf-8"))
+
+        xml_sellado = xml_con_cert.replace(
+            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
+        )
+        return xml_sellado
 
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
@@ -1072,12 +1096,11 @@ class BillingService:
             "forma_pago": d.get("forma_pago", "99"),
             "condiciones_pago": "Contado",
             "cert_sat": c_sat,
-            "cert_emisor": "00001000000504204441",  # Cambiar por tu certificado real extraído
+            "cert_emisor": "00001000000504204441",
             "sello_sat": chunk_b64(s_sat),
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
             "importe_letra": importe_letra,
-            # --- DATOS EXCLUSIVOS PARA CARTA PORTE ---
             "id_ccp": d.get("id_ccp", ""),
             "remitente_nombre": self.emisor_nombre,
             "remitente_rfc": self.emisor_rfc,
@@ -1087,7 +1110,6 @@ class BillingService:
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_cliente', '')}",
-            # --- DATOS EXCLUSIVOS PARA COMPLEMENTO DE PAGO ---
             "fecha_pago": d.get("fecha_pago", ""),
             "monto_total_pago": f"{_clean_float(d.get('monto_total', 0)):,.2f}",
             "doctos_relacionados": d.get("doctos_relacionados", []),
