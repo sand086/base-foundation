@@ -475,6 +475,18 @@ def add_timeline_event(
         if getattr(payload, "penalizacion_monto", None) is not None:
             active_leg.monto_penalizaciones = payload.penalizacion_monto
 
+        # ---------------------------------------------------------
+        # NUEVO BLOQUE SEGURO: MARCAR VALES COMO CONCILIADOS
+        # Solo se ejecuta si el evento viene de la conciliación
+        # ---------------------------------------------------------
+        if payload.location == "Conciliación de Combustible":
+            db.query(models.FuelLog).filter(
+                models.FuelLog.trip_leg_id == active_leg.id,
+                models.FuelLog.record_status == "A",
+                models.FuelLog.is_conciliated == False,
+            ).update({"is_conciliated": True}, synchronize_session=False)
+        # ---------------------------------------------------------
+
         #  LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
@@ -871,150 +883,164 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
     if not legs:
         return None
 
-    trips_to_check = set()
-    num_legs = len(legs)
+    # INICIO DEL BLINDAJE DE TRANSACCIÓN
+    try:
+        trips_to_check = set()
+        num_legs = len(legs)
 
-    # Juntamos los conceptos manuales enviados desde el borrador dinámico en React
-    conceptos_json = (
-        [c.model_dump() for c in payload.conceptos_extra]
-        if payload.conceptos_extra
-        else []
-    )
-
-    # Inyectamos el Sueldo Base como ingreso automático si es mayor a 0
-    if payload.monto_sueldo > 0:
-        conceptos_json.append(
-            {
-                "id": str(uuid.uuid4())[:8],
-                "tipo": "ingreso",
-                "categoria": "tarifa",
-                "descripcion": "Sueldo Base Pactado",
-                "monto": payload.monto_sueldo / num_legs,
-                "esAutomatico": True,
-            }
+        # Juntamos los conceptos manuales enviados desde el borrador dinámico en React
+        conceptos_json = (
+            [c.model_dump() for c in payload.conceptos_extra]
+            if payload.conceptos_extra
+            else []
         )
 
-    # Inyectamos la Penalización de Combustible desmenuzada si existe
-    if payload.monto_penalizaciones > 0:
-        conceptos_json.append(
-            {
-                "id": str(uuid.uuid4())[:8],
-                "tipo": "deduccion",
-                "categoria": "combustible",
-                "descripcion": "Cargo por Diésel (Monto excedente de tolerancia permitida)",
-                "monto": payload.monto_penalizaciones / num_legs,
-                "esAutomatico": True,
-            }
-        )
-
-    for leg in legs:
-        leg.status = "liquidado"
-
-        # Desglose financiero para los reportes (Dividido equitativamente)
-        leg.monto_sueldo = payload.monto_sueldo / num_legs
-        leg.monto_bonos = payload.monto_bonos / num_legs
-        leg.monto_maniobras = payload.monto_maniobras / num_legs
-        leg.monto_penalizaciones = payload.monto_penalizaciones / num_legs
-
-        leg.saldo_operador = payload.neto_a_pagar / num_legs
-        leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
-        leg.desglose_conceptos = conceptos_json
-        leg.actual_arrival = datetime.utcnow()
-
-        event = models.TripTimelineEvent(
-            trip_leg_id=leg.id,
-            time=datetime.utcnow(),
-            event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f} (Desc. Registro de detalles: ${(payload.monto_penalizaciones/num_legs):,.2f})",
-            event_type="success",
-        )
-        db.add(event)
-        trips_to_check.add(leg.trip)
-
-    cxc_creadas = 0
-
-    for trip in trips_to_check:
-        all_completed = all(
-            l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
-        )
-
-        if all_completed and trip.status not in ["cerrado", "liquidado"]:
-            trip.status = "cerrado"
-            trip.closed_at = func.now()
-
-            #  LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
-            unit_ids_to_free = [trip.remolque_1_id, trip.dolly_id, trip.remolque_2_id]
-            operator_ids_to_free = []
-
-            for l in trip.legs:
-                if l.unit_id:
-                    unit_ids_to_free.append(l.unit_id)
-                if l.operator_id:
-                    operator_ids_to_free.append(l.operator_id)
-
-            unit_ids_to_free = list(
-                set([uid for uid in unit_ids_to_free if uid is not None])
-            )
-            operator_ids_to_free = list(
-                set([oid for oid in operator_ids_to_free if oid is not None])
+        # Inyectamos el Sueldo Base como ingreso automático si es mayor a 0
+        if payload.monto_sueldo > 0:
+            conceptos_json.append(
+                {
+                    "id": str(uuid.uuid4())[:8],
+                    "tipo": "ingreso",
+                    "categoria": "tarifa",
+                    "descripcion": "Sueldo Base Pactado",
+                    "monto": payload.monto_sueldo / num_legs,
+                    "esAutomatico": True,
+                }
             )
 
-            if unit_ids_to_free:
-                db.query(models.Unit).filter(
-                    models.Unit.id.in_(unit_ids_to_free)
-                ).update({"status": "disponible"}, synchronize_session=False)
+        # Inyectamos la Penalización de Combustible desmenuzada si existe
+        if payload.monto_penalizaciones > 0:
+            conceptos_json.append(
+                {
+                    "id": str(uuid.uuid4())[:8],
+                    "tipo": "deduccion",
+                    "categoria": "combustible",
+                    "descripcion": "Cargo por Diésel (Monto excedente de tolerancia permitida)",
+                    "monto": payload.monto_penalizaciones / num_legs,
+                    "esAutomatico": True,
+                }
+            )
 
-            if operator_ids_to_free:
-                db.query(models.Operator).filter(
-                    models.Operator.id.in_(operator_ids_to_free)
-                ).update({"status": "activo"}, synchronize_session=False)
+        for leg in legs:
+            leg.status = "liquidado"
 
-            #  CREACIÓN DE CXC
-            existing_cxc = (
-                db.query(models.ReceivableInvoice)
-                .filter(
-                    models.ReceivableInvoice.viaje_id == trip.id,
-                    models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+            # Desglose financiero para los reportes (Dividido equitativamente)
+            leg.monto_sueldo = payload.monto_sueldo / num_legs
+            leg.monto_bonos = payload.monto_bonos / num_legs
+            leg.monto_maniobras = payload.monto_maniobras / num_legs
+            leg.monto_penalizaciones = payload.monto_penalizaciones / num_legs
+
+            leg.saldo_operador = payload.neto_a_pagar / num_legs
+            leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
+            leg.desglose_conceptos = conceptos_json
+            leg.actual_arrival = datetime.utcnow()
+
+            event = models.TripTimelineEvent(
+                trip_leg_id=leg.id,
+                time=datetime.utcnow(),
+                event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f} (Desc. Registro de detalles: ${(payload.monto_penalizaciones/num_legs):,.2f})",
+                event_type="success",
+            )
+            db.add(event)
+            trips_to_check.add(leg.trip)
+
+        cxc_creadas = 0
+
+        for trip in trips_to_check:
+            all_completed = all(
+                l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
+            )
+
+            if all_completed and trip.status not in ["cerrado", "liquidado"]:
+                trip.status = "cerrado"
+                trip.closed_at = func.now()
+
+                #  LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
+                unit_ids_to_free = [
+                    trip.remolque_1_id,
+                    trip.dolly_id,
+                    trip.remolque_2_id,
+                ]
+                operator_ids_to_free = []
+
+                for l in trip.legs:
+                    if l.unit_id:
+                        unit_ids_to_free.append(l.unit_id)
+                    if l.operator_id:
+                        operator_ids_to_free.append(l.operator_id)
+
+                unit_ids_to_free = list(
+                    set([uid for uid in unit_ids_to_free if uid is not None])
                 )
-                .first()
-            )
-            if not existing_cxc:
-                base = trip.tarifa_base or 0.0
-                casetas = trip.costo_casetas or 0.0
-                subtotal = base + casetas
-                iva = subtotal * 0.16
-                retencion = subtotal * 0.04
-                monto_total = subtotal + iva - retencion
-
-                dias_credito = 15
-                if trip.client and trip.client.dias_credito:
-                    dias_credito = trip.client.dias_credito
-
-                nueva_cxc = models.ReceivableInvoice(
-                    client_id=trip.client_id,
-                    sub_client_id=trip.sub_client_id,
-                    viaje_id=trip.id,
-                    folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
-                    concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
-                    subtotal=subtotal,
-                    iva=iva,
-                    retenciones=retencion,
-                    monto_total=monto_total,
-                    saldo_pendiente=monto_total,
-                    fecha_emision=date.today(),
-                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
-                    estatus=models.InvoiceStatus.PENDIENTE,
-                    metodo_pago="PPD",
-                    tipo_comprobante="I",
+                operator_ids_to_free = list(
+                    set([oid for oid in operator_ids_to_free if oid is not None])
                 )
-                db.add(nueva_cxc)
-                cxc_creadas += 1
 
-    db.commit()
-    return {
-        "message": "Liquidación completada y Recursos Liberados",
-        "legs_procesados": len(legs),
-        "cxc_generadas": cxc_creadas,
-    }
+                if unit_ids_to_free:
+                    db.query(models.Unit).filter(
+                        models.Unit.id.in_(unit_ids_to_free)
+                    ).update({"status": "disponible"}, synchronize_session=False)
+
+                if operator_ids_to_free:
+                    db.query(models.Operator).filter(
+                        models.Operator.id.in_(operator_ids_to_free)
+                    ).update({"status": "activo"}, synchronize_session=False)
+
+                #  CREACIÓN DE CXC
+                existing_cxc = (
+                    db.query(models.ReceivableInvoice)
+                    .filter(
+                        models.ReceivableInvoice.viaje_id == trip.id,
+                        models.ReceivableInvoice.record_status
+                        != RecordStatus.ELIMINADO,
+                    )
+                    .first()
+                )
+                if not existing_cxc:
+                    base = trip.tarifa_base or 0.0
+                    casetas = trip.costo_casetas or 0.0
+                    subtotal = base + casetas
+                    iva = subtotal * 0.16
+                    retencion = subtotal * 0.04
+                    monto_total = subtotal + iva - retencion
+
+                    dias_credito = 15
+                    if trip.client and trip.client.dias_credito:
+                        dias_credito = trip.client.dias_credito
+
+                    nueva_cxc = models.ReceivableInvoice(
+                        client_id=trip.client_id,
+                        sub_client_id=trip.sub_client_id,
+                        viaje_id=trip.id,
+                        folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
+                        concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
+                        subtotal=subtotal,
+                        iva=iva,
+                        retenciones=retencion,
+                        monto_total=monto_total,
+                        saldo_pendiente=monto_total,
+                        fecha_emision=date.today(),
+                        fecha_vencimiento=date.today() + timedelta(days=dias_credito),
+                        estatus=models.InvoiceStatus.PENDIENTE,
+                        metodo_pago="PPD",
+                        tipo_comprobante="I",
+                    )
+                    db.add(nueva_cxc)
+                    cxc_creadas += 1
+
+        db.commit()
+        return {
+            "message": "Liquidación completada y Recursos Liberados",
+            "legs_procesados": len(legs),
+            "cxc_generadas": cxc_creadas,
+        }
+
+    except Exception as e:
+        # SI ALGO FALLA: Deshacemos todo lo que intentó guardar en la memoria
+        db.rollback()
+        logger.error(f"Falla crítica al liquidar lote: {str(e)}")
+        # Levantamos el error para que el Frontend reciba un 500 y no un falso "éxito"
+        raise e
 
 
 def preview_batch_settlement(db: Session, leg_ids: list[int]):

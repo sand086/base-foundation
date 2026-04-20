@@ -801,7 +801,6 @@ export class DefaultService {
     /**
      * Update Sat Params
      * Endpoint para la Pestaña 3: Guarda la leyenda legal y otros textos.
-     * Recibe un dict: {"sat_leyenda_legal": "TEXTO LARGO...", "sat_ppd_default": "true"}
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -859,8 +858,6 @@ export class DefaultService {
     }
     /**
      * Test Csd Connection
-     * Verifica que los certificados existan, lee la fecha de caducidad del .cer
-     * y simula la conexión con el PAC.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -882,7 +879,6 @@ export class DefaultService {
      * Reintentar Cancelaciones Pendientes SAT
      * Este endpoint busca facturas con status 'PENDIENTE_CANCELAR_SAT'
      * y vuelve a mandar la petición SOAP de cancelación al PAC.
-     * Ideal para configurar en un CRONJOB (ej. cada hora).
      * @returns any Successful Response
      * @throws ApiError
      */
