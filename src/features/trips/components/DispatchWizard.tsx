@@ -642,6 +642,11 @@ export const DispatchWizard = ({
         is_dummy_stamping: false, // Ya no usamos el bypass desde UI directa
         conoce_ruta_completa: data.conoceRutaCompleta,
         ocultar_montos_pdf: true, // Siempre ocultamos el monto en el PDF operativo
+
+        // ✅ FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
+        remolque_1_id: cleanId(data.remolque1Id) || null,
+        dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
+        remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
       };
 
       if (finalStatus !== "creado") {
@@ -649,9 +654,6 @@ export const DispatchWizard = ({
           unit_id: cleanId(data.unitId) || null,
           leg_type: data.leg_type || "carga_muelle",
           operator_id: cleanId(data.driverId) || null,
-          remolque_1_id: cleanId(data.remolque1Id) || null,
-          dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
-          remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
           odometro_inicial: 0,
           nivel_tanque_inicial: 0,
         };
@@ -660,11 +662,6 @@ export const DispatchWizard = ({
           payload.final_leg = {
             unit_id: cleanId(data.unit2Id) || null,
             operator_id: cleanId(data.driver2Id) || null,
-            remolque_1_id: cleanId(data.remolque1Id_2) || null,
-            dolly_id: isFullTrip ? cleanId(data.dollyId_2) || null : null,
-            remolque_2_id: isFullTrip
-              ? cleanId(data.remolque2Id_2) || null
-              : null,
             leg_type: "ruta_carretera",
             odometro_inicial: 0,
             nivel_tanque_inicial: 0,
@@ -750,7 +747,7 @@ export const DispatchWizard = ({
           navigate("/Dispatch", { replace: true });
 
           // Opcional: Si necesitas forzar que recargue los datos de la tabla, descomenta la siguiente línea:
-          window.location.href = "/Dispatch";
+          // window.location.href = "/Dispatch";
         }
       }
     } catch (error: any) {

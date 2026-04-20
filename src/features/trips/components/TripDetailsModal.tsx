@@ -932,7 +932,7 @@ export function TripDetailsModal({
 
                                             {/* 2. BOTÓN DE DESENGANCHAR EN PATIO */}
                                             {/* Este SÍ desaparece después de usarse para no duplicar desenganches */}
-                                            {leg.leg_type === "carga_muelle" &&
+                                            {/*                                           {leg.leg_type === "carga_muelle" &&
                                               [
                                                 "creado",
                                                 "en_transito",
@@ -963,7 +963,7 @@ export function TripDetailsModal({
                                                   )}
                                                   Desenganchar Carga
                                                 </Button>
-                                              )}
+                                              )} */}
 
                                             {/* 3. BOTÓN DE LIQUIDAR OP. */}
                                             {leg.status === "entregado" &&

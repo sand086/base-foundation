@@ -994,10 +994,14 @@ def update_timeline_event(
 
 @router.post("/trips/{trip_id}/stamp-real", response_model=schemas.TripResponse)
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+    # 1. IMPORTAMOS EL SERVICIO DE FINANZAS
     from app.integrations.sat.billing_service import BillingService
 
+    # 2. USAMOS BILLING SERVICE
     billing = BillingService(db)
     invoice_data = schemas.ReceivableInvoiceCreate(viaje_id=trip_id, is_nominal=False)
+
+    # 3. GENERAMOS LA FACTURA REAL
     factura = billing.generar_factura_final_relacionada(invoice_data)
 
     if not factura:

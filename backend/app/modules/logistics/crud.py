@@ -123,9 +123,9 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 unit_ids_to_block.extend(
                     [
                         leg_data.unit_id,
-                        trip.remolque_1_id,
-                        trip.dolly_id,
-                        trip.remolque_2_id,
+                        db_trip.remolque_1_id,
+                        db_trip.dolly_id,
+                        db_trip.remolque_2_id,
                     ]
                 )
                 operator_ids_to_block.append(leg_data.operator_id)

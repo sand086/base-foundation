@@ -16,12 +16,14 @@ from cryptography.hazmat.backends import default_backend
 
 from app.db.database import get_db
 from app.modules.logistics.schemas import ReceivableInvoiceCreate
+
+# IMPORTAMOS AMBOS MOTORES
 from app.integrations.sat.billing_service import BillingService
+from app.integrations.sat.carta_porte_service import CartaPorteService
 from app.models import models
 from app.modules.auth.router import get_current_active_user
 from app.core.security import verify_password
 import base64
-from fastapi.responses import FileResponse
 
 router = APIRouter()
 
@@ -40,7 +42,6 @@ class RegistroPagoPayload(BaseModel):
     cuenta_deposito: Optional[str] = ""
 
 
-# Función auxiliar para traducir errores crudos a mensajes amigables
 def parse_sat_error(e: Exception) -> str:
     error_msg = str(e).lower()
     if (
@@ -79,7 +80,6 @@ def test_invoice_pro():
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        # INYECTAMOS EL FORMATO CON COMAS PARA EL PREVIEW DEL PDF
         context = {
             "rfc_emisor": "RTX110624KP5",
             "cert_emisor": "00001000000717643613",
@@ -164,7 +164,7 @@ def generar_carta_porte_nominal(
     Endpoint Fase 3 (Bypass Aduanal):
     Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN o montos ocultos.
     """
-    service = BillingService(db)
+    service = CartaPorteService(db)  # CORRECTO: Servicio Operativo
     try:
         factura = service.generar_carta_porte_nominal(invoice_data)
         return {
@@ -193,9 +193,8 @@ def generar_carta_porte_one_shot(
     Genera y timbra la Carta Porte 3.1 con ruta completa (Multi-Origen / Multi-Destino)
     consumiendo solo 1 timbre.
     """
-    service = BillingService(db)
+    service = CartaPorteService(db)  # CORRECTO: Servicio Operativo
     try:
-        # Llama al método del BillingService que construye el XML completo Multi-Nodo
         factura = service.generar_carta_porte_one_shot(invoice_data)
         return {
             "status": "success",
@@ -221,9 +220,8 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     cuando el viaje inicia su tramo de carretera. Automáticamente
     relaciona y cancela la carta porte nominal previa si existe.
     """
-    service = BillingService(db)
+    service = BillingService(db)  # CORRECTO: Servicio Financiero
 
-    # Buscamos la carta porte nominal previa para relacionarla y cancelarla
     from app.models.models import ReceivableInvoice
 
     factura_vieja = (
@@ -236,13 +234,11 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     uuid_relacionado = factura_vieja.uuid if factura_vieja else None
 
-    # Creamos el objeto de solicitud para el service
     invoice_data = ReceivableInvoiceCreate(
         viaje_id=trip_id, is_nominal=False, uuid_relacionado=uuid_relacionado
     )
 
     try:
-        # Genera el XML Real, Timbra ante el PAC y genera el PDF
         factura_final = service.generar_factura_final_relacionada(invoice_data)
 
         if not factura_final:
@@ -250,7 +246,6 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
                 status_code=500, detail="No se pudo procesar el timbrado real."
             )
 
-        # Cancelar la nominal si existía
         if factura_vieja:
             service.cancelar_factura_nominal(
                 invoice_id=factura_vieja.id,
@@ -278,11 +273,10 @@ def generar_factura_final(
     2. Aplica la Relación 04 al UUID de la Carta Porte nominal.
     3. Cancela localmente la Carta Porte nominal de $1.
     """
-    service = BillingService(db)
+    service = BillingService(db)  # CORRECTO: Servicio Financiero
     try:
         factura_final = service.generar_factura_final_relacionada(invoice_data)
 
-        # Efectuamos la cancelación del comprobante anterior (Fase 4)
         if invoice_data.uuid_relacionado:
             from app.models.models import ReceivableInvoice
 
@@ -324,10 +318,11 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         str(uuid),
     )
-    # 1. Quitamos el .upper() forzado de aquí para tener el UUID original
     clean_uuid = match.group(0) if match else str(uuid)
 
-    service = BillingService(db)
+    service = CartaPorteService(
+        db
+    )  # Aquí cualquiera de los dos funciona (solo leemos disco)
 
     pdf_path_upper = service.storage_dir / f"{clean_uuid.upper()}.pdf"
     pdf_path_lower = service.storage_dir / f"{clean_uuid.lower()}.pdf"
@@ -342,10 +337,9 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
             detail=f"El PDF del documento {clean_uuid} no se encontró en el servidor.",
         )
 
-    # FORZAMOS LA DESCARGA COMO ATTACHMENT
     return FileResponse(
         path=str(pdf_path),
-        filename=f"{uuid}.pdf",  # Mantiene el prefijo original
+        filename=f"{uuid}.pdf",
         media_type="application/pdf",
         content_disposition_type="attachment",
     )
@@ -363,10 +357,9 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         str(uuid),
     )
-    # 1. Quitamos el .upper() forzado de aquí para tener el UUID original
     clean_uuid = match.group(0) if match else str(uuid)
 
-    service = BillingService(db)
+    service = CartaPorteService(db)
 
     xml_path_upper = service.storage_dir / f"{clean_uuid.upper()}.xml"
     xml_path_lower = service.storage_dir / f"{clean_uuid.lower()}.xml"
@@ -381,7 +374,6 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
             detail=f"El XML del documento {clean_uuid} no se encontró en el servidor.",
         )
 
-    # FORZAMOS LA DESCARGA COMO ATTACHMENT
     return FileResponse(
         path=str(xml_path),
         filename=f"{uuid}.xml",
@@ -394,7 +386,6 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
 def update_sat_params(data: dict, db: Session = Depends(get_db)):
     """
     Endpoint para la Pestaña 3: Guarda la leyenda legal y otros textos.
-    Recibe un dict: {"sat_leyenda_legal": "TEXTO LARGO...", "sat_ppd_default": "true"}
     """
     for key, value in data.items():
         db_conf = (
@@ -417,16 +408,14 @@ def upload_csd_files(
     cer_file: UploadFile = File(...),
     key_file: UploadFile = File(...),
     password: str = Form(...),
-    environment: str = Form("PROD"),  #  Recibimos el ambiente
+    environment: str = Form("PROD"),
     db: Session = Depends(get_db),
 ):
     suffix = "_qa" if environment == "QA" else ""
 
-    # Validaciones de extensión
     if not cer_file.filename.endswith(".cer") or not key_file.filename.endswith(".key"):
         raise HTTPException(status_code=400, detail="Archivos inválidos")
 
-    # Definir carpetas
     base_path = Path(os.getenv("APP_BASE_PATH", "./"))
     cert_dir = Path(os.getenv("CERT_DIR", base_path / "certs"))
     cert_dir.mkdir(parents=True, exist_ok=True)
@@ -435,13 +424,11 @@ def upload_csd_files(
     cer_path = cert_dir / f"CSD_{environment}_{timestamp}.cer"
     key_path = cert_dir / f"CSD_{environment}_{timestamp}.key"
 
-    # Guardar archivos físicamente
     with open(cer_path, "wb") as buffer:
         shutil.copyfileobj(cer_file.file, buffer)
     with open(key_path, "wb") as buffer:
         shutil.copyfileobj(key_file.file, buffer)
 
-    # Actualizar llaves dinámicas en la BD
     configs = {
         f"sat_cert_path{suffix}": str(cer_path),
         f"sat_key_path{suffix}": str(key_path),
@@ -474,21 +461,15 @@ def download_csd_secure(
     file_type: str = Form(...),
     environment: str = Form(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        get_current_active_user
-    ),  #  Obtenemos al usuario logueado
+    current_user: models.User = Depends(get_current_active_user),
 ):
-    # 1. VALIDAR CONTRASEÑA DEL USUARIO (Logueo)
     if not verify_password(password, current_user.password_hash):
         raise HTTPException(
             status_code=401,
             detail="Tu contraseña de acceso es incorrecta. Verificación fallida.",
         )
 
-    # 2. SELECCIONAR SUFIJO SEGÚN AMBIENTE
     suffix = "_qa" if environment == "QA" else ""
-
-    # 3. BUSCAR LA RUTA FÍSICA EN LA DB
     key_name = (
         f"sat_cert_path{suffix}" if file_type == "cer" else f"sat_key_path{suffix}"
     )
@@ -503,7 +484,6 @@ def download_csd_secure(
             status_code=404, detail="El archivo físico no existe en el servidor."
         )
 
-    # 4. ENVIAR ARCHIVO PARA DESCARGA
     return FileResponse(
         path=path_conf.value,
         filename=Path(path_conf.value).name,
@@ -517,10 +497,6 @@ def test_csd_connection(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """
-    Verifica que los certificados existan, lee la fecha de caducidad del .cer
-    y simula la conexión con el PAC.
-    """
     environment = payload.get("environment", "PROD")
     suffix = "_qa" if environment == "QA" else ""
 
@@ -541,24 +517,19 @@ def test_csd_connection(
         )
 
     cer_path = Path(cer_conf.value)
-
     if not cer_path.exists():
         raise HTTPException(
             status_code=404,
             detail="El archivo de certificado (.cer) no se encuentra físicamente en el servidor.",
         )
 
-    #  LECTURA REAL DEL CERTIFICADO PARA SACAR LA FECHA
     try:
         with open(cer_path, "rb") as cert_file:
             cert_data = cert_file.read()
-            # El SAT usa formato DER
             cert = x509.load_der_x509_certificate(cert_data, default_backend())
 
-            # Fechas en UTC
             not_valid_before = cert.not_valid_before_utc
             not_valid_after = cert.not_valid_after_utc
-
             ahora = datetime.now(not_valid_after.tzinfo)
             dias_restantes = (not_valid_after - ahora).days
 
@@ -590,9 +561,8 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
     """
     Este endpoint busca facturas con status 'PENDIENTE_CANCELAR_SAT'
     y vuelve a mandar la petición SOAP de cancelación al PAC.
-    Ideal para configurar en un CRONJOB (ej. cada hora).
     """
-    service = BillingService(db)
+    service = BillingService(db)  # CORRECTO: Servicio Financiero
     resultado = service.procesar_cancelaciones_pendientes()
     return resultado
 
@@ -619,7 +589,7 @@ def registrar_pago_multiple(
                     detail=f"La factura {factura.folio_interno or factura.id} tiene un UUID inválido de {len(clean_uuid)} caracteres. El SAT exige exactamente 36 caracteres.",
                 )
 
-    service = BillingService(db)
+    service = BillingService(db)  # CORRECTO: Servicio Financiero (Pagos 2.0)
     try:
         resultado = service.registrar_pago_y_timbrar_complemento(
             client_id=payload.client_id,

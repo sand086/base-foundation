@@ -442,6 +442,77 @@ export function NextLegModal({
     );
   }, [operadores, formData.operator_id]);
 
+  useEffect(() => {
+    if (!open || !tripPadre) return;
+
+    const lastLeg =
+      tripPadre.legs && tripPadre.legs.length > 0
+        ? tripPadre.legs[tripPadre.legs.length - 1]
+        : null;
+
+    console.log("=== 🛑 INICIO DEBUGGER: REMOLQUES Y DOLLY ===");
+    console.log("1. TripPadre:", tripPadre);
+    console.log("2. Último Tramo (lastLeg):", lastLeg);
+
+    console.log("--- VALORES OBTENIDOS DEL JSON ---");
+    console.log("lastLeg.remolque_1_id:", (lastLeg as any)?.remolque_1_id);
+    console.log("lastLeg.dolly_id:", (lastLeg as any)?.dolly_id);
+    console.log("lastLeg.remolque_2_id:", (lastLeg as any)?.remolque_2_id);
+
+    console.log("tripPadre.remolque_1_id:", tripPadre.remolque_1_id);
+    console.log("tripPadre.dolly_id:", tripPadre.dolly_id);
+    console.log("tripPadre.remolque_2_id:", tripPadre.remolque_2_id);
+
+    console.log(
+      "tripPadre.remolque_1 (Objeto):",
+      (tripPadre as any).remolque_1,
+    );
+    console.log("tripPadre.dolly (Objeto):", (tripPadre as any).dolly);
+    console.log(
+      "tripPadre.remolque_2 (Objeto):",
+      (tripPadre as any).remolque_2,
+    );
+
+    console.log("--- RESULTADO EN FORMDATA ---");
+    console.log("formData.remolque_1_id:", formData.remolque_1_id);
+    console.log("formData.dolly_id:", formData.dolly_id);
+    console.log("formData.remolque_2_id:", formData.remolque_2_id);
+
+    console.log("--- VERIFICACIÓN DE SELECTS (AVAILABLES) ---");
+    console.log("¿Están los IDs en las listas de opciones?");
+
+    const r1Exists = availableRemolques.some(
+      (r) => r.id === formData.remolque_1_id,
+    );
+    const dollyExists = availableDollies.some(
+      (d) => d.id === formData.dolly_id,
+    );
+    const r2Exists = availableRemolques.some(
+      (r) => r.id === formData.remolque_2_id,
+    );
+
+    console.log(
+      `Remolque 1 (ID ${formData.remolque_1_id}) existe en options:`,
+      r1Exists,
+    );
+    console.log(
+      `Dolly (ID ${formData.dolly_id}) existe en options:`,
+      dollyExists,
+    );
+    console.log(
+      `Remolque 2 (ID ${formData.remolque_2_id}) existe en options:`,
+      r2Exists,
+    );
+
+    if (!r1Exists && formData.remolque_1_id) {
+      console.warn(
+        `⚠️ ALERTA: El Remolque 1 (ID ${formData.remolque_1_id}) NO ESTÁ en availableRemolques. Motivo probable: status diferente a 'disponible' o no lo manda el backend general.`,
+      );
+    }
+
+    console.log("=== 🛑 FIN DEBUGGER ===");
+  }, [open, tripPadre, formData, availableRemolques, availableDollies]);
+
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
       toast.error("Falta Asignación", {
