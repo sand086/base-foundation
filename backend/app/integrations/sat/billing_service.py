@@ -196,7 +196,7 @@ def get_sat_trailer_code(tipo: str) -> str:
     return "CTR004"
 
 
-class SafeData_(dict):
+class SafeData(dict):
     def __getitem__(self, key):
         val = self.get(key)
         if val is None or str(val).strip() == "" or str(val).strip() == "None":
