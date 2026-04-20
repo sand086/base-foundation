@@ -137,7 +137,14 @@ export default function FuelConciliation() {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
-  const tripLegs = useMemo(() => activeTrip?.legs || [], [activeTrip]);
+  const tripLegs = useMemo(() => {
+    if (!activeTrip || !activeTrip.legs) return [];
+
+    return activeTrip.legs.filter((leg) => {
+      const legStatus = String(leg.status ?? "").toLowerCase();
+      return ["entregado"].includes(legStatus);
+    });
+  }, [activeTrip]);
   const activeLeg = useMemo(
     () => tripLegs.find((l) => String(l.id) === selectedLegId) || null,
     [tripLegs, selectedLegId],
@@ -636,9 +643,10 @@ export default function FuelConciliation() {
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
                   {trips
-                    .filter(
-                      (t) => String(t.status).toLowerCase() !== "liquidado",
-                    )
+                    .filter((t) => {
+                      const status = String(t.status ?? "").toLowerCase();
+                      return ["entregado"].includes(status);
+                    })
                     .map((t) => {
                       const clientName =
                         t.client?.razon_social || "Sin Cliente";

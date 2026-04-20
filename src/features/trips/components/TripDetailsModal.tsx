@@ -895,13 +895,14 @@ export function TripDetailsModal({
                                           /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
                                           <div className="flex flex-wrap gap-2">
                                             {/* 1. BOTÓN DE SIGUIENTE FASE / PASAR A RUTA */}
-                                            {/* FIX: Agregamos "entregado" y "detenido" para que NO desaparezca tras desenganchar */}
-                                            {[
-                                              "creado",
-                                              "en_transito",
-                                              "entregado",
-                                              "detenido",
-                                            ].includes(leg.status) &&
+                                            {/* FIX: Solo la fase ACTIVA puede detonar la siguiente fase */}
+                                            {leg.id === activeLeg?.id &&
+                                              [
+                                                "creado",
+                                                "en_transito",
+                                                "entregado",
+                                                "detenido",
+                                              ].includes(leg.status) &&
                                               leg.leg_type !==
                                                 "entrega_vacio" && (
                                                 <Button

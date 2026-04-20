@@ -237,15 +237,23 @@ export function AddTicketModal({
 
   const activeTrips = useMemo(
     () =>
-      (trips as any[]).filter(
-        (t) => String(t.status ?? "").toLowerCase() !== "liquidado",
-      ),
+      (trips as any[]).filter((t) => {
+        const status = String(t.status ?? "").toLowerCase();
+        // Dejamos pasar ÚNICAMENTE los que están como "entregado"
+        return ["entregado"].includes(status);
+      }),
     [trips],
   );
 
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
-      return (t.legs || []).map((leg: any) => ({
+      // 🚀 En los tramos (legs), también aplicamos la misma lista blanca
+      const validLegs = (t.legs || []).filter((leg: any) => {
+        const legStatus = String(leg.status ?? "").toLowerCase();
+        return ["entregado", "cerrado"].includes(legStatus);
+      });
+
+      return validLegs.map((leg: any) => ({
         label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`,
         value: `${t.id}|${leg.id}|${leg.unit_id}|${leg.operator_id}`,
       }));
@@ -302,7 +310,7 @@ export function AddTicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0 gap-0 border-none shadow-2xl overflow-hidden animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0 gap-0 border-none shadow-2xl overflow-hidden animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
