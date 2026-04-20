@@ -1267,8 +1267,17 @@ def reset_leg_audit(db: Session, leg_id: int):
     if not leg:
         return None
 
-    # Limpiamos el odómetro final para que la fase vuelva a pedir auditoría
+    # Limpiamos el odómetro final y los montos de penalización
     leg.odometro_final = None
+    leg.monto_penalizaciones = 0.0
+
+    # ---------------------------------------------------------
+    # NUEVO: Liberamos los vales de combustible para que puedan
+    # volver a ser auditados si se equivocaron.
+    # ---------------------------------------------------------
+    db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == leg.id).update(
+        {"is_conciliated": False}, synchronize_session=False
+    )
 
     # Registramos en la bitácora que la auditoría fue anulada
     event = models.TripTimelineEvent(
