@@ -18,17 +18,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Edit,
   Loader2,
   Camera,
   AlertTriangle,
   Fuel,
   Droplets,
-  Truck,
-  User,
-  Navigation,
   DollarSign,
   Hash,
+  ChevronsUpDown,
+  Check,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { fuelService } from "@/features/settlements/services/fuelService";
@@ -100,6 +113,112 @@ interface EditFuelModalProps {
 function safeNumber(v: unknown, fallback = 0): number {
   const n = typeof v === "string" ? Number(v) : (v as number);
   return Number.isFinite(n) ? n : fallback;
+}
+
+// Catálogo de Estaciones Fijas
+const ESTACIONES_CATALOGO = [
+  "Estación de Servicio Rápidos 3T",
+  "San Marcos",
+  "BP",
+  "Shell",
+  "Pemex",
+  "Mobil",
+  "Oxxo Gas",
+  "Repsol",
+  "G500",
+];
+
+/** =========================
+ * Custom Combobox para Estaciones (Permite texto libre)
+ * ========================= */
+function StationCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+
+  // Determinar si lo que el usuario escribió ya existe exactamente en el catálogo
+  const isExactMatch = ESTACIONES_CATALOGO.some(
+    (est) => est.toLowerCase() === inputValue.toLowerCase(),
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between h-11 px-3 bg-card text-xs font-bold shadow-sm border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+        >
+          <span className="truncate">{value || "Seleccione o escriba..."}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[300px] p-0 rounded-xl shadow-xl border-slate-200 dark:border-white/10"
+        align="start"
+      >
+        <Command>
+          <CommandInput
+            placeholder="Buscar o escribir nueva estación..."
+            value={inputValue}
+            onValueChange={setInputValue}
+            className="text-xs"
+          />
+          <CommandList className="max-h-[200px] custom-scrollbar">
+            <CommandEmpty className="py-3 text-center text-xs text-slate-500">
+              No se encontraron coincidencias.
+            </CommandEmpty>
+            <CommandGroup>
+              {ESTACIONES_CATALOGO.map((est) => (
+                <CommandItem
+                  key={est}
+                  value={est}
+                  onSelect={() => {
+                    onChange(est);
+                    setOpen(false);
+                    setInputValue("");
+                  }}
+                  className="text-xs cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === est
+                        ? "opacity-100 text-emerald-500"
+                        : "opacity-0",
+                    )}
+                  />
+                  {est}
+                </CommandItem>
+              ))}
+
+              {/* Opción dinámica para agregar texto libre */}
+              {inputValue.trim() !== "" && !isExactMatch && (
+                <CommandItem
+                  value={inputValue}
+                  onSelect={() => {
+                    onChange(inputValue.trim());
+                    setOpen(false);
+                    setInputValue("");
+                  }}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 cursor-pointer border-t border-slate-100 dark:border-white/10 mt-1 pt-2"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Usar "{inputValue.trim()}"
+                </CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function EditFuelModal({
@@ -227,13 +346,17 @@ export function EditFuelModal({
                 Editar Registro de Carga
               </DialogTitle>
               <DialogDescription className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                Transaction Log ID: <span className="font-mono text-foreground">#{carga.id}</span>
+                Transaction Log ID:{" "}
+                <span className="font-mono text-foreground">#{carga.id}</span>
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 min-h-0 overflow-hidden flex flex-col"
+        >
           {/* CAPA 3: BODY */}
           <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
             {/* Fecha y Tipo */}
@@ -254,7 +377,9 @@ export function EditFuelModal({
                   <Select
                     value={formData.tipo_combustible}
                     onValueChange={(v: TipoCombustible) =>
-                      setFormData((p) => (p ? { ...p, tipo_combustible: v } : p))
+                      setFormData((p) =>
+                        p ? { ...p, tipo_combustible: v } : p,
+                      )
                     }
                   >
                     <SelectTrigger className="h-11 shadow-sm font-bold bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
@@ -268,7 +393,8 @@ export function EditFuelModal({
                       </SelectItem>
                       <SelectItem value="urea">
                         <div className="flex items-center gap-2">
-                          <Droplets className="h-4 w-4 text-blue-500" /> UREA / DEF
+                          <Droplets className="h-4 w-4 text-blue-500" /> UREA /
+                          DEF
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -332,22 +458,15 @@ export function EditFuelModal({
               </div>
             </div>
 
-            {/* Estación */}
+            {/* Estación - CON COMBOBOX MEJORADO */}
             <div className="space-y-1.5">
               <FormLabelBrand>Estación de Suministro</FormLabelBrand>
-              <div className="relative group">
-                <Navigation className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground group-focus-within:text-brand-red transition-colors" />
-                <Input
-                  className="h-11 pl-10 font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
-                  value={formData.estacion}
-                  onChange={(e) =>
-                    setFormData((p) =>
-                      p ? { ...p, estacion: e.target.value } : p,
-                    )
-                  }
-                  placeholder="Terminal de carga..."
-                />
-              </div>
+              <StationCombobox
+                value={formData.estacion}
+                onChange={(val) =>
+                  setFormData((p) => (p ? { ...p, estacion: val } : p))
+                }
+              />
             </div>
 
             {/* Métricas: Litros, Precio, Odómetro */}
@@ -397,7 +516,9 @@ export function EditFuelModal({
                       value={formData.odometro}
                       onChange={(e) =>
                         setFormData((p) =>
-                          p ? { ...p, odometro: safeNumber(e.target.value) } : p,
+                          p
+                            ? { ...p, odometro: safeNumber(e.target.value) }
+                            : p,
                         )
                       }
                     />

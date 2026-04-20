@@ -53,6 +53,7 @@ export interface ColumnDef<T> {
   width?: string;
 }
 
+// ⚠️ AQUÍ ESTÁ LA MAGIA: Declaramos customFilters como Opcional (?)
 interface EnhancedDataTableProps<T> {
   data: T[];
   columns: ColumnDef<T>[];
@@ -61,11 +62,11 @@ interface EnhancedDataTableProps<T> {
   exportFileName?: string;
   searchPlaceholder?: string;
   isLoading?: boolean;
-  //   NUEVAS PROPS PARA SELECCIÓN MULTIPLE
   enableRowSelection?: boolean;
   selectedRows?: T[];
   onSelectedRowsChange?: (rows: T[]) => void;
-  rowKey?: keyof T; // e.g., 'id'
+  rowKey?: keyof T;
+  customFilters?: React.ReactNode; // <- Prop opcional para no romper otros módulos
 }
 
 type SortDirection = "asc" | "desc" | null;
@@ -99,8 +100,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   selectedRows = [],
   onSelectedRowsChange,
   rowKey = "id" as keyof T,
+  customFilters, // <- Desestructuramos la prop
 }: EnhancedDataTableProps<T>) {
-  // State
   const [globalSearch, setGlobalSearch] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [pageSize, setPageSize] = useState(10);
@@ -108,16 +109,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
   const [showFilters, setShowFilters] = useState(false);
 
-  // Get value from nested keys
   const getValue = (row: T, key: string): any => {
     return key.split(".").reduce((obj, k) => obj?.[k], row);
   };
 
-  // Filter data
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    // Global search
     if (globalSearch) {
       const searchLower = globalSearch.toLowerCase();
       result = result.filter((row) =>
@@ -128,7 +126,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
       );
     }
 
-    // Column filters
     Object.entries(columnFilters).forEach(([key, filter]) => {
       if (!filter.value) return;
 
@@ -151,8 +148,17 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         if (range.from || range.to) {
           result = result.filter((row) => {
             const dateValue = new Date(getValue(row, key));
-            if (range.from && dateValue < range.from) return false;
-            if (range.to && dateValue > range.to) return false;
+
+            if (range.from) {
+              const fromDate = new Date(range.from);
+              fromDate.setHours(0, 0, 0, 0);
+              if (dateValue < fromDate) return false;
+            }
+            if (range.to) {
+              const toDate = new Date(range.to);
+              toDate.setHours(23, 59, 59, 999);
+              if (dateValue > toDate) return false;
+            }
             return true;
           });
         }
@@ -178,7 +184,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return result;
   }, [data, globalSearch, columnFilters, columns]);
 
-  // Sort data
   const sortedData = useMemo(() => {
     if (!sortConfig || !sortConfig.direction) return filteredData;
 
@@ -195,9 +200,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     });
   }, [filteredData, sortConfig]);
 
-  // Paginate data
   const paginatedData = useMemo(() => {
-    if (pageSize === -1) return sortedData; // Show all
+    if (pageSize === -1) return sortedData;
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
@@ -205,7 +209,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const totalPages =
     pageSize === -1 ? 1 : Math.ceil(sortedData.length / pageSize);
 
-  // Handlers
   const handleSort = (key: string) => {
     setSortConfig((prev) => {
       if (prev?.key !== key) return { key, direction: "asc" };
@@ -269,25 +272,31 @@ export function EnhancedDataTable<T extends Record<string, any>>({
 
   return (
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
-      {/* CAPA 3: TOOLBAR (SUNKEN AREA TAHOE) */}
-      <div className="flex flex-wrap items-center gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
-        {/* Global Search */}
-        <div className="relative flex-1 min-w-[250px] max-w-sm group">
-          <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />{" "}
-          <Input
-            placeholder={searchPlaceholder}
-            value={globalSearch}
-            onChange={(e) => {
-              setGlobalSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
-          />
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
+        {/* Left Side: Global Search + Custom Filters (Si existen) */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-1 min-w-[250px] max-w-sm group">
+            <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
+            <Input
+              placeholder={searchPlaceholder}
+              value={globalSearch}
+              onChange={(e) => {
+                setGlobalSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
+            />
+          </div>
+
+          {/* AQUI SE INYECTA LA ESTACIÓN Y FECHAS DE FuelLoads.tsx */}
+          {customFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              {customFilters}
+            </div>
+          )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 ml-auto">
-          {/* Filters Button & Popover */}
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
           <Popover open={showFilters} onOpenChange={setShowFilters}>
             <PopoverTrigger asChild>
               <Button
@@ -300,7 +309,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 )}
               >
                 <Filter className="h-4 w-4 mr-2" />
-                Filtros
+                Filtros Int.
                 {hasActiveFilters && (
                   <Badge className="ml-2 h-5 px-1.5 bg-white/20 text-white border-none shadow-sm font-mono text-[10px]">
                     {Object.keys(columnFilters).length + (globalSearch ? 1 : 0)}
@@ -310,12 +319,12 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             </PopoverTrigger>
             <PopoverContent
               className="w-80 glass-panel bg-white/95 dark:bg-brand-navy/95 border-slate-200 dark:border-white/10 shadow-2xl p-6 backdrop-blur-2xl rounded-2xl"
-              align="start"
+              align="end"
             >
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-4">
                   <h4 className="text-[11px] font-black text-brand-navy dark:text-white uppercase tracking-[0.2em]">
-                    Filtros Avanzados
+                    Filtros Internos
                   </h4>
                   {hasActiveFilters && (
                     <Button
@@ -503,7 +512,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           <table className="w-full caption-bottom text-sm border-collapse">
             <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
-                {/*   COLUMNA DE SELECCIÓN HEADER   */}
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
                     <Checkbox
@@ -604,7 +612,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     )}
                     onClick={() => onRowClick?.(row)}
                   >
-                    {/*   COLUMNA DE SELECCIÓN ROW   */}
                     {enableRowSelection && (
                       <td
                         className="px-6 py-4 align-middle text-center"

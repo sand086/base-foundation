@@ -96,6 +96,9 @@ def create_trip(db: Session, trip: schemas.TripCreate):
         if trip.initial_leg:
             leg_data = trip.initial_leg
 
+            if not leg_data.odometro_inicial or leg_data.odometro_inicial == 0:
+                leg_data.odometro_inicial = get_last_unit_odometer(db, leg_data.unit_id)
+
             monto_pagar = (trip.tarifa_base or 0) - (
                 (leg_data.anticipo_casetas or 0)
                 + (leg_data.anticipo_viaticos or 0)
@@ -389,7 +392,7 @@ def add_timeline_event(
             (leg for leg in trip.legs if leg.id == payload.trip_leg_id), None
         )
 
-    # 2. LÓGICA ANTERIOR (Respaldo): Si React no mandó nada, buscamos el último tramo activo (Ej. Gustavo).
+    # 2. LÓGICA ANTERIOR (Respaldo): Si React no mandó nada, buscamos el último tramo activo.
     if not active_leg:
         active_leg = next(
             (
@@ -467,6 +470,10 @@ def add_timeline_event(
             if payload.combustible_litros is not None:
                 if hasattr(unidad, "nivel_combustible_litros"):
                     unidad.nivel_combustible_litros = payload.combustible_litros
+
+        # 🚀 LÓGICA INCORPORADA: ATRAPAMOS EL MONTO DE PENALIZACIÓN DICTAMINADO POR LA AUDITORÍA
+        if getattr(payload, "penalizacion_monto", None) is not None:
+            active_leg.monto_penalizaciones = payload.penalizacion_monto
 
         #  LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
         db_event = models.TripTimelineEvent(
@@ -866,11 +873,40 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
     trips_to_check = set()
     num_legs = len(legs)
+
+    # Juntamos los conceptos manuales enviados desde el borrador dinámico en React
     conceptos_json = (
         [c.model_dump() for c in payload.conceptos_extra]
         if payload.conceptos_extra
         else []
     )
+
+    # Inyectamos el Sueldo Base como ingreso automático si es mayor a 0
+    if payload.monto_sueldo > 0:
+        conceptos_json.append(
+            {
+                "id": str(uuid.uuid4())[:8],
+                "tipo": "ingreso",
+                "categoria": "tarifa",
+                "descripcion": "Sueldo Base Pactado",
+                "monto": payload.monto_sueldo / num_legs,
+                "esAutomatico": True,
+            }
+        )
+
+    # Inyectamos la Penalización de Combustible desmenuzada si existe
+    if payload.monto_penalizaciones > 0:
+        conceptos_json.append(
+            {
+                "id": str(uuid.uuid4())[:8],
+                "tipo": "deduccion",
+                "categoria": "combustible",
+                "descripcion": "Cargo por Diésel (Monto excedente de tolerancia permitida)",
+                "monto": payload.monto_penalizaciones / num_legs,
+                "esAutomatico": True,
+            }
+        )
+
     for leg in legs:
         leg.status = "liquidado"
 
@@ -967,7 +1003,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                     fecha_emision=date.today(),
                     fecha_vencimiento=date.today() + timedelta(days=dias_credito),
                     estatus=models.InvoiceStatus.PENDIENTE,
-                    metodo_pago="PPD",  # <--- Añade esto
+                    metodo_pago="PPD",
                     tipo_comprobante="I",
                 )
                 db.add(nueva_cxc)
@@ -1045,34 +1081,35 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 total_real_liters += f.litros
                 total_fuel_cost += f.litros * f.precio_por_litro
 
-    # Calculamos el precio promedio para valorizar las deducciones
+    # Calculamos el precio promedio
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
 
     # =========================================================================
-    # LÓGICA CORREGIDA: DEDUCCIÓN SEGURA (Adiós a los cobros fantasma)
+    # LÓGICA NUEVA: DEDUCCIÓN DE COMBUSTIBLE DICTAMINADA POR AUDITORÍA (FRONTEND)
     # =========================================================================
     diferencia_litros_total = 0.0
     deduccion_combustible = 0.0
 
     for leg in legs:
+        # Tomamos directamente lo que la auditoría dictaminó y guardó en la BD
+        if getattr(leg, "monto_penalizaciones", 0.0) > 0:
+            deduccion_combustible += leg.monto_penalizaciones
+
+        # Para mostrar cuántos litros faltaron (meramente visual para la pre-liquidación)
         vales = [
             f
             for f in leg.fuel_logs
             if f.record_status == "A" and f.tipo_combustible == "diesel"
         ]
         for vale in vales:
-            # Extraemos los datos usando getattr por seguridad (por si en algún momento la BD no los tiene)
             is_conciliated = getattr(vale, "is_conciliated", False)
             diferencia = getattr(vale, "diferencia_litros", 0.0)
 
-            # SOLO sumamos la diferencia si el vale ya fue conciliado y el operador consumió de más
+            # Sumamos la diferencia si el vale ya fue conciliado (si tienes este flujo activo)
             if is_conciliated and diferencia > 0:
                 diferencia_litros_total += diferencia
-
-    if diferencia_litros_total > 0:
-        deduccion_combustible = diferencia_litros_total * precio_promedio
     # =========================================================================
 
     # JALAR SUELDO FIJO

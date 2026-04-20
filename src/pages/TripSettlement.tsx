@@ -388,6 +388,17 @@ export default function TripSettlement() {
     setNewConceptoAmount("");
   };
 
+  // Función para remover un concepto extra manual (Borrador dinámico)
+  const removeConcepto = (id: string) => {
+    setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  // Función para perdonar cobro de combustible
+  const removeCombustibleFaltante = () => {
+    setCombustibleFaltante(0);
+    toast.success("Cargo por combustible anulado para esta liquidación.");
+  };
+
   const handleLiquidate = async () => {
     setIsAnimating(true);
     try {
@@ -842,6 +853,7 @@ export default function TripSettlement() {
                     )}
 
                     <div className="space-y-4">
+                      {/* INGRESOS Y BONOS */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
                           <span>Ingresos / Abonos</span>
@@ -870,11 +882,21 @@ export default function TripSettlement() {
                           .map((c) => (
                             <div
                               key={c.id}
-                              className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded"
+                              className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded group transition-colors"
                             >
-                              <span className="text-emerald-700 text-xs font-medium">
-                                {c.descripcion}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-200/50"
+                                  onClick={() => removeConcepto(c.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 text-rose-500" />
+                                </Button>
+                                <span className="text-emerald-700 text-xs font-medium">
+                                  {c.descripcion}
+                                </span>
+                              </div>
                               <span className="font-mono font-bold text-emerald-600">
                                 +{formatCurrencyLocal(c.monto)}
                               </span>
@@ -882,6 +904,7 @@ export default function TripSettlement() {
                           ))}
                       </div>
 
+                      {/* CARGOS Y DEDUCCIONES */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
                           <span>Cargos / Descuentos</span>
@@ -912,12 +935,24 @@ export default function TripSettlement() {
                             </span>
                           </div>
                         )}
+                        {/* Faltante Combustible con opción a eliminar */}
                         {liquidacion.combustibleFaltante > 0 && (
-                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded">
-                            <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-                              <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
-                              Faltante Diésel
-                            </span>
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded group transition-colors">
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50"
+                                onClick={removeCombustibleFaltante}
+                                title="Perdonar Cobro"
+                              >
+                                <Trash2 className="h-3 w-3 text-rose-600" />
+                              </Button>
+                              <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
+                                Faltante Diésel
+                              </span>
+                            </div>
                             <span className="font-mono font-black text-rose-600">
                               -
                               {formatCurrencyLocal(
@@ -926,16 +961,27 @@ export default function TripSettlement() {
                             </span>
                           </div>
                         )}
+                        {/* Conceptos Extra de Deducción */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "deduccion")
                           .map((c) => (
                             <div
                               key={c.id}
-                              className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded"
+                              className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded group transition-colors"
                             >
-                              <span className="text-rose-700 text-xs font-medium">
-                                {c.descripcion}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50"
+                                  onClick={() => removeConcepto(c.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 text-rose-600" />
+                                </Button>
+                                <span className="text-rose-700 text-xs font-medium">
+                                  {c.descripcion}
+                                </span>
+                              </div>
                               <span className="font-mono font-bold text-rose-600">
                                 -{formatCurrencyLocal(c.monto)}
                               </span>
