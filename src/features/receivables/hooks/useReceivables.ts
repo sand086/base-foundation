@@ -3,7 +3,23 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { receivableService } from "@/features/receivables/services/receivableService";
 import { ReceivableInvoice } from "@/features/receivables/types";
-import axiosClient from "@/api/axiosClient"; // <-- IMPORTANTE AGREGAR ESTO
+import axiosClient from "@/api/axiosClient";
+
+// 🚀 HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee con objetos
+const getErrorMessage = (error: any, fallback: string) => {
+  const detail = error.response?.data?.detail;
+
+  if (Array.isArray(detail)) {
+    // Si es un error 422 de Pydantic, extraemos el mensaje del primer elemento
+    return detail[0]?.msg || fallback;
+  }
+  if (typeof detail === "string") {
+    // Si es un error 400 normal lanzado con HTTPException
+    return detail;
+  }
+
+  return fallback;
+};
 
 export const useReceivables = () => {
   const queryClient = useQueryClient();
@@ -43,7 +59,7 @@ export const useReceivables = () => {
     },
   });
 
-  //   5. NUEVA MUTACIÓN: Registrar Múltiples Pagos y Timbrar REP en el SAT
+  // 5. NUEVA MUTACIÓN: Registrar Múltiples Pagos y Timbrar REP en el SAT
   const registerMultiPaymentRepMut = useMutation({
     mutationFn: (payload: any) =>
       axiosClient.post("/api/sat/stamp/payment", payload),
@@ -75,9 +91,8 @@ export const useReceivables = () => {
         });
         return true;
       } catch (error: any) {
-        toast.error(
-          error.response?.data?.detail || "Error al registrar el pago",
-        );
+        // 🚀 Usamos el helper
+        toast.error(getErrorMessage(error, "Error al registrar el pago"));
         return false;
       }
     },
@@ -87,12 +102,13 @@ export const useReceivables = () => {
         await uploadXmlMut.mutateAsync(file);
         return true;
       } catch (error: any) {
-        toast.error(error.response?.data?.detail || "Error al procesar el XML");
+        // 🚀 Usamos el helper
+        toast.error(getErrorMessage(error, "Error al procesar el XML"));
         return false;
       }
     },
 
-    //   NUEVA FUNCIÓN EXPUESTA PARA USAR EN TU COMPONENTE
+    // NUEVA FUNCIÓN EXPUESTA PARA USAR EN TU COMPONENTE
     registerMultiplePaymentRep: async (payload: any) => {
       try {
         await registerMultiPaymentRepMut.mutateAsync(payload);
@@ -101,8 +117,9 @@ export const useReceivables = () => {
         );
         return true;
       } catch (error: any) {
+        // 🚀 Usamos el helper para que el array del 422 no rompa la pantalla
         toast.error(
-          error.response?.data?.detail || "Error al timbrar el REP en el SAT",
+          getErrorMessage(error, "Error al timbrar el REP en el SAT"),
         );
         console.error(error);
         return false;
