@@ -392,7 +392,7 @@ export function TripDetailsModal({
       const baseURL = rawBaseURL.replace(/\/$/, "");
 
       // 2. Construimos la ruta dinámica correcta
-      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/pdf`;
+      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/pdf`;
 
       console.log(rawBaseURL);
 
@@ -421,7 +421,7 @@ export function TripDetailsModal({
       const baseURL = rawBaseURL.replace(/\/$/, "");
 
       // 2. Ruta dinámica
-      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/xml`;
+      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/xml`;
 
       const link = document.createElement("a");
       link.href = fileUrl;

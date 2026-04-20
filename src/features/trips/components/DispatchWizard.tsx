@@ -572,25 +572,30 @@ export const DispatchWizard = ({
 
   const downloadPdf = async (uuid: string) => {
     try {
-      const response = await axiosClient.get(`/billing/invoice/${uuid}/pdf`, {
+      const response = await axiosClient.get(`/api/sat/invoice/${uuid}/pdf`, {
         responseType: "blob",
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `Carta_Porte_${uuid}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode?.removeChild(link);
+
+      // Especificamos que es un PDF para que el navegador lo renderice
+      const file = new Blob([response.data], { type: "application/pdf" });
+      const fileURL = URL.createObjectURL(file);
+
+      // Abrimos el PDF en una nueva pestaña
+      window.open(fileURL, "_blank");
 
       toast({
-        title: "Descarga Exitosa",
-        description: "El PDF se descargó correctamente en tu equipo.",
+        title: "¡PDF Generado!",
+        description: "El documento se ha abierto en una nueva pestaña.",
       });
+
+      // Limpiamos la memoria del navegador después de unos segundos
+      setTimeout(() => {
+        URL.revokeObjectURL(fileURL);
+      }, 10000);
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error de Descarga",
+        title: "Error al obtener el PDF",
         description:
           "El SAT procesó el timbre, pero el PDF tardó en generarse. Búscalo en la mesa de control.",
       });
@@ -738,8 +743,15 @@ export const DispatchWizard = ({
           });
         }
 
-        if (onSuccess) onSuccess();
-        else setTimeout(() => navigate("/Dispatch"), 1000);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          // Usamos replace: true para que el usuario no pueda "volver atrás" al wizard con el botón del navegador
+          navigate("/Dispatch", { replace: true });
+
+          // Opcional: Si necesitas forzar que recargue los datos de la tabla, descomenta la siguiente línea:
+          window.location.href = "/Dispatch";
+        }
       }
     } catch (error: any) {
       const detail = error?.response?.data?.detail;

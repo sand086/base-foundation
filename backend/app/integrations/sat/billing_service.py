@@ -270,8 +270,6 @@ class BillingService:
         )
 
     def _generar_sello_xslt(self, xml_bytes: bytes) -> tuple[str, str]:
-        """Aplica el XSLT oficial al XML para obtener la Cadena Original y la firma."""
-
         xslt_path = (
             Path(__file__).parent
             / "cadenas_sat_originales_base"
@@ -284,33 +282,22 @@ class BillingService:
             )
 
         try:
-            # 🛡️ BLINDAJE ANTI-ERRORES DE RED 🛡️
-            # Configuramos el parser para que NO intente resolver entidades externas
             parser = etree.XMLParser(
                 load_dtd=False, no_network=True, resolve_entities=False
             )
 
-            # Cargamos el XSLT con el parser protegido
             xslt_doc = etree.parse(str(xslt_path), parser=parser)
-
-            # Configuramos el procesador para que ignore URIs externas que no existan
             transform = etree.XSLT(xslt_doc)
-
-            # Parseamos el XML que vamos a sellar también con protección
             xml_doc = etree.fromstring(xml_bytes, parser=parser)
-
-            # Generamos la cadena original
             cadena_original_tree = transform(xml_doc)
             cadena_original = str(cadena_original_tree)
 
-            # Limpieza estándar
             cadena_original = (
                 cadena_original.replace('<?xml version="1.0" encoding="UTF-8"?>', "")
                 .replace("\n", "")
                 .strip()
             )
 
-            # Sello con Llave Privada
             with open(self.path_key, "rb") as f:
                 private_key = load_der_private_key(
                     f.read(), password=self.key_password.encode()
@@ -325,7 +312,6 @@ class BillingService:
 
         except Exception as e:
             logger.error(f"Fallo en motor criptográfico blindado: {e}")
-            # Si falla por el XSLT, mostramos un error más claro
             raise HTTPException(
                 status_code=500,
                 detail=f"Error en Sello SAT: Verifica que tu archivo XSLT local no tenga referencias a http externas caídas. Error: {str(e)}",
@@ -359,7 +345,6 @@ class BillingService:
             .first()
         )
 
-        # 🚀 SOLUCIÓN AL ERROR DE REMOLQUES (Se sacan del Viaje Padre, NO del tramo)
         r1 = (
             self.db.query(Unit).filter(Unit.id == viaje.remolque_1_id).first()
             if viaje.remolque_1_id
@@ -403,15 +388,12 @@ class BillingService:
             estado_dest = loc_destino.estado_clave
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
-            logger.warning(
-                f"CP {cp_cliente} no encontrado en BD. Usando tríada fallback Veracruz."
-            )
             cp_cliente = "91808"
             estado_dest = "VER"
             municipio_dest = "193"
 
         return {
-            "id_ccp": "CCC" + str(uuid.uuid4()).upper().replace("-", "")[:33],
+            "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
@@ -498,7 +480,7 @@ class BillingService:
             "estado_destino": estado_dest,
             "municipio_destino": municipio_dest,
             "leyenda_legal": DEFAULT_LEYENDA,
-            "ocultar_montos": ocultar_montos,
+            "ocultar_montos": False,  # SIEMPRE DESOCULTADO PARA PDF
         }
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
@@ -550,7 +532,60 @@ class BillingService:
             cfdi_bytes = (
                 raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
             )
+
+            # 1. Guardar XML
             self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
+
+            # 2. Generar PDF Automáticamente
+            try:
+                root = etree.fromstring(cfdi_bytes)
+                ns = {
+                    "cfdi": "http://www.sat.gob.mx/cfd/4",
+                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+                }
+                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+                s_sat = tfd_node.get("SelloSAT", "0000")
+                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+                s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+
+                cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+                total_float = _clean_float(data.get("total", 0))
+                if HAS_NUM2WORDS:
+                    entero = int(total_float)
+                    decimales = int(round((total_float - entero) * 100))
+                    texto = num2words(entero, lang="es").upper()
+                    # Corrección "UNO PESOS" -> "UN PESO"
+                    if texto == "UNO":
+                        texto = "UN"
+                    importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+                else:
+                    importe_letra = f"({total_float:,.2f} MXN)"
+
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={data['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                buffer = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(
+                    buffer, format="PNG"
+                )
+
+                self._generar_pdf_con_diseno(
+                    data,
+                    uuid_timbrado,
+                    buffer.getvalue(),
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original_tfd,
+                    importe_letra,
+                )
+                logger.info(
+                    f"¡PDF GENERADO EXITOSAMENTE PARA LA CARTA PORTE: {uuid_timbrado}!"
+                )
+            except Exception as e:
+                logger.error(f"El XML se timbró pero falló la creación del PDF: {e}")
 
             class PACResult:
                 pass
@@ -914,9 +949,11 @@ class BillingService:
                 entero = int(total_float)
                 decimales = int(round((total_float - entero) * 100))
                 texto = num2words(entero, lang="es").upper()
-                importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
+                if texto == "UNO":
+                    texto = "UN"
+                importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
             else:
-                importe_letra = f"(*** {total_float:,.2f} MXN ***)"
+                importe_letra = f"({total_float:,.2f} MXN)"
 
             qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={complemento_uuid}&re={self.emisor_rfc}&rr={datos_pago['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
             qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -1123,9 +1160,6 @@ class BillingService:
             </cartaporte31:FiguraTransporte>
         </cartaporte31:CartaPorte>
     </cfdi:Complemento>
-    <cfdi:Addenda>
-        <fst3:Contrato xmlns:fst3="http://facturasoftesc.com/ns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://facturasoftesc.com/ns http://facturasoftesc.com/ns/fst3.xsd" Comentario="{d['leyenda_legal']}"></fst3:Contrato>
-    </cfdi:Addenda>
 </cfdi:Comprobante>""".strip()
 
     def _generar_pdf_con_diseno(
@@ -1146,21 +1180,12 @@ class BillingService:
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        ocultar = d.get("ocultar_montos", False)
-
-        subtotal_str = (
-            "***" if ocultar else f"{_clean_float(d.get('subtotal', 0)):,.2f}"
-        )
-        iva_str = "***" if ocultar else f"{_clean_float(d.get('iva', 0)):,.2f}"
-        retenciones_str = (
-            "***" if ocultar else f"{_clean_float(d.get('retenciones', 0)):,.2f}"
-        )
-        total_str = "***" if ocultar else f"{_clean_float(d.get('total', 0)):,.2f}"
-        importe_letra_final = (
-            "(*** DOCUMENTO OPERATIVO SIN VALOR COMERCIAL ***)"
-            if ocultar
-            else importe_letra
-        )
+        # FORMATEO DE MONTOS SIN ASTERISCOS
+        subtotal_str = f"{_clean_float(d.get('subtotal', 0)):,.2f}"
+        iva_str = f"{_clean_float(d.get('iva', 0)):,.2f}"
+        retenciones_str = f"{_clean_float(d.get('retenciones', 0)):,.2f}"
+        total_str = f"{_clean_float(d.get('total', 0)):,.2f}"
+        importe_letra_final = importe_letra
 
         context = {
             **d,

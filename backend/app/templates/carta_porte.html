@@ -15,7 +15,7 @@
               {% if logo_src %}
               <img src="{{ logo_src }}" class="logo-img" alt="Logo" />
               {% else %}
-              <div class="header-company">{{ nombre_emisor }}</div>
+              <div class="header-company">TRANSPORTES RAPIDOS 3T</div>
               {% endif %}
             </td>
 
@@ -28,16 +28,21 @@
                 class="bold text-dark"
                 style="font-size: 10pt; margin-bottom: 2px"
               >
-                {{ nombre_emisor }}
+                TRANSPORTES RAPIDOS 3T
               </div>
               <div>
                 <span class="bold text-muted">RFC:</span>
-                <span class="text-dark">{{ rfc_emisor }}</span>
+                <span class="text-dark">RTX110624KP5</span>
               </div>
-              <div class="text-muted">C.P. EXPEDICIÓN: {{ cp_emisor }}</div>
+              <div class="text-muted">C.P. EXPEDICIÓN: 91808</div>
               <div>
                 <span class="bold text-muted">Régimen Fiscal (Emisor):</span>
-                <span class="text-dark">{{ regimen_emisor }}</span>
+                <span class="text-dark">624</span>
+              </div>
+              <div class="text-muted" style="margin-top: 4px">
+                DESARROLLO URBANO, MANZANA 3, LOTE 10 Y 11, COL. RENACIMIENTO,
+                C.P. 91808,<br />
+                VERACRUZ, VER. Tel. 2291000240
               </div>
             </td>
 
@@ -56,10 +61,10 @@
                     class="text-primary bold"
                     style="font-size: 12pt; margin-bottom: 3px"
                   >
-                    CP-{{ folio_interno }}
+                    {{ folio_interno }}
                   </div>
                   <div style="font-size: 5.5pt; color: #64748b">
-                    Fecha y Hora:
+                    Fecha y Hora:<br />
                     <span class="text-dark bold">{{ fecha_emision }}</span>
                   </div>
                 </div>
@@ -93,7 +98,7 @@
           <tr>
             <td colspan="2">
               <span class="grid-label">Dirección Fiscal</span>
-              <span class="text-dark">{{ direccion_cliente }}</span>
+              <span class="text-dark">{{ cp_cliente }} (C.P.)</span>
             </td>
             <td>
               <span class="grid-label">C.P. Receptor</span>
@@ -145,7 +150,7 @@
               <tr>
                 <td class="bold text-dark">{{ uuid }}</td>
                 <td class="bold text-dark">{{ cert_sat }}</td>
-                <td class="bold text-dark">{{ fecha_certificacion }}</td>
+                <td class="bold text-dark">{{ fecha_emision }}</td>
               </tr>
             </table>
 
@@ -225,7 +230,7 @@
           <td width="70%"></td>
           <td width="30%">
             <div class="bento-card" style="padding: 8px">
-              <table style="font-size: 7.5pt">
+              <table style="font-size: 7.5pt; width: 100%">
                 <tr>
                   <td class="right text-muted">SubTotal:</td>
                   <td class="right bold">$ {{ subtotal }}</td>
@@ -279,11 +284,11 @@
           <tr>
             <td width="50%">
               <span class="grid-label">Remitente</span
-              ><span class="bold text-dark">{{ remitente_nombre }}</span>
+              ><span class="bold text-dark">TRANSPORTES RAPIDOS 3T</span>
             </td>
             <td width="50%">
               <span class="grid-label">RFC Remitente</span
-              ><span class="bold text-dark">{{ remitente_rfc }}</span>
+              ><span class="bold text-dark">RTX110624KP5</span>
             </td>
           </tr>
           <tr>
@@ -399,17 +404,18 @@
               <span class="grid-label">Remolques Asignados</span>
               <span class="text-dark">
                 <b>R1:</b> {{ subtipo_remolque }} - Placa: {{ placa_remolque_1
-                }} {% if placa_remolque_2 and placa_remolque_2 != 'S/P' %}
-                <br /><b>R2:</b> {{ subtipo_remolque_2 }} - Placa: {{
-                placa_remolque_2 }} {% endif %}
+                }} {% if placa_remolque_2 and placa_remolque_2 != 'S/P' and
+                placa_remolque_2 != '1XXXX99' %} <br /><b>R2:</b> {{
+                subtipo_remolque_2 }} - Placa: {{ placa_remolque_2 }} {% endif
+                %}
               </span>
             </td>
             <td>
               <span class="grid-label">Operador</span>
-              <span class="bold text-dark">{{ operador_rfc }}</span> - {{
-              operador_nombre }} <br />
+              <span class="bold text-dark">{{ rfc_operador }}</span> - {{
+              nombre_operador }} <br />
               <span class="text-muted" style="font-size: 6pt"
-                >Lic: {{ operador_licencia }}</span
+                >Lic: {{ licencia }}</span
               >
             </td>
           </tr>
