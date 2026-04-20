@@ -263,9 +263,6 @@ export default function TripSettlement() {
     activeTab,
   ]);
 
-  // =========================================================================
-  //  LÓGICA CORREGIDA PARA EXTRAER EL SUELDO SIN BUCLES INFINITOS
-  // =========================================================================
   useEffect(() => {
     if (activeTab === "historico") return;
 
@@ -281,33 +278,29 @@ export default function TripSettlement() {
     );
 
     if (roadLeg) {
-      // 1. Extraemos el sueldo navegando por la estructura real del JSON
       let sueldoTarifa = 0;
       const trip = roadLeg.trip;
 
       if (trip?.client?.sub_clients) {
-        // Buscamos el subcliente que coincida con el sub_client_id del viaje
         const subClient =
           trip.client.sub_clients.find(
             (sc: any) => sc.id === trip.sub_client_id,
           ) || trip.client.sub_clients[0];
 
         if (subClient?.tariffs) {
-          // Buscamos la tarifa que coincida con el tariff_id del viaje
           const tariff =
             subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
             subClient.tariffs[0];
 
           if (tariff?.sueldo_operador) {
-            sueldoTarifa = tariff.sueldo_operador; // 👈 ¡Aquí atrapa los 1600.0!
+            sueldoTarifa = tariff.sueldo_operador;
           }
         }
       }
 
-      // 2. Evaluamos el sueldo con la prioridad correcta
       const sueldoLocal =
         roadLeg.monto_sueldo ||
-        sueldoTarifa || // <-- Insertamos el valor extraído de la tarifa
+        sueldoTarifa ||
         trip?.sueldo_operador ||
         trip?.monto_sueldo ||
         trip?.pago_operador ||
@@ -324,7 +317,6 @@ export default function TripSettlement() {
                 0,
             );
 
-            // 3. Si el API devuelve un sueldo mayor a 0, usamos ese. Si no, usamos el Local.
             const sueldoAPI =
               data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
             setSueldoRutaPactado(sueldoAPI > 0 ? sueldoAPI : sueldoLocal);
@@ -333,7 +325,7 @@ export default function TripSettlement() {
             toast.error("Error de conexión al verificar telemetría del viaje.");
             setPreviewData(null);
             setCombustibleFaltante(0);
-            setSueldoRutaPactado(sueldoLocal); // Fallback si falla el API
+            setSueldoRutaPactado(sueldoLocal);
           })
           .finally(() => setIsLoadingPreview(false));
       } else {
@@ -344,10 +336,7 @@ export default function TripSettlement() {
       setCombustibleFaltante(0);
       setSueldoRutaPactado(0);
     }
-    // 🛑 ROMPEMOS EL BUCLE: No ponemos getSettlementPreview ni selectedLegsData en este arreglo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLegIds, activeTab]);
-  // =========================================================================
 
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -388,15 +377,10 @@ export default function TripSettlement() {
     setNewConceptoAmount("");
   };
 
-  // Función para remover un concepto extra manual (Borrador dinámico)
+  // 🚀 FUNCIÓN PARA ELIMINAR BONOS O DEDUCCIONES (EXPRÉS)
   const removeConcepto = (id: string) => {
     setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
-  };
-
-  // Función para perdonar cobro de combustible
-  const removeCombustibleFaltante = () => {
-    setCombustibleFaltante(0);
-    toast.success("Cargo por combustible anulado para esta liquidación.");
+    toast.info("Concepto eliminado exitosamente.");
   };
 
   const handleLiquidate = async () => {
@@ -411,7 +395,6 @@ export default function TripSettlement() {
         monto_maniobras: liquidacion.deduccionesManuales,
         monto_penalizaciones: liquidacion.combustibleFaltante,
         neto_a_pagar: liquidacion.neto_a_pagar,
-        // 👇 PARCHE DE SEGURIDAD AQUÍ 👇
         conceptos_extra: conceptosExtra.map((c) => ({
           ...c,
           categoria: c.categoria || (c.tipo === "ingreso" ? "bono" : "cargo"),
@@ -803,7 +786,7 @@ export default function TripSettlement() {
                     Conciliacion Pendiente
                   </AlertTitle>
                   <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
-                    El sistema detecta {previewData.legs_sin_ticket.length}{" "}
+                    El sistema detecta {previewData?.legs_sin_ticket?.length}{" "}
                     tramo(s) de carretera que{" "}
                     <span className="underline">no han sido conciliados</span>{" "}
                     en Diésel.
@@ -853,7 +836,6 @@ export default function TripSettlement() {
                     )}
 
                     <div className="space-y-4">
-                      {/* INGRESOS Y BONOS */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
                           <span>Ingresos / Abonos</span>
@@ -877,6 +859,8 @@ export default function TripSettlement() {
                             +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
                           </span>
                         </div>
+
+                        {/* 🚀 MAPEO DE INGRESOS CON BOTÓN DE ELIMINAR */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "ingreso")
                           .map((c) => (
@@ -904,7 +888,6 @@ export default function TripSettlement() {
                           ))}
                       </div>
 
-                      {/* CARGOS Y DEDUCCIONES */}
                       <div className="space-y-2">
                         <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
                           <span>Cargos / Descuentos</span>
@@ -935,33 +918,8 @@ export default function TripSettlement() {
                             </span>
                           </div>
                         )}
-                        {/* Faltante Combustible con opción a eliminar */}
-                        {liquidacion.combustibleFaltante > 0 && (
-                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded group transition-colors">
-                            <div className="flex items-center gap-1.5">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50"
-                                onClick={removeCombustibleFaltante}
-                                title="Perdonar Cobro"
-                              >
-                                <Trash2 className="h-3 w-3 text-rose-600" />
-                              </Button>
-                              <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-                                <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
-                                Faltante Diésel
-                              </span>
-                            </div>
-                            <span className="font-mono font-black text-rose-600">
-                              -
-                              {formatCurrencyLocal(
-                                liquidacion.combustibleFaltante,
-                              )}
-                            </span>
-                          </div>
-                        )}
-                        {/* Conceptos Extra de Deducción */}
+
+                        {/* 🚀 MAPEO DE DEDUCCIONES CON BOTÓN DE ELIMINAR */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "deduccion")
                           .map((c) => (
@@ -1021,7 +979,7 @@ export default function TripSettlement() {
           )}
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN (DISEÑO TAHOE) */}
+      {/* MODAL DE CONFIRMACIÓN */}
       <AlertDialog
         open={!!actionModal}
         onOpenChange={(open) => !open && setActionModal(null)}
@@ -1142,7 +1100,7 @@ export default function TripSettlement() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DE CONCEPTOS MANUALES (DISEÑO TAHOE) */}
+      {/* MODAL DE CONCEPTOS MANUALES */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}

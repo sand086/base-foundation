@@ -47,7 +47,7 @@ export function OperatorSettlementDetailModal({
   onOpenChange,
   selectedLegsData,
   liquidacion,
-  conceptosExtra, // Lo que escribes en vivo
+  conceptosExtra,
   previewData,
   activeTab,
   empresaNombre,
@@ -65,11 +65,9 @@ export function OperatorSettlementDetailModal({
 
   const leg = selectedLegsData[0];
 
-  // MAGIA: Decidimos de dónde leer los conceptos desmenuzados
   const listaConceptos =
     activeTab === "pendientes" ? conceptosExtra : leg?.desglose_conceptos || [];
 
-  // Cálculos operativos (Tiempo, Distancia, Paradas)
   const calcOperativos = React.useMemo(() => {
     if (!leg) return { distancia: "N/A", tiempo: "N/A", paradas: 0 };
 
@@ -102,18 +100,33 @@ export function OperatorSettlementDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-card/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:fixed print:inset-0 print:w-screen print:h-screen print:max-h-none print:max-w-none print:border-none print:shadow-none print:rounded-none print:bg-white print:m-0 print:z-50 print:block">
+      {/* Ajustes clave en DialogContent:
+        1. Se le agrega un id "print-modal" para controlarlo con CSS crudo.
+        2. Clases print para que se vuelva absoluto, tome toda la pantalla y quite los scrolls en la impresión.
+      */}
+      <DialogContent
+        id="print-modal"
+        className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-card/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:absolute print:inset-0 print:w-full print:h-auto print:max-h-none print:max-w-none print:border-none print:shadow-none print:rounded-none print:bg-white print:m-0 print:p-8 print:z-[99999] print:block print:overflow-visible"
+      >
+        {/* MAGIA DE IMPRESIÓN: Ocultamos el resto de la app y solo mostramos el modal */}
+        <style media="print">{`
+          @page { size: auto; margin: 10mm; }
+          body * { visibility: hidden; }
+          #print-modal, #print-modal * { visibility: visible; }
+          #print-modal { position: absolute; left: 0; top: 0; width: 100%; }
+        `}</style>
+
         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.02] pointer-events-none print:opacity-5 print:hidden">
           <Truck className="w-[400px] h-[400px] transform -rotate-12" />
         </div>
 
-        {/* HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden print:bg-white print:border-black print:pb-4 print:pt-8">
+        {/* HEADER */}
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden print:bg-transparent print:border-black print:p-0 print:pb-6 print:mb-6">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none print:hidden" />
 
           <div className="relative z-10 flex justify-between items-start">
             <div className="flex items-center gap-4 sm:gap-5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-inner shrink-0 border border-slate-200 dark:border-slate-700 overflow-hidden print:border-none print:shadow-none">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-inner shrink-0 border border-slate-200 dark:border-slate-700 overflow-hidden print:border print:border-slate-300 print:shadow-none">
                 {empresaLogo ? (
                   <img
                     src={empresaLogo}
@@ -138,7 +151,7 @@ export function OperatorSettlementDetailModal({
             </div>
 
             <div className="text-right flex flex-col items-end gap-1.5">
-              <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg font-mono font-black text-xs sm:text-sm tracking-wider border border-slate-200 dark:border-slate-700 shadow-sm print:bg-transparent print:border-slate-400 print:text-black print:shadow-none">
+              <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg font-mono font-black text-xs sm:text-sm tracking-wider border border-slate-200 dark:border-slate-700 shadow-sm print:bg-transparent print:border-slate-400 print:text-black print:shadow-none print:px-0">
                 LIQ-{leg.id}-{String(Date.now()).slice(-4)}
               </span>
               <p className="text-slate-500 text-[10px] sm:text-xs font-mono print:text-slate-600">
@@ -149,17 +162,17 @@ export function OperatorSettlementDetailModal({
         </DialogHeader>
 
         {/* BODY */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar print:overflow-visible print:bg-white print:p-8">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 print:gap-8">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar print:overflow-visible print:bg-transparent print:p-0 print:h-auto">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 print:flex print:flex-col print:gap-6">
             {/* COLUMNA IZQUIERDA (Info Viaje y Estadísticas) */}
-            <div className="md:col-span-7 space-y-4">
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm print:shadow-none print:border-slate-300">
+            <div className="md:col-span-7 space-y-4 print:w-full">
+              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm print:shadow-none print:border-slate-300 print:bg-transparent">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 mb-3 block border-b pb-2 border-slate-100 dark:border-slate-800 print:border-slate-200">
                   Detalles de la Operación
                 </span>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5 print:text-slate-500">
                       Operador
                     </span>
                     <span className="font-black text-brand-navy dark:text-white text-sm truncate print:text-black">
@@ -167,7 +180,7 @@ export function OperatorSettlementDetailModal({
                     </span>
                   </div>
                   <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5 print:text-slate-500">
                       Tracto / Eco
                     </span>
                     <span className="font-bold text-slate-700 dark:text-slate-300 text-xs print:text-black">
@@ -177,24 +190,26 @@ export function OperatorSettlementDetailModal({
                     </span>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5 print:text-slate-500">
                       Trayecto
                     </span>
                     <span className="font-bold text-slate-700 dark:text-slate-300 text-xs print:text-black flex items-center gap-2">
-                      <MapPin className="h-3 w-3 text-emerald-500" />{" "}
+                      <MapPin className="h-3 w-3 text-emerald-500 print:text-black" />{" "}
                       {leg.trip?.origin || "S/D"}
-                      <span className="text-slate-300 mx-1">➔</span>
-                      <MapPin className="h-3 w-3 text-rose-500" />{" "}
+                      <span className="text-slate-300 mx-1 print:text-slate-400">
+                        ➔
+                      </span>
+                      <MapPin className="h-3 w-3 text-rose-500 print:text-black" />{" "}
                       {leg.trip?.destination || "S/D"}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Estadísticas Extraídas de Bitácora */}
-              <div className="grid grid-cols-3 gap-3 print:gap-4">
-                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 print:bg-white print:border-slate-300 flex flex-col items-center justify-center text-center">
-                  <Route className="h-5 w-5 text-blue-500 mb-1" />
+              {/* Estadísticas */}
+              <div className="grid grid-cols-3 gap-3 print:gap-4 print:break-inside-avoid">
+                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 print:bg-transparent print:border-slate-300 flex flex-col items-center justify-center text-center">
+                  <Route className="h-5 w-5 text-blue-500 mb-1 print:text-slate-700" />
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
                     Recorrido
                   </span>
@@ -202,8 +217,8 @@ export function OperatorSettlementDetailModal({
                     {calcOperativos.distancia}
                   </span>
                 </div>
-                <div className="bg-amber-50/50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 print:bg-white print:border-slate-300 flex flex-col items-center justify-center text-center">
-                  <Clock className="h-5 w-5 text-amber-500 mb-1" />
+                <div className="bg-amber-50/50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 print:bg-transparent print:border-slate-300 flex flex-col items-center justify-center text-center">
+                  <Clock className="h-5 w-5 text-amber-500 mb-1 print:text-slate-700" />
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
                     Duración
                   </span>
@@ -211,8 +226,8 @@ export function OperatorSettlementDetailModal({
                     {calcOperativos.tiempo}
                   </span>
                 </div>
-                <div className="bg-purple-50/50 dark:bg-purple-900/10 p-3 rounded-xl border border-purple-100 dark:border-purple-900/30 print:bg-white print:border-slate-300 flex flex-col items-center justify-center text-center">
-                  <Activity className="h-5 w-5 text-purple-500 mb-1" />
+                <div className="bg-purple-50/50 dark:bg-purple-900/10 p-3 rounded-xl border border-purple-100 dark:border-purple-900/30 print:bg-transparent print:border-slate-300 flex flex-col items-center justify-center text-center">
+                  <Activity className="h-5 w-5 text-purple-500 mb-1 print:text-slate-700" />
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
                     Paradas / Evt
                   </span>
@@ -224,14 +239,14 @@ export function OperatorSettlementDetailModal({
             </div>
 
             {/* COLUMNA DERECHA (Finanzas) */}
-            <div className="md:col-span-5 flex flex-col justify-between">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-5 rounded-xl shadow-sm space-y-4 flex-1 mb-4 print:shadow-none print:border-slate-300 print:p-0 print:mb-8">
+            <div className="md:col-span-5 flex flex-col justify-between print:w-full print:break-inside-avoid">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-5 rounded-xl shadow-sm space-y-4 flex-1 mb-4 print:shadow-none print:border-slate-300 print:bg-transparent print:p-4 print:mb-4">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-100 dark:border-slate-800 pb-2 print:text-slate-600 print:border-slate-300">
                   Desglose Financiero
                 </h4>
 
                 <div className="space-y-3 text-xs font-medium">
-                  {/* SECCIÓN 1: INGRESOS Y BONOS */}
+                  {/* SECCIÓN 1 */}
                   <div className="flex justify-between items-center text-slate-700 dark:text-slate-300 print:text-black">
                     <span>Sueldo Base Operativo</span>
                     <span className="font-mono font-semibold">
@@ -255,7 +270,7 @@ export function OperatorSettlementDetailModal({
 
                   <div className="my-2 border-b border-dashed border-slate-200 dark:border-slate-700 print:border-slate-300"></div>
 
-                  {/* SECCIÓN 2: ANTICIPOS Y VALES */}
+                  {/* SECCIÓN 2 */}
                   {(leg?.anticipo_viaticos || 0) > 0 && (
                     <div className="flex justify-between items-center text-rose-600 dark:text-rose-400 print:text-black">
                       <span>Anticipo de Viáticos</span>
@@ -283,11 +298,11 @@ export function OperatorSettlementDetailModal({
                     </div>
                   )}
 
-                  {/* SECCIÓN 3: PENALIZACIONES Y DESCUENTOS */}
+                  {/* SECCIÓN 3 */}
                   {(liquidacion?.combustibleFaltante || 0) > 0 && (
                     <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 print:text-black font-bold">
                       <div className="flex flex-col">
-                        <span>Faltante Diésel (Registro de detalles)</span>
+                        <span>Faltante Diésel</span>
                       </div>
                       <span className="font-mono font-black mt-0.5">
                         -
@@ -315,7 +330,7 @@ export function OperatorSettlementDetailModal({
               </div>
 
               {/* GRAN TOTAL */}
-              <div className="relative bg-slate-900 p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-black print:shadow-none print:mt-4">
+              <div className="relative bg-slate-900 p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-transparent print:border-2 print:border-black print:shadow-none print:p-4">
                 <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
                 <div className="relative z-10">
                   <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1 print:text-black">
@@ -332,12 +347,12 @@ export function OperatorSettlementDetailModal({
             </div>
           </div>
 
-          {/* FIRMAS */}
-          <div className="mt-12 pt-8 print:pt-16 print:mt-16">
-            <div className="relative flex items-center pb-8 mb-8 print:pb-12 ">
+          {/* FIRMAS - Con clase de evitar quiebre de página (break-inside-avoid) */}
+          <div className="mt-12 pt-8 print:pt-8 print:mt-12 print:break-inside-avoid">
+            <div className="relative flex items-center pb-8 mb-8 print:pb-8 print:mb-8">
               <div className="w-full border-t-2 border-dashed border-slate-300 print:border-black/40"></div>
             </div>
-            <div className="flex justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8 print:px-12">
+            <div className="flex justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8 print:px-4">
               <div className="flex-1 text-center">
                 <div className="border-t border-slate-800 print:border-black pt-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-800 print:text-black">
@@ -365,7 +380,7 @@ export function OperatorSettlementDetailModal({
                 </div>
               </div>
             </div>
-            <p className="text-[8px] text-slate-500 text-center leading-relaxed px-4 md:px-12 print:text-slate-600 print:max-w-2xl print:mx-auto">
+            <p className="text-[8px] text-slate-500 text-center leading-relaxed px-4 md:px-12 print:text-slate-600 print:px-0">
               Este documento ampara la liquidación de los movimientos descritos.
               Al firmar, el operador acepta de conformidad los descuentos y
               pagos realizados, no reservándose acción ni derecho legal en
