@@ -117,51 +117,17 @@ def parse_sat_error(e: Exception) -> str:
     return str(e)
 
 
-class SafeData(dict):
-    def __getitem__(self, key):
-        val = self.get(key)
-        if val is None or str(val).strip() == "" or str(val).strip() == "None":
-            logger.warning(
-                f" [BLINDAJE ACTIVO] Llave faltante o vacía: '{key}'. Inyectando default."
-            )
-            if key in [
-                "subtotal",
-                "total",
-                "iva",
-                "retenciones",
-                "peso_bruto",
-                "peso_bruto_vehicular",
-            ]:
-                return "0.00"
-            if key in ["total_dist_rec", "cantidad", "tc"]:
-                return "1"
-            if "rfc" in key.lower():
-                return "XAXX010101000"
-            if "cp" in key.lower():
-                return "91700"
-            if key in ["contenedor_1", "contenedor_2"]:
-                return "N/A"
-            return "NO_ESPECIFICADO"
-        return val
-
-
 # =========================================================
 # MAPEO INTELIGENTE DE REMOLQUES SAT (CTR001 - CTR032)
 # =========================================================
 def get_sat_trailer_code(tipo: str) -> str:
-    """
-    Convierte descripciones libres de tu Base de Datos (ej. 'Caja Seca', 'Chasis', 'Dolly')
-    a los códigos oficiales del SAT CTRXXX.
-    """
     if not tipo:
-        return "CTR004"  # Default: Caja Cerrada
-
+        return "CTR004"
     tipo_upper = str(tipo).strip().upper()
     if re.match(r"^CTR0[0-9]{2}$", tipo_upper):
-        return tipo_upper  # Ya es un código CTR válido
+        return tipo_upper
 
     tipo_lower = tipo_upper.lower()
-
     if "caballete" in tipo_lower:
         return "CTR001"
     if "abierta" in tipo_lower and "caja" in tipo_lower:
@@ -227,7 +193,35 @@ def get_sat_trailer_code(tipo: str) -> str:
     if "caja" in tipo_lower:
         return "CTR002"
 
-    return "CTR004"  # Respaldo seguro si no se reconoce
+    return "CTR004"
+
+
+class SafeData(dict):
+    def __getitem__(self, key):
+        val = self.get(key)
+        if val is None or str(val).strip() == "" or str(val).strip() == "None":
+            logger.warning(
+                f" [BLINDAJE ACTIVO] Llave faltante o vacía: '{key}'. Inyectando default."
+            )
+            if key in [
+                "subtotal",
+                "total",
+                "iva",
+                "retenciones",
+                "peso_bruto",
+                "peso_bruto_vehicular",
+            ]:
+                return "0.00"
+            if key in ["total_dist_rec", "cantidad", "tc"]:
+                return "1"
+            if "rfc" in key.lower():
+                return "XAXX010101000"
+            if "cp" in key.lower():
+                return "91700"
+            if key in ["contenedor_1", "contenedor_2"]:
+                return "N/A"
+            return "NO_ESPECIFICADO"
+        return val
 
 
 class BillingService:
@@ -459,24 +453,21 @@ class BillingService:
         is_nominal=False,
         ocultar_montos=False,
     ) -> dict:
-
         # ========================================================
-        # 1. EXTRACCIÓN DE COSTOS E IMPUESTOS REALES (DE LA TARIFA)
+        # 1. EXTRACCIÓN DE COSTOS E IMPUESTOS REALES
         # ========================================================
         tarifa = viaje.tariff
         if tarifa and not is_nominal:
-            # Factura Final: Tomamos los datos reales de la ruta cotizada
             subtotal = float(tarifa.tarifa_base or 0.0) + float(
                 tarifa.costo_casetas or 0.0
             )
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
             ret_pct = float(tarifa.retencion_porcentaje or 4.0) / 100.0
 
-            # 🚀 BLINDAJE SAT: La distancia NUNCA puede ser 0. Si está vacía, forzamos "1" km.
+            # 🚀 BLINDAJE SAT: La distancia NUNCA puede ser 0
             dist_km = int(tarifa.distancia_km or 0)
             distancia_real = str(dist_km) if dist_km > 0 else "1"
         else:
-            # Carta Porte de $1.00 o Fallback si no hay tarifa asignada
             subtotal = (
                 1.00
                 if is_nominal
@@ -496,8 +487,6 @@ class BillingService:
         # 2. EXTRACCIÓN DE DOMICILIOS REALES (DEL SUBCLIENTE)
         # ========================================================
         subcliente = viaje.sub_client
-
-        # Buscamos el CP real del destino (Subcliente), si no tiene, usamos el fiscal del Cliente
         cp_destino_real = getattr(subcliente, "codigo_postal", None)
         if not cp_destino_real or str(cp_destino_real).strip() == "":
             cp_destino_real = getattr(cliente, "codigo_postal_fiscal", "91808")
@@ -506,19 +495,17 @@ class BillingService:
             getattr(subcliente, "direccion", viaje.destination) or "DOMICILIO CONOCIDO"
         )
 
-        # Validación estricta de la Tríada SAT para el DESTINO
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_destino_real)
             .first()
         )
-
         if loc_destino:
             estado_dest = loc_destino.estado_clave
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
             logger.warning(
-                f"CP Destino {cp_destino_real} no encontrado en BD. Usando fallback Veracruz para evitar rechazo SAT."
+                f"CP {cp_destino_real} no encontrado en BD. Usando fallback Veracruz para evitar rechazo SAT."
             )
             cp_destino_real = "91808"
             estado_dest = "VER"
@@ -527,53 +514,70 @@ class BillingService:
                 f"{calle_destino_real} (CP Original no catalogado en SAT)"
             )
 
-        # 🚀 Aplicando mapeo inteligente de Remolques
+        # ========================================================
+        # 3. CONCATENACIÓN DINÁMICA DE CONTENEDORES PARA EL PDF
+        # ========================================================
+        c1 = getattr(viaje, "contenedor_1", "")
+        c2 = getattr(viaje, "contenedor_2", "")
+        cont_str = ""
+        if c1 and c1 != "N/A" and c1 != "S/R":
+            cont_str += f" {c1}"
+        if c2 and c2 != "N/A" and c2 != "S/R":
+            cont_str += f" / {c2}"
+
+        # 🚀 CORRECCIÓN CP109: Separar el Servicio de la Mercancía
+        clave_servicio_flete = "78101802"  # ESTO EXIGE EL SAT EN EL CONCEPTO DEL CFDI
+        clave_mercancia = (
+            viaje.sat_clave_producto
+            if viaje and getattr(viaje, "sat_clave_producto", None)
+            else "01010101"
+        )  # ESTO VA EN CARTA PORTE
+
+        desc_merc = (
+            "FLETE NOMINAL"
+            if is_nominal
+            else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+        )
+
+        # Este string se imprimirá tal cual en el PDF: "[78101802] FLETE CARGA GENERAL TRHU6327561 / MRKU4816300"
+        pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
+
+        dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
+        condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
+
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
         tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
 
-        # ========================================================
-        # 3. ARMADO DEL DICCIONARIO FINAL
-        # ========================================================
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            # Montos Reales
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            "descripcion_concepto": (
-                "FLETE NOMINAL"
-                if is_nominal
-                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
-            ),
+            "descripcion_concepto": desc_merc,
+            # Variables inyectadas exclusivamente para el formato del PDF
+            "pdf_descripcion": pdf_descripcion,
+            "condiciones_pago": condiciones_pago,
+            # 🚀 El SAT exige que el CFDI cobre un Flete
+            "clave_prod_serv": clave_servicio_flete,
             "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
             "nombre_cliente": cliente.razon_social if cliente else "PUBLICO EN GENERAL",
-            "cp_cliente": cp_destino_real,  # Se usa el CP Validado
+            "cp_cliente": cp_destino_real,
             "regimen_cliente": (
                 getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
             ),
             "uso_cfdi": "G03",
-            # Distancia Real
             "total_dist_rec": distancia_real,
             "peso_bruto": (
                 str(viaje.peso_toneladas * 1000)
                 if viaje and viaje.peso_toneladas
                 else "1000.00"
             ),
-            "bienes_transp": (
-                "01010101"
-                if is_nominal
-                or not viaje
-                or not getattr(viaje, "sat_clave_producto", None)
-                else viaje.sat_clave_producto
-            ),
-            "descripcion_mercancia": (
-                viaje.descripcion_mercancia
-                if viaje and viaje.descripcion_mercancia
-                else "Carga General"
-            ),
+            # 🚀 Lo que va dentro de la caja para la Carta Porte
+            "bienes_transp": clave_mercancia,
+            "descripcion_mercancia": desc_merc,
             "permiso_sct": (
                 getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
             ),
@@ -598,7 +602,6 @@ class BillingService:
             "poliza": (
                 getattr(unidad, "poliza_resp_civil", "123456") if unidad else "123456"
             ),
-            # Remolques Reales
             "subtipo_remolque": get_sat_trailer_code(tipo_r1_bruto),
             "placa_remolque_1": (
                 getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
@@ -607,7 +610,6 @@ class BillingService:
             "placa_remolque_2": (
                 getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
             ),
-            # Operador Real
             "rfc_operador": (
                 getattr(operador, "rfc", "XAXX010101000")
                 if operador
@@ -619,7 +621,6 @@ class BillingService:
             "licencia": (
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
-            # Direcciones Reales
             "domicilio_origen": viaje.origin or "DOMICILIO CONOCIDO",
             "domicilio_destino": calle_destino_real,
             "cp_destino": cp_destino_real,
@@ -640,6 +641,9 @@ class BillingService:
             cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+
+            # Inyectamos el número de certificado real para que el PDF lo pueda leer
+            data["cert_emisor"] = no_certificado
 
         xml_con_cert = xml_base.replace(
             "<cfdi:Comprobante",
@@ -745,64 +749,6 @@ class BillingService:
                 status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
             )
 
-    def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
-        d = SafeData(data)
-        relacion_xml = (
-            f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
-            if relacion_uuid
-            else ""
-        )
-        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque_1"]}" />'
-        if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
-            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
-
-        mat_peligroso = (
-            ' MaterialPeligroso="No"' if d["bienes_transp"] == "01010101" else ""
-        )
-
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
-    <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
-            <cfdi:Impuestos>
-                <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-                <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-            </cfdi:Impuestos>
-        </cfdi:Concepto>
-    </cfdi:Conceptos>
-    <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
-        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-        <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-    </cfdi:Impuestos>
-    <cfdi:Complemento>
-        <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['total_dist_rec']}">
-            <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['total_dist_rec']}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
-                </cartaporte31:Ubicacion>
-            </cartaporte31:Ubicaciones>
-            <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
-                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
-                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
-                    <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
-                </cartaporte31:Autotransporte>
-            </cartaporte31:Mercancias>
-            <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:TiposFigura>
-            </cartaporte31:FiguraTransporte>
-        </cartaporte31:CartaPorte>
-    </cfdi:Complemento>
-</cfdi:Comprobante>""".strip()
-
     def _generar_pdf_con_diseno(
         self, data, uuid, qr_bytes, s_sat, s_emi, c_sat, cadena_original, importe_letra
     ):
@@ -836,18 +782,24 @@ class BillingService:
             "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', 0))):,}",
             "conceptos": [
                 {
-                    "clave": (
-                        "84111506"
-                        if "Pago" in d.get("descripcion_concepto", "")
-                        else "78101802"
+                    "clave": d.get(
+                        "clave_prod_serv",
+                        (
+                            "84111506"
+                            if "Pago" in d.get("descripcion_concepto", "")
+                            else "78101802"
+                        ),
                     ),
+                    "no_identificacion": "001",
                     "cantidad": "1.00",
                     "unidad": (
                         "ACT"
                         if "Pago" in d.get("descripcion_concepto", "")
                         else "E48 - SRV"
                     ),
-                    "descripcion": d.get("descripcion_concepto", "PAGO"),
+                    "descripcion": d.get(
+                        "pdf_descripcion", d.get("descripcion_concepto", "PAGO")
+                    ),
                     "detalles_extra": f"Folio: {d['folio']}",
                     "precio": subtotal_str,
                     "importe": subtotal_str,
@@ -878,9 +830,9 @@ class BillingService:
             ),
             "tc": "1",
             "forma_pago": d.get("forma_pago", "99"),
-            "condiciones_pago": "Contado",
+            "condiciones_pago": d.get("condiciones_pago", "CONTADO"),
             "cert_sat": c_sat,
-            "cert_emisor": "00001000000504204441",
+            "cert_emisor": d.get("cert_emisor", "00001000000000000000"),
             "sello_sat": chunk_b64(s_sat),
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
@@ -1086,6 +1038,14 @@ class BillingService:
             "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16:.2f}",
         }
 
+        # Extraemos certificado emisor para inyectar en el XML y PDF de Pago
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
+            cert = x509.load_der_x509_certificate(cer_data, default_backend())
+            sn_hex = format(cert.serial_number, "x")
+            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+            datos_pago["cert_emisor"] = no_certificado
+
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
@@ -1285,7 +1245,7 @@ class BillingService:
         }
 
     # =========================================================
-    # ENSAMBLADORES DE XML BASE (Facturas y Pagos)
+    # ENSAMBLADORES DE XML BASE (Pagos)
     # =========================================================
 
     def _armar_xml_pago_sin_sello(self, d: dict) -> str:
@@ -1341,16 +1301,19 @@ class BillingService:
 </cfdi:Comprobante>""".strip()
 
     def _sellar_xml_pago(self, xml_str, d: dict) -> str:
-        with open(self.path_cer, "rb") as f:
-            cer_data = f.read()
-            cert = x509.load_der_x509_certificate(cer_data)
-            cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
-            sn_hex = format(cert.serial_number, "x")
-            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
-
+        cert_b64 = (
+            base64.b64encode(
+                d["cert_emisor"].encode("utf-8")
+                if not hasattr(self, "cer_data")
+                else self.cer_data
+            )
+            .decode("utf-8")
+            .replace("\n", "")
+        )
+        # El número de certificado ya viene inyectado o lo leemos directamente.
         xml_con_cert = xml_str.replace(
             "<cfdi:Comprobante",
-            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
+            f'<cfdi:Comprobante NoCertificado="{d.get("cert_emisor")}" Certificado="{cert_b64}"',
         )
         sello_b64, _ = self._generar_sello_xslt(xml_con_cert.encode("utf-8"))
         return xml_con_cert.replace(
@@ -1377,7 +1340,7 @@ class BillingService:
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
                 <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
                 <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>

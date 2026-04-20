@@ -285,14 +285,31 @@ export function NextLegModal({
         destino_vacio: "",
       });
 
+      // --- 🛡️ INICIO PARCHE DEFENSIVO SAT ---
+      const rawDescription = tripPadre.descripcion_mercancia || "Carga General";
+      // Buscamos si la descripción empieza exactamente con 8 dígitos (ej. "12161800 - ...")
+      const matchSatCode = rawDescription.match(/^(\d{8})\b/);
+
+      // Si encontramos la clave en la descripción, la usamos. Si no, fallback a lo que manda el backend o genérico.
+      const realSatCode = matchSatCode
+        ? matchSatCode[1]
+        : tripPadre.sat_clave_producto || "01010101";
+
+      // Limpiamos la descripción para que no se duplique visualmente (quita la clave y el guion)
+      const cleanDescription = matchSatCode
+        ? rawDescription
+            .substring(matchSatCode[0].length)
+            .replace(/^[\s-]+/, "")
+        : rawDescription;
+      // --- 🛡️ FIN PARCHE DEFENSIVO SAT ---
+
       setTripFiscalData({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
         referencia: (tripPadre as any).referencia || "",
         peso_toneladas: tripPadre.peso_toneladas || 0,
-        descripcion_mercancia:
-          tripPadre.descripcion_mercancia || "Carga General",
-        sat_clave_producto: tripPadre.sat_clave_producto || "01010101",
+        descripcion_mercancia: cleanDescription, // Descripción limpia
+        sat_clave_producto: realSatCode, // Clave real extraída (ej. "12161800")
         sat_clave_unidad: tripPadre.sat_clave_unidad || "E48",
         es_material_peligroso: tripPadre.es_material_peligroso || false,
         clase_imo: tripPadre.clase_imo || "",
@@ -301,6 +318,15 @@ export function NextLegModal({
       setShowFiscalData(false);
     }
   }, [open, tripPadre]);
+
+  useEffect(() => {
+    console.log("=== 🚦 DEBUG FISCAL PARSEADO ===");
+    console.log(
+      "Clave SAT a inyectar en el Select:",
+      tripFiscalData.sat_clave_producto,
+    );
+    console.log("Descripción limpia:", tripFiscalData.descripcion_mercancia);
+  }, [tripFiscalData]);
 
   const isFullTrip = useMemo(() => {
     return checkIsFullTrip(tripPadre);

@@ -1035,7 +1035,7 @@ export function TripDetailsModal({
                                       <div className="space-y-1">
                                         <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
                                           <DollarSign className="h-3 w-3" />{" "}
-                                          Anticipos / Vales
+                                          Casetas
                                         </Label>
                                         {(() => {
                                           // Parche visual
