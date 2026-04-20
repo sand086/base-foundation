@@ -23,6 +23,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,7 @@ export default function TripSettlementModal({
   const [consumoEsperado, setConsumoEsperado] = useState(0);
   const [consumoReal, setConsumoReal] = useState(0);
   const [diferenciaLitros, setDiferenciaLitros] = useState(0);
+  const [cobrarExcedenteDiesel, setCobrarExcedenteDiesel] = useState(true);
 
   // Estados Locales
   const [odometroFinal, setOdometroFinal] = useState<number | "">("");
@@ -256,6 +258,18 @@ export default function TripSettlementModal({
           esAutomatico: c.esAutomatico || false,
         }));
 
+      if (diferenciaLitros > consumoEsperado * 0.05 && cobrarExcedenteDiesel) {
+        conceptosFinales.push({
+          id: `diesel-penalidad-${Date.now()}`,
+          tipo: "deduccion",
+          categoria: "combustible",
+          descripcion: `Exceso Diésel Detectado (${diferenciaLitros.toFixed(1)} L)`,
+          // Nota: Asumiendo un precio promedio de $24.50 (lo ideal es traerlo del back, pero es seguro hardcodearlo temporalmente si el back no lo manda en la raíz)
+          monto: diferenciaLitros * 24.5,
+          esAutomatico: true,
+        });
+      }
+
       const payloadLiquidacion = {
         conceptos: conceptosFinales,
         total_ingresos: totalPercepciones,
@@ -428,19 +442,26 @@ export default function TripSettlementModal({
                       </Badge>
                     </div>
                   </div>
-
                   {diferenciaLitros > consumoEsperado * 0.05 && (
                     <div className="bg-rose-50 border-t border-rose-100 p-4">
                       <div className="flex gap-3">
                         <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0" />
-                        <div>
+                        <div className="w-full">
                           <p className="text-[10px] font-black text-rose-800 uppercase tracking-widest">
                             Penalización Automática
                           </p>
-                          <p className="text-xs text-rose-600/80 font-medium leading-tight mt-0.5">
-                            El operador excedió el 5% de tolerancia de
-                            rendimiento. Se agregó la deducción a la tabla.
+                          <p className="text-xs text-rose-600/80 font-medium leading-tight mt-0.5 mb-3">
+                            El operador excedió el 5% de tolerancia.
                           </p>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              checked={cobrarExcedenteDiesel}
+                              onCheckedChange={setCobrarExcedenteDiesel}
+                            />
+                            <Label className="text-xs font-bold text-rose-900">
+                              Aplicar descuento a liquidación
+                            </Label>
+                          </div>
                         </div>
                       </div>
                     </div>

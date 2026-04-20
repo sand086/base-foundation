@@ -22,6 +22,8 @@ export interface UserDisplay {
   estado: string;
   avatar?: string;
   twoFactorEnabled: boolean;
+  is2FAConfigured: boolean;
+  password?: string;
   ultimoAcceso: string;
 }
 
@@ -42,9 +44,11 @@ export const useUsers = () => {
     estado: user.activo ? "activo" : "inactivo",
     avatar: user.avatar_url || undefined,
     twoFactorEnabled: user.is_2fa_enabled || false,
+    is2FAConfigured: !!(user as any).two_factor_secret || false,
     ultimoAcceso: user.last_login
       ? new Date(user.last_login).toLocaleDateString()
       : "Nunca",
+    password: user.password,
   });
 
   const fetchUsers = useCallback(async () => {

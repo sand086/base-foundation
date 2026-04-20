@@ -467,7 +467,7 @@ export class AuthenticationService {
     }
     /**
      * Verify User Password
-     * Verifica la contraseña del usuario en sesión para operaciones .
+     * Verifica la contraseña del usuario en sesión para operaciones críticas.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -483,6 +483,19 @@ export class AuthenticationService {
             errors: {
                 422: `Validation Error`,
             },
+        });
+    }
+    /**
+     * Migrar Todas Las Contrasenas
+     * Este endpoint recorre todos los usuarios y cambia su contraseña a "Temp086."
+     * usando la nueva encriptación reversible (Fernet).
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static migrarTodasLasContrasenasApiAuthDevMigrarContrasenasPost(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/auth/dev/migrar-contrasenas',
         });
     }
 }

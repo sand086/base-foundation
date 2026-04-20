@@ -18,6 +18,7 @@ export type UserResponse = {
     last_login?: (string | null);
     id: number;
     role?: (RoleResponse | null);
+    password?: (string | null);
     record_status: RecordStatus;
     created_at?: (string | null);
     updated_at?: (string | null);

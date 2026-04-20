@@ -79,12 +79,21 @@ export default function Login() {
 
       // 2. Caso: El backend dice que el usuario tiene 2FA activado
       if (response.require_2fa) {
+        // Determinamos la ruta: si es configuración obligatoria o solo verificación
+        const targetRoute = response.must_setup_2fa
+          ? "/setup-2fa"
+          : "/verify-2fa";
+
         toast({
-          title: "Verificación requerida",
-          description: "Ingresa el código de tu autenticador",
+          title: response.must_setup_2fa
+            ? "Configuración de Seguridad"
+            : "Verificación requerida",
+          description: response.must_setup_2fa
+            ? "Víncula tu dispositivo para continuar"
+            : "Ingresa el código de tu autenticador",
         });
 
-        navigate("/verify-2fa", {
+        navigate(targetRoute, {
           replace: true,
           state: {
             tempToken: response.temp_token,

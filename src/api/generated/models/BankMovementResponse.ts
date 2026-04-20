@@ -6,14 +6,14 @@ export type BankMovementResponse = {
     id: number;
     tipo: string;
     monto: number;
-    moneda: string;
+    moneda?: string;
     concepto: string;
     fecha: string;
-    banco: (string | null);
-    cuenta_bancaria: (string | null);
-    referencia_bancaria: (string | null);
-    origen_modulo: (string | null);
-    conciliado: boolean;
-    fecha_conciliacion: (string | null);
+    banco?: (string | null);
+    cuenta_bancaria?: (string | null);
+    referencia_bancaria?: (string | null);
+    origen_modulo?: (string | null);
+    conciliado?: boolean;
+    fecha_conciliacion?: (string | null);
 };
 

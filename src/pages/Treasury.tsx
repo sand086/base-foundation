@@ -1,12 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import {
   Landmark,
   TrendingUp,
   Wallet,
   AlertTriangle,
   CheckCircle2,
+  Plus,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -26,11 +28,12 @@ import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { BankMovement, BankAccount } from "@/features/treasury/types";
 
-//  IMPORTAMOS NUESTROS COMPONENTES MODULARES
+// IMPORTAMOS NUESTROS COMPONENTES MODULARES
 import { BankAccountsTab } from "@/features/treasury/components/BankAccountsTab";
 import { TreasuryFlowTab } from "@/features/treasury/components/TreasuryFlowTab";
 import { BankAccountModal } from "@/features/treasury/components/BankAccountModal";
 import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
+import { ManualMovementModal } from "@/features/treasury/components/ManualMovementModal";
 
 export default function Treasury() {
   const { value: monedaBase } = useSystemConfig("moneda_base");
@@ -67,6 +70,7 @@ export default function Treasury() {
     null,
   );
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+  const [isManualMovementOpen, setIsManualMovementOpen] = useState(false);
 
   // States Modales Cuentas
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(
@@ -172,7 +176,7 @@ export default function Treasury() {
           ? operativaAccounts.map((a) => a.numero_cuenta)
           : cobranzaAccounts.map((a) => a.numero_cuenta);
       filtered = filtered.filter((m) =>
-        accountNumbers.includes(m.cuenta_bancaria),
+        accountNumbers.includes(m.cuenta_bancaria || ""),
       );
     }
     if (searchTerm) {
@@ -215,7 +219,7 @@ export default function Treasury() {
       />
 
       <Tabs defaultValue="tesoreria" className="w-full">
-        <div className="flex justify-start mb-6">
+        <div className="flex justify-between items-center mb-6 w-full">
           <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex">
             <TabsTrigger
               value="tesoreria"
@@ -231,6 +235,14 @@ export default function Treasury() {
               <Wallet className="h-4 w-4 text-blue-600" /> Cuentas Bancarias
             </TabsTrigger>
           </TabsList>
+
+          <Button
+            onClick={() => setIsManualMovementOpen(true)}
+            className="rounded-xl shadow-md h-12 px-6 bg-brand-navy hover:bg-brand-navy/90 text-white font-bold tracking-wide"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nuevo Movimiento
+          </Button>
         </div>
 
         <TabsContent value="tesoreria" className="m-0">
@@ -284,6 +296,16 @@ export default function Treasury() {
         open={isDetailModalOpen}
         onOpenChange={setIsDetailModalOpen}
         movement={selectedMovement}
+      />
+
+      <ManualMovementModal
+        open={isManualMovementOpen}
+        onOpenChange={setIsManualMovementOpen}
+        bankAccounts={bankAccounts}
+        onSuccess={() => {
+          fetchMovements();
+          refreshAccounts();
+        }}
       />
 
       {/* ALERT DIALOG ELIMINAR CUENTA */}
@@ -400,11 +422,13 @@ export default function Treasury() {
                 </div>
               ) : deleteStep === 2 ? (
                 <div className="p-4 bg-rose-50 border-l-4 border-rose-500 rounded-r-lg text-rose-800 font-bold">
-                  CONFIRMACIÓN FINAL: Esta acción no se puede deshacer.
+                  CONFIRMACIÓN FINAL: Esta acción no se puede deshacer. Se
+                  revertirá el saldo a la cuenta bancaria.
                 </div>
               ) : (
                 <>
-                  Se eliminará permanentemente la transacción:
+                  Se eliminará permanentemente la transacción y se devolverá el
+                  dinero a la cuenta bancaria para mantener el saldo cuadrado:
                   <br />
                   <strong className="text-slate-900 mt-2 block p-3 bg-muted rounded-lg border">
                     {movementToDelete?.concepto}
@@ -431,9 +455,11 @@ export default function Treasury() {
                     movimientos.filter((m) => m.id !== movementToDelete?.id),
                   );
                   refreshAccounts();
-                  toast.success("Movimiento eliminado");
+                  toast.success(
+                    "Movimiento eliminado y saldo restaurado correctamente",
+                  );
                 } catch (error) {
-                  toast.error("Error al eliminar");
+                  toast.error("Error al eliminar el movimiento");
                 } finally {
                   setIsDeleteMovementOpen(false);
                   setMovementToDelete(null);
@@ -442,7 +468,9 @@ export default function Treasury() {
               }}
               className={cn(
                 "rounded-xl font-bold h-11 px-6 text-white shadow-lg",
-                deleteStep === 2 ? "bg-rose-600" : "bg-amber-600",
+                deleteStep === 2
+                  ? "bg-rose-600 hover:bg-rose-700"
+                  : "bg-amber-600 hover:bg-amber-700",
               )}
             >
               {movementToDelete?.conciliado && deleteStep === 1

@@ -3,9 +3,10 @@
 /* tslint:disable */
 /* eslint-disable */
 export type SatProductResponse = {
-    id: number;
     clave: string;
     descripcion: string;
     es_material_peligroso: string;
+    id: number;
+    activo: boolean;
 };
 

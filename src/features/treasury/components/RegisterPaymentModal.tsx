@@ -140,7 +140,7 @@ export function RegisterPaymentModal({
     // Determinamos si es un banco real o la caja general virtual
     const isVirtualCash = formData.cuenta_retiro === "virtual";
 
-    // 💡 PAYLOAD EXACTO PARA Pydantic + Tesorería
+    //  PAYLOAD EXACTO PARA Pydantic + Tesorería
     const payload = {
       fecha_pago: formData.fecha_pago,
       monto: toNumber(formData.monto),

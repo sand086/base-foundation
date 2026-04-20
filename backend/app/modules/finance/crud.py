@@ -134,12 +134,18 @@ def delete_bank_account(db: Session, account_id: int):
 
 
 def get_bank_movements(db: Session):
-    return (
-        db.query(models.BankMovement)
-        .filter(models.BankMovement.record_status != RecordStatus.ELIMINADO)
-        .order_by(models.BankMovement.fecha.desc())
-        .all()
-    )
+    try:
+        return (
+            db.query(models.BankMovement)
+            # Solución: Comparamos directamente contra el Enum (RecordStatus.ELIMINADO)
+            # sin usar .value
+            .filter(models.BankMovement.record_status != RecordStatus.ELIMINADO)
+            .order_by(models.BankMovement.fecha.desc())
+            .all()
+        )
+    except Exception as e:
+        print(f"Error en get_bank_movements: {e}")
+        raise e
 
 
 def create_bank_movement(
@@ -149,14 +155,14 @@ def create_bank_movement(
     Registra un movimiento bancario y actualiza el saldo de la cuenta.
     Esta función es el corazón del módulo de Treasury.
     """
-    # Bloqueo de fila para evitar que dos pagos al mismo tiempo rompan el saldo
+    # Bloqueo de fila ESPECÍFICO para evitar el error del LEFT JOIN en Postgres
     account = (
         db.query(models.BankAccount)
         .filter(
             models.BankAccount.id == movement_data.bank_account_id,
             models.BankAccount.record_status != RecordStatus.ELIMINADO,
         )
-        .with_for_update()
+        .with_for_update(of=models.BankAccount)
         .first()
     )
 
@@ -167,8 +173,14 @@ def create_bank_movement(
     if movement_data.tipo == "ingreso":
         account.saldo += movement_data.monto
     elif movement_data.tipo == "egreso":
-        # Nota: Aquí podrías validar si tiene saldo suficiente, o permitir saldos negativos
         account.saldo -= movement_data.monto
+
+    # 🚨 EXTRAEMOS LA FECHA (Si no viene, usamos la de hoy para proteger la BD)
+    fecha_mov = getattr(movement_data, "fecha", None)
+    if not fecha_mov:
+        from datetime import datetime
+
+        fecha_mov = datetime.now()
 
     nuevo_movimiento = models.BankMovement(
         bank_account_id=account.id,
@@ -176,6 +188,7 @@ def create_bank_movement(
         monto=movement_data.monto,
         concepto=movement_data.concepto,
         referencia=movement_data.referencia,
+        fecha=fecha_mov,  # <--- ¡AQUÍ ESTÁ EL FIX! Ahora sí mandamos la fecha a la BD
         created_by_id=current_user_id,
     )
 
@@ -700,3 +713,65 @@ def process_sat_master_report(
 
     db.commit()
     return {"message": "Sincronización SAT Completada", "detalles": resultados}
+
+
+def conciliate_bank_movement(db: Session, movement_id: int):
+    """Marca un movimiento como conciliado con la fecha de hoy"""
+    movement = (
+        db.query(models.BankMovement)
+        .filter(
+            models.BankMovement.id == movement_id,
+            models.BankMovement.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if not movement:
+        return None
+
+    # Cambiamos el estatus a conciliado y le ponemos la fecha actual
+    movement.conciliado = True
+    movement.fecha_conciliacion = date.today()
+
+    db.commit()
+    db.refresh(movement)
+    return movement
+
+
+def delete_bank_movement(db: Session, movement_id: int):
+    """
+    Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
+    """
+    movement = (
+        db.query(models.BankMovement)
+        .filter(
+            models.BankMovement.id == movement_id,
+            models.BankMovement.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if not movement:
+        return False
+
+    # Buscamos la cuenta y la bloqueamos (for update) para evitar errores de concurrencia
+    account = (
+        db.query(models.BankAccount)
+        .filter(models.BankAccount.id == movement.bank_account_id)
+        .with_for_update()
+        .first()
+    )
+
+    if account:
+        # Si era un ingreso que sumó dinero, se lo restamos.
+        if movement.tipo == "ingreso":
+            account.saldo -= movement.monto
+        # Si era un egreso que restó dinero, se lo devolvemos.
+        elif movement.tipo == "egreso":
+            account.saldo += movement.monto
+
+    # Hacemos Soft Delete del movimiento
+    movement.record_status = RecordStatus.ELIMINADO
+
+    db.commit()
+    return True

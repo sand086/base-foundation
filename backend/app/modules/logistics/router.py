@@ -773,7 +773,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
         "total": "0.00",
         "conceptos": [
             {
-                "clave": "78101802",
+                "clave": "01010101",
                 "cantidad": "1.00",
                 "unidad": "E48 - SRV",
                 "descripcion": trip.descripcion_mercancia or "FLETE",
@@ -812,7 +812,7 @@ def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
         ),
         "poliza": getattr(unidad, "poliza_resp_civil", "N/A") if unidad else "N/A",
         "peso_bruto": str(float(trip.peso_toneladas or 0) * 1000),
-        "bienes_transp": getattr(trip, "sat_clave_producto", "78101802"),
+        "bienes_transp": getattr(trip, "sat_clave_producto", "01010101"),
         "descripcion_mercancia": trip.descripcion_mercancia or "N/A",
         "subtipo_remolque": "N/A",
         "placa_remolque": "N/A",

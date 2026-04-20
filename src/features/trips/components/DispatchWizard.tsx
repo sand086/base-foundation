@@ -651,14 +651,11 @@ export const DispatchWizard = ({
           (data.generarCartaPorte || isQuickStamp)
         ) {
           try {
-            const stampRes = await axiosClient.post(
-              "/api/billing/stamp/nominal",
-              {
-                viaje_id: resultTripId,
-                is_nominal: true,
-                use_dummy: isQuickStamp,
-              },
-            );
+            const stampRes = await axiosClient.post("/api/sat/stamp/nominal", {
+              viaje_id: resultTripId,
+              is_nominal: true,
+              use_dummy: isQuickStamp,
+            });
 
             const uuid = stampRes.data?.data?.uuid || stampRes.data?.uuid;
 

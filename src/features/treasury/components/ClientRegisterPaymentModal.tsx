@@ -28,9 +28,13 @@ import {
   FileText,
   CheckCircle2,
   Loader2,
+  Landmark,
 } from "lucide-react";
 import { ReceivableInvoice } from "@/features/receivables/types";
 import { cn } from "@/lib/utils";
+
+// Importamos el hook para traer las cuentas bancarias reales
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 
 interface ClientRegisterPaymentModalProps {
   open: boolean;
@@ -51,11 +55,18 @@ export function ClientRegisterPaymentModal({
   onSubmit,
   isSubmitting = false,
 }: ClientRegisterPaymentModalProps) {
+  // Traemos las cuentas bancarias directamente al modal
+  const { bankAccounts = [] } = useBankAccounts();
+  const cuentasActivas = useMemo(
+    () => bankAccounts.filter((acc) => acc.estatus === "activo"),
+    [bankAccounts],
+  );
+
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split("T")[0],
     metodoPago: "03",
     referencia: "",
-    cuenta_deposito: "",
+    cuenta_deposito: "", // Aquí guardaremos el ID de la cuenta bancaria
   });
 
   const [abonos, setAbonos] = useState<Record<number, number>>({});
@@ -72,6 +83,7 @@ export function ClientRegisterPaymentModal({
         ...prev,
         fecha: new Date().toISOString().split("T")[0],
         referencia: "",
+        cuenta_deposito: "", // Limpiamos la cuenta al abrir
       }));
       setError("");
     }
@@ -90,6 +102,12 @@ export function ClientRegisterPaymentModal({
   const handleSubmit = async () => {
     if (granTotal <= 0) {
       setError("El total a cobrar debe ser mayor a $0.00");
+      return;
+    }
+
+    // VALIDACIÓN CRÍTICA: Exigir cuenta bancaria
+    if (!formData.cuenta_deposito) {
+      setError("Debes seleccionar una Cuenta Bancaria de depósito.");
       return;
     }
 
@@ -125,7 +143,7 @@ export function ClientRegisterPaymentModal({
       forma_pago: formData.metodoPago,
       fecha_pago: formData.fecha,
       referencia: formData.referencia,
-      cuenta_deposito: formData.cuenta_deposito,
+      cuenta_deposito: Number(formData.cuenta_deposito), // Enviamos el ID numérico al backend
     };
 
     await onSubmit(payloadBackend);
@@ -138,9 +156,7 @@ export function ClientRegisterPaymentModal({
       open={open}
       onOpenChange={(val) => !isSubmitting && onOpenChange(val)}
     >
-      {/* CAPA 1: CASCARÓN TAHOE */}
-      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
-        {/* CAPA 2: HEADER */}
+      <DialogContent className="w-[95vw] sm:max-w-4xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center justify-between">
@@ -172,15 +188,14 @@ export function ClientRegisterPaymentModal({
           </div>
         </DialogHeader>
 
-        {/* CAPA 3: BODY (Scrollable) */}
         <ScrollArea className="flex-1 px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar mt-4">
           <div className="space-y-6">
-            {/* CONFIGURACIÓN DEL PAGO */}
             <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-1.5">
-                <Building2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" /> Datos de la Transacción
+                <Building2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />{" "}
+                Datos de la Transacción
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <Calendar className="inline h-3 w-3 mr-1" /> Fecha de Pago *
@@ -197,7 +212,8 @@ export function ClientRegisterPaymentModal({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    <CreditCard className="inline h-3 w-3 mr-1" /> Forma de Pago *
+                    <CreditCard className="inline h-3 w-3 mr-1" /> Forma de Pago
+                    *
                   </Label>
                   <Select
                     value={formData.metodoPago}
@@ -218,6 +234,36 @@ export function ClientRegisterPaymentModal({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <Landmark className="inline h-3 w-3 mr-1" /> Cuenta Destino
+                    *
+                  </Label>
+                  <Select
+                    value={formData.cuenta_deposito}
+                    onValueChange={(v) =>
+                      setFormData({ ...formData, cuenta_deposito: v })
+                    }
+                    disabled={isSubmitting}
+                  >
+                    <SelectTrigger
+                      className={cn(
+                        "h-11 shadow-sm font-bold text-xs bg-card border-slate-200",
+                        !formData.cuenta_deposito &&
+                          "border-rose-300 ring-1 ring-rose-200",
+                      )}
+                    >
+                      <SelectValue placeholder="Selecciona banco..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cuentasActivas.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id.toString()}>
+                          {acc.alias} ({acc.numero_cuenta.slice(-4)})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Ref. / Operación
                   </Label>
                   <Input
@@ -233,12 +279,11 @@ export function ClientRegisterPaymentModal({
               </div>
             </div>
 
-            {/* LISTA DE FACTURAS */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" /> Desglose de Facturas a
-                  Pagar ({invoices.length})
+                  <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />{" "}
+                  Desglose de Facturas a Pagar ({invoices.length})
                 </h4>
               </div>
 
@@ -313,7 +358,6 @@ export function ClientRegisterPaymentModal({
           </div>
         </ScrollArea>
 
-        {/* CAPA 5: FOOTER */}
         <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
           <div className="sm:hidden w-full text-center mb-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
@@ -344,7 +388,9 @@ export function ClientRegisterPaymentModal({
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
               )}
-              {isSubmitting ? "Timbrando REP..." : "Timbrar Complemento de Pago"}
+              {isSubmitting
+                ? "Timbrando REP..."
+                : "Timbrar Complemento de Pago"}
             </Button>
           </div>
         </DialogFooter>

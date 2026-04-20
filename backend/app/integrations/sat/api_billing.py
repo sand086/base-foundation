@@ -124,7 +124,7 @@ def test_invoice_pro():
             "logo_src": logo_src,
             "conceptos": [
                 {
-                    "clave": "78101802",
+                    "clave": "01010101",
                     "descripcion": "FLETE CARGA GENERAL",
                     "detalles_extra": "MSBU6763609",
                     "cantidad": "1.00",
