@@ -98,6 +98,11 @@ export default function TripSettlement() {
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
+  // 🚀 ESTADO OPTIMISTA: Ocultar de inmediato los que acaban de ser liquidados
+  const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
+    [],
+  );
+
   const [sueldoRutaPactado, setSueldoRutaPactado] = useState<number>(0);
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
   const [previewData, setPreviewData] = useState<any>(null);
@@ -138,22 +143,27 @@ export default function TripSettlement() {
     );
   }, [trips, clients]);
 
+  // 🚀 FILTRO ACTUALIZADO: Quitamos instantáneamente los locallyLiquidatedIds
   const pendingLegs = useMemo(
     () =>
-      allLegs.filter((l) =>
-        ["entregado", "cerrado"].includes(String(l.status).toLowerCase()),
+      allLegs.filter(
+        (l) =>
+          ["entregado", "cerrado"].includes(String(l.status).toLowerCase()) &&
+          !locallyLiquidatedIds.includes(String(l.id)),
       ),
-    [allLegs],
+    [allLegs, locallyLiquidatedIds],
   );
 
+  // 🚀 FILTRO ACTUALIZADO: Agregamos instantáneamente los locallyLiquidatedIds al histórico
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
         (l) =>
-          String(l.status).toLowerCase() === "liquidado" &&
+          (String(l.status).toLowerCase() === "liquidado" ||
+            locallyLiquidatedIds.includes(String(l.id))) &&
           !hiddenHistoryIds.includes(String(l.id)),
       ),
-    [allLegs, hiddenHistoryIds],
+    [allLegs, hiddenHistoryIds, locallyLiquidatedIds],
   );
 
   const operatorsWithPending = useMemo(() => {
@@ -377,10 +387,14 @@ export default function TripSettlement() {
     setNewConceptoAmount("");
   };
 
-  // 🚀 FUNCIÓN PARA ELIMINAR BONOS O DEDUCCIONES (EXPRÉS)
   const removeConcepto = (id: string) => {
     setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
     toast.info("Concepto eliminado exitosamente.");
+  };
+
+  const removeCombustibleFaltante = () => {
+    setCombustibleFaltante(0);
+    toast.success("Cargo por combustible anulado para esta liquidación.");
   };
 
   const handleLiquidate = async () => {
@@ -402,6 +416,9 @@ export default function TripSettlement() {
       };
 
       await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
+
+      // 🚀 ACTUALIZACIÓN OPTIMISTA: Ocultar inmediatamente de pendientes
+      setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
       toast.success("Liquidación Emitida Exitosamente", {
         description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose.`,
@@ -430,6 +447,12 @@ export default function TripSettlement() {
     } else if (actionModal.type === "reopen") {
       try {
         await axiosClient.post(`/api/trips/legs/${actionModal.leg.id}/reopen`);
+
+        // 🚀 Removemos del estado optimista si se reabrió
+        setLocallyLiquidatedIds((prev) =>
+          prev.filter((id) => id !== String(actionModal.leg.id)),
+        );
+
         toast.success("Liquidación anulada y reabierta.", {
           description:
             "La CxC ha sido cancelada y el viaje regresó a 'Por Liquidar'.",
@@ -914,6 +937,33 @@ export default function TripSettlement() {
                               {formatCurrencyLocal(
                                 liquidacion.deduccionViaticos +
                                   liquidacion.otrosAnticipos,
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 🚀 Faltante Combustible con opción a eliminar */}
+                        {liquidacion.combustibleFaltante > 0 && (
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded group transition-colors">
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50"
+                                onClick={removeCombustibleFaltante}
+                                title="Perdonar Cobro"
+                              >
+                                <Trash2 className="h-3 w-3 text-rose-600" />
+                              </Button>
+                              <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
+                                Faltante Diésel
+                              </span>
+                            </div>
+                            <span className="font-mono font-black text-rose-600">
+                              -
+                              {formatCurrencyLocal(
+                                liquidacion.combustibleFaltante,
                               )}
                             </span>
                           </div>
