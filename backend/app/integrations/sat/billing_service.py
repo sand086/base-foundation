@@ -4,7 +4,7 @@ import logging
 import logging.config
 import uuid
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from io import BytesIO
@@ -220,45 +220,6 @@ class SafeData_(dict):
                 return "91700"
             if key in ["contenedor_1", "contenedor_2"]:
                 return "N/A"
-            return "NO_ESPECIFICADO"
-        return val
-
-
-class SafeData(dict):
-    def __getitem__(self, key):
-        val = self.get(key)
-        if val is None or str(val).strip() == "" or str(val).strip() == "None":
-            logger.warning(
-                f" [BLINDAJE ACTIVO] Llave faltante o vacía: '{key}'. Inyectando default."
-            )
-            if key in [
-                "subtotal",
-                "total",
-                "iva",
-                "retenciones",
-                "peso_bruto",
-                "peso_bruto_vehicular",
-            ]:
-                return "0.00"
-            if key in ["total_dist_rec", "cantidad", "tc"]:
-                return "1"
-            if "rfc" in key.lower():
-                return "XAXX010101000"
-            if "cp" in key.lower():
-                return "91700"
-            if key in ["contenedor_1", "contenedor_2"]:
-                return "N/A"
-
-            # 🚀 PARCHE DE EMERGENCIA PARA LA JUNTA (Valores dummy aceptados por el SAT)
-            if key == "num_permiso":
-                return "1234567890"
-            if key == "poliza":
-                return "111111111"
-            if key == "aseguradora":
-                return "QUALITAS"
-            if key in ["placas", "placa_remolque_1", "placa_remolque_2"]:
-                return "1XXXX99"
-
             return "NO_ESPECIFICADO"
         return val
 
@@ -591,9 +552,6 @@ class BillingService:
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "fecha_llegada": (datetime.now() + timedelta(hours=2)).strftime(
-                "%Y-%m-%dT%H:%M:%S"
-            ),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
@@ -1399,7 +1357,7 @@ class BillingService:
                 <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
                     <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha_llegada']}" DistanciaRecorrida="{d['total_dist_rec']}">
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['total_dist_rec']}">
                     <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
