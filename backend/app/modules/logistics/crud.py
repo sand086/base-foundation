@@ -1070,7 +1070,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
 
     for leg in legs:
         distancia = 0.0
-        is_ruta = leg.leg_type == models.TripLegType.RUTA
+        is_ruta = "ruta" in str(leg.leg_type).lower()
 
         if (
             leg.odometro_final
@@ -1079,9 +1079,11 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         ):
             distancia = float(leg.odometro_final - leg.odometro_inicial)
         else:
-            distancia = float(
+            # 🚀 BLINDAJE CONTRA NULLS EN DISTANCIA
+            dist_tarifa = (
                 leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
             )
+            distancia = float(dist_tarifa or 0.0)
             if is_ruta:
                 alertas.append(
                     f"Tramo #{leg.id}: Usando distancia teórica (Faltan odómetros en auditoría)."
@@ -1089,7 +1091,8 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
 
         if is_ruta:
             total_kms_reales += distancia
-            rendimiento = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
+            rend_ecm = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2)
+            rendimiento = float(rend_ecm or 3.2)
             total_consumo_esperado += (
                 (distancia / rendimiento) if distancia > 0 else 0.0
             )
@@ -1097,59 +1100,53 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             fuel_logs_activos = [
                 f
                 for f in leg.fuel_logs
-                if f.record_status == "A" and f.tipo_combustible == "diesel"
+                if f.record_status == "A"
+                and str(f.tipo_combustible).lower() == "diesel"
             ]
 
             if not fuel_logs_activos:
                 legs_sin_ticket.append(leg.id)
 
             for f in fuel_logs_activos:
-                total_real_liters += f.litros
-                total_fuel_cost += f.litros * f.precio_por_litro
+                # 🚀 BLINDAJE CONTRA NULLS EN COMBUSTIBLE
+                lts = float(f.litros or 0.0)
+                precio = float(f.precio_por_litro or 24.50)
+                total_real_liters += lts
+                total_fuel_cost += lts * precio
 
     # Calculamos el precio promedio
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
 
-    # =========================================================================
-    # LÓGICA NUEVA: DEDUCCIÓN DE COMBUSTIBLE DICTAMINADA POR AUDITORÍA (FRONTEND)
-    # =========================================================================
     diferencia_litros_total = 0.0
     deduccion_combustible = 0.0
 
     for leg in legs:
-        # Tomamos directamente lo que la auditoría dictaminó y guardó en la BD
-        if getattr(leg, "monto_penalizaciones", 0.0) > 0:
-            deduccion_combustible += leg.monto_penalizaciones
+        # 🚀 BLINDAJE CONTRA NULLS EN AUDITORÍA
+        penalizacion = getattr(leg, "monto_penalizaciones", 0.0)
+        if penalizacion and float(penalizacion) > 0:
+            deduccion_combustible += float(penalizacion)
 
-        # Para mostrar cuántos litros faltaron (meramente visual para la pre-liquidación)
         vales = [
             f
             for f in leg.fuel_logs
-            if f.record_status == "A" and f.tipo_combustible == "diesel"
+            if f.record_status == "A" and str(f.tipo_combustible).lower() == "diesel"
         ]
         for vale in vales:
             is_conciliated = getattr(vale, "is_conciliated", False)
             diferencia = getattr(vale, "diferencia_litros", 0.0)
 
-            # Sumamos la diferencia si el vale ya fue conciliado (si tienes este flujo activo)
-            if is_conciliated and diferencia > 0:
-                diferencia_litros_total += diferencia
-    # =========================================================================
+            if is_conciliated and diferencia and float(diferencia) > 0:
+                diferencia_litros_total += float(diferencia)
 
-    # JALAR SUELDO FIJO
+    # 🚀 BLINDAJE CONTRA NULLS EN SUELDO
     sueldo_operador_pactado = 0.0
     if legs and legs[0].trip:
         trip_padre = legs[0].trip
-        # Priorizamos el sueldo congelado en el viaje, si no, el del catálogo
-        sueldo_operador_pactado = (
-            float(trip_padre.sueldo_operador)
-            if trip_padre.sueldo_operador
-            else (
-                float(trip_padre.tariff.sueldo_operador) if trip_padre.tariff else 0.0
-            )
-        )
+        sueldo_viaje = trip_padre.sueldo_operador
+        sueldo_tarifa = trip_padre.tariff.sueldo_operador if trip_padre.tariff else 0.0
+        sueldo_operador_pactado = float(sueldo_viaje or sueldo_tarifa or 0.0)
 
     return {
         "total_kms": round(total_kms_reales, 2),
