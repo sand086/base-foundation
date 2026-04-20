@@ -98,7 +98,7 @@ export default function TripSettlement() {
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
-  // 🚀 ESTADO OPTIMISTA: Ocultar de inmediato los que acaban de ser liquidados
+  // 🚀 ESTADO OPTIMISTA: Para ocultar al instante los liquidados
   const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
     [],
   );
@@ -143,7 +143,7 @@ export default function TripSettlement() {
     );
   }, [trips, clients]);
 
-  // 🚀 FILTRO ACTUALIZADO: Quitamos instantáneamente los locallyLiquidatedIds
+  // 🚀 FILTRO ACTUALIZADO: Quita los liquidados al instante
   const pendingLegs = useMemo(
     () =>
       allLegs.filter(
@@ -154,7 +154,7 @@ export default function TripSettlement() {
     [allLegs, locallyLiquidatedIds],
   );
 
-  // 🚀 FILTRO ACTUALIZADO: Agregamos instantáneamente los locallyLiquidatedIds al histórico
+  // 🚀 FILTRO ACTUALIZADO: Muestra los liquidados al instante en el histórico
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
@@ -387,11 +387,13 @@ export default function TripSettlement() {
     setNewConceptoAmount("");
   };
 
+  // FUNCIÓN PARA ELIMINAR BONOS O DEDUCCIONES
   const removeConcepto = (id: string) => {
     setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
     toast.info("Concepto eliminado exitosamente.");
   };
 
+  // FUNCIÓN PARA PERDONAR COBRO DE COMBUSTIBLE
   const removeCombustibleFaltante = () => {
     setCombustibleFaltante(0);
     toast.success("Cargo por combustible anulado para esta liquidación.");
@@ -417,11 +419,11 @@ export default function TripSettlement() {
 
       await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
 
-      // 🚀 ACTUALIZACIÓN OPTIMISTA: Ocultar inmediatamente de pendientes
+      // 🚀 ACTUALIZACIÓN OPTIMISTA AQUÍ: Desaparece al instante de la lista de pendientes
       setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
       toast.success("Liquidación Emitida Exitosamente", {
-        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose.`,
+        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose. Cuenta por cobrar enviada a Tesorería.`,
       });
 
       if (refresh) refresh();
@@ -448,7 +450,7 @@ export default function TripSettlement() {
       try {
         await axiosClient.post(`/api/trips/legs/${actionModal.leg.id}/reopen`);
 
-        // 🚀 Removemos del estado optimista si se reabrió
+        // Lo quitamos de la lista optimista para que vuelva a aparecer
         setLocallyLiquidatedIds((prev) =>
           prev.filter((id) => id !== String(actionModal.leg.id)),
         );
@@ -798,7 +800,7 @@ export default function TripSettlement() {
         {selectedLegIds.length > 0 &&
           liquidacion &&
           activeTab === "pendientes" && (
-            <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+            <div className="xl:col-span-5 space-y-6 animate-in slide-in-from-right-4 duration-500">
               {liquidacion.hasRoadMove && isAuditPending && (
                 <Alert
                   variant="destructive"
@@ -883,7 +885,7 @@ export default function TripSettlement() {
                           </span>
                         </div>
 
-                        {/* 🚀 MAPEO DE INGRESOS CON BOTÓN DE ELIMINAR */}
+                        {/* MAPEO DE INGRESOS CON BOTÓN DE ELIMINAR */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "ingreso")
                           .map((c) => (
@@ -942,7 +944,7 @@ export default function TripSettlement() {
                           </div>
                         )}
 
-                        {/* 🚀 Faltante Combustible con opción a eliminar */}
+                        {/* Faltante Combustible con opción a eliminar */}
                         {liquidacion.combustibleFaltante > 0 && (
                           <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded group transition-colors">
                             <div className="flex items-center gap-1.5">
@@ -969,7 +971,7 @@ export default function TripSettlement() {
                           </div>
                         )}
 
-                        {/* 🚀 MAPEO DE DEDUCCIONES CON BOTÓN DE ELIMINAR */}
+                        {/* MAPEO DE DEDUCCIONES CON BOTÓN DE ELIMINAR */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "deduccion")
                           .map((c) => (
@@ -1009,7 +1011,7 @@ export default function TripSettlement() {
                       </span>
                     </div>
                     <Button
-                      className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 shadow-lg gap-2 uppercase tracking-widest text-xs"
                       disabled={
                         isAnimating || isLoadingPreview || isAuditPending
                       }
