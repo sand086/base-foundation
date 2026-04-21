@@ -79,10 +79,18 @@ export function ClientRegisterPaymentModal({
         initialAbonos[inv.id] = inv.saldo_pendiente;
       });
       setAbonos(initialAbonos);
+
+      // 👇 1. EXTRAEMOS Y UNIMOS LOS FOLIOS DE LAS FACTURAS SELECCIONADAS
+      const defaultReferencia = invoices
+        .map((inv) => inv.folio_interno)
+        .filter(Boolean)
+        .join(", ");
+
       setFormData((prev) => ({
         ...prev,
         fecha: new Date().toISOString().split("T")[0],
-        referencia: "",
+        // 👇 2. LO INYECTAMOS AQUÍ EN VEZ DE DEJARLO VACÍO
+        referencia: defaultReferencia,
         cuenta_deposito: "", // Limpiamos la cuenta al abrir
       }));
       setError("");
