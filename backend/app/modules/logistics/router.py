@@ -498,7 +498,8 @@ def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
         if not unit:
             raise HTTPException(status_code=404, detail="La unidad principal no existe")
 
-        estatus_permitidos = ["disponible", "bloqueado"]
+        estatus_permitidos = ["disponible", "bloqueado", "en_ruta"]
+
         if unit.status.lower() not in estatus_permitidos:
             raise HTTPException(
                 status_code=400,

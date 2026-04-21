@@ -351,7 +351,7 @@ export function TripDetailsModal({
 
   //  FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
-    if (!activeLeg) return; // Quitamos la validación de emptyTerminal
+    if (!activeLeg) return;
     setFinishingLeg(true);
 
     try {
@@ -360,7 +360,7 @@ export function TripDetailsModal({
         activeLeg.id,
         {
           status: "entregado",
-          location: "Patio de Retorno Asignado", // Ya no dependemos del input
+          location: "Patio de Retorno Asignado",
           comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente.`,
         },
         true,
@@ -373,7 +373,9 @@ export function TripDetailsModal({
 
       toast.success("Viaje concluido y equipo liberado exitosamente.");
 
-      await refreshLocalTrip();
+      // 🚀 FIX: Cerramos el modal inmediatamente y recargamos la tabla principal
+      onOpenChange(false);
+      await fetchTrips();
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   format,
   isToday,
@@ -176,7 +176,17 @@ const legTypeShort: Record<string, string> = {
 
 export const TripPlanner = () => {
   const navigate = useNavigate();
-  // FIX: Destructuramos unhookTrip desde el useTrips
+
+  // 🚀 FIX: Importamos search params si no estaba y leemos el estado del calendario
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewMode =
+    searchParams.get("view") === "calendar" ? "standby" : "table";
+
+  const setViewMode = (v: "table" | "standby") => {
+    searchParams.set("view", v === "standby" ? "calendar" : "table");
+    setSearchParams(searchParams);
+  };
+
   const {
     trips,
     loading,
@@ -187,7 +197,6 @@ export const TripPlanner = () => {
     unhookTrip,
   } = useTrips();
 
-  const [viewMode, setViewMode] = useState<"table" | "standby">("table");
   const [tripToView, setTripToView] = useState<Trip | null>(null);
   const { updateLoadStatus } = useUnits();
   const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
@@ -516,25 +525,6 @@ export const TripPlanner = () => {
                                   <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
                                   Abrir Centro de Mando
                                 </DropdownMenuItem>
-
-                                {/* FIX: Agregamos el botón de Desenganchar directamente en el menú de la tabla */}
-                                {leg.leg_type === "carga_muelle" &&
-                                  ["creado", "en_transito"].includes(
-                                    leg.status,
-                                  ) && (
-                                    <DropdownMenuItem
-                                      onClick={async () => {
-                                        const ok = await unhookTrip(
-                                          String(tripPadre.id),
-                                        );
-                                        if (ok) await fetchTrips();
-                                      }}
-                                      className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-purple-700 dark:text-purple-400 focus:bg-purple-50 dark:focus:bg-purple-950/30"
-                                    >
-                                      <Container className="h-4 w-4 mr-3 text-purple-600" />{" "}
-                                      Desenganchar en Patio
-                                    </DropdownMenuItem>
-                                  )}
 
                                 {leg.status === "entregado" && (
                                   <DropdownMenuItem

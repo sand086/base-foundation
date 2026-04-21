@@ -747,11 +747,13 @@ export const DispatchWizard = ({
         if (onSuccess) {
           onSuccess();
         } else {
-          // Usamos replace: true para que el usuario no pueda "volver atrás" al wizard con el botón del navegador
-          navigate("/Dispatch", { replace: true });
-
-          // Opcional: Si necesitas forzar que recargue los datos de la tabla, descomenta la siguiente línea:
-          // window.location.href = "/Dispatch";
+          if (finalStatus === "creado") {
+            // Le dio al botón "Planeador" -> Lo mandamos al Calendario
+            navigate("/dispatch?tab=planner&view=calendar", { replace: true });
+          } else {
+            // Le dio al botón "Despachar" -> Lo mandamos a la Tabla
+            navigate("/dispatch?tab=planner&view=table", { replace: true });
+          }
         }
       }
     } catch (error: any) {
