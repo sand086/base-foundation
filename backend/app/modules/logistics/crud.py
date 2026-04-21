@@ -220,7 +220,7 @@ def update_trip_status(
     if trip.legs:
         active_leg = trip.legs[-1]
 
-    #  PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
+    # 🛡️ PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
     if status == models.TripStatus.ENTREGADO:
         is_last_leg = False
         if trip.legs:
@@ -253,7 +253,7 @@ def update_trip_status(
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             trip.actual_arrival = datetime.utcnow()
 
-        #  LIBERACIÓN DE UNIDADES INTELIGENTE
+        # 💡 LIBERACIÓN DE UNIDADES INTELIGENTE
         # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             unit_ids_to_free = [
@@ -306,7 +306,7 @@ def update_trip(db: Session, trip_id: int, trip_update_data: dict):
         if hasattr(db_trip, key):
             setattr(db_trip, key, value)
 
-    # 2.  LA PIEZA FALTANTE: Bloquear los remolques que se acaban de asignar
+    # 2. 🧩 LA PIEZA FALTANTE: Bloquear los remolques que se acaban de asignar
     unit_ids_to_block = []
     if "remolque_1_id" in trip_update_data and trip_update_data["remolque_1_id"]:
         unit_ids_to_block.append(trip_update_data["remolque_1_id"])
@@ -403,7 +403,7 @@ def add_timeline_event(
             trip.legs[-1] if trip.legs else None,
         )
 
-    #  MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
+    # 🛡️ MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
     status_db_validos = ["detenido", "retraso", "accidente", "bloqueado", "entregado"]
     mapped_status = (
         payload.status if payload.status in status_db_validos else "en_transito"
@@ -418,7 +418,7 @@ def add_timeline_event(
         if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
             trip.status = "entregado"
 
-            #  LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
+            # 💡 LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
             unit_ids_to_free = [
                 active_leg.unit_id if active_leg else None,
                 trip.remolque_1_id,
@@ -487,7 +487,7 @@ def add_timeline_event(
             ).update({"is_conciliated": True}, synchronize_session=False)
         # ---------------------------------------------------------
 
-        #  LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
+        # 📝 LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
             time=datetime.utcnow(),
@@ -623,19 +623,15 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         diferencia_cruda = consumo_real_litros - consumo_esperado
         diferencia_litros = diferencia_cruda if diferencia_cruda > 0 else 0.0
 
-        # REGLA GUSTAVO / UI: Aplicar tolerancia del 5% del consumo esperado
-        tolerancia = consumo_esperado * 0.05
+        deduccion_combustible = float(getattr(leg, "monto_penalizaciones", 0.0) or 0.0)
 
-        # Si el operador se pasa de la tolerancia, cobramos TODO el exceso
-        if diferencia_litros > tolerancia:
-            deduccion_combustible = diferencia_litros * precio_promedio_litro
-
+        if deduccion_combustible > 0:
             conceptos.append(
                 schemas.ConceptoPago(
                     id=str(uuid.uuid4())[:8],
                     tipo="deduccion",
                     categoria="combustible",
-                    descripcion=f"Exceso Diésel Detectado ({diferencia_litros:.1f} L)",
+                    descripcion=f"Cargo Exceso Diésel (Según Auditoría)",
                     monto=deduccion_combustible,
                     esAutomatico=True,
                 )
@@ -742,7 +738,7 @@ def close_trip_settlement(
     leg.saldo_operador = payload.neto_a_pagar
     leg.actual_arrival = datetime.utcnow()
 
-    #  NUEVO: Guardar el odómetro en el tramo y en el camión
+    # 🚀 NUEVO: Guardar el odómetro en el tramo y en el camión
     if payload.odometro_final:
         leg.odometro_final = payload.odometro_final
         if leg.unit:
@@ -867,7 +863,7 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
 
 
 # =========================================================
-#  LA VERDADERA MAGIA (LIQUIDACIÓN POR LOTE ACTUALIZADA)
+# ⚙️ LA VERDADERA MAGIA (LIQUIDACIÓN POR LOTE ACTUALIZADA)
 # =========================================================
 
 
@@ -947,6 +943,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
         cxc_creadas = 0
 
         for trip in trips_to_check:
+            # 1. EVALUACIÓN DE CIERRE DE VIAJE (Liberación de recursos)
             all_completed = all(
                 l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
             )
@@ -955,7 +952,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                 trip.status = "cerrado"
                 trip.closed_at = func.now()
 
-                #  LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
+                # LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
                 unit_ids_to_free = [
                     trip.remolque_1_id,
                     trip.dolly_id,
@@ -986,7 +983,19 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         models.Operator.id.in_(operator_ids_to_free)
                     ).update({"status": "activo"}, synchronize_session=False)
 
-                #  CREACIÓN DE CXC
+            # 2. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
+            # 🔧 AQUÍ ESTÁ EL FIX APLICADO:
+            carretera_liquidada = any(
+                (
+                    l.leg_type == "ruta_carretera"
+                    or l.leg_type == models.TripLegType.RUTA
+                )
+                and l.status in ["liquidado", "cerrado"]
+                for l in trip.legs
+            )
+
+            if carretera_liquidada:
+                # CREACIÓN DE CXC
                 existing_cxc = (
                     db.query(models.ReceivableInvoice)
                     .filter(
@@ -996,6 +1005,8 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                     )
                     .first()
                 )
+
+                # Si la fase de carretera ya está liquidada y NO existe la CxC, la creamos
                 if not existing_cxc:
                     base = trip.tarifa_base or 0.0
                     casetas = trip.costo_casetas or 0.0

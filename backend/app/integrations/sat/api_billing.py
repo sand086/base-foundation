@@ -16,6 +16,9 @@ from cryptography.hazmat.backends import default_backend
 
 from app.db.database import get_db
 from app.modules.logistics.schemas import ReceivableInvoiceCreate
+from app.integrations.sat.payment_service import (
+    PaymentComplementService,
+)  # <-- ¡ESTA ES LA NUEVA!
 
 # IMPORTAMOS AMBOS MOTORES
 from app.integrations.sat.billing_service import BillingService
@@ -590,7 +593,7 @@ def registrar_pago_multiple(
                 # Ya no lanzamos error, solo lo limpiamos o lo dejamos pasar para el bypass
                 pass
 
-    service = BillingService(db)
+    service = PaymentComplementService(db)
     try:
         # 1. Intentamos el timbrado real con el SAT
         resultado = service.registrar_pago_y_timbrar_complemento(

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -117,6 +118,7 @@ export default function FuelConciliation() {
   const [legToReset, setLegToReset] = useState<string | null>(null);
   const [legToView, setLegToView] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [cobrarOperador, setCobrarOperador] = useState(true);
 
   // 1. FILTRADO DE HISTÓRICOS
   const auditedLegs = useMemo(() => {
@@ -377,6 +379,7 @@ export default function FuelConciliation() {
       odometroFinal: "",
       maxOdoVales: 0,
     });
+    setCobrarOperador(true);
   };
 
   const handleResetAll = () => {
@@ -418,8 +421,10 @@ export default function FuelConciliation() {
         odometro: Number(formData.odometroFinal),
         combustible_litros: Number(vales),
         trip_leg_id: Number(selectedLegId),
-        penalizacion_monto: auditResult.descuentoPesos,
-        penalizacion_motivo: auditResult.mensajeDeduccion,
+        penalizacion_monto: cobrarOperador ? auditResult.descuentoPesos : 0,
+        penalizacion_motivo: cobrarOperador
+          ? auditResult.mensajeDeduccion
+          : "Excedente perdonado por el auditor.",
       };
 
       await axiosClient.post(
@@ -960,11 +965,20 @@ export default function FuelConciliation() {
 
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                   {auditResult?.esRoboSospechado && (
-                    <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
-                      <AlertTriangle className="h-4 w-4 animate-pulse" />
-                      <span className="font-black uppercase text-[10px] tracking-widest">
-                        Excede Tol.
-                      </span>
+                    <div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                      <div className="flex flex-col text-right">
+                        <span className="font-black uppercase text-[10px] tracking-widest leading-none">
+                          Excede Tol.
+                        </span>
+                        <span className="text-[9px] font-medium text-rose-800 dark:text-rose-300 mt-0.5">
+                          ¿Cobrar ${auditResult.descuentoPesos.toFixed(2)}?
+                        </span>
+                      </div>
+                      <Switch
+                        checked={cobrarOperador}
+                        onCheckedChange={setCobrarOperador}
+                        className="data-[state=checked]:bg-rose-600"
+                      />
                     </div>
                   )}
                   {isEditing ? (
