@@ -1009,8 +1009,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                 # Si la fase de carretera ya está liquidada y NO existe la CxC, la creamos
                 if not existing_cxc:
                     base = trip.tarifa_base or 0.0
-                    casetas = trip.costo_casetas or 0.0
-                    subtotal = base + casetas
+                    subtotal = base
                     iva = subtotal * 0.16
                     retencion = subtotal * 0.04
                     monto_total = subtotal + iva - retencion

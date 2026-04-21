@@ -649,8 +649,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         # Si ya liquidamos la carretera y NO hay CxC, la generamos
         if not existing_cxc:
             base = trip.tarifa_base or 0.0
-            casetas = trip.costo_casetas or 0.0
-            subtotal = base + casetas
+            subtotal = base
             iva = subtotal * 0.16
             retencion = subtotal * 0.04
             monto_total = subtotal + iva - retencion
