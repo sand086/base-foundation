@@ -19,6 +19,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import axiosClient from "@/api/axiosClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -189,10 +191,39 @@ export const WorkOrdersTable = () => {
   const handleCloseOrder = async () => {
     if (!orderToClose) return;
     setIsProcessing(true);
-    await updateOrderStatus(orderToClose.id, "cerrada");
-    setIsProcessing(false);
-    setOrderToClose(null);
-    // Nota: Aquí el backend o tu hook disparará la integración con CxP Proveedores
+
+    try {
+      // 1. Cerramos la orden de trabajo (Esto ya lo hacías)
+      await updateOrderStatus(orderToClose.id, "cerrada");
+
+      // 2. Calculamos el costo total a pagar (usando la misma lógica de tu tabla)
+      const costoTotal =
+        orderToClose.parts?.reduce(
+          (acc, p) => acc + p.cantidad * p.costo_unitario_snapshot,
+          0,
+        ) || 0;
+
+      // 3. 🚀 CREAMOS LA CUENTA POR PAGAR (CxP) EN TESORERÍA
+      // Nota: Revisa si tu 'orderToClose' tiene algún campo como 'supplier_id' o 'mechanic_id'
+      // que funcione como proveedor. Aquí asumo una estructura estándar para el payload.
+      await axiosClient.post("/api/suppliers/invoices", {
+        proveedor_id: orderToClose.mechanic_id, // <-- Ajusta este ID según tu modelo
+        referencia: `OT-${orderToClose.folio}`, // Usamos el folio de la orden como referencia
+        monto_total: costoTotal,
+        fecha_emision: new Date().toISOString().split("T")[0], // Fecha de hoy
+        concepto: `Liquidación de Orden de Trabajo: ${orderToClose.descripcion_problema}`,
+      });
+
+      toast.success("Orden cerrada y CxP generada exitosamente.");
+    } catch (error) {
+      toast.error(
+        "Error al cerrar la orden o generar la CxP. Intenta de nuevo.",
+      );
+      console.error("Error al generar la CxP:", error);
+    } finally {
+      setIsProcessing(false);
+      setOrderToClose(null);
+    }
   };
 
   const handleCancelOrder = async (orderId: number) => {
@@ -364,7 +395,8 @@ export const WorkOrdersTable = () => {
                       setIsModalOpen(true);
                     }}
                   >
-                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Editar Orden
+                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+                    Editar Orden
                   </DropdownMenuItem>
                 )}
 
@@ -700,8 +732,10 @@ export const WorkOrdersTable = () => {
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Se borrará todo su historial y registro de sistema de forma permanente.{" "}
-                  <b className="font-black">Esta acción no se puede deshacer</b>.
+                  Se borrará todo su historial y registro de sistema de forma
+                  permanente.{" "}
+                  <b className="font-black">Esta acción no se puede deshacer</b>
+                  .
                 </p>
               </div>
             </AlertDialogDescription>

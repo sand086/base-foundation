@@ -31,12 +31,15 @@ try:
 except ImportError:
     HAS_NUM2WORDS = False
 
+# 🚀 FIX: Añadimos BankAccount y BankMovement a las importaciones
 from app.models.models import (
     ReceivableInvoice,
     Client as ClientModel,
     SystemConfig,
     SatLocationCode,
     ReceivableInvoicePayment,
+    BankAccount,
+    BankMovement,
 )
 
 logger = logging.getLogger("billing.audit")
@@ -441,19 +444,46 @@ class PaymentComplementService:
                 status_code=500, detail=f"Error al timbrar el pago: {str(e)}"
             )
 
-        # Guardar registros de pago en BD
+        # =========================================================================
+        # 🚀 FIX: GUARDAR PAGOS Y CREAR MOVIMIENTO BANCARIO EN TESORERÍA
+        # =========================================================================
         for factura in facturas_afectadas:
             abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
+            monto_abono_float = float(abono.get("monto_pagado"))
+
+            # 1. Guardar el pago de la factura
             nuevo_pago = ReceivableInvoicePayment(
                 invoice_id=factura.id,
                 fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
-                monto=float(abono.get("monto_pagado")),
+                monto=monto_abono_float,
                 metodo_pago=forma_pago,
                 referencia=referencia,
                 cuenta_deposito=cuenta_deposito,
                 complemento_uuid=complemento_uuid,
             )
             self.db.add(nuevo_pago)
+
+            # 2. Sumar el dinero al Banco
+            if cuenta_deposito:
+                banco = (
+                    self.db.query(BankAccount)
+                    .filter(BankAccount.id == int(cuenta_deposito))
+                    .first()
+                )
+                if banco:
+                    nuevo_ingreso = BankMovement(
+                        bank_account_id=banco.id,
+                        tipo="ingreso",
+                        monto=monto_abono_float,
+                        fecha=datetime.now(),
+                        concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
+                        referencia=referencia or f"REP {complemento_uuid[:8]}",
+                        conciliado=False,
+                    )
+                    self.db.add(nuevo_ingreso)
+                    # Sumamos el saldo a la cuenta bancaria
+                    banco.saldo += monto_abono_float
+                    self.db.add(banco)
 
         self.db.commit()
         return {
