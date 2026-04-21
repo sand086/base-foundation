@@ -98,6 +98,7 @@ export default function Receivables() {
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // FORMATEO DE DATOS DE LA API
+  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -110,29 +111,34 @@ export default function Receivables() {
         [];
     }
 
-    return dataArray.map((inv: any) => ({
-      ...inv,
-      id: inv.id,
-      client_id: inv.client_id || inv.cliente_id || inv.client?.id,
-      folio:
-        inv.folio_interno ||
-        (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
-      cliente:
-        inv.client?.razon_social ||
-        inv.clientName ||
-        inv.client_razon_social ||
-        "Cliente Desconocido",
-      monto_total: Number(inv.monto_total) || 0,
-      saldo_pendiente:
-        inv.saldo_pendiente !== undefined
-          ? Number(inv.saldo_pendiente)
-          : Number(inv.monto_total) || 0,
-      requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
-      fecha_emision: inv.fecha_emision || inv.created_at,
-      fecha_vencimiento: inv.fecha_vencimiento,
-      estatus: inv.estatus || inv.status || "corriente",
-      cobros: inv.payments || [],
-    })) as ReceivableInvoice[];
+    return (
+      dataArray
+        // 🚀 NOVO FILTRO: Remove todas as faturas com o valor exato de 1.12
+        .filter((inv: any) => Number(inv.monto_total) !== 1.12)
+        .map((inv: any) => ({
+          ...inv,
+          id: inv.id,
+          client_id: inv.client_id || inv.cliente_id || inv.client?.id,
+          folio:
+            inv.folio_interno ||
+            (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
+          cliente:
+            inv.client?.razon_social ||
+            inv.clientName ||
+            inv.client_razon_social ||
+            "Cliente Desconocido",
+          monto_total: Number(inv.monto_total) || 0,
+          saldo_pendiente:
+            inv.saldo_pendiente !== undefined
+              ? Number(inv.saldo_pendiente)
+              : Number(inv.monto_total) || 0,
+          requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
+          fecha_emision: inv.fecha_emision || inv.created_at,
+          fecha_vencimiento: inv.fecha_vencimiento,
+          estatus: inv.estatus || inv.status || "corriente",
+          cobros: inv.payments || [],
+        })) as ReceivableInvoice[]
+    );
   }, [receivables]);
 
   // CÁLCULO DEL RESUMEN FINANCIERO (Facturado, Cobrado, Pendiente, Vencido)

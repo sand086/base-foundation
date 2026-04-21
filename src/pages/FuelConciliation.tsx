@@ -144,8 +144,9 @@ export default function FuelConciliation() {
       const legStatus = String(leg.status ?? "").toLowerCase();
       // 🚀 EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
       return (
-        ["entregado", "cerrado", "finalizado"].includes(legStatus) ||
-        String(leg.id) === selectedLegId
+        ["entregado", "cerrado", "finalizado", "liquidado"].includes(
+          legStatus,
+        ) || String(leg.id) === selectedLegId
       );
     });
   }, [activeTrip, selectedLegId]);
@@ -337,7 +338,8 @@ export default function FuelConciliation() {
     const rendimientoECM = litrosECM > 0 ? kmECM / litrosECM : 0;
     const rendimientoReal = litrosVales > 0 ? kmECM / litrosVales : 0;
 
-    const diferenciaLitros = litrosECM - litrosVales;
+    // 👇 SOLUCIÓN GUSTAVO: Vales (Físico) - ECM (Computadora)
+    const diferenciaLitros = litrosVales - litrosECM;
     const toleranciaPermitida = litrosECM * TOLERANCIA_FIJA;
 
     let estatus: "CONCILIADO" | "COBRO_OPERADOR" = "CONCILIADO";
@@ -345,11 +347,12 @@ export default function FuelConciliation() {
     let descuentoPesos = 0;
     let mensajeDeduccion = "";
 
+    // Si la diferencia es positiva y excede la tolerancia del 3%
     if (diferenciaLitros > 0 && diferenciaLitros > toleranciaPermitida) {
       estatus = "COBRO_OPERADOR";
       esRoboSospechado = true;
       descuentoPesos = diferenciaLitros * PRECIO_DIESEL_ESTANDAR;
-      mensajeDeduccion = `Cargo por diésel: Te faltaron ${diferenciaLitros.toFixed(1)} litros según el rendimiento del viaje, generando un descuento de $${descuentoPesos.toFixed(2)}`;
+      mensajeDeduccion = `Cargo por diésel: Excedente de ${diferenciaLitros.toFixed(1)}L sobre lo marcado por ECM, generando un descuento de $${descuentoPesos.toFixed(2)}`;
     }
 
     return {
@@ -674,16 +677,18 @@ export default function FuelConciliation() {
                       if (String(t.id) === selectedTripId) return true;
 
                       const tripStatus = String(t.status ?? "").toLowerCase();
-                      if (
-                        ["entregado", "cerrado", "finalizado"].includes(
-                          tripStatus,
-                        )
-                      )
-                        return true;
+                      const estatusValidos = [
+                        "entregado",
+                        "cerrado",
+                        "finalizado",
+                        "liquidado",
+                      ];
 
-                      // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos entregados, ¡muéstralo!
+                      if (estatusValidos.includes(tripStatus)) return true;
+
+                      // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos listos, ¡muéstralo!
                       const tieneTramosListos = t.legs?.some((leg) =>
-                        ["entregado", "cerrado", "finalizado"].includes(
+                        estatusValidos.includes(
                           String(leg.status ?? "").toLowerCase(),
                         ),
                       );
@@ -947,7 +952,10 @@ export default function FuelConciliation() {
                   </div>
                   <div className="flex flex-col pl-4 md:pl-8">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      Faltante Diésel
+                      {auditResult?.diferenciaLitros != null &&
+                      auditResult.diferenciaLitros > 0
+                        ? "Faltante / Exceso"
+                        : "Ahorro Diésel"}
                     </span>
                     <span
                       className={cn(

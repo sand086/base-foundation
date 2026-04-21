@@ -1002,6 +1002,8 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         models.ReceivableInvoice.viaje_id == trip.id,
                         models.ReceivableInvoice.record_status
                         != RecordStatus.ELIMINADO,
+                        models.ReceivableInvoice.is_nominal
+                        == False,  # 🚀 FIX: Ignorar las nominales de $1 peso
                     )
                     .first()
                 )
