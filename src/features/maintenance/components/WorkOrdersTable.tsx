@@ -193,33 +193,45 @@ export const WorkOrdersTable = () => {
     setIsProcessing(true);
 
     try {
-      // 1. Cerramos la orden de trabajo (Esto ya lo hacías)
+      // 1. Cerramos la orden de trabajo para que ya no se pueda editar
       await updateOrderStatus(orderToClose.id, "cerrada");
 
-      // 2. Calculamos el costo total a pagar (usando la misma lógica de tu tabla)
+      // 2. Calculamos el costo total a mandar a finanzas
       const costoTotal =
         orderToClose.parts?.reduce(
           (acc, p) => acc + p.cantidad * p.costo_unitario_snapshot,
           0,
         ) || 0;
 
-      // 3. 🚀 CREAMOS LA CUENTA POR PAGAR (CxP) EN TESORERÍA
-      // Nota: Revisa si tu 'orderToClose' tiene algún campo como 'supplier_id' o 'mechanic_id'
-      // que funcione como proveedor. Aquí asumo una estructura estándar para el payload.
-      await axiosClient.post("/api/suppliers/invoices", {
-        proveedor_id: orderToClose.mechanic_id, // <-- Ajusta este ID según tu modelo
-        referencia: `OT-${orderToClose.folio}`, // Usamos el folio de la orden como referencia
+      // 3. 🚀 CREAMOS LA CUENTA POR PAGAR (CxP)
+      // OJO: Los nombres de estas propiedades deben coincidir exactamente
+      // con tu esquema PayableInvoiceCreate en FastAPI.
+      const payloadCxP = {
+        supplier_id: orderToClose.mechanic_id, // El ID del mecánico/taller (Debe existir en la tabla suppliers)
+        folio_interno: `OT-${orderToClose.folio}`, // Usamos el folio de la orden
         monto_total: costoTotal,
-        fecha_emision: new Date().toISOString().split("T")[0], // Fecha de hoy
-        concepto: `Liquidación de Orden de Trabajo: ${orderToClose.descripcion_problema}`,
-      });
+        saldo_pendiente: costoTotal,
+        fecha_emision: new Date().toISOString().split("T")[0], // "YYYY-MM-DD"
+        concepto: `Liquidación de Orden de Trabajo: ${orderToClose.descripcion_problema || "Mantenimiento"}`,
+        estatus: "pendiente", // O el default que use tu backend
+        moneda: "MXN",
+      };
 
-      toast.success("Orden cerrada y CxP generada exitosamente.");
-    } catch (error) {
-      toast.error(
-        "Error al cerrar la orden o generar la CxP. Intenta de nuevo.",
-      );
+      // Hacemos el POST al endpoint que descubrimos en tu código de FastAPI
+      await axiosClient.post("/api/suppliers/invoices", payloadCxP);
+
+      toast.success("¡Orden Finalizada!", {
+        description:
+          "La orden se cerró y la factura de proveedor se envió a Tesorería.",
+      });
+    } catch (error: any) {
       console.error("Error al generar la CxP:", error);
+      // Si el backend rechaza el payload, mostramos el error exacto
+      const errMsg =
+        error.response?.data?.detail || "Fallo la integración con CxP.";
+      toast.error("Orden cerrada con advertencia", {
+        description: `La orden se cerró, pero la CxP falló: ${errMsg}`,
+      });
     } finally {
       setIsProcessing(false);
       setOrderToClose(null);
