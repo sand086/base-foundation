@@ -623,6 +623,7 @@ def get_fuel_logs(
                 joinedload(models.FuelLog.unit),
                 joinedload(models.FuelLog.operator),
                 joinedload(models.FuelLog.created_by),
+                joinedload(models.FuelLog.trip_leg),
             )
             .where(models.FuelLog.record_status == "A")
         )

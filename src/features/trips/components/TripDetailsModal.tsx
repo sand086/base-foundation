@@ -376,6 +376,7 @@ export function TripDetailsModal({
       // 🚀 FIX: Cerramos el modal inmediatamente y recargamos la tabla principal
       onOpenChange(false);
       await fetchTrips();
+      window.location.href = "/dispatch"; // Redirigimos al usuario al tablero principal
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {
@@ -930,60 +931,6 @@ export function TripDetailsModal({
                                                     btnUI.icon
                                                   )}
                                                   {btnUI.text}
-                                                </Button>
-                                              )}
-
-                                            {/* 2. BOTÓN DE DESENGANCHAR EN PATIO */}
-                                            {/* Este SÍ desaparece después de usarse para no duplicar desenganches */}
-                                            {/*                                           {leg.leg_type === "carga_muelle" &&
-                                              [
-                                                "creado",
-                                                "en_transito",
-                                              ].includes(leg.status) && (
-                                                <Button
-                                                  size="sm"
-                                                  className="h-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-purple-500/20 haptic-press border-none"
-                                                  disabled={
-                                                    finishingLeg || isUnhooking
-                                                  }
-                                                  onClick={async () => {
-                                                    setIsUnhooking(true);
-                                                    const success =
-                                                      await unhookTrip(
-                                                        String(localTrip.id),
-                                                      );
-                                                    if (success) {
-                                                      await fetchTrips();
-                                                      onOpenChange(false);
-                                                    }
-                                                    setIsUnhooking(false);
-                                                  }}
-                                                >
-                                                  {isUnhooking ? (
-                                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                                  ) : (
-                                                    <Container className="h-3.5 w-3.5 mr-1.5" />
-                                                  )}
-                                                  Desenganchar Carga
-                                                </Button>
-                                              )} */}
-
-                                            {/* 3. BOTÓN DE LIQUIDAR OP. */}
-                                            {leg.status === "entregado" &&
-                                              onSettleClick && (
-                                                <Button
-                                                  size="sm"
-                                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase shadow-lg shadow-emerald-500/20"
-                                                  onClick={() => {
-                                                    onOpenChange(false);
-                                                    onSettleClick(
-                                                      leg as any,
-                                                      localTrip!,
-                                                    );
-                                                  }}
-                                                >
-                                                  <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
-                                                  LIQUIDAR OP.
                                                 </Button>
                                               )}
                                           </div>

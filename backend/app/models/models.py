@@ -1371,6 +1371,10 @@ class FuelLog(AuditMixin, Base):
         "FuelDocumentHistory", back_populates="fuel_log", cascade="all, delete-orphan"
     )
 
+    @property
+    def trip_id(self):
+        return self.trip_leg.trip_id if self.trip_leg else None
+
 
 class SatProduct(Base):
     __tablename__ = "sat_products"

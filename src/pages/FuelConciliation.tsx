@@ -144,7 +144,7 @@ export default function FuelConciliation() {
       const legStatus = String(leg.status ?? "").toLowerCase();
       // 🚀 EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
       return (
-        ["entregado", "cerrado"].includes(legStatus) ||
+        ["entregado", "cerrado", "finalizado"].includes(legStatus) ||
         String(leg.id) === selectedLegId
       );
     });
@@ -674,12 +674,16 @@ export default function FuelConciliation() {
                       if (String(t.id) === selectedTripId) return true;
 
                       const tripStatus = String(t.status ?? "").toLowerCase();
-                      if (["entregado", "cerrado"].includes(tripStatus))
+                      if (
+                        ["entregado", "cerrado", "finalizado"].includes(
+                          tripStatus,
+                        )
+                      )
                         return true;
 
                       // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos entregados, ¡muéstralo!
                       const tieneTramosListos = t.legs?.some((leg) =>
-                        ["entregado", "cerrado"].includes(
+                        ["entregado", "cerrado", "finalizado"].includes(
                           String(leg.status ?? "").toLowerCase(),
                         ),
                       );

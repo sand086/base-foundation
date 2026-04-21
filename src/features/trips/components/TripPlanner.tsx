@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   format,
@@ -36,6 +36,7 @@ import {
   ShieldAlert,
   Route as RouteIcon,
   Container,
+  RefreshCw,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -177,7 +178,6 @@ const legTypeShort: Record<string, string> = {
 export const TripPlanner = () => {
   const navigate = useNavigate();
 
-  // 🚀 FIX: Importamos search params si no estaba y leemos el estado del calendario
   const [searchParams, setSearchParams] = useSearchParams();
   const viewMode =
     searchParams.get("view") === "calendar" ? "standby" : "table";
@@ -215,16 +215,29 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  // 🚀 ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
+  const [tableKey, setTableKey] = useState(Date.now());
+
+  useEffect(() => {
+    fetchTrips();
+
+    const interval = setInterval(() => {
+      fetchTrips();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [fetchTrips]);
+
   const handleNextLegSubmit = async (tripId: string, payload: any) => {
     const res = await createNextLeg(tripId, payload);
-    // FIX: Refrescamos la tabla global al pasar a la siguiente fase
     if (res) {
       await fetchTrips();
+      setTableKey(Date.now()); // Forzamos a la tabla a dibujarse de nuevo
     }
     return !!res;
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (tripToView) {
       const updatedTrip = trips.find((t) => t.id === tripToView.id);
       if (updatedTrip) {
@@ -284,19 +297,29 @@ export const TripPlanner = () => {
         notifyClient: data.notifyClient,
       },
     );
+
     if (ok) {
       setUpdateModalOpen(false);
-      // FIX: Refrescamos la tabla global al guardar novedad
       await fetchTrips();
+      setTableKey(Date.now()); // 🚀 Destruye y recrea la tabla internamente
 
+      // 🚀 CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
+
         if (activeLeg.leg_type === "entrega_vacio") {
           if (selectedTripPadre.remolque_1_id)
             await updateLoadStatus(selectedTripPadre.remolque_1_id, false);
           if (selectedTripPadre.remolque_2_id)
             await updateLoadStatus(selectedTripPadre.remolque_2_id, false);
         }
+
+        // Ejecutamos el reload brutal de la ventana SOLO al finalizar/liberar
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        toast.success("Novedad registrada correctamente.");
       }
     }
   };
@@ -338,7 +361,7 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
-  if (loading)
+  if (loading && trips.length === 0)
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
@@ -358,7 +381,27 @@ export const TripPlanner = () => {
           Centro de Operaciones
         </h2>
 
-        <div className="w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">
+        <div className="flex items-center w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={async () => {
+              toast.info("Sincronizando datos...");
+              await fetchTrips();
+              setTableKey(Date.now()); // 🚀 Forzar destrucción y recreación de tabla sin recargar página
+            }}
+            disabled={loading}
+            className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+            title="Sincronizar base de datos"
+          >
+            <RefreshCw
+              className={cn(
+                "h-4 w-4 text-slate-500",
+                loading && "animate-spin text-blue-500",
+              )}
+            />
+          </Button>
+
           <Tabs
             value={viewMode}
             onValueChange={(v) => setViewMode(v as any)}
@@ -394,7 +437,8 @@ export const TripPlanner = () => {
         <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <DataTable className="min-w-[800px]">
+              {/* 🚀 EL KEY MÁGICO: Al cambiar tableKey, esta tabla muere y renace */}
+              <DataTable key={tableKey} className="min-w-[800px]">
                 <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
                   <DataTableRow className="hover:bg-transparent border-none">
                     <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
@@ -526,17 +570,6 @@ export const TripPlanner = () => {
                                   Abrir Centro de Mando
                                 </DropdownMenuItem>
 
-                                {leg.status === "entregado" && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      setLegToSettle({ leg, tripPadre })
-                                    }
-                                    className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
-                                  >
-                                    <Banknote className="h-4 w-4 mr-3" />{" "}
-                                    Liquidar Fase
-                                  </DropdownMenuItem>
-                                )}
                                 <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
                                 <DropdownMenuItem
                                   onClick={() => setTripToDelete(tripPadre)}

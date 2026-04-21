@@ -355,16 +355,16 @@ const FuelLoads = () => {
         ),
       },
       {
-        key: "trip_leg_id",
-        header: "Fase / Viaje",
+        key: "trip_id",
+        header: "Viaje / Conciliación",
         render: (v) =>
           v ? (
-            <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700 shadow-none text-[10px] font-mono">
-              Fase #{v}
+            <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 shadow-none text-[10px] font-mono">
+              TRP-{v}
             </Badge>
           ) : (
             <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
-              Patio
+              Patio / Sin Viaje
             </span>
           ),
       },
@@ -409,21 +409,16 @@ const FuelLoads = () => {
         ),
       },
       {
-        key: "evidencia_url",
-        header: "Evidencia",
-        render: (v) =>
-          v ? (
-            <Badge className="bg-emerald-500 dark:bg-emerald-600 text-white border-none text-[8px] font-black tracking-widest px-2 shadow-sm">
-              ADJUNTA
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="text-rose-400 border-rose-400/30 text-[8px] font-black tracking-widest px-2 uppercase bg-rose-50 dark:bg-rose-500/10 shadow-sm"
-            >
-              SIN ARCHIVO
-            </Badge>
-          ),
+        key: "operador_nombre",
+        header: "Operador",
+        render: (v) => (
+          <span
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase truncate max-w-[180px] block"
+            title={String(v)}
+          >
+            {v !== "N/A" ? v : "Sin Operador"}
+          </span>
+        ),
       },
       {
         key: "acciones",
