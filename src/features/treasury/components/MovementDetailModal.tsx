@@ -8,12 +8,10 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   Receipt,
   Calendar,
   Landmark,
-  Link2,
   User,
   FileText,
   CheckCircle2,
@@ -21,7 +19,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
 } from "lucide-react";
-import { BankAccount, BankMovement } from "@/features/treasury/types";
+import { BankMovement } from "@/features/treasury/types";
 import { cn } from "@/lib/utils";
 
 interface MovementDetailModalProps {
@@ -111,12 +109,12 @@ export function MovementDetailModal({
                 )}
               >
                 {isIngreso ? "+" : "-"}$
-                {movement.monto.toLocaleString("es-MX", {
+                {(movement.monto || 0).toLocaleString("es-MX", {
                   minimumFractionDigits: 2,
                 })}
               </span>
               <span className="text-lg font-bold text-muted-foreground uppercase tracking-widest">
-                {movement.moneda}
+                {movement.moneda || "MXN"}
               </span>
             </div>
           </div>
@@ -127,7 +125,7 @@ export function MovementDetailModal({
               Concepto de Transacción
             </p>
             <p className="text-lg font-semibold text-foreground leading-tight">
-              {movement.concepto}
+              {movement.concepto || "Sin concepto especificado"}
             </p>
           </div>
 
@@ -140,7 +138,9 @@ export function MovementDetailModal({
                   Afectación
                 </span>
               </div>
-              <p className="font-bold text-foreground">{movement.fecha}</p>
+              <p className="font-bold text-foreground">
+                {movement.fecha || "S/F"}
+              </p>
             </div>
 
             <div className="p-4 border border-border rounded-2xl bg-card shadow-sm">
@@ -151,10 +151,12 @@ export function MovementDetailModal({
                 </span>
               </div>
               <p className="font-bold text-foreground leading-none mb-1">
-                {movement.banco}
+                {movement.banco || "Banco no especificado"}
               </p>
               <p className="text-[10px] font-mono font-medium text-muted-foreground tracking-widest">
-                •••• {movement.cuenta_bancaria?.slice(-4)}
+                {movement.cuenta_bancaria
+                  ? `•••• ${movement.cuenta_bancaria.slice(-4)}`
+                  : "N/A"}
               </p>
             </div>
           </div>
@@ -166,16 +168,19 @@ export function MovementDetailModal({
                 Referencia Bancaria / SPEI
               </p>
               <p className="font-mono font-black text-foreground text-xl tracking-wider">
-                {movement.referencia_bancaria}
+                {movement.referencia_bancaria || "SIN REFERENCIA"}
               </p>
             </div>
             <Button
               variant="ghost"
               size="icon"
               className="text-muted-foreground hover:text-foreground haptic-press"
-              onClick={() =>
-                navigator.clipboard.writeText(movement.referencia_bancaria)
-              }
+              disabled={!movement.referencia_bancaria}
+              onClick={() => {
+                if (movement.referencia_bancaria) {
+                  navigator.clipboard.writeText(movement.referencia_bancaria);
+                }
+              }}
             >
               <FileText className="h-4 w-4" />
             </Button>
@@ -213,9 +218,7 @@ export function MovementDetailModal({
                     : "text-muted-foreground",
                 )}
               >
-                {movement.conciliado
-                  ? "Conciliación Exitosa"
-                  : "Por Conciliar"}
+                {movement.conciliado ? "Conciliación Exitosa" : "Por Conciliar"}
               </p>
               <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                 <div
@@ -230,20 +233,22 @@ export function MovementDetailModal({
             </div>
           </div>
 
-          {/* Registro */}
+          {/* Registro Footer */}
           <div className="flex justify-between items-center px-2 pt-2 border-t border-border opacity-80">
             <div className="flex items-center gap-2">
               <User className="h-3 w-3 text-muted-foreground" />
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-tight">
                 BY:{" "}
                 <span className="text-foreground">
-                  {movement.registrado_por}
+                  {/* Se agregó fallback para registrado_por si no viene de backend */}
+                  {(movement as any).registrado_por || "SISTEMA"}
                 </span>
               </span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground font-mono text-[9px]">
               <span className="bg-muted px-2 py-0.5 rounded border border-border">
-                {movement.fecha_registro}
+                {/* Fallback de la fecha de registro o fecha principal */}
+                {(movement as any).fecha_registro || movement.fecha || "S/F"}
               </span>
             </div>
           </div>
