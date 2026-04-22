@@ -438,6 +438,66 @@ def register_petty_cash_expense(db: Session, expense_data: dict, user_id: int):
     return movimiento
 
 
+def create_manual_receivable(db: Session, data: dict, user_id: int):
+    import time
+    from datetime import datetime, date
+
+    # Generamos un folio provisional en lo que el sistema la timbra con el SAT
+    folio = f"MNL-{int(time.time())}"
+
+    # El frontend manda 'conceptos' como un array. Tomamos la primera descripción
+    conceptos = data.get("conceptos", [])
+    concepto_general = (
+        conceptos[0].get("descripcion", "Factura Manual")
+        if conceptos
+        else "Servicio de Transporte"
+    )
+
+    # Procesar fechas de texto ("YYYY-MM-DD") a objetos Date
+    fecha_emision_str = data.get("fecha_emision")
+    fecha_vencimiento_str = data.get("fecha_vencimiento")
+
+    try:
+        emision_obj = (
+            datetime.strptime(fecha_emision_str, "%Y-%m-%d").date()
+            if fecha_emision_str
+            else date.today()
+        )
+        vencimiento_obj = (
+            datetime.strptime(fecha_vencimiento_str, "%Y-%m-%d").date()
+            if fecha_vencimiento_str
+            else date.today()
+        )
+    except Exception:
+        emision_obj = date.today()
+        vencimiento_obj = date.today()
+
+    nueva_factura = models.ReceivableInvoice(
+        client_id=int(data.get("client_id")),
+        folio_interno=folio,
+        concepto=concepto_general,
+        subtotal=float(data.get("subtotal", 0)),
+        iva=float(data.get("iva", 0)),
+        retenciones=float(data.get("retenciones", 0)),
+        monto_total=float(data.get("monto_total", 0)),
+        saldo_pendiente=float(data.get("monto_total", 0)),  # Nace debiendo el 100%
+        moneda=data.get("moneda", "MXN"),
+        fecha_emision=emision_obj,
+        fecha_vencimiento=vencimiento_obj,
+        dias_credito=int(data.get("dias_credito", 0)),
+        metodo_pago=data.get("metodo_pago", "PPD"),
+        forma_pago=data.get("forma_pago", "99"),
+        tipo_comprobante="I",
+        estatus=models.InvoiceStatus.PENDIENTE,
+    )
+
+    db.add(nueva_factura)
+    db.commit()
+    db.refresh(nueva_factura)
+
+    return nueva_factura
+
+
 def process_sat_master_report(
     db: Session,
     payload_data: list[dict],

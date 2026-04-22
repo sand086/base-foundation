@@ -246,7 +246,7 @@ def get_receivable_invoices(
         ]
 
         folio_display = inv.folio_interno or (
-            f"CXC-VIAJE-{inv.viaje_id}"
+            f"CXC-TRP-{inv.viaje_id}"
             if inv.viaje_id
             else (f"SAT-{str(inv.uuid)[:8]}" if inv.uuid else f"PROVISIONAL-{inv.id}")
         )
@@ -397,6 +397,22 @@ def register_receivable_payment(
         "nuevo_saldo_factura": invoice.saldo_pendiente,
         "estatus": invoice.estatus,
     }
+
+
+@router.post("/receivables")
+def create_manual_receivable(
+    invoice_data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Endpoint para crear una factura manual (CxC) generada por el usuario.
+    """
+    try:
+        nueva_factura = crud.create_manual_receivable(db, invoice_data, current_user.id)
+        return nueva_factura
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/payments/upload-xml")

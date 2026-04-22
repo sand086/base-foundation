@@ -58,6 +58,7 @@ import {
   getInvoiceStatusInfo,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
+import axiosClient from "@/api/axiosClient";
 
 // HOOKS
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -259,10 +260,25 @@ export default function Receivables() {
     setIsCreateModalOpen(true);
   };
 
-  const handleCreateInvoice = async (
-    invoiceData: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
-  ) => {
-    toast.info("Función de creación manual en desarrollo");
+  const handleCreateInvoice = async (invoiceData: any) => {
+    try {
+      // Usamos directamente axiosClient ya que la función no existe en el hook
+      await axiosClient.post("/api/finance/receivables", invoiceData);
+
+      setIsCreateModalOpen(false);
+      setImportedServices(undefined);
+      toast.success("Factura generada y guardada exitosamente");
+
+      // Refrescamos la tabla de CxC
+      await refreshReceivables?.();
+    } catch (error: any) {
+      console.error("Error al crear factura:", error);
+      toast.error("Error al generar la factura", {
+        description:
+          error.response?.data?.detail ||
+          "Verifica la conexión con el servidor",
+      });
+    }
   };
 
   const handleRegisterPayment = async (payload: any) => {

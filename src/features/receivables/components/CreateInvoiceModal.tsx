@@ -15,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-// 🚀 FIX FASE 4: Importamos los componentes de Autocompletado (Combobox)
 import {
   Command,
   CommandEmpty,
@@ -53,13 +52,20 @@ interface CreateInvoiceModalProps {
     invoice: Omit<
       ReceivableInvoice,
       "id" | "folio_interno" | "payments" | "estatus"
-    >,
+    > & {
+      uso_cfdi?: string;
+      regimen_fiscal_receptor?: string;
+      cp_receptor?: string;
+      metodo_pago?: string;
+      forma_pago?: string;
+      requiere_rep?: boolean;
+    },
   ) => void;
   importedServices?: FinalizableService[];
 }
 
 const creditDaysOptions = [
-  { value: 0, label: "Contado" },
+  { value: 0, label: "Contado (0 días)" },
   { value: 15, label: "15 días" },
   { value: 30, label: "30 días" },
   { value: 45, label: "45 días" },
@@ -75,19 +81,45 @@ export function CreateInvoiceModal({
   const { clients, isLoading: loadingClients } = useClients();
 
   const [clienteId, setClienteId] = useState("");
-  const [openCombobox, setOpenCombobox] = useState(false); // 🚀 Estado del Autocomplete
+  const [openCombobox, setOpenCombobox] = useState(false);
+
+  // 🚀 FIX FASE 4: Estados para Información Fiscal Editable
+  const [rfcEditable, setRfcEditable] = useState("");
+  const [cpEditable, setCpEditable] = useState("");
+  const [regimenEditable, setRegimenEditable] = useState("601");
+  const [usoCfdiEditable, setUsoCfdiEditable] = useState("G03");
 
   const [diasCredito, setDiasCredito] = useState(30);
   const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
   const [fechaEmision, setFechaEmision] = useState(
     new Date().toISOString().split("T")[0],
   );
+
+  const [metodoPago, setMetodoPago] = useState<"PUE" | "PPD">("PPD");
+  const [formaPago, setFormaPago] = useState("99");
+  const [aplicaImpuestos, setAplicaImpuestos] = useState<"SI" | "NO">("SI");
+
   const [conceptos, setConceptos] = useState<InvoiceConcept[]>([]);
 
   const selectedClient = useMemo(
     () => clients.find((c) => c.id.toString() === clienteId),
     [clients, clienteId],
   );
+
+  // 🚀 Autofill Inteligente cuando cambia el cliente seleccionado
+  useEffect(() => {
+    if (selectedClient) {
+      setRfcEditable(selectedClient.rfc || "");
+      // Dependiendo de cómo se llame tu campo en la BD (codigo_postal_fiscal o codigo_postal)
+      setCpEditable(
+        (selectedClient as any).codigo_postal_fiscal ||
+          (selectedClient as any).codigo_postal ||
+          "",
+      );
+      setRegimenEditable((selectedClient as any).regimen_fiscal || "601");
+      setUsoCfdiEditable((selectedClient as any).uso_cfdi || "G03");
+    }
+  }, [selectedClient]);
 
   useEffect(() => {
     if (open) {
@@ -106,6 +138,10 @@ export function CreateInvoiceModal({
         setConceptos(newConceptos);
       } else {
         setClienteId("");
+        setRfcEditable("");
+        setCpEditable("");
+        setRegimenEditable("601");
+        setUsoCfdiEditable("G03");
         setConceptos([
           {
             id: "1",
@@ -125,9 +161,22 @@ export function CreateInvoiceModal({
     return date.toISOString().split("T")[0];
   }, [fechaEmision, diasCredito]);
 
-  const montoTotal = useMemo(
+  const subtotal = useMemo(
     () => conceptos.reduce((sum, c) => sum + c.importe, 0),
     [conceptos],
+  );
+
+  const iva = useMemo(
+    () => (aplicaImpuestos === "SI" ? subtotal * 0.16 : 0),
+    [subtotal, aplicaImpuestos],
+  );
+  const retenciones = useMemo(
+    () => (aplicaImpuestos === "SI" ? subtotal * 0.04 : 0),
+    [subtotal, aplicaImpuestos],
+  );
+  const montoTotal = useMemo(
+    () => subtotal + iva - retenciones,
+    [subtotal, iva, retenciones],
   );
 
   const addConcepto = () => {
@@ -170,21 +219,37 @@ export function CreateInvoiceModal({
   };
 
   const handleSubmit = () => {
-    if (!clienteId || conceptos.length === 0 || montoTotal <= 0) return;
+    if (
+      !clienteId ||
+      conceptos.length === 0 ||
+      montoTotal <= 0 ||
+      !rfcEditable ||
+      !cpEditable
+    ) {
+      return;
+    }
 
     onSubmit({
       client_id: Number(clienteId),
       cliente: selectedClient?.razon_social || "",
-      cliente_rfc: selectedClient?.rfc || "",
+      cliente_rfc: rfcEditable,
+      cp_receptor: cpEditable,
+      regimen_fiscal_receptor: regimenEditable,
+      uso_cfdi: usoCfdiEditable,
       conceptos,
+      subtotal: subtotal,
+      iva: iva,
+      retenciones: retenciones,
       monto_total: montoTotal,
       saldo_pendiente: montoTotal,
       moneda,
       fecha_emision: fechaEmision,
       fecha_vencimiento: fechaVencimiento,
       dias_credito: diasCredito,
+      metodo_pago: metodoPago,
+      forma_pago: formaPago,
       servicios_relacionados: importedServices?.map((s) => s.id) || [],
-      requiere_rep: false,
+      requiere_rep: metodoPago === "PPD",
     });
 
     onOpenChange(false);
@@ -192,7 +257,7 @@ export function CreateInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -206,17 +271,21 @@ export function CreateInvoiceModal({
                   : "Nueva Factura Manual"}
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                Cuentas por cobrar
+                Cuentas por cobrar • Facturación Directa
               </p>
             </div>
           </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-6">
-          {/* SECCIÓN CLIENTE CON BUSCADOR INTELIGENTE */}
+          {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL (EDITABLE) */}
           <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
+            <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
+              Datos del Receptor
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-2 lg:col-span-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Cliente Receptor *
                 </Label>
@@ -250,7 +319,7 @@ export function CreateInvoiceModal({
                         {clients.map((client) => (
                           <CommandItem
                             key={client.id}
-                            value={client.razon_social} // El buscador filtra sobre este valor
+                            value={client.razon_social}
                             onSelect={() => {
                               setClienteId(client.id.toString());
                               setOpenCombobox(false);
@@ -273,22 +342,103 @@ export function CreateInvoiceModal({
                   </PopoverContent>
                 </Popover>
               </div>
+
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  RFC Fiscal
+                  RFC Fiscal *
                 </Label>
                 <Input
-                  value={selectedClient?.rfc || ""}
-                  disabled
-                  className="h-11 bg-muted font-mono font-bold uppercase tracking-widest shadow-sm border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                  value={rfcEditable}
+                  onChange={(e) => setRfcEditable(e.target.value)}
+                  placeholder="XAXX010101000"
+                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500 transition-colors"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  C.P. (Domicilio) *
+                </Label>
+                <Input
+                  value={cpEditable}
+                  onChange={(e) => setCpEditable(e.target.value)}
+                  placeholder="00000"
+                  maxLength={5}
+                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Régimen Fiscal
+                </Label>
+                <Select
+                  value={regimenEditable}
+                  onValueChange={setRegimenEditable}
+                >
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="601" className="font-bold text-xs">
+                      601 - General de Ley Personas Morales
+                    </SelectItem>
+                    <SelectItem value="612" className="font-bold text-xs">
+                      612 - Personas Físicas con Actividades Empresariales
+                    </SelectItem>
+                    <SelectItem value="626" className="font-bold text-xs">
+                      626 - Régimen Simplificado de Confianza (RESICO)
+                    </SelectItem>
+                    <SelectItem value="603" className="font-bold text-xs">
+                      603 - Personas Morales con Fines no Lucrativos
+                    </SelectItem>
+                    <SelectItem value="616" className="font-bold text-xs">
+                      616 - Sin obligaciones fiscales
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Uso de CFDI
+                </Label>
+                <Select
+                  value={usoCfdiEditable}
+                  onValueChange={setUsoCfdiEditable}
+                >
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="G03" className="font-bold text-xs">
+                      G03 - Gastos en general
+                    </SelectItem>
+                    <SelectItem value="G01" className="font-bold text-xs">
+                      G01 - Adquisición de mercancías
+                    </SelectItem>
+                    <SelectItem value="I04" className="font-bold text-xs">
+                      I04 - Equipo de computo y accesorios
+                    </SelectItem>
+                    <SelectItem value="P01" className="font-bold text-xs">
+                      P01 - Por definir
+                    </SelectItem>
+                    <SelectItem value="S01" className="font-bold text-xs">
+                      S01 - Sin efectos fiscales
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
 
-          {/* PARÁMETROS FACTURA */}
+          {/* PARÁMETROS FACTURA Y FISCALES */}
           <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
+              Condiciones de Pago
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Fecha Emisión
@@ -297,7 +447,7 @@ export function CreateInvoiceModal({
                   type="date"
                   value={fechaEmision}
                   onChange={(e) => setFechaEmision(e.target.value)}
-                  className="h-11 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                  className="h-11 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5"
                 />
               </div>
               <div className="space-y-2">
@@ -306,9 +456,12 @@ export function CreateInvoiceModal({
                 </Label>
                 <Select
                   value={String(diasCredito)}
-                  onValueChange={(v) => setDiasCredito(Number(v))}
+                  onValueChange={(v) => {
+                    setDiasCredito(Number(v));
+                    if (Number(v) > 0) setMetodoPago("PPD");
+                  }}
                 >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -332,7 +485,7 @@ export function CreateInvoiceModal({
                   value={moneda}
                   onValueChange={(v: "MXN" | "USD") => setMoneda(v)}
                 >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -345,23 +498,89 @@ export function CreateInvoiceModal({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Impuestos (16% / 4%)
+                </Label>
+                <Select
+                  value={aplicaImpuestos}
+                  onValueChange={(v: "SI" | "NO") => setAplicaImpuestos(v)}
+                >
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="SI"
+                      className="font-bold text-xs text-emerald-600"
+                    >
+                      Sí Aplicar
+                    </SelectItem>
+                    <SelectItem
+                      value="NO"
+                      className="font-bold text-xs text-slate-500"
+                    >
+                      Exento / Tasa 0%
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-800/30 flex items-center justify-between shadow-sm">
-              <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">
-                Vencimiento Proyectado:
-              </span>
-              <span className="font-mono font-black text-foreground">
-                {fechaVencimiento}
-              </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Método de Pago (SAT)
+                </Label>
+                <Select
+                  value={metodoPago}
+                  onValueChange={(v: "PUE" | "PPD") => setMetodoPago(v)}
+                >
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PPD" className="font-bold text-xs">
+                      PPD - Parcialidades o Diferido
+                    </SelectItem>
+                    <SelectItem value="PUE" className="font-bold text-xs">
+                      PUE - Pago en una Sola Exhibición
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Forma de Pago (SAT)
+                </Label>
+                <Select value={formaPago} onValueChange={setFormaPago}>
+                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="99" className="font-bold text-xs">
+                      99 - Por definir
+                    </SelectItem>
+                    <SelectItem value="03" className="font-bold text-xs">
+                      03 - Transferencia electrónica
+                    </SelectItem>
+                    <SelectItem value="01" className="font-bold text-xs">
+                      01 - Efectivo
+                    </SelectItem>
+                    <SelectItem value="02" className="font-bold text-xs">
+                      02 - Cheque nominativo
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
           {/* LISTA DE CONCEPTOS */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-2">
-              <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                Detalle de Conceptos
+              <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest">
+                Detalle de Conceptos (Subtotal)
               </h3>
               <Button
                 type="button"
@@ -378,11 +597,11 @@ export function CreateInvoiceModal({
               {conceptos.map((concepto) => (
                 <div
                   key={concepto.id}
-                  className="grid grid-cols-12 gap-3 items-start p-3 bg-card rounded-xl border border-border group hover:border-blue-300 dark:hover:border-blue-700 transition-all shadow-sm"
+                  className="grid grid-cols-12 gap-3 items-start p-3 bg-card rounded-xl border border-border group hover:border-indigo-300 dark:hover:border-indigo-700 transition-all shadow-sm"
                 >
-                  <div className="col-span-12 md:col-span-6 space-y-1.5">
+                  <div className="col-span-12 md:col-span-5 space-y-1.5">
                     <Input
-                      placeholder="Descripción del servicio..."
+                      placeholder="Descripción del servicio (ej. Maniobras)..."
                       value={concepto.descripcion}
                       onChange={(e) =>
                         updateConcepto(
@@ -391,12 +610,13 @@ export function CreateInvoiceModal({
                           e.target.value,
                         )
                       }
-                      className="h-9 text-xs font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                      className="h-9 text-xs font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10"
                     />
                   </div>
                   <div className="col-span-4 md:col-span-2">
                     <Input
                       type="number"
+                      placeholder="Cant."
                       value={concepto.cantidad}
                       onChange={(e) =>
                         updateConcepto(
@@ -405,12 +625,13 @@ export function CreateInvoiceModal({
                           Number(e.target.value),
                         )
                       }
-                      className="h-9 text-xs font-mono font-bold text-center shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                      className="h-9 text-xs font-mono font-bold text-center shadow-sm bg-muted border-slate-200 dark:border-white/5"
                     />
                   </div>
-                  <div className="col-span-4 md:col-span-2">
+                  <div className="col-span-5 md:col-span-2">
                     <Input
                       type="number"
+                      placeholder="Precio Unit."
                       value={concepto.precioUnitario}
                       onChange={(e) =>
                         updateConcepto(
@@ -419,11 +640,14 @@ export function CreateInvoiceModal({
                           Number(e.target.value),
                         )
                       }
-                      className="h-9 text-xs font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5 text-slate-800 dark:text-slate-100"
+                      className="h-9 text-xs font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5"
                     />
                   </div>
-                  <div className="col-span-3 md:col-span-1 flex items-center h-9 font-mono font-black text-xs text-blue-600 dark:text-blue-400">
-                    ${concepto.importe.toLocaleString("es-MX")}
+                  <div className="col-span-3 md:col-span-2 flex items-center justify-end h-9 font-mono font-black text-xs text-indigo-600 dark:text-indigo-400">
+                    $
+                    {concepto.importe.toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                    })}
                   </div>
                   <div className="col-span-1 flex justify-end">
                     <Button
@@ -443,24 +667,61 @@ export function CreateInvoiceModal({
           </div>
         </div>
 
-        {/* CAPA 5: FOOTER */}
+        {/* CAPA 5: FOOTER CON RESUMEN FINANCIERO */}
         <div className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0 space-y-4">
-          <div className="flex items-center justify-between bg-foreground rounded-2xl p-5 text-background shadow-xl ring-4 ring-background">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-background/10 rounded-lg">
-                <DollarSign className="h-6 w-6 text-emerald-400" />
+          <div className="flex flex-col sm:flex-row items-center justify-between bg-foreground rounded-2xl p-5 text-background shadow-xl ring-4 ring-background gap-4">
+            {aplicaImpuestos === "SI" ? (
+              <div className="flex flex-row sm:flex-col gap-4 sm:gap-1 text-xs opacity-80 font-mono font-medium justify-center w-full sm:w-auto">
+                <div className="flex justify-between gap-4">
+                  <span>Subtotal:</span>
+                  <span>
+                    $
+                    {subtotal.toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4 text-emerald-400">
+                  <span>+ IVA (16%):</span>
+                  <span>
+                    ${iva.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4 text-rose-400">
+                  <span>- Retención (4%):</span>
+                  <span>
+                    $
+                    {retenciones.toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
               </div>
-              <span className="text-sm font-black uppercase tracking-widest opacity-80">
-                Total Factura
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="text-3xl font-black font-mono tracking-tighter">
-                ${montoTotal.toLocaleString("es-MX")}
-              </span>
-              <span className="ml-2 text-xs font-bold opacity-60 uppercase">
-                {moneda}
-              </span>
+            ) : (
+              <div className="text-xs opacity-80 font-mono font-medium text-slate-400 uppercase tracking-widest">
+                Sin Desglose de Impuestos
+              </div>
+            )}
+
+            <div className="h-px w-full bg-white/20 sm:hidden block"></div>
+
+            <div className="flex items-center gap-4 justify-between w-full sm:w-auto">
+              <div className="flex flex-col items-start sm:items-end">
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                  Total a Cobrar
+                </span>
+                <div className="text-right flex items-baseline">
+                  <span className="text-3xl font-black font-mono tracking-tighter">
+                    $
+                    {montoTotal.toLocaleString("es-MX", {
+                      minimumFractionDigits: 2,
+                    })}
+                  </span>
+                  <span className="ml-2 text-xs font-bold opacity-60 uppercase">
+                    {moneda}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -475,8 +736,14 @@ export function CreateInvoiceModal({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!clienteId || montoTotal <= 0 || loadingClients}
-              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-red hover:bg-brand-red/90 shadow-[0_4px_15px_rgba(190,8,17,0.3)] font-black uppercase tracking-widest text-[10px]"
+              disabled={
+                !clienteId ||
+                montoTotal <= 0 ||
+                loadingClients ||
+                !rfcEditable ||
+                !cpEditable
+              }
+              className="w-full sm:w-auto haptic-press border-none text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
               {loadingClients ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
