@@ -31,7 +31,7 @@ try:
 except ImportError:
     HAS_NUM2WORDS = False
 
-# 🚀 FIX: Añadimos BankAccount y BankMovement a las importaciones
+# 🚀 IMPORTAMOS MODELOS DE FINANZAS
 from app.models.models import (
     ReceivableInvoice,
     Client as ClientModel,
@@ -344,14 +344,19 @@ class PaymentComplementService:
             "total_retenciones_iva": f"{total_retenciones_iva.quantize(Decimal('0.00')):.2f}",
             "total_traslados_base_iva16": f"{total_traslados_base_iva16.quantize(Decimal('0.00')):.2f}",
             "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16.quantize(Decimal('0.00')):.2f}",
+            "cuenta_deposito": cuenta_deposito,  # 🚀 Pasamos el ID de la cuenta para extraer los datos del banco luego
         }
 
+        # 🚀 FIX: Cargamos correctamente el certificado en Base64 real
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data, default_backend())
             sn_hex = format(cert.serial_number, "x")
             datos_pago["cert_emisor"] = "".join(
                 [sn_hex[i] for i in range(1, len(sn_hex), 2)]
+            )
+            datos_pago["certificado_b64"] = (
+                base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
             )
 
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
@@ -397,6 +402,10 @@ class PaymentComplementService:
             s_sat = tfd_node.get("SelloSAT", "0000")
             c_sat = tfd_node.get("NoCertificadoSAT", "0000")
             s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+
+            # 🚀 NUEVO: Extraemos la fecha de certificación exacta del SAT
+            fecha_certificacion = tfd_node.get("FechaTimbrado", "")
+
             cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
             total_float = _clean_float(datos_pago["monto_total"])
@@ -436,6 +445,7 @@ class PaymentComplementService:
                 c_sat,
                 cadena_original_tfd,
                 importe_letra,
+                fecha_certificacion,  # 🚀 Pasamos la fecha de certificación
             )
 
         except Exception as e:
@@ -445,7 +455,7 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        # 🚀 FIX: GUARDAR PAGOS Y CREAR MOVIMIENTO BANCARIO EN TESORERÍA
+        # 🚀 FIX TESORERÍA: GUARDAR PAGOS Y CREAR MOVIMIENTO BANCARIO
         # =========================================================================
         for factura in facturas_afectadas:
             abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
@@ -544,15 +554,9 @@ class PaymentComplementService:
 </cfdi:Comprobante>""".strip()
 
     def _sellar_xml_pago(self, xml_str, d: dict) -> str:
-        cert_b64 = (
-            base64.b64encode(
-                d["cert_emisor"].encode("utf-8")
-                if not hasattr(self, "cer_data")
-                else self.cer_data
-            )
-            .decode("utf-8")
-            .replace("\n", "")
-        )
+        # 🚀 FIX CRÍTICO: Usamos el B64 del archivo .cer, no del número de certificado
+        cert_b64 = d.get("certificado_b64", "")
+
         xml_con_cert = xml_str.replace(
             "<cfdi:Comprobante",
             f'<cfdi:Comprobante NoCertificado="{d.get("cert_emisor")}" Certificado="{cert_b64}"',
@@ -563,7 +567,16 @@ class PaymentComplementService:
         )
 
     def _generar_pdf_pago(
-        self, data, uuid, qr_bytes, s_sat, s_emi, c_sat, cadena_original, importe_letra
+        self,
+        data,
+        uuid,
+        qr_bytes,
+        s_sat,
+        s_emi,
+        c_sat,
+        cadena_original,
+        importe_letra,
+        fecha_certificacion,  # 🚀 Agregado aquí
     ):
         logo_path = self.templates_dir / "assets" / "logo-black.png"
         logo_src = (
@@ -579,11 +592,26 @@ class PaymentComplementService:
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
+        # 🚀 NUEVO: Consultamos el banco destino
+        banco_info = None
+        if data.get("cuenta_deposito"):
+            banco_info = (
+                self.db.query(BankAccount)
+                .filter(BankAccount.id == int(data["cuenta_deposito"]))
+                .first()
+            )
+
+        cuenta_benef = banco_info.numero_cuenta if banco_info else "NO IDENTIFICADA"
+        banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
+
         context = {
             **data,
             "uuid": uuid,
             "folio_interno": data["folio"],
             "fecha_emision": data["fecha"],
+            "fecha_certificacion": fecha_certificacion,  # 🚀 NUEVO
+            "cuenta_beneficiario": cuenta_benef,  # 🚀 NUEVO
+            "banco_beneficiario": banco_benef,  # 🚀 NUEVO
             "logo_src": logo_src,
             "qr_src": qr_src,
             "metodo_pago": "PPD",
@@ -617,7 +645,7 @@ class PaymentComplementService:
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
         # Aquí puedes usar tu mismo HTML de carta porte o crear uno simplificado de pagos
-        html_out = env.get_template("carta_porte.html").render(context)
+        html_out = env.get_template("complemento_pago.html").render(context)
         pdf_path = self.storage_dir / f"{uuid}.pdf"
         HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
             str(pdf_path)

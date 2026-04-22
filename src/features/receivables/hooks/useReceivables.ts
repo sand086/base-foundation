@@ -5,33 +5,25 @@ import { receivableService } from "@/features/receivables/services/receivableSer
 import { ReceivableInvoice } from "@/features/receivables/types";
 import axiosClient from "@/api/axiosClient";
 
-// 🚀 HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee con objetos
+// 🚀 HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee
 const getErrorMessage = (error: any, fallback: string) => {
   const detail = error.response?.data?.detail;
-
-  if (Array.isArray(detail)) {
-    // Si es un error 422 de Pydantic, extraemos el mensaje del primer elemento
-    return detail[0]?.msg || fallback;
-  }
-  if (typeof detail === "string") {
-    // Si es un error 400 normal lanzado con HTTPException
-    return detail;
-  }
-
+  if (Array.isArray(detail)) return detail[0]?.msg || fallback;
+  if (typeof detail === "string") return detail;
   return fallback;
 };
 
 export const useReceivables = () => {
   const queryClient = useQueryClient();
 
-  // 1. CONSULTA: Obtener todas las facturas de clientes (Cuentas por Cobrar)
+  // 1. CONSULTA: Obtener todas las facturas
   const receivablesQuery = useQuery({
     queryKey: ["receivables"],
     queryFn: () => receivableService.getInvoices(),
     staleTime: 1000 * 60 * 5,
   });
 
-  // 2. MUTACIÓN: Eliminar una factura
+  // 2. MUTACIÓN: Eliminar factura
   const deleteReceivableMut = useMutation({
     mutationFn: (id: number) => receivableService.deleteInvoice(id),
     onSuccess: () => {
@@ -40,7 +32,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 3. MUTACIÓN: Registrar un pago manualmente (Simple / 1 factura)
+  // 3. MUTACIÓN: Registrar pago manual simple
   const registerPaymentMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       receivableService.registerPayment(id, data),
@@ -50,7 +42,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 4. MUTACIÓN: Subir XML de pago (REP)
+  // 4. MUTACIÓN: Subir XML
   const uploadXmlMut = useMutation({
     mutationFn: (file: File) => receivableService.uploadPaymentXml(file),
     onSuccess: () => {
@@ -59,7 +51,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 5. NUEVA MUTACIÓN: Registrar Múltiples Pagos y Timbrar REP en el SAT
+  // 5. MUTACIÓN: Timbrar REP en el SAT
   const registerMultiPaymentRepMut = useMutation({
     mutationFn: (payload: any) =>
       axiosClient.post("/api/sat/stamp/payment", payload),
@@ -68,11 +60,22 @@ export const useReceivables = () => {
     },
   });
 
+  // 6. 🚀 MUTACIÓN: Reabrir / Restaurar factura
+  const reopenMut = useMutation({
+    mutationFn: (id: number) =>
+      axiosClient.post(`/api/finance/receivables/${id}/reopen`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+    },
+  });
+
   return {
+    // ESTADOS
     receivables: (receivablesQuery.data || []) as ReceivableInvoice[],
     isLoadingReceivables: receivablesQuery.isLoading,
     refreshReceivables: receivablesQuery.refetch,
 
+    // ACCIONES
     deleteReceivable: async (id: number) => {
       try {
         await deleteReceivableMut.mutateAsync(id);
@@ -91,7 +94,6 @@ export const useReceivables = () => {
         });
         return true;
       } catch (error: any) {
-        // 🚀 Usamos el helper
         toast.error(getErrorMessage(error, "Error al registrar el pago"));
         return false;
       }
@@ -102,13 +104,11 @@ export const useReceivables = () => {
         await uploadXmlMut.mutateAsync(file);
         return true;
       } catch (error: any) {
-        // 🚀 Usamos el helper
         toast.error(getErrorMessage(error, "Error al procesar el XML"));
         return false;
       }
     },
 
-    // NUEVA FUNCIÓN EXPUESTA PARA USAR EN TU COMPONENTE
     registerMultiplePaymentRep: async (payload: any) => {
       try {
         await registerMultiPaymentRepMut.mutateAsync(payload);
@@ -117,11 +117,24 @@ export const useReceivables = () => {
         );
         return true;
       } catch (error: any) {
-        // 🚀 Usamos el helper para que el array del 422 no rompa la pantalla
         toast.error(
           getErrorMessage(error, "Error al timbrar el REP en el SAT"),
         );
         console.error(error);
+        return false;
+      }
+    },
+
+    // 🚀 ACCIÓN: Restaurar la factura
+    reopenReceivable: async (id: number) => {
+      try {
+        await reopenMut.mutateAsync(id);
+        toast.success(
+          "Factura restaurada. Lista para intentar el cobro de nuevo.",
+        );
+        return true;
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al restaurar la factura"));
         return false;
       }
     },

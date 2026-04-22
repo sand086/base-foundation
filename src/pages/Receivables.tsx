@@ -73,6 +73,7 @@ export default function Receivables() {
     deleteReceivable,
     registerMultiplePaymentRep,
     registerPayment,
+    reopenReceivable,
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -494,13 +495,18 @@ export default function Receivables() {
 
               <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
-                onClick={() => {
-                  setInvoiceToDelete(row);
-                  setIsDeleteDialogOpen(true);
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      "¿Estás seguro de restaurar esta factura? El saldo volverá a estar pendiente para que puedas intentar el REP de nuevo.",
+                    )
+                  ) {
+                    await reopenReceivable(Number(row.id));
+                  }
                 }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-blue-600 dark:text-blue-500 cursor-pointer dark:focus:bg-blue-950/30"
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Factura
+                <Clock className="h-4 w-4 mr-2" /> Restaurar / Reintentar Pago
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
