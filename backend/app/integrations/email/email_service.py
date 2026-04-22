@@ -40,7 +40,7 @@ class EmailService:
         )
 
         # 2. DEFINIR CORREOS OCULTOS (CCO / Bcc)
-        cco_emails = ["gerencia@3t.com.mx", "desarrolloSoft@asicomsystems.com.mx"]
+        cco_emails = ["desarrolloSoft@asicomsystems.com.mx"]
 
         # La lista total de destinatarios para el servidor SMTP (Para + CCO)
         destinatarios_totales = [to_email] + cco_emails
