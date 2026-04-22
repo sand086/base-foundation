@@ -3,6 +3,7 @@ import datetime
 from datetime import date, timedelta
 from pathlib import Path
 from typing import List, Optional
+import requests  # <-- NUEVO: Para la API de mapas OSRM
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
@@ -15,7 +16,7 @@ from app.db.database import get_db
 from app.models import models
 from app.models.models import SystemConfig
 
-#  importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+# importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
 from . import schemas, crud
 
 # Autenticación
@@ -27,7 +28,7 @@ except Exception as e:
     print(f" Advertencia: WeasyPrint no se cargó correctamente ({e})")
     HTML = None
 
-#  ÚNICA INSTANCIA DEL ROUTER
+# ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Logistics"])
 
 # Configuración de Plantillas para PDFs
@@ -35,6 +36,47 @@ TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../../templates"
 )
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
+
+# =====================================================================
+# FUNCIONES HELPER (NUEVO)
+# =====================================================================
+
+
+def get_osrm_distance(origen: str, destino: str) -> float:
+    """
+    Calcula la distancia real en carretera usando la API gratuita de OpenStreetMap / OSRM.
+    """
+    try:
+        headers = {"User-Agent": "TMS-Rapidos3T/1.0"}
+
+        # 1. Convertimos Origen a Coordenadas
+        res_orig = requests.get(
+            f"https://nominatim.openstreetmap.org/search?q={origen}, Mexico&format=json&limit=1",
+            headers=headers,
+            timeout=5,
+        ).json()
+        # 2. Convertimos Destino a Coordenadas
+        res_dest = requests.get(
+            f"https://nominatim.openstreetmap.org/search?q={destino}, Mexico&format=json&limit=1",
+            headers=headers,
+            timeout=5,
+        ).json()
+
+        if res_orig and res_dest:
+            lon1, lat1 = res_orig[0]["lon"], res_orig[0]["lat"]
+            lon2, lat2 = res_dest[0]["lon"], res_dest[0]["lat"]
+
+            # 3. Pedimos la ruta en carretera a OSRM
+            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+            route_res = requests.get(osrm_url, timeout=5).json()
+
+            if route_res.get("code") == "Ok":
+                distancia_metros = route_res["routes"][0]["distance"]
+                return round(distancia_metros / 1000.0, 2)
+    except Exception as e:
+        print(f"⚠️ Advertencia silenciosa calculando distancia OSRM: {e}")
+    return 0.0
 
 
 # =====================================================================
@@ -506,7 +548,28 @@ def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
                 detail=f"La unidad {unit.numero_economico} no puede ser despachada. Estatus actual: {unit.status}",
             )
 
+    # Generamos el viaje de la forma tradicional (No alteramos el CRUD base)
     db_trip = crud.create_trip(db, trip)
+
+    # 🚀 IDEA 4: CALCULAMOS LA DISTANCIA AUTOMÁTICA EN SEGUNDO PLANO Y SILENCIOSAMENTE
+    if db_trip.origin and db_trip.destination:
+        distancia_calculada = get_osrm_distance(db_trip.origin, db_trip.destination)
+        if distancia_calculada > 0:
+            # Asignamos la distancia al campo si existe en tu modelo Trip
+            try:
+                if hasattr(db_trip, "distancia_km"):
+                    db_trip.distancia_km = distancia_calculada
+                elif hasattr(db_trip, "distancia_total"):
+                    db_trip.distancia_total = distancia_calculada
+                elif hasattr(db_trip, "distancia"):
+                    db_trip.distancia = distancia_calculada
+
+                db.commit()
+                db.refresh(db_trip)
+            except Exception as e:
+                db.rollback()
+                print(f"⚠️ Error inofensivo actualizando la distancia en BD: {e}")
+
     return db_trip
 
 

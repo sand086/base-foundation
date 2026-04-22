@@ -670,6 +670,20 @@ async def create_fuel_log(
         )
         evidencia_url, filename = storage["url"], storage["filename"]
 
+    # 🚀 IDEA 1: LA MEMORIA DEL CAMIÓN
+    # Buscamos el último ticket registrado para ESTA unidad, ordenado por odómetro
+    last_log = (
+        db.query(models.FuelLog)
+        .filter(models.FuelLog.unit_id == unit_id, models.FuelLog.record_status != "E")
+        .order_by(models.FuelLog.odometro.desc())
+        .first()
+    )
+
+    km_recorridos = 0
+    # Si encontramos un ticket anterior, y el odómetro actual es mayor:
+    if last_log and odometro > last_log.odometro:
+        km_recorridos = odometro - last_log.odometro
+
     created_logs = []
 
     def _crear_registro(tipo: str, litros: float, precio: float):
@@ -684,6 +698,7 @@ async def create_fuel_log(
             precio_por_litro=precio,
             total=litros * precio,
             odometro=odometro,
+            km_sm=km_recorridos,  # 🚀 AQUÍ SE GUARDAN LOS KM AUTOMÁTICAMENTE
             evidencia_url=evidencia_url,
             created_by_id=current_user.id,
         )

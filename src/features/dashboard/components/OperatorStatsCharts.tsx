@@ -36,36 +36,38 @@ export function OperatorStatsCharts({ operators }: OperatorStatsChartsProps) {
 
   // 1. Transformación: Top Operadores por Ingresos ($)
   const revenueData = useMemo(() => {
-    return operators
-      .map((op) => ({
-        name: op.shortName || op.name,
-        ingresos: op.revenue || 0, // CORRECCIÓN: Usamos op.revenue que sí existe en tu type actual
-      }))
-      .filter((op) => op.ingresos > 0)
-      .sort((a, b) => b.ingresos - a.ingresos);
+    return (
+      operators
+        .map((op) => ({
+          name: op.shortName || op.name,
+          ingresos: op.revenue || 0,
+        }))
+        // Quitamos el filtro para que se muestren los operadores aunque lleven $0
+        .sort((a, b) => b.ingresos - a.ingresos)
+    );
   }, [operators]);
 
   // 2. Transformación: Rendimiento Comparativo (Líneas)
   const rendimientoData = useMemo(() => {
-    return operators
-      .map((op: any) => ({
-        // CORRECCIÓN TS: op as any temporalmente para leer los nuevos campos
-        name: op.shortName || op.name,
-        lectura: op.rendimiento_lectura || 0,
-        real: op.rendimiento_real || 0,
-      }))
-      .filter((op) => op.lectura > 0 || op.real > 0);
+    return operators.map((op: any) => ({
+      name: op.shortName || op.name,
+      lectura: op.rendimiento_lectura || 0,
+      real: op.rendimiento_real || 0,
+    }));
+    // Quitamos el filtro para que se muestren aunque no tengan viajes aún
   }, [operators]);
 
   // 3. Transformación: Incidencias
   const incidentsData = useMemo(() => {
-    return operators
-      .map((op) => ({
-        name: op.shortName || op.name,
-        incidencias: op.incidents || 0,
-      }))
-      .filter((op) => op.incidencias > 0)
-      .sort((a, b) => b.incidencias - a.incidencias);
+    return (
+      operators
+        .map((op) => ({
+          name: op.shortName || op.name,
+          incidencias: op.incidents || 0,
+        }))
+        // Quitamos el filtro de > 0 para que la gráfica no desaparezca si todos se portan bien
+        .sort((a, b) => b.incidencias - a.incidencias)
+    );
   }, [operators]);
 
   const handleViewDetail = (

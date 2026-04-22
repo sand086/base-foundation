@@ -2,7 +2,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -36,23 +35,8 @@ import {
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
 
-// 🚀 FIX FASE 1: Importamos los logos reales en formato SVG
-import BanamexIcon from "@/assets/img/icons/banks/banamex.svg";
-import BanorteIcon from "@/assets/img/icons/banks/banorte.svg";
-import BbvaIcon from "@/assets/img/icons/banks/bbva.svg";
-import HsbcIcon from "@/assets/img/icons/banks/hsbc.svg";
-import SantanderIcon from "@/assets/img/icons/banks/santander.svg";
-import ScotiaIcon from "@/assets/img/icons/banks/scotia.svg";
-
-// 🚀 FIX FASE 1: Mapeamos los nombres a los SVGs importados
-const bankLogos: Record<string, string> = {
-  Banamex: BanamexIcon,
-  Santander: SantanderIcon,
-  Banorte: BanorteIcon,
-  BBVA: BbvaIcon,
-  HSBC: HsbcIcon,
-  Scotiabank: ScotiaIcon,
-};
+// 🚀 FIX: Importamos nuestra utilidad global en lugar de quemar los SVGs aquí
+import { getBankLogo } from "../utils/bankUtils";
 
 interface TreasuryFlowTabProps {
   stats: any;
@@ -62,8 +46,8 @@ interface TreasuryFlowTabProps {
   formatCurrency: (amount: number) => string;
   searchTerm: string;
   setSearchTerm: (val: string) => void;
-  movementFilter: "all" | "operativa" | "cobranza";
-  setMovementFilter: (val: "all" | "operativa" | "cobranza") => void;
+  movementFilter: "all" | "egreso" | "ingreso";
+  setMovementFilter: (val: "all" | "egreso" | "ingreso") => void;
   fetchMovements: () => void;
   handleToggleConciliacion: (id: number) => void;
   onViewMovement: (mov: BankMovement) => void;
@@ -179,10 +163,10 @@ export function TreasuryFlowTab({
             Libro Total
           </button>
           <button
-            onClick={() => setMovementFilter("operativa")}
+            onClick={() => setMovementFilter("egreso")}
             className={cn(
               "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex gap-2 transition-all",
-              movementFilter === "operativa"
+              movementFilter === "egreso"
                 ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
@@ -190,10 +174,10 @@ export function TreasuryFlowTab({
             <ArrowDownLeft className="h-3.5 w-3.5" /> Salidas
           </button>
           <button
-            onClick={() => setMovementFilter("cobranza")}
+            onClick={() => setMovementFilter("ingreso")}
             className={cn(
               "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex gap-2 transition-all",
-              movementFilter === "cobranza"
+              movementFilter === "ingreso"
                 ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
@@ -229,9 +213,6 @@ export function TreasuryFlowTab({
                   Concepto / Ref
                 </TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
-                  Origen
-                </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
                   Banco
                 </TableHead>
                 <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 text-right h-12">
@@ -245,14 +226,14 @@ export function TreasuryFlowTab({
             <TableBody>
               {isMovementsLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="p-16 text-center">
+                  <TableCell colSpan={6} className="p-16 text-center">
                     <Loader2 className="h-8 w-8 mx-auto animate-spin text-brand-red/50 dark:text-brand-red" />
                   </TableCell>
                 </TableRow>
               ) : movimientos.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={6}
                     className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                   >
                     <Landmark className="h-10 w-10 mx-auto opacity-20 mb-2" />
@@ -260,112 +241,95 @@ export function TreasuryFlowTab({
                   </TableCell>
                 </TableRow>
               ) : (
-                movimientos.map((mov) => (
-                  <TableRow
-                    key={mov.id}
-                    className={cn(
-                      "border-b border-slate-100 dark:border-white/5 interactive-row transition-colors duration-200",
-                      mov.conciliado &&
-                        "bg-emerald-50/30 dark:bg-emerald-950/20",
-                    )}
-                  >
-                    <TableCell className="w-14 pl-6">
-                      <Checkbox
-                        checked={mov.conciliado}
-                        onCheckedChange={() => handleToggleConciliacion(mov.id)}
-                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                      />
-                    </TableCell>
-                    <TableCell className="py-4 font-mono text-sm font-medium text-slate-500 dark:text-slate-400">
-                      {mov.fecha}
-                    </TableCell>
-                    <TableCell className="py-4 max-w-[250px]">
-                      <p className="font-black text-slate-700 dark:text-slate-200 truncate uppercase tracking-tight text-sm">
-                        {mov.concepto}
-                      </p>
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 uppercase tracking-wider">
-                        REF: {mov.referencia_bancaria || "N/A"}
-                      </p>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <StatusBadge
-                        status={
-                          mov.origen_modulo === "CxC"
-                            ? "success"
-                            : mov.origen_modulo === "CxP"
-                              ? "danger"
-                              : "info"
-                        }
-                      >
-                        {mov.origen_modulo || "Manual"}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div className="flex items-center gap-2">
-                        {/* 🚀 FIX FASE 1: Renderizamos la imagen SVG en lugar del Emoji */}
-                        <span className="flex items-center justify-center w-6 h-6">
-                          {bankLogos[mov.banco] ? (
-                            <img
-                              src={bankLogos[mov.banco]}
-                              alt={mov.banco}
-                              className="w-full h-full object-contain"
-                            />
-                          ) : (
-                            <Landmark className="h-5 w-5 text-slate-400" />
+                movimientos.map((mov) => {
+                  // 🚀 Obtenemos el logo SVG para cada fila
+                  const logoSvg = getBankLogo(mov.banco);
+
+                  return (
+                    <TableRow
+                      key={mov.id}
+                      className={cn(
+                        "border-b border-slate-100 dark:border-white/5 interactive-row transition-colors duration-200",
+                        mov.conciliado &&
+                          "bg-emerald-50/30 dark:bg-emerald-950/20",
+                      )}
+                    >
+                      <TableCell className="w-14 pl-6">
+                        <Checkbox
+                          checked={mov.conciliado}
+                          onCheckedChange={() =>
+                            handleToggleConciliacion(mov.id)
+                          }
+                          className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                      </TableCell>
+                      <TableCell className="py-4 font-mono text-sm font-medium text-slate-500 dark:text-slate-400">
+                        {mov.fecha}
+                      </TableCell>
+                      <TableCell className="py-4 max-w-[250px]">
+                        <p className="font-black text-slate-700 dark:text-slate-200 truncate uppercase tracking-tight text-sm">
+                          {mov.concepto}
+                        </p>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 uppercase tracking-wider">
+                          REF: {mov.referencia_bancaria || "N/A"}
+                        </p>
+                      </TableCell>
+
+                      <TableCell className="py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center justify-center w-6 h-6">
+                            {mov.banco}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-4 text-right">
+                        <span
+                          className={cn(
+                            "font-black font-mono text-sm",
+                            mov.tipo === "ingreso"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-600 dark:text-rose-400",
                           )}
-                        </span>
-                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                          {mov.banco}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 text-right">
-                      <span
-                        className={cn(
-                          "font-black font-mono text-sm",
-                          mov.tipo === "ingreso"
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-rose-600 dark:text-rose-400",
-                        )}
-                      >
-                        {mov.tipo === "ingreso" ? "+" : "-"}
-                        {formatCurrency(mov.monto)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-4 text-center pr-6">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
-                          >
-                            <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="glass-panel border-white/20 min-w-[160px] rounded-xl z-50 dark:bg-slate-900/90"
                         >
-                          <DropdownMenuItem
-                            onClick={() => onViewMovement(mov)}
-                            className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer rounded-lg dark:text-slate-300 dark:focus:bg-slate-800"
+                          {mov.tipo === "ingreso" ? "+" : "-"}
+                          {formatCurrency(mov.monto)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-4 text-center pr-6">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
+                            >
+                              <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="glass-panel border-white/20 min-w-[160px] rounded-xl z-50 dark:bg-slate-900/90"
                           >
-                            <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
-                            Ver Detalle
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="dark:bg-white/10" />
-                          <DropdownMenuItem
-                            onClick={() => onDeleteMovement(mov)}
-                            className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer rounded-lg dark:focus:bg-rose-950/30"
-                          >
-                            <Trash2 className="h-4 w-4" /> Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                            <DropdownMenuItem
+                              onClick={() => onViewMovement(mov)}
+                              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer rounded-lg dark:text-slate-300 dark:focus:bg-slate-800"
+                            >
+                              <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                              Ver Detalle
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="dark:bg-white/10" />
+                            <DropdownMenuItem
+                              onClick={() => onDeleteMovement(mov)}
+                              className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer rounded-lg dark:focus:bg-rose-950/30"
+                            >
+                              <Trash2 className="h-4 w-4" /> Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

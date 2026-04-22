@@ -35,8 +35,6 @@ import { TreasuryFlowTab } from "@/features/treasury/components/TreasuryFlowTab"
 import { BankAccountModal } from "@/features/treasury/components/BankAccountModal";
 import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
 import { ManualMovementModal } from "@/features/treasury/components/ManualMovementModal";
-
-// 🚀 FIX FASE 3: Importamos el nuevo modal de Caja Chica
 import { PettyCashModal } from "@/features/treasury/components/PettyCashModal";
 
 export default function Treasury() {
@@ -58,10 +56,10 @@ export default function Treasury() {
   const [isMovementsLoading, setIsMovementsLoading] = useState(true);
   const [showBalances, setShowBalances] = useState(true);
 
-  // States Tab Movimientos
+  // States Tab Movimientos (🚀 FIX: Tipos corregidos a egreso/ingreso)
   const [searchTerm, setSearchTerm] = useState("");
   const [movementFilter, setMovementFilter] = useState<
-    "all" | "operativa" | "cobranza"
+    "all" | "egreso" | "ingreso"
   >("all");
 
   // States Modales Movimientos
@@ -75,8 +73,6 @@ export default function Treasury() {
   );
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [isManualMovementOpen, setIsManualMovementOpen] = useState(false);
-
-  // 🚀 FIX FASE 3: Estado para el modal de Caja Chica
   const [isPettyCashOpen, setIsPettyCashOpen] = useState(false);
 
   // States Modales Cuentas
@@ -160,32 +156,16 @@ export default function Treasury() {
     }
   };
 
-  const operativaAccounts = useMemo(
-    () =>
-      bankAccounts.filter(
-        (a) => a.tipo_cuenta === "operativa" && a.estatus === "activo",
-      ),
-    [bankAccounts],
-  );
-  const cobranzaAccounts = useMemo(
-    () =>
-      bankAccounts.filter(
-        (a) => a.tipo_cuenta === "cobranza" && a.estatus === "activo",
-      ),
-    [bankAccounts],
-  );
-
+  // 🚀 FIX: Filtramos por TIPO de movimiento, no por cuenta.
   const filteredMovimientos = useMemo(() => {
     let filtered = movimientos;
+
+    // 1. Filtro por Ingreso / Egreso
     if (movementFilter !== "all") {
-      const accountNumbers =
-        movementFilter === "operativa"
-          ? operativaAccounts.map((a) => a.numero_cuenta)
-          : cobranzaAccounts.map((a) => a.numero_cuenta);
-      filtered = filtered.filter((m) =>
-        accountNumbers.includes(m.cuenta_bancaria || ""),
-      );
+      filtered = filtered.filter((m) => m.tipo === movementFilter);
     }
+
+    // 2. Filtro por Búsqueda
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -197,13 +177,7 @@ export default function Treasury() {
       );
     }
     return filtered;
-  }, [
-    movimientos,
-    movementFilter,
-    searchTerm,
-    operativaAccounts,
-    cobranzaAccounts,
-  ]);
+  }, [movimientos, movementFilter, searchTerm]);
 
   const stats = {
     total_ingresos: movimientos
@@ -243,7 +217,6 @@ export default function Treasury() {
           </TabsList>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
-            {/* 🚀 FIX FASE 3: Botón de Caja Chica */}
             <Button
               onClick={() => setIsPettyCashOpen(true)}
               variant="outline"
@@ -326,7 +299,6 @@ export default function Treasury() {
         }}
       />
 
-      {/* 🚀 FIX FASE 3: Instancia del nuevo modal de Caja Chica */}
       <PettyCashModal
         open={isPettyCashOpen}
         onOpenChange={setIsPettyCashOpen}
