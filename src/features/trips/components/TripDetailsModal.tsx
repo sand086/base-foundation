@@ -193,18 +193,39 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
+  const extractUuid = (tripData: any) => {
+    if (!tripData) return null;
+
+    // 1. Si viene directo en la raíz (como lo buscaba antes)
+    if (tripData.uuid_fiscal) return tripData.uuid_fiscal;
+
+    // 2. Si viene anidado en la tabla de facturas (receivable_invoices)
+    const facturas =
+      tripData.receivable_invoices || tripData.facturas || tripData.cxc || [];
+
+    // Buscamos la primera factura que tenga un UUID válido (así evitamos las provisionales)
+    const facturaTimbrada = facturas.find(
+      (inv: any) => inv.uuid && inv.uuid.length > 10,
+    );
+
+    return facturaTimbrada ? facturaTimbrada.uuid : null;
+  };
+
   //  Sincronizar prop inicial con estado local cuando se abre el modal
+  // 1. SINCRONIZACIÓN MAESTRA
   useEffect(() => {
     if (open && initialTrip) {
-      // Al ABRIR, forzamos que todos los estados tomen los datos del viaje actual
       setLocalTrip(initialTrip);
-      setLocalUuid(initialTrip.uuid_fiscal || null);
-      setFinalUuid(null); // Si tu BD ya trae un final_uuid, ponlo aquí en vez de null
+
+      // 🚀 Usamos el buscador inteligente
+      setLocalUuid(extractUuid(initialTrip));
+      setFinalUuid(null);
+
       setIsEditing(false);
       setTarifaBase(initialTrip.tarifa_base || 0);
       setCostoCasetas(initialTrip.costo_casetas || 0);
     } else if (!open) {
-      // Al CERRAR, limpiamos TODA la "basura" para que no contamine al próximo viaje
+      // Limpieza total al cerrar
       setLocalTrip(null);
       setLocalUuid(null);
       setFinalUuid(null);
@@ -214,6 +235,19 @@ export function TripDetailsModal({
     }
   }, [initialTrip, open]);
 
+  // 2. RECARGA LOCAL DEL VIAJE
+  useEffect(() => {
+    if (localTrip && !isEditing) {
+      setTarifaBase(localTrip.tarifa_base || 0);
+      setCostoCasetas(localTrip.costo_casetas || 0);
+
+      // 🚀 Volvemos a usar el buscador si los datos se recargaron
+      const uuidEncontrado = extractUuid(localTrip);
+      if (uuidEncontrado) {
+        setLocalUuid(uuidEncontrado);
+      }
+    }
+  }, [localTrip, isEditing]);
   // 2. SINCRONIZACIÓN CUANDO EL VIAJE SE RECARGA LOCALMENTE (Ej. después de guardar o timbrar)
   useEffect(() => {
     if (localTrip && !isEditing) {
