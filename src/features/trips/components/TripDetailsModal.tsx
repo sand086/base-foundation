@@ -196,13 +196,36 @@ export function TripDetailsModal({
   //  Sincronizar prop inicial con estado local cuando se abre el modal
   useEffect(() => {
     if (open && initialTrip) {
-      if (localTrip?.id !== initialTrip.id) {
-        setLocalTrip(initialTrip);
-      }
+      // Al ABRIR, forzamos que todos los estados tomen los datos del viaje actual
+      setLocalTrip(initialTrip);
+      setLocalUuid(initialTrip.uuid_fiscal || null);
+      setFinalUuid(null); // Si tu BD ya trae un final_uuid, ponlo aquí en vez de null
+      setIsEditing(false);
+      setTarifaBase(initialTrip.tarifa_base || 0);
+      setCostoCasetas(initialTrip.costo_casetas || 0);
     } else if (!open) {
+      // Al CERRAR, limpiamos TODA la "basura" para que no contamine al próximo viaje
       setLocalTrip(null);
+      setLocalUuid(null);
+      setFinalUuid(null);
+      setIsEditing(false);
+      setTarifaBase(0);
+      setCostoCasetas(0);
     }
-  }, [initialTrip?.id, open]);
+  }, [initialTrip, open]);
+
+  // 2. SINCRONIZACIÓN CUANDO EL VIAJE SE RECARGA LOCALMENTE (Ej. después de guardar o timbrar)
+  useEffect(() => {
+    if (localTrip && !isEditing) {
+      setTarifaBase(localTrip.tarifa_base || 0);
+      setCostoCasetas(localTrip.costo_casetas || 0);
+
+      // Actualizamos el UUID por si el refreshLocalTrip trajo datos nuevos
+      if (localTrip.uuid_fiscal) {
+        setLocalUuid(localTrip.uuid_fiscal);
+      }
+    }
+  }, [localTrip, isEditing]);
 
   //  FUNCIÓN MAESTRA DE REFRESCO INTERNO
   const refreshLocalTrip = async () => {
