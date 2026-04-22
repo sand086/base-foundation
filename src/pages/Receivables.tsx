@@ -46,7 +46,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
@@ -542,39 +541,16 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <ActionButton
-                size="md"
-                className="bg-brand-navy hover:bg-brand-navy/90"
-              >
-                <Plus className="h-4 w-4 mr-2" /> Nueva Factura
-              </ActionButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-56 rounded-xl p-1 shadow-xl bg-white"
-            >
-              <DropdownMenuItem
-                onClick={() => setIsImportModalOpen(true)}
-                className="rounded-lg cursor-pointer py-2"
-              >
-                <FileInput className="h-4 w-4 mr-3 text-brand-navy" />{" "}
-                <span className="font-medium">Importar desde Operaciones</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setImportedServices(undefined);
-                  setIsCreateModalOpen(true);
-                }}
-                className="rounded-lg cursor-pointer py-2"
-              >
-                <Plus className="h-4 w-4 mr-3 text-slate-600" />{" "}
-                <span className="font-medium">Crear Factura Manual</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ActionButton
+            size="md"
+            className="bg-brand-navy hover:bg-brand-navy/90"
+            onClick={() => {
+              setImportedServices(undefined);
+              setIsCreateModalOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" /> Nueva Factura
+          </ActionButton>
         </div>
       </PageHeader>
 
@@ -689,12 +665,7 @@ export default function Receivables() {
       )}
 
       {/* MODALES */}
-      <ImportServicesModal
-        open={isImportModalOpen}
-        onOpenChange={setIsImportModalOpen}
-        services={services}
-        onImport={handleImportServices}
-      />
+
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {

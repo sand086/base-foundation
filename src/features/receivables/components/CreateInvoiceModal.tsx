@@ -41,9 +41,19 @@ import { cn } from "@/lib/utils";
 import {
   ReceivableInvoice,
   FinalizableService,
-  InvoiceConcept,
 } from "@/features/receivables/types";
 import { useClients } from "@/features/clients/hooks/useClients";
+
+// Ampliamos el concepto para soportar los campos obligatorios del SAT
+interface SmartInvoiceConcept {
+  id: string;
+  claveProdServ: string;
+  claveUnidad: string;
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+  importe: number;
+}
 
 interface CreateInvoiceModalProps {
   open: boolean;
@@ -59,6 +69,8 @@ interface CreateInvoiceModalProps {
       metodo_pago?: string;
       forma_pago?: string;
       requiere_rep?: boolean;
+      cliente_email?: string;
+      conceptos: SmartInvoiceConcept[]; // Aseguramos que pasen los campos SAT
     },
   ) => void;
   importedServices?: FinalizableService[];
@@ -83,11 +95,13 @@ export function CreateInvoiceModal({
   const [clienteId, setClienteId] = useState("");
   const [openCombobox, setOpenCombobox] = useState(false);
 
-  // 🚀 FIX FASE 4: Estados para Información Fiscal Editable
+  // Estados para Información Fiscal Editable (CFDI 4.0)
+  const [razonSocialEditable, setRazonSocialEditable] = useState("");
   const [rfcEditable, setRfcEditable] = useState("");
   const [cpEditable, setCpEditable] = useState("");
   const [regimenEditable, setRegimenEditable] = useState("601");
   const [usoCfdiEditable, setUsoCfdiEditable] = useState("G03");
+  const [emailEditable, setEmailEditable] = useState("");
 
   const [diasCredito, setDiasCredito] = useState(30);
   const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
@@ -97,20 +111,23 @@ export function CreateInvoiceModal({
 
   const [metodoPago, setMetodoPago] = useState<"PUE" | "PPD">("PPD");
   const [formaPago, setFormaPago] = useState("99");
-  const [aplicaImpuestos, setAplicaImpuestos] = useState<"SI" | "NO">("SI");
 
-  const [conceptos, setConceptos] = useState<InvoiceConcept[]>([]);
+  const [tipoImpuesto, setTipoImpuesto] = useState<
+    "FLETE" | "MANIOBRA" | "EXENTO"
+  >("MANIOBRA");
+
+  const [conceptos, setConceptos] = useState<SmartInvoiceConcept[]>([]);
 
   const selectedClient = useMemo(
     () => clients.find((c) => c.id.toString() === clienteId),
     [clients, clienteId],
   );
 
-  // 🚀 Autofill Inteligente cuando cambia el cliente seleccionado
+  // Autofill Inteligente
   useEffect(() => {
     if (selectedClient) {
+      setRazonSocialEditable(selectedClient.razon_social || "");
       setRfcEditable(selectedClient.rfc || "");
-      // Dependiendo de cómo se llame tu campo en la BD (codigo_postal_fiscal o codigo_postal)
       setCpEditable(
         (selectedClient as any).codigo_postal_fiscal ||
           (selectedClient as any).codigo_postal ||
@@ -118,17 +135,28 @@ export function CreateInvoiceModal({
       );
       setRegimenEditable((selectedClient as any).regimen_fiscal || "601");
       setUsoCfdiEditable((selectedClient as any).uso_cfdi || "G03");
+      setEmailEditable(
+        (selectedClient as any).email || (selectedClient as any).correo || "",
+      );
     }
   }, [selectedClient]);
 
+  // Inicialización de Conceptos Inteligentes
   useEffect(() => {
     if (open) {
+      const defaultClaveSAT =
+        tipoImpuesto === "FLETE" ? "78101802" : "78101800";
+      const defaultUnidadSAT = "E48"; // Unidad de servicio por defecto
+
       if (importedServices && importedServices.length > 0) {
         setClienteId(importedServices[0].clienteId.toString());
+        setTipoImpuesto("FLETE");
 
-        const newConceptos: InvoiceConcept[] = importedServices.map(
+        const newConceptos: SmartInvoiceConcept[] = importedServices.map(
           (srv, idx) => ({
             id: `IMP-${idx}-${Date.now()}`,
+            claveProdServ: "78101802", // Transporte de carga
+            claveUnidad: "E48",
             descripcion: `Servicio de transporte: ${srv.ruta} (${srv.tipoUnidad})`,
             cantidad: 1,
             precioUnitario: srv.monto,
@@ -138,13 +166,19 @@ export function CreateInvoiceModal({
         setConceptos(newConceptos);
       } else {
         setClienteId("");
+        setRazonSocialEditable("");
         setRfcEditable("");
         setCpEditable("");
+        setEmailEditable("");
         setRegimenEditable("601");
         setUsoCfdiEditable("G03");
+        setTipoImpuesto("MANIOBRA");
+
         setConceptos([
           {
             id: "1",
+            claveProdServ: "78101800", // Maniobras por defecto
+            claveUnidad: "E48",
             descripcion: "",
             cantidad: 1,
             precioUnitario: 0,
@@ -153,7 +187,7 @@ export function CreateInvoiceModal({
         ]);
       }
     }
-  }, [importedServices, open]);
+  }, [importedServices, open, tipoImpuesto]);
 
   const fechaVencimiento = useMemo(() => {
     const date = new Date(fechaEmision);
@@ -166,14 +200,16 @@ export function CreateInvoiceModal({
     [conceptos],
   );
 
-  const iva = useMemo(
-    () => (aplicaImpuestos === "SI" ? subtotal * 0.16 : 0),
-    [subtotal, aplicaImpuestos],
-  );
-  const retenciones = useMemo(
-    () => (aplicaImpuestos === "SI" ? subtotal * 0.04 : 0),
-    [subtotal, aplicaImpuestos],
-  );
+  const iva = useMemo(() => {
+    return tipoImpuesto === "FLETE" || tipoImpuesto === "MANIOBRA"
+      ? subtotal * 0.16
+      : 0;
+  }, [subtotal, tipoImpuesto]);
+
+  const retenciones = useMemo(() => {
+    return tipoImpuesto === "FLETE" ? subtotal * 0.04 : 0;
+  }, [subtotal, tipoImpuesto]);
+
   const montoTotal = useMemo(
     () => subtotal + iva - retenciones,
     [subtotal, iva, retenciones],
@@ -184,6 +220,8 @@ export function CreateInvoiceModal({
       ...conceptos,
       {
         id: String(Date.now()),
+        claveProdServ: tipoImpuesto === "FLETE" ? "78101802" : "78101800",
+        claveUnidad: "E48",
         descripcion: "",
         cantidad: 1,
         precioUnitario: 0,
@@ -200,7 +238,7 @@ export function CreateInvoiceModal({
 
   const updateConcepto = (
     id: string,
-    field: keyof InvoiceConcept,
+    field: keyof SmartInvoiceConcept,
     value: string | number,
   ) => {
     setConceptos(
@@ -223,19 +261,28 @@ export function CreateInvoiceModal({
       !clienteId ||
       conceptos.length === 0 ||
       montoTotal <= 0 ||
+      !razonSocialEditable ||
       !rfcEditable ||
-      !cpEditable
+      !cpEditable ||
+      conceptos.some(
+        (c) => !c.claveProdServ || !c.claveUnidad || !c.descripcion,
+      )
     ) {
+      toast.error("Faltan datos obligatorios del SAT", {
+        description:
+          "Revisa que todos los conceptos tengan Clave SAT, Unidad y Descripción.",
+      });
       return;
     }
 
     onSubmit({
       client_id: Number(clienteId),
-      cliente: selectedClient?.razon_social || "",
+      cliente: razonSocialEditable,
       cliente_rfc: rfcEditable,
       cp_receptor: cpEditable,
       regimen_fiscal_receptor: regimenEditable,
       uso_cfdi: usoCfdiEditable,
+      cliente_email: emailEditable,
       conceptos,
       subtotal: subtotal,
       iva: iva,
@@ -268,26 +315,27 @@ export function CreateInvoiceModal({
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
                 {importedServices
                   ? "Facturar Servicios"
-                  : "Nueva Factura Manual"}
+                  : "Nueva Factura Directa"}
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                Cuentas por cobrar • Facturación Directa
+                Cuentas por cobrar • Validar Datos CFDI 4.0
               </p>
             </div>
           </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-6">
-          {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL (EDITABLE) */}
+          {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL COMPLETA (CFDI 4.0) */}
           <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
             <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
-              Datos del Receptor
+              Datos del Receptor (Editables para SAT)
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="space-y-2 lg:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              {/* Buscador */}
+              <div className="space-y-2 md:col-span-4">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Cliente Receptor *
+                  Buscar Cliente del Catálogo
                 </Label>
                 <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
                   <PopoverTrigger asChild>
@@ -295,16 +343,15 @@ export function CreateInvoiceModal({
                       variant="outline"
                       role="combobox"
                       aria-expanded={openCombobox}
-                      className="w-full h-11 justify-between font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 uppercase overflow-hidden"
+                      className="w-full h-11 justify-between font-bold shadow-sm bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400 uppercase overflow-hidden"
                       disabled={loadingClients || !!importedServices}
                     >
                       <span className="truncate">
                         {clienteId
-                          ? clients.find((c) => c.id.toString() === clienteId)
-                              ?.razon_social
+                          ? "✓ Cliente Seleccionado"
                           : loadingClients
                             ? "Cargando..."
-                            : "Buscar cliente..."}
+                            : "Seleccionar cliente..."}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -343,6 +390,21 @@ export function CreateInvoiceModal({
                 </Popover>
               </div>
 
+              {/* Razón Social Editable */}
+              <div className="space-y-2 md:col-span-8">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Razón Social (SAT sin S.A. de C.V.) *
+                </Label>
+                <Input
+                  value={razonSocialEditable}
+                  onChange={(e) => setRazonSocialEditable(e.target.value)}
+                  placeholder="Ej. RAPIDOS 3T"
+                  className="h-11 font-bold uppercase tracking-wide shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   RFC Fiscal *
@@ -351,28 +413,41 @@ export function CreateInvoiceModal({
                   value={rfcEditable}
                   onChange={(e) => setRfcEditable(e.target.value)}
                   placeholder="XAXX010101000"
-                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500 transition-colors"
+                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  C.P. (Domicilio) *
+                  C.P. (Domicilio Fiscal) *
                 </Label>
                 <Input
                   value={cpEditable}
                   onChange={(e) => setCpEditable(e.target.value)}
                   placeholder="00000"
                   maxLength={5}
-                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500 transition-colors"
+                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Correo Electrónico (Envío)
+                </Label>
+                <Input
+                  value={emailEditable}
+                  onChange={(e) => setEmailEditable(e.target.value)}
+                  placeholder="contacto@cliente.com"
+                  type="email"
+                  className="h-11 font-medium shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-white/5">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Régimen Fiscal
+                  Régimen Fiscal Receptor
                 </Label>
                 <Select
                   value={regimenEditable}
@@ -386,7 +461,7 @@ export function CreateInvoiceModal({
                       601 - General de Ley Personas Morales
                     </SelectItem>
                     <SelectItem value="612" className="font-bold text-xs">
-                      612 - Personas Físicas con Actividades Empresariales
+                      612 - Personas Físicas Actividades Empresariales
                     </SelectItem>
                     <SelectItem value="626" className="font-bold text-xs">
                       626 - Régimen Simplificado de Confianza (RESICO)
@@ -436,7 +511,7 @@ export function CreateInvoiceModal({
           {/* PARÁMETROS FACTURA Y FISCALES */}
           <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
             <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
-              Condiciones de Pago
+              Condiciones de Facturación
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -500,25 +575,33 @@ export function CreateInvoiceModal({
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Impuestos (16% / 4%)
+                  Esquema de Impuestos
                 </Label>
                 <Select
-                  value={aplicaImpuestos}
-                  onValueChange={(v: "SI" | "NO") => setAplicaImpuestos(v)}
+                  value={tipoImpuesto}
+                  onValueChange={(v: "FLETE" | "MANIOBRA" | "EXENTO") =>
+                    setTipoImpuesto(v)
+                  }
                 >
                   <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem
-                      value="SI"
-                      className="font-bold text-xs text-emerald-600"
+                      value="FLETE"
+                      className="font-bold text-[11px] text-emerald-600"
                     >
-                      Sí Aplicar
+                      Flete (+16% IVA, -4% Ret)
                     </SelectItem>
                     <SelectItem
-                      value="NO"
-                      className="font-bold text-xs text-slate-500"
+                      value="MANIOBRA"
+                      className="font-bold text-[11px] text-blue-600"
+                    >
+                      Maniobras/Extras (+16% IVA, Sin Retención)
+                    </SelectItem>
+                    <SelectItem
+                      value="EXENTO"
+                      className="font-bold text-[11px] text-slate-500"
                     >
                       Exento / Tasa 0%
                     </SelectItem>
@@ -576,11 +659,11 @@ export function CreateInvoiceModal({
             </div>
           </div>
 
-          {/* LISTA DE CONCEPTOS */}
+          {/* LISTA DE CONCEPTOS INTELIGENTE (CON CLAVES SAT) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-2">
-              <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest">
-                Detalle de Conceptos (Subtotal)
+              <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                Detalle de Conceptos y Claves SAT
               </h3>
               <Button
                 type="button"
@@ -593,73 +676,134 @@ export function CreateInvoiceModal({
               </Button>
             </div>
 
-            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-              {conceptos.map((concepto) => (
+            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+              {conceptos.map((concepto, idx) => (
                 <div
                   key={concepto.id}
-                  className="grid grid-cols-12 gap-3 items-start p-3 bg-card rounded-xl border border-border group hover:border-indigo-300 dark:hover:border-indigo-700 transition-all shadow-sm"
+                  className="flex flex-col gap-3 p-4 bg-card rounded-xl border border-border group hover:border-indigo-300 dark:hover:border-indigo-700 transition-all shadow-sm"
                 >
-                  <div className="col-span-12 md:col-span-5 space-y-1.5">
-                    <Input
-                      placeholder="Descripción del servicio (ej. Maniobras)..."
-                      value={concepto.descripcion}
-                      onChange={(e) =>
-                        updateConcepto(
-                          concepto.id,
-                          "descripcion",
-                          e.target.value,
-                        )
-                      }
-                      className="h-9 text-xs font-bold uppercase shadow-sm bg-card border-slate-200 dark:border-white/10"
-                    />
-                  </div>
-                  <div className="col-span-4 md:col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Cant."
-                      value={concepto.cantidad}
-                      onChange={(e) =>
-                        updateConcepto(
-                          concepto.id,
-                          "cantidad",
-                          Number(e.target.value),
-                        )
-                      }
-                      className="h-9 text-xs font-mono font-bold text-center shadow-sm bg-muted border-slate-200 dark:border-white/5"
-                    />
-                  </div>
-                  <div className="col-span-5 md:col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Precio Unit."
-                      value={concepto.precioUnitario}
-                      onChange={(e) =>
-                        updateConcepto(
-                          concepto.id,
-                          "precioUnitario",
-                          Number(e.target.value),
-                        )
-                      }
-                      className="h-9 text-xs font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5"
-                    />
-                  </div>
-                  <div className="col-span-3 md:col-span-2 flex items-center justify-end h-9 font-mono font-black text-xs text-indigo-600 dark:text-indigo-400">
-                    $
-                    {concepto.importe.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </div>
-                  <div className="col-span-1 flex justify-end">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Concepto {idx + 1}
+                    </span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       onClick={() => removeConcepto(concepto.id)}
                       disabled={conceptos.length === 1}
-                      className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                      className="h-6 w-6 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
+                  </div>
+
+                  {/* Fila 1: Claves SAT y Descripción */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="space-y-1.5 md:col-span-3">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                        Clave Prod/Serv (SAT) *
+                      </Label>
+                      <Input
+                        value={concepto.claveProdServ}
+                        onChange={(e) =>
+                          updateConcepto(
+                            concepto.id,
+                            "claveProdServ",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="Ej. 78101802"
+                        maxLength={8}
+                        className="h-9 text-xs font-mono font-bold shadow-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                        Unidad SAT *
+                      </Label>
+                      <Input
+                        value={concepto.claveUnidad}
+                        onChange={(e) =>
+                          updateConcepto(
+                            concepto.id,
+                            "claveUnidad",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="E48"
+                        maxLength={3}
+                        className="h-9 text-xs font-mono font-bold shadow-sm text-center"
+                      />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-7">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                        Descripción del Servicio *
+                      </Label>
+                      <Input
+                        placeholder="Ej. Servicio de Maniobras..."
+                        value={concepto.descripcion}
+                        onChange={(e) =>
+                          updateConcepto(
+                            concepto.id,
+                            "descripcion",
+                            e.target.value,
+                          )
+                        }
+                        className="h-9 text-xs font-bold uppercase shadow-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fila 2: Cantidad y Precios */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <div className="space-y-1.5 md:col-span-3">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                        Cantidad *
+                      </Label>
+                      <Input
+                        type="number"
+                        value={concepto.cantidad}
+                        onChange={(e) =>
+                          updateConcepto(
+                            concepto.id,
+                            "cantidad",
+                            Number(e.target.value),
+                          )
+                        }
+                        className="h-9 text-xs font-mono font-bold text-center shadow-sm bg-muted"
+                      />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-4">
+                      <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                        Precio Unitario *
+                      </Label>
+                      <Input
+                        type="number"
+                        value={concepto.precioUnitario}
+                        onChange={(e) =>
+                          updateConcepto(
+                            concepto.id,
+                            "precioUnitario",
+                            Number(e.target.value),
+                          )
+                        }
+                        className="h-9 text-xs font-mono font-bold shadow-sm bg-muted"
+                      />
+                    </div>
+                    <div className="md:col-span-5 flex items-center justify-end h-9">
+                      <div className="text-right">
+                        <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest block mb-1">
+                          Importe
+                        </span>
+                        <span className="font-mono font-black text-sm text-indigo-600 dark:text-indigo-400">
+                          $
+                          {concepto.importe.toLocaleString("es-MX", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -667,41 +811,39 @@ export function CreateInvoiceModal({
           </div>
         </div>
 
-        {/* CAPA 5: FOOTER CON RESUMEN FINANCIERO */}
+        {/* FOOTER CON RESUMEN FINANCIERO */}
         <div className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0 space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between bg-foreground rounded-2xl p-5 text-background shadow-xl ring-4 ring-background gap-4">
-            {aplicaImpuestos === "SI" ? (
-              <div className="flex flex-row sm:flex-col gap-4 sm:gap-1 text-xs opacity-80 font-mono font-medium justify-center w-full sm:w-auto">
-                <div className="flex justify-between gap-4">
-                  <span>Subtotal:</span>
-                  <span>
-                    $
-                    {subtotal.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-4 text-emerald-400">
-                  <span>+ IVA (16%):</span>
-                  <span>
-                    ${iva.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-4 text-rose-400">
-                  <span>- Retención (4%):</span>
-                  <span>
-                    $
-                    {retenciones.toLocaleString("es-MX", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
+            <div className="flex flex-row sm:flex-col gap-4 sm:gap-1 text-xs opacity-80 font-mono font-medium justify-center w-full sm:w-auto">
+              <div className="flex justify-between gap-4">
+                <span>Subtotal:</span>
+                <span>
+                  $
+                  {subtotal.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
               </div>
-            ) : (
-              <div className="text-xs opacity-80 font-mono font-medium text-slate-400 uppercase tracking-widest">
-                Sin Desglose de Impuestos
+              <div
+                className={`flex justify-between gap-4 ${iva > 0 ? "text-emerald-400" : "text-slate-400"}`}
+              >
+                <span>+ IVA (16%):</span>
+                <span>
+                  ${iva.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                </span>
               </div>
-            )}
+              <div
+                className={`flex justify-between gap-4 ${retenciones > 0 ? "text-rose-400" : "text-slate-400"}`}
+              >
+                <span>- Retención (4%):</span>
+                <span>
+                  $
+                  {retenciones.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            </div>
 
             <div className="h-px w-full bg-white/20 sm:hidden block"></div>
 
@@ -740,15 +882,19 @@ export function CreateInvoiceModal({
                 !clienteId ||
                 montoTotal <= 0 ||
                 loadingClients ||
+                !razonSocialEditable ||
                 !rfcEditable ||
-                !cpEditable
+                !cpEditable ||
+                conceptos.some(
+                  (c) => !c.claveProdServ || !c.claveUnidad || !c.descripcion,
+                )
               }
               className="w-full sm:w-auto haptic-press border-none text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
               {loadingClients ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "Generar Factura"
+                "Generar Factura Directa"
               )}
             </Button>
           </div>
