@@ -512,6 +512,9 @@ def add_timeline_event(
             status=payload.status,
             location=payload.location,
             event_time=fecha_str,
+            comentario=(
+                payload.comments if payload.comments else "Sin comentarios adicionales"
+            ),  # 🔥 AQUÍ ESTÁ LA SOLUCIÓN
         )
 
     db.commit()

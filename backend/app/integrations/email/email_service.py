@@ -43,7 +43,7 @@ class EmailService:
         cco_emails = ["desarrolloSoft@asicomsystems.com.mx"]
 
         # La lista total de destinatarios para el servidor SMTP (Para + CCO)
-        destinatarios_totales = [to_email] + cco_emails
+        destinatarios_totales = list(set([to_email] + cco_emails))
 
         # 3. Buscar Plantilla y Logo en BD
         template = self.db.query(EmailTemplate).filter_by(codigo="TPL-001").first()

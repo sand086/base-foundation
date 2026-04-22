@@ -166,15 +166,19 @@ async def create_notification(
                         "statusLabel", "Actualización"
                     )
                     location = payload.metadata_info.get("location", "No especificada")
+                    comentario_texto = payload.metadata_info.get(
+                        "comments", "Sin comentarios adicionales"
+                    )
                     fecha_envio = db_notif.created_at.strftime("%d/%m/%Y %H:%M")
 
                     email_service = EmailService(db)
                     background_tasks.add_task(
                         email_service.send_status_update,
-                        trip,
-                        status_label,
-                        location,
-                        fecha_envio,
+                        trip=trip,
+                        status=status_label,
+                        location=location,
+                        event_time=fecha_envio,
+                        comentario=comentario_texto,  # 🔥 SE LO PASAMOS AL CORREO
                     )
                     logger.info(f"Email de tracking encolado para viaje #{trip.id}")
             except ValueError:
