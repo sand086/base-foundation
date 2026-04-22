@@ -29,7 +29,10 @@ import { SidebarSvgIcon } from "@/components/common/SidebarSvgIcon";
 import { AnimatedLogo } from "@/components/common/AnimatedLogo";
 
 //  1. IMPORTAMOS LOS HOOKS DE SEGURIDAD
-import { usePermissions } from "@/hooks/use-permissions";
+import {
+  getPermissionSnapshot,
+  usePermissions,
+} from "@/hooks/use-permissions";
 import { useAuth } from "@/context/AuthContext";
 
 //  2. AGREGAMOS EL MODULE_CODE A LA INTERFAZ
@@ -206,9 +209,7 @@ export function AppSidebar({
     // Si el ítem no tiene código (es público como el Dashboard), lo dejamos pasar
     if (!item.moduleCode) return true;
 
-    // Verificamos en el diccionario de permisos del usuario si puede "leer" este módulo
-    const modulePerms = user?.role?.permisos?.[item.moduleCode] || {};
-    return !!modulePerms.read || !!modulePerms.ver || !!modulePerms.leer;
+    return getPermissionSnapshot(user, item.moduleCode).canRead;
   });
 
   const RenderIcon = ({
