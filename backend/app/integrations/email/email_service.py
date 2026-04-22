@@ -76,12 +76,22 @@ class EmailService:
         operador = "Sin asignar"
         unidad = "Sin asignar"
 
-        if trip.legs and len(trip.legs) > 0:
-            primer_tramo = trip.legs[0]
-            if primer_tramo.operator:
-                operador = primer_tramo.operator.name
-            if primer_tramo.unit:
-                unidad = primer_tramo.unit.numero_economico
+        if trip.legs:
+            # Filtramos para buscar exactamente la Fase 2 (Carretera)
+            tramo_carretera = next(
+                (leg for leg in trip.legs if leg.leg_type == "ruta_carretera"), None
+            )
+
+            # Fallback seguro: Si no hay fase de carretera aún, tomamos el último tramo creado
+            if not tramo_carretera:
+                # O si quieres forzar la posición 1 (Array 1):
+                # tramo_carretera = trip.legs[1] if len(trip.legs) > 1 else trip.legs[0]
+                tramo_carretera = trip.legs[-1]
+
+            if tramo_carretera.operator:
+                operador = tramo_carretera.operator.name
+            if tramo_carretera.unit:
+                unidad = tramo_carretera.unit.numero_economico
 
         # 5. Construcción del HTML con Estilo "Bento/SaaS" y el LOGO
         html_content = f"""
