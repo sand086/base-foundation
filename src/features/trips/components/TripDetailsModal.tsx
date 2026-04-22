@@ -60,12 +60,10 @@ import { useBilling } from "@/features/receivables/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 
-// Extendemos TripLeg localmente
 interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
 }
 
-// Helper Para traducir las fases dinámicamente en el Modal
 const getDynamicLegStatus = (leg: ExtendedTripLeg) => {
   const status = String(leg.status).toLowerCase();
   const type = leg.leg_type;
@@ -156,19 +154,16 @@ interface TripDetailsModalProps {
 export function TripDetailsModal({
   open,
   onOpenChange,
-  trip: initialTrip, //  Renombramos la prop
+  trip: initialTrip,
   onRelayClick,
   onSettleClick,
   onUpdateStatusClick,
 }: TripDetailsModalProps) {
-  // FIX: Cambiamos refreshTrips por fetchTrips para asegurar la sincronización global
-  const { editTrip, fetchTrips, addTimelineEvent, unhookTrip } = useTrips();
+  const { editTrip, fetchTrips, addTimelineEvent } = useTrips();
   const { updateLoadStatus } = useUnits();
   const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
 
-  //  ESTADO LOCAL (La copia independiente de la verdad)
   const [localTrip, setLocalTrip] = useState<Trip | null>(null);
-
   const [activeTab, setActiveTab] = useState("fases");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -193,82 +188,39 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  const extractUuid = (tripData: any) => {
-    if (!tripData) return null;
-
-    // 1. Si viene directo en la raíz (como lo buscaba antes)
-    if (tripData.uuid_fiscal) return tripData.uuid_fiscal;
-
-    // 2. Si viene anidado en la tabla de facturas (receivable_invoices)
-    const facturas =
-      tripData.receivable_invoices || tripData.facturas || tripData.cxc || [];
-
-    // Buscamos la primera factura que tenga un UUID válido (así evitamos las provisionales)
-    const facturaTimbrada = facturas.find(
-      (inv: any) => inv.uuid && inv.uuid.length > 10,
-    );
-
-    return facturaTimbrada ? facturaTimbrada.uuid : null;
-  };
-
-  //  Sincronizar prop inicial con estado local cuando se abre el modal
-  // 1. SINCRONIZACIÓN MAESTRA
+  // 🚀 FIX: CONTROL ESTRICTO DE ESTADO (Evita la fuga de datos entre viajes)
   useEffect(() => {
     if (open && initialTrip) {
       setLocalTrip(initialTrip);
+      setLocalUuid(initialTrip.uuid_fiscal || null);
 
-      // 🚀 Usamos el buscador inteligente
-      setLocalUuid(extractUuid(initialTrip));
+      // Reseteamos siempre el UUID final al abrir un nuevo viaje
       setFinalUuid(null);
 
-      setIsEditing(false);
       setTarifaBase(initialTrip.tarifa_base || 0);
       setCostoCasetas(initialTrip.costo_casetas || 0);
-    } else if (!open) {
-      // Limpieza total al cerrar
+      setIsEditing(false);
+      setActiveTab("fases");
+    } else {
+      // Limpieza total cuando se cierra el modal
       setLocalTrip(null);
       setLocalUuid(null);
       setFinalUuid(null);
-      setIsEditing(false);
       setTarifaBase(0);
       setCostoCasetas(0);
+      setIsEditing(false);
     }
-  }, [initialTrip, open]);
+  }, [open, initialTrip?.id]);
 
-  // 2. RECARGA LOCAL DEL VIAJE
-  useEffect(() => {
-    if (localTrip && !isEditing) {
-      setTarifaBase(localTrip.tarifa_base || 0);
-      setCostoCasetas(localTrip.costo_casetas || 0);
-
-      // 🚀 Volvemos a usar el buscador si los datos se recargaron
-      const uuidEncontrado = extractUuid(localTrip);
-      if (uuidEncontrado) {
-        setLocalUuid(uuidEncontrado);
-      }
-    }
-  }, [localTrip, isEditing]);
-  // 2. SINCRONIZACIÓN CUANDO EL VIAJE SE RECARGA LOCALMENTE (Ej. después de guardar o timbrar)
-  useEffect(() => {
-    if (localTrip && !isEditing) {
-      setTarifaBase(localTrip.tarifa_base || 0);
-      setCostoCasetas(localTrip.costo_casetas || 0);
-
-      // Actualizamos el UUID por si el refreshLocalTrip trajo datos nuevos
-      if (localTrip.uuid_fiscal) {
-        setLocalUuid(localTrip.uuid_fiscal);
-      }
-    }
-  }, [localTrip, isEditing]);
-
-  //  FUNCIÓN MAESTRA DE REFRESCO INTERNO
   const refreshLocalTrip = async () => {
     if (!localTrip?.id) return;
     try {
-      // 1. Buscamos el viaje actualizado directo en la base de datos
       const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
-      // 2. Avisamos al padre (el tablero) que actualice lo suyo en el fondo (AQUI ES CLAVE)
+      // Sincronizamos el UUID de carta porte si existe
+      if (res.data.uuid_fiscal) {
+        setLocalUuid(res.data.uuid_fiscal);
+      }
       await fetchTrips();
     } catch (e) {
       console.error("Error recargando viaje local", e);
@@ -278,18 +230,6 @@ export function TripDetailsModal({
   const isFullTrip = useMemo(() => {
     return checkIsFullTrip(localTrip);
   }, [localTrip]);
-
-  useEffect(() => {
-    if (localTrip) {
-      if (!isEditing) {
-        setTarifaBase(localTrip.tarifa_base || 0);
-        setCostoCasetas(localTrip.costo_casetas || 0);
-      }
-      if (localTrip.uuid_fiscal || !localUuid) {
-        setLocalUuid(localTrip.uuid_fiscal || null);
-      }
-    }
-  }, [localTrip?.id, localTrip?.uuid_fiscal, isEditing]);
 
   const activeLeg = useMemo(() => {
     if (!localTrip) return undefined;
@@ -362,7 +302,6 @@ export function TripDetailsModal({
     toast.success("Datos sincronizados.");
   };
 
-  //  DESHACER INTELIGENTE CON RECARGA LOCAL
   const executeUndoLeg = async () => {
     setIsUndoing(true);
     try {
@@ -390,14 +329,13 @@ export function TripDetailsModal({
         isFirstLeg ? "Viaje retornado a Planeador." : "Fase revertida.",
       );
 
-      setShowUndoDialog(false); // Cerramos el dialog rojo
+      setShowUndoDialog(false);
 
-      //  LÓGICA DE CIERRE CONDICIONAL
       if (isFirstLeg) {
-        onOpenChange(false); // Si era la única fase, cerramos todo.
-        await fetchTrips(); // FIX: recargar tabla padre
+        onOpenChange(false);
+        await fetchTrips();
       } else {
-        await refreshLocalTrip(); // Si quedan fases, repintamos el modal abierto.
+        await refreshLocalTrip();
       }
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al deshacer la fase.");
@@ -406,7 +344,6 @@ export function TripDetailsModal({
     }
   };
 
-  //  FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
     if (!activeLeg) return;
     setFinishingLeg(true);
@@ -430,10 +367,9 @@ export function TripDetailsModal({
 
       toast.success("Viaje concluido y equipo liberado exitosamente.");
 
-      // 🚀 FIX: Cerramos el modal inmediatamente y recargamos la tabla principal
       onOpenChange(false);
       await fetchTrips();
-      window.location.href = "/dispatch"; // Redirigimos al usuario al tablero principal
+      window.location.href = "/dispatch";
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {
@@ -444,19 +380,10 @@ export function TripDetailsModal({
   const handleDownloadPDF = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando PDF...");
     try {
-      // 1. Obtenemos la URL base desde el archivo .env (Local o Producción)
-      // Si no existe la variable, usamos localhost por defecto.
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-
-      // Limpiamos la URL por si tiene un slash al final (ej: /api/ -> /api)
       const baseURL = rawBaseURL.replace(/\/$/, "");
-
-      // 2. Construimos la ruta dinámica correcta
       const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/pdf`;
 
-      console.log(rawBaseURL);
-
-      // 3. Descarga nativa (inmune a corrupciones de Axios)
       const link = document.createElement("a");
       link.href = fileUrl;
       link.target = "_blank";
@@ -475,12 +402,8 @@ export function TripDetailsModal({
   const handleDownloadXML = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando XML...");
     try {
-      // 1. URL Dinámica
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      console.log(rawBaseURL);
       const baseURL = rawBaseURL.replace(/\/$/, "");
-
-      // 2. Ruta dinámica
       const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/xml`;
 
       const link = document.createElement("a");
@@ -503,8 +426,6 @@ export function TripDetailsModal({
     isFinal: boolean = false,
   ) => {
     handleDownloadPDF(uuidToDownload);
-
-    // Le damos medio segundo al navegador para que no bloquee la segunda descarga
     setTimeout(() => {
       handleDownloadXML(uuidToDownload);
     }, 500);
@@ -864,7 +785,6 @@ export function TripDetailsModal({
                                           {leg.unit?.numero_economico || "N/A"}
                                         </span>
                                       </div>
-                                      {/* INYECCIÓN NUEVA: VALES DE COMBUSTIBLE */}
                                       {activeFuelLogs.length > 0 && (
                                         <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-white/10">
                                           <p className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1 mb-2">
@@ -927,7 +847,6 @@ export function TripDetailsModal({
                                         );
                                       })()}
                                       <div className="flex flex-col gap-3">
-                                        {/* SI ES ENTREGA DE VACÍO: Mostramos Input + Botón Finalizar */}
                                         {leg.id === activeLeg?.id &&
                                         leg.leg_type === "entrega_vacio" &&
                                         ![
@@ -951,11 +870,7 @@ export function TripDetailsModal({
                                             </Button>
                                           </div>
                                         ) : (
-                                          /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
-                                          /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
                                           <div className="flex flex-wrap gap-2">
-                                            {/* 1. BOTÓN DE SIGUIENTE FASE / PASAR A RUTA */}
-                                            {/* FIX: Solo la fase ACTIVA puede detonar la siguiente fase */}
                                             {leg.id === activeLeg?.id &&
                                               [
                                                 "creado",
@@ -1045,7 +960,6 @@ export function TripDetailsModal({
                                           Casetas
                                         </Label>
                                         {(() => {
-                                          // Parche visual
                                           const displayAnticipos =
                                             leg.leg_type === "entrega_vacio"
                                               ? Math.max(
@@ -1282,6 +1196,12 @@ export function TripDetailsModal({
                                     Genera la factura real del servicio
                                     aplicando Sustitución (04) de la Carta Porte
                                     Bypass.
+                                    <br />
+                                    <span className="text-blue-500 font-medium lowercase">
+                                      *Nota: El botón se habilitará para generar
+                                      la factura solo si el viaje no cuenta con
+                                      un UUID final registrado por Tesorería.
+                                    </span>
                                   </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
@@ -1293,6 +1213,7 @@ export function TripDetailsModal({
                                         ? "bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
                                         : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
                                     )}
+                                    // Bloqueamos si ya hay factura final (pero no lo mostramos como para timbrar de nuevo)
                                     disabled={
                                       isStamping ||
                                       (!localUuid &&
@@ -1348,7 +1269,7 @@ export function TripDetailsModal({
                                   {finalUuid && (
                                     <Button
                                       variant="outline"
-                                      className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                      className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 haptic-press"
                                       onClick={() =>
                                         handleDownloadXML(finalUuid)
                                       }
