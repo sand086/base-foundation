@@ -891,7 +891,7 @@ export class DefaultService {
     /**
      * Generar Complemento de Pago
      * Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-     * el Complemento de Pago (REP) ante el SAT.
+     * el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA)
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError

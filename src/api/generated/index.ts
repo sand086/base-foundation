@@ -17,6 +17,7 @@ export type { BankMovementResponse } from './models/BankMovementResponse';
 export type { BatchSettlementPayload } from './models/BatchSettlementPayload';
 export type { BatchSettlementPreviewRequest } from './models/BatchSettlementPreviewRequest';
 export type { BatchSettlementPreviewResponse } from './models/BatchSettlementPreviewResponse';
+export type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from './models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 export type { Body_create_fuel_log_api_fleet_fuel_logs_post } from './models/Body_create_fuel_log_api_fleet_fuel_logs_post';
 export type { Body_download_csd_secure_api_sat_csd_download_post } from './models/Body_download_csd_secure_api_sat_csd_download_post';
 export type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from './models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
@@ -33,7 +34,6 @@ export type { Body_upload_units_bulk_api_fleet_units_bulk_upload_post } from './
 export type { Body_upload_user_avatar_api_auth__user_id__avatar_post } from './models/Body_upload_user_avatar_api_auth__user_id__avatar_post';
 export type { BrandCreate } from './models/BrandCreate';
 export type { BrandResponse } from './models/BrandResponse';
-export type { BulkUploadPayload } from './models/BulkUploadPayload';
 export type { ClientCreate } from './models/ClientCreate';
 export type { ClientLite } from './models/ClientLite';
 export type { ClientResponse } from './models/ClientResponse';

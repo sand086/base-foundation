@@ -1,11 +1,9 @@
 import smtplib
 import logging
-import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
 from sqlalchemy.orm import Session
-from app.models.models import EmailTemplate, Trip
+from app.models.models import EmailTemplate, Trip, SystemConfig
 
 # Configuración de logs
 logger = logging.getLogger(__name__)
@@ -14,16 +12,13 @@ logger = logging.getLogger(__name__)
 class EmailService:
     def __init__(self, db: Session):
         self.db = db
-        # Configuración SMTP (Equivalente a tu PHPMailer)
+        # Configuración SMTP
         self.smtp_host = "smtp.gmail.com"
         self.smtp_port = 587
         self.smtp_user = "myereportes@gmail.com"
         self.smtp_pass = "rdekcsuljhszykxy"
         self.from_email = "myereportes@gmail.com"
         self.from_name = "Rápidos 3T | Sistema de Rastreo"
-
-        # Ruta física del avatar (Robot)
-        self.avatar_path = r"C:\xampp\htdocs\github\base-foundation\src\assets\img\usuarios\avatar3.png"
 
     def send_status_update(
         self,
@@ -34,18 +29,23 @@ class EmailService:
         comentario: str = "Sin comentarios adicionales",
     ):
         """
-        Envía un correo con diseño SaaS/Bento UI y el avatar del robot incrustado.
+        Envía un correo con diseño SaaS/Bento UI usando el LOGO OFICIAL de la BD.
+        Usa CCO para enviar copia oculta a Gerencia y Desarrollo.
         """
-        # 1. Definir Destinatarios
+        # 1. Definir Destinatario Principal (El Cliente)
         to_email = (
             trip.client.email
             if trip.client and trip.client.email
-            else "gerencia@3t.com.mx"
+            else "desarrolloSoft@asicomsystems.com.mx"
         )
-        cc_emails = ["desarrolloSoft@asicomsystems.com.mx", "trafico2@3t.com.mx"]
-        destinatarios = [to_email] + cc_emails
 
-        # 2. Buscar Plantilla en BD
+        # 2. DEFINIR CORREOS OCULTOS (CCO / Bcc)
+        cco_emails = ["gerencia@3t.com.mx", "desarrolloSoft@asicomsystems.com.mx"]
+
+        # La lista total de destinatarios para el servidor SMTP (Para + CCO)
+        destinatarios_totales = [to_email] + cco_emails
+
+        # 3. Buscar Plantilla y Logo en BD
         template = self.db.query(EmailTemplate).filter_by(codigo="TPL-001").first()
         if not template:
             logger.error(
@@ -53,23 +53,23 @@ class EmailService:
             )
             return False
 
-        # 3. Preparar variables y Formateo
+        # 🚀 EXTRAEMOS EL LOGO OFICIAL EN BASE64 DESDE LA TABLA SYSTEM_CONFIGS
+        logo_config = self.db.query(SystemConfig).filter_by(key="empresa_logo").first()
+        empresa_logo = logo_config.value if logo_config and logo_config.value else ""
+
+        # 4. Preparar variables y Formateo
         folio = str(trip.public_id or trip.id)
         cliente_nombre = trip.client.razon_social if trip.client else "Cliente"
         estatus_formateado = status.replace("_", " ").upper()
 
-        # --- [NUEVO] Extracción de variables faltantes del mockup ---
-        # Asumo que estos campos existen en tu modelo Trip. Si se llaman diferente, ajústalos.
-        # Usamos `getattr` o un `or` para evitar que el script truene si el dato viene nulo en la BD.
         contenedor = getattr(trip, "contenedor", None) or "Sin asignar"
         operador = getattr(trip, "operador_nombre", None) or "Sin asignar"
         unidad = getattr(trip, "unidad", None) or "Sin asignar"
         referencia = getattr(trip, "referencia", None) or "N/A"
         origen = getattr(trip, "origen", None) or "N/A"
         destino = getattr(trip, "destino", None) or "N/A"
-        # ------------------------------------------------------------
 
-        # 4. Construcción del HTML con Estilo "Bento/SaaS"
+        # 5. Construcción del HTML con Estilo "Bento/SaaS" y el LOGO
         html_content = f"""
             <!DOCTYPE html>
             <html>
@@ -85,7 +85,7 @@ class EmailService:
                     </div>
 
                     <div style="text-align: center; padding: 30px 20px; background: linear-gradient(180deg, #0f172a 0%, #ffffff 100%);">
-                        <img src="cid:robot_avatar" alt="Asistente 3T" style="width: 130px; height: 130px; border-radius: 50%; border: 5px solid #ffffff; box-shadow: 0 10px 15px rgba(0,0,0,0.1);">
+                        <img src="{empresa_logo}" alt="Logotipo Rápidos 3T" style="max-width: 220px; height: auto;">
                     </div>
 
                     <div style="padding: 0 40px 40px 40px;">
@@ -144,42 +144,35 @@ class EmailService:
             </html>
             """
 
-        # 5. Armar el objeto MIMEMultipart
+        # 6. Armar el objeto MIME
         msg = MIMEMultipart("related")
         msg["From"] = f"{self.from_name} <{self.from_email}>"
+
+        # El "Para" solo lo ve el cliente. Los CCO se envían por detrás.
         msg["To"] = to_email
-        msg["Cc"] = ", ".join(cc_emails)
         msg["Subject"] = template.asunto.replace("[SERVICIO_ID]", folio)
 
         msg.attach(MIMEText(html_content, "html"))
 
-        # 6. ADJUNTAR IMAGEN DEL ROBOT (CID)
-        if os.path.exists(self.avatar_path):
-            try:
-                with open(self.avatar_path, "rb") as f:
-                    img_data = f.read()
-
-                img_robot = MIMEImage(img_data)
-                img_robot.add_header("Content-ID", "<robot_avatar>")
-                img_robot.add_header(
-                    "Content-Disposition", "inline", filename="robot.png"
-                )
-                msg.attach(img_robot)
-            except Exception as img_err:
-                logger.error(f"Error incrustando imagen del robot: {img_err}")
-        else:
-            logger.warning(f"No se encontró el avatar en la ruta: {self.avatar_path}")
-
         # 7. Envío Real por SMTP
         try:
-            logger.info(f"Iniciando envío de tracking a {to_email}...")
+            logger.info(
+                f"Iniciando envío de tracking a {to_email} y copias ocultas a gerencia/desarrollo..."
+            )
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
             server.starttls()
             server.login(self.smtp_user, self.smtp_pass)
-            server.send_message(msg, from_addr=self.from_email, to_addrs=destinatarios)
+
+            # MAGIA CCO: Mandamos a la lista completa por el ruteo interno del servidor
+            server.send_message(
+                msg, from_addr=self.from_email, to_addrs=destinatarios_totales
+            )
+
             server.quit()
-            logger.info(" Correo SaaS de Tracking enviado exitosamente.")
+            logger.info(
+                "Correo SaaS de Tracking enviado exitosamente con LOGO OFICIAL y CCO."
+            )
             return True
         except Exception as e:
-            logger.error(f" Error crítico en EmailService: {str(e)}")
+            logger.error(f"Error crítico en EmailService: {str(e)}")
             return False

@@ -27,6 +27,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
+import { toast } from "sonner";
 import {
   Plus,
   Trash2,
@@ -44,7 +46,9 @@ import {
 } from "@/features/receivables/types";
 import { useClients } from "@/features/clients/hooks/useClients";
 
-// Ampliamos el concepto para soportar los campos obligatorios del SAT
+// IMPORTAMOS TU HOOK DE CATÁLOGOS SAT
+import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
+
 interface SmartInvoiceConcept {
   id: string;
   claveProdServ: string;
@@ -70,7 +74,7 @@ interface CreateInvoiceModalProps {
       forma_pago?: string;
       requiere_rep?: boolean;
       cliente_email?: string;
-      conceptos: SmartInvoiceConcept[]; // Aseguramos que pasen los campos SAT
+      conceptos: SmartInvoiceConcept[];
     },
   ) => void;
   importedServices?: FinalizableService[];
@@ -84,6 +88,23 @@ const creditDaysOptions = [
   { value: 60, label: "60 días" },
 ];
 
+// 🚀 FIX: Lista Inteligente de Unidades de Medida SAT (Las más usadas en Logística y Transporte)
+const SAT_UNITS = [
+  { clave: "E48", descripcion: "Unidad de servicio" },
+  { clave: "ACT", descripcion: "Actividad" },
+  { clave: "E51", descripcion: "Trabajo" },
+  { clave: "DAY", descripcion: "Día (Estadías)" },
+  { clave: "HUR", descripcion: "Hora (Retrasos)" },
+  { clave: "MON", descripcion: "Mes" },
+  { clave: "H87", descripcion: "Pieza" },
+  { clave: "KGM", descripcion: "Kilogramo" },
+  { clave: "TNE", descripcion: "Tonelada métrica" },
+  { clave: "LTR", descripcion: "Litro" },
+  { clave: "XBX", descripcion: "Caja" },
+  { clave: "Q3", descripcion: "Comida (Viáticos)" },
+  { clave: "ROM", descripcion: "Habitación (Hospedaje)" },
+];
+
 export function CreateInvoiceModal({
   open,
   onOpenChange,
@@ -92,8 +113,18 @@ export function CreateInvoiceModal({
 }: CreateInvoiceModalProps) {
   const { clients, isLoading: loadingClients } = useClients();
 
+  // Obtenemos los productos del SAT desde tu custom hook
+  const { products: satProducts, loading: loadingSatProducts } =
+    useSatCatalogs();
+
   const [clienteId, setClienteId] = useState("");
   const [openCombobox, setOpenCombobox] = useState(false);
+
+  // Estados para controlar QUÉ renglón tiene el Popover abierto
+  const [openSatPopoverId, setOpenSatPopoverId] = useState<string | null>(null);
+  const [openUnidadPopoverId, setOpenUnidadPopoverId] = useState<string | null>(
+    null,
+  );
 
   // Estados para Información Fiscal Editable (CFDI 4.0)
   const [razonSocialEditable, setRazonSocialEditable] = useState("");
@@ -144,10 +175,6 @@ export function CreateInvoiceModal({
   // Inicialización de Conceptos Inteligentes
   useEffect(() => {
     if (open) {
-      const defaultClaveSAT =
-        tipoImpuesto === "FLETE" ? "78101802" : "78101800";
-      const defaultUnidadSAT = "E48"; // Unidad de servicio por defecto
-
       if (importedServices && importedServices.length > 0) {
         setClienteId(importedServices[0].clienteId.toString());
         setTipoImpuesto("FLETE");
@@ -304,7 +331,7 @@ export function CreateInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-6xl p-0 flex flex-col max-h-[95vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -325,341 +352,320 @@ export function CreateInvoiceModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-6">
-          {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL COMPLETA (CFDI 4.0) */}
-          <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
-            <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
-              Datos del Receptor (Editables para SAT)
-            </h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL COMPLETA (CFDI 4.0) */}
+            <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-4">
+              <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
+                Datos del Receptor (Editables para SAT)
+              </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              {/* Buscador */}
-              <div className="space-y-2 md:col-span-4">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Buscar Cliente del Catálogo
-                </Label>
-                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={openCombobox}
-                      className="w-full h-11 justify-between font-bold shadow-sm bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400 uppercase overflow-hidden"
-                      disabled={loadingClients || !!importedServices}
-                    >
-                      <span className="truncate">
-                        {clienteId
-                          ? "✓ Cliente Seleccionado"
-                          : loadingClients
-                            ? "Cargando..."
-                            : "Seleccionar cliente..."}
-                      </span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[300px] sm:w-[400px] p-0 border-slate-200 dark:border-white/10 z-[100]">
-                    <Command>
-                      <CommandInput placeholder="Escribe para buscar..." />
-                      <CommandEmpty>
-                        No se encontró ningún cliente.
-                      </CommandEmpty>
-                      <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
-                        {clients.map((client) => (
-                          <CommandItem
-                            key={client.id}
-                            value={client.razon_social}
-                            onSelect={() => {
-                              setClienteId(client.id.toString());
-                              setOpenCombobox(false);
-                            }}
-                            className="font-bold text-xs uppercase cursor-pointer"
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                clienteId === client.id.toString()
-                                  ? "opacity-100"
-                                  : "opacity-0",
-                              )}
-                            />
-                            {client.razon_social}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* Razón Social Editable */}
-              <div className="space-y-2 md:col-span-8">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Razón Social (SAT sin S.A. de C.V.) *
-                </Label>
-                <Input
-                  value={razonSocialEditable}
-                  onChange={(e) => setRazonSocialEditable(e.target.value)}
-                  placeholder="Ej. RAPIDOS 3T"
-                  className="h-11 font-bold uppercase tracking-wide shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  RFC Fiscal *
-                </Label>
-                <Input
-                  value={rfcEditable}
-                  onChange={(e) => setRfcEditable(e.target.value)}
-                  placeholder="XAXX010101000"
-                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  C.P. (Domicilio Fiscal) *
-                </Label>
-                <Input
-                  value={cpEditable}
-                  onChange={(e) => setCpEditable(e.target.value)}
-                  placeholder="00000"
-                  maxLength={5}
-                  className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Correo Electrónico (Envío)
-                </Label>
-                <Input
-                  value={emailEditable}
-                  onChange={(e) => setEmailEditable(e.target.value)}
-                  placeholder="contacto@cliente.com"
-                  type="email"
-                  className="h-11 font-medium shadow-sm bg-card border-slate-200 dark:border-white/10 focus:border-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-white/5">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Régimen Fiscal Receptor
-                </Label>
-                <Select
-                  value={regimenEditable}
-                  onValueChange={setRegimenEditable}
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="601" className="font-bold text-xs">
-                      601 - General de Ley Personas Morales
-                    </SelectItem>
-                    <SelectItem value="612" className="font-bold text-xs">
-                      612 - Personas Físicas Actividades Empresariales
-                    </SelectItem>
-                    <SelectItem value="626" className="font-bold text-xs">
-                      626 - Régimen Simplificado de Confianza (RESICO)
-                    </SelectItem>
-                    <SelectItem value="603" className="font-bold text-xs">
-                      603 - Personas Morales con Fines no Lucrativos
-                    </SelectItem>
-                    <SelectItem value="616" className="font-bold text-xs">
-                      616 - Sin obligaciones fiscales
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Uso de CFDI
-                </Label>
-                <Select
-                  value={usoCfdiEditable}
-                  onValueChange={setUsoCfdiEditable}
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="G03" className="font-bold text-xs">
-                      G03 - Gastos en general
-                    </SelectItem>
-                    <SelectItem value="G01" className="font-bold text-xs">
-                      G01 - Adquisición de mercancías
-                    </SelectItem>
-                    <SelectItem value="I04" className="font-bold text-xs">
-                      I04 - Equipo de computo y accesorios
-                    </SelectItem>
-                    <SelectItem value="P01" className="font-bold text-xs">
-                      P01 - Por definir
-                    </SelectItem>
-                    <SelectItem value="S01" className="font-bold text-xs">
-                      S01 - Sin efectos fiscales
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* PARÁMETROS FACTURA Y FISCALES */}
-          <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
-            <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
-              Condiciones de Facturación
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Fecha Emisión
-                </Label>
-                <Input
-                  type="date"
-                  value={fechaEmision}
-                  onChange={(e) => setFechaEmision(e.target.value)}
-                  className="h-11 font-mono font-bold shadow-sm bg-muted border-slate-200 dark:border-white/5"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Plazo Crédito
-                </Label>
-                <Select
-                  value={String(diasCredito)}
-                  onValueChange={(v) => {
-                    setDiasCredito(Number(v));
-                    if (Number(v) > 0) setMetodoPago("PPD");
-                  }}
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {creditDaysOptions.map((opt) => (
-                      <SelectItem
-                        key={opt.value}
-                        value={String(opt.value)}
-                        className="font-bold"
+              <div className="grid grid-cols-1 gap-4">
+                {/* Buscador */}
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Buscar Cliente del Catálogo
+                  </Label>
+                  <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCombobox}
+                        className="w-full h-11 justify-between font-bold shadow-sm bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400 uppercase overflow-hidden"
+                        disabled={loadingClients || !!importedServices}
                       >
-                        {opt.label}
+                        <span className="truncate">
+                          {clienteId
+                            ? "✓ Cliente Seleccionado"
+                            : loadingClients
+                              ? "Cargando..."
+                              : "Seleccionar cliente..."}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0 border-slate-200 dark:border-white/10 z-[100]">
+                      <Command>
+                        <CommandInput placeholder="Escribe para buscar..." />
+                        <CommandEmpty>
+                          No se encontró ningún cliente.
+                        </CommandEmpty>
+                        <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                          {clients.map((client) => (
+                            <CommandItem
+                              key={client.id}
+                              value={client.razon_social}
+                              onSelect={() => {
+                                setClienteId(client.id.toString());
+                                setOpenCombobox(false);
+                              }}
+                              className="font-bold text-xs uppercase cursor-pointer"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  clienteId === client.id.toString()
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
+                              {client.razon_social}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Razón Social (SAT sin S.A. de C.V.) *
+                  </Label>
+                  <Input
+                    value={razonSocialEditable}
+                    onChange={(e) => setRazonSocialEditable(e.target.value)}
+                    placeholder="Ej. RAPIDOS 3T"
+                    className="h-11 font-bold uppercase tracking-wide shadow-sm bg-card focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    RFC Fiscal *
+                  </Label>
+                  <Input
+                    value={rfcEditable}
+                    onChange={(e) => setRfcEditable(e.target.value)}
+                    placeholder="XAXX010101000"
+                    className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm focus:border-indigo-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    C.P. (Domicilio) *
+                  </Label>
+                  <Input
+                    value={cpEditable}
+                    onChange={(e) => setCpEditable(e.target.value)}
+                    placeholder="00000"
+                    maxLength={5}
+                    className="h-11 font-mono font-bold uppercase tracking-widest shadow-sm focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Régimen Fiscal Receptor
+                  </Label>
+                  <Select
+                    value={regimenEditable}
+                    onValueChange={setRegimenEditable}
+                  >
+                    <SelectTrigger className="h-11 font-bold shadow-sm text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="601" className="font-bold text-xs">
+                        601 - Gral. Ley Personas Morales
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Moneda
-                </Label>
-                <Select
-                  value={moneda}
-                  onValueChange={(v: "MXN" | "USD") => setMoneda(v)}
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MXN" className="font-bold">
-                      🇲🇽 MXN - Pesos
-                    </SelectItem>
-                    <SelectItem value="USD" className="font-bold">
-                      🇺🇸 USD - Dólares
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Esquema de Impuestos
-                </Label>
-                <Select
-                  value={tipoImpuesto}
-                  onValueChange={(v: "FLETE" | "MANIOBRA" | "EXENTO") =>
-                    setTipoImpuesto(v)
-                  }
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      value="FLETE"
-                      className="font-bold text-[11px] text-emerald-600"
-                    >
-                      Flete (+16% IVA, -4% Ret)
-                    </SelectItem>
-                    <SelectItem
-                      value="MANIOBRA"
-                      className="font-bold text-[11px] text-blue-600"
-                    >
-                      Maniobras/Extras (+16% IVA, Sin Retención)
-                    </SelectItem>
-                    <SelectItem
-                      value="EXENTO"
-                      className="font-bold text-[11px] text-slate-500"
-                    >
-                      Exento / Tasa 0%
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                      <SelectItem value="612" className="font-bold text-xs">
+                        612 - PF Actividades Empresariales
+                      </SelectItem>
+                      <SelectItem value="626" className="font-bold text-xs">
+                        626 - RESICO
+                      </SelectItem>
+                      <SelectItem value="603" className="font-bold text-xs">
+                        603 - PM Fines no Lucrativos
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Uso de CFDI
+                  </Label>
+                  <Select
+                    value={usoCfdiEditable}
+                    onValueChange={setUsoCfdiEditable}
+                  >
+                    <SelectTrigger className="h-11 font-bold shadow-sm text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="G03" className="font-bold text-xs">
+                        G03 - Gastos en general
+                      </SelectItem>
+                      <SelectItem value="G01" className="font-bold text-xs">
+                        G01 - Adquisición mercancías
+                      </SelectItem>
+                      <SelectItem value="I04" className="font-bold text-xs">
+                        I04 - Equipo computo
+                      </SelectItem>
+                      <SelectItem value="P01" className="font-bold text-xs">
+                        P01 - Por definir
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Método de Pago (SAT)
-                </Label>
-                <Select
-                  value={metodoPago}
-                  onValueChange={(v: "PUE" | "PPD") => setMetodoPago(v)}
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PPD" className="font-bold text-xs">
-                      PPD - Parcialidades o Diferido
-                    </SelectItem>
-                    <SelectItem value="PUE" className="font-bold text-xs">
-                      PUE - Pago en una Sola Exhibición
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+            {/* PARÁMETROS FACTURA Y FISCALES */}
+            <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-4">
+              <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
+                Condiciones de Facturación
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Fecha Emisión
+                  </Label>
+                  <Input
+                    type="date"
+                    value={fechaEmision}
+                    onChange={(e) => setFechaEmision(e.target.value)}
+                    className="h-11 font-mono font-bold shadow-sm bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Plazo Crédito
+                  </Label>
+                  <Select
+                    value={String(diasCredito)}
+                    onValueChange={(v) => {
+                      setDiasCredito(Number(v));
+                      if (Number(v) > 0) setMetodoPago("PPD");
+                    }}
+                  >
+                    <SelectTrigger className="h-11 font-bold shadow-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {creditDaysOptions.map((opt) => (
+                        <SelectItem
+                          key={opt.value}
+                          value={String(opt.value)}
+                          className="font-bold"
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Forma de Pago (SAT)
-                </Label>
-                <Select value={formaPago} onValueChange={setFormaPago}>
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="99" className="font-bold text-xs">
-                      99 - Por definir
-                    </SelectItem>
-                    <SelectItem value="03" className="font-bold text-xs">
-                      03 - Transferencia electrónica
-                    </SelectItem>
-                    <SelectItem value="01" className="font-bold text-xs">
-                      01 - Efectivo
-                    </SelectItem>
-                    <SelectItem value="02" className="font-bold text-xs">
-                      02 - Cheque nominativo
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Esquema Impuestos
+                  </Label>
+                  <Select
+                    value={tipoImpuesto}
+                    onValueChange={(v: "FLETE" | "MANIOBRA" | "EXENTO") =>
+                      setTipoImpuesto(v)
+                    }
+                  >
+                    <SelectTrigger className="h-11 font-bold shadow-sm text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="FLETE"
+                        className="font-bold text-[11px] text-emerald-600"
+                      >
+                        Flete (+16% IVA, -4% Ret)
+                      </SelectItem>
+                      <SelectItem
+                        value="MANIOBRA"
+                        className="font-bold text-[11px] text-blue-600"
+                      >
+                        Maniobras (+16% IVA)
+                      </SelectItem>
+                      <SelectItem
+                        value="EXENTO"
+                        className="font-bold text-[11px] text-slate-500"
+                      >
+                        Exento / Tasa 0%
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Moneda
+                  </Label>
+                  <Select
+                    value={moneda}
+                    onValueChange={(v: "MXN" | "USD") => setMoneda(v)}
+                  >
+                    <SelectTrigger className="h-11 font-bold shadow-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MXN" className="font-bold">
+                        🇲🇽 MXN
+                      </SelectItem>
+                      <SelectItem value="USD" className="font-bold">
+                        🇺🇸 USD
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Método Pago (SAT)
+                  </Label>
+                  <Select
+                    value={metodoPago}
+                    onValueChange={(v: "PUE" | "PPD") => setMetodoPago(v)}
+                  >
+                    <SelectTrigger className="h-11 font-bold shadow-sm text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PPD" className="font-bold text-xs">
+                        PPD - Diferido
+                      </SelectItem>
+                      <SelectItem value="PUE" className="font-bold text-xs">
+                        PUE - Sola Exhibición
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    Forma Pago (SAT)
+                  </Label>
+                  <Select value={formaPago} onValueChange={setFormaPago}>
+                    <SelectTrigger className="h-11 font-bold shadow-sm text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="99" className="font-bold text-xs">
+                        99 - Por definir
+                      </SelectItem>
+                      <SelectItem value="03" className="font-bold text-xs">
+                        03 - Transferencia
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* LISTA DE CONCEPTOS INTELIGENTE (CON CLAVES SAT) */}
+          {/* 🚀 FIX FASE 4: LISTA DE CONCEPTOS INTELIGENTE (CON CLAVES Y UNIDADES SAT AUTOCOMPLETABLES) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
@@ -700,43 +706,151 @@ export function CreateInvoiceModal({
 
                   {/* Fila 1: Claves SAT y Descripción */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <div className="space-y-1.5 md:col-span-3">
+                    {/* Buscador Inteligente Producto SAT */}
+                    <div className="space-y-1.5 md:col-span-4">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
                         Clave Prod/Serv (SAT) *
                       </Label>
-                      <Input
-                        value={concepto.claveProdServ}
-                        onChange={(e) =>
-                          updateConcepto(
-                            concepto.id,
-                            "claveProdServ",
-                            e.target.value,
-                          )
+                      <Popover
+                        open={openSatPopoverId === concepto.id}
+                        onOpenChange={(open) =>
+                          setOpenSatPopoverId(open ? concepto.id : null)
                         }
-                        placeholder="Ej. 78101802"
-                        maxLength={8}
-                        className="h-9 text-xs font-mono font-bold shadow-sm"
-                      />
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full h-9 justify-between text-xs font-mono font-bold shadow-sm px-3"
+                            disabled={loadingSatProducts}
+                          >
+                            <span className="truncate">
+                              {concepto.claveProdServ
+                                ? `${concepto.claveProdServ} - ${satProducts.find((p) => p.clave === concepto.claveProdServ)?.descripcion?.substring(0, 15) || "SAT"}`
+                                : "Buscar Clave..."}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-[350px] p-0 z-[100]"
+                          align="start"
+                        >
+                          <Command>
+                            <CommandInput placeholder="Buscar por número o nombre..." />
+                            <CommandEmpty>
+                              No se encontraron coincidencias en el SAT.
+                            </CommandEmpty>
+                            <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                              {satProducts.map((prod) => (
+                                <CommandItem
+                                  key={prod.id}
+                                  value={`${prod.clave} ${prod.descripcion}`}
+                                  onSelect={() => {
+                                    updateConcepto(
+                                      concepto.id,
+                                      "claveProdServ",
+                                      prod.clave,
+                                    );
+                                    // Auto-rellenar descripción si está vacía
+                                    if (!concepto.descripcion) {
+                                      updateConcepto(
+                                        concepto.id,
+                                        "descripcion",
+                                        prod.descripcion,
+                                      );
+                                    }
+                                    setOpenSatPopoverId(null);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 flex-shrink-0",
+                                      concepto.claveProdServ === prod.clave
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold mr-2">
+                                    {prod.clave}
+                                  </span>
+                                  <span className="truncate text-xs">
+                                    {prod.descripcion}
+                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
+
+                    {/* Buscador Inteligente Unidad SAT */}
                     <div className="space-y-1.5 md:col-span-2">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
                         Unidad SAT *
                       </Label>
-                      <Input
-                        value={concepto.claveUnidad}
-                        onChange={(e) =>
-                          updateConcepto(
-                            concepto.id,
-                            "claveUnidad",
-                            e.target.value,
-                          )
+                      <Popover
+                        open={openUnidadPopoverId === concepto.id}
+                        onOpenChange={(open) =>
+                          setOpenUnidadPopoverId(open ? concepto.id : null)
                         }
-                        placeholder="E48"
-                        maxLength={3}
-                        className="h-9 text-xs font-mono font-bold shadow-sm text-center"
-                      />
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full h-9 justify-center text-xs font-mono font-bold shadow-sm px-2"
+                          >
+                            <span className="truncate">
+                              {concepto.claveUnidad || "Elegir"}
+                            </span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-[250px] p-0 z-[100]"
+                          align="start"
+                        >
+                          <Command>
+                            <CommandInput placeholder="Buscar unidad..." />
+                            <CommandEmpty>No encontrada.</CommandEmpty>
+                            <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                              {SAT_UNITS.map((unit) => (
+                                <CommandItem
+                                  key={unit.clave}
+                                  value={`${unit.clave} ${unit.descripcion}`}
+                                  onSelect={() => {
+                                    updateConcepto(
+                                      concepto.id,
+                                      "claveUnidad",
+                                      unit.clave,
+                                    );
+                                    setOpenUnidadPopoverId(null);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4 flex-shrink-0",
+                                      concepto.claveUnidad === unit.clave
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  <span className="font-mono text-amber-600 dark:text-amber-400 font-bold mr-2">
+                                    {unit.clave}
+                                  </span>
+                                  <span className="truncate text-xs">
+                                    {unit.descripcion}
+                                  </span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
-                    <div className="space-y-1.5 md:col-span-7">
+
+                    <div className="space-y-1.5 md:col-span-6">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
                         Descripción del Servicio *
                       </Label>
@@ -812,7 +926,7 @@ export function CreateInvoiceModal({
         </div>
 
         {/* FOOTER CON RESUMEN FINANCIERO */}
-        <div className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0 space-y-4">
+        <div className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0 space-y-4 z-10">
           <div className="flex flex-col sm:flex-row items-center justify-between bg-foreground rounded-2xl p-5 text-background shadow-xl ring-4 ring-background gap-4">
             <div className="flex flex-row sm:flex-col gap-4 sm:gap-1 text-xs opacity-80 font-mono font-medium justify-center w-full sm:w-auto">
               <div className="flex justify-between gap-4">

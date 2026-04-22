@@ -17,10 +17,10 @@ from app.models.models import (
     Unit,
     FuelLog,
     RecordStatus,
-    Mechanic,  # <-- NUEVO
-    WorkOrder,  # <-- NUEVO
-    WorkOrderPart,  # <-- NUEVO
-    WorkOrderStatus,  # <-- NUEVO
+    Mechanic,
+    WorkOrder,
+    WorkOrderPart,
+    WorkOrderStatus,
 )
 from app.modules.dashboard.schemas import DashboardData
 
@@ -41,14 +41,14 @@ def get_dashboard_stats(
         # Total servicios y ganancias
         base_query = db.query(Trip).filter(
             Trip.start_date.between(start_date, end_date),
-            Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+            Trip.record_status != RecordStatus.ELIMINADO,
         )
         total_services = base_query.count()
         total_revenue = (
             db.query(func.sum(Trip.tarifa_base))
             .filter(
                 Trip.start_date.between(start_date, end_date),
-                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+                Trip.record_status != RecordStatus.ELIMINADO,
             )
             .scalar()
             or 0.0
@@ -68,7 +68,7 @@ def get_dashboard_stats(
             )
             .filter(
                 FuelLog.fecha_hora.between(start_date, end_date),
-                FuelLog.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+                FuelLog.record_status != RecordStatus.ELIMINADO,
             )
             .first()
         )
@@ -77,7 +77,7 @@ def get_dashboard_stats(
         t_liters = float(fleet_metrics.total_liters or 0.0) if fleet_metrics else 0.0
         avg_rendimiento = round((t_kms / t_liters), 2) if t_liters > 0 else 0.0
 
-        # Top Clientes (AHORA TODOS, ORDENADOS POR MONTO)
+        # Top Clientes (Ordenados por monto)
         top_clients = (
             db.query(
                 Client.razon_social.label("client"),
@@ -88,11 +88,11 @@ def get_dashboard_stats(
             .join(Trip, Trip.client_id == Client.id)
             .filter(
                 Trip.start_date.between(start_date, end_date),
-                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+                Trip.record_status != RecordStatus.ELIMINADO,
             )
             .group_by(Client.id)
-            .order_by(func.sum(Trip.tarifa_base).desc())  # Ordenado por ingresos ($)
-            .all()  # <-- SIN LÍMITE (Trae todos los del mes)
+            .order_by(func.sum(Trip.tarifa_base).desc())
+            .all()
         )
 
         # --- 2. OPERATOR STATS ACTUALIZADO ---
@@ -110,13 +110,11 @@ def get_dashboard_stats(
             )
             .join(TripLeg, TripLeg.operator_id == Operator.id)
             .join(Trip, TripLeg.trip_id == Trip.id)
-            .outerjoin(
-                FuelLog, TripLeg.id == FuelLog.trip_leg_id
-            )  # Outerjoin para métricas de telemetría
+            .outerjoin(FuelLog, TripLeg.id == FuelLog.trip_leg_id)
             .filter(
                 TripLeg.start_date.between(start_date, end_date),
-                TripLeg.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
-                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN EXTRA
+                TripLeg.record_status != RecordStatus.ELIMINADO,
+                Trip.record_status != RecordStatus.ELIMINADO,
             )
             .group_by(Operator.id)
             .limit(8)
@@ -127,27 +125,25 @@ def get_dashboard_stats(
         recent = (
             db.query(Trip)
             .join(Client, Trip.client_id == Client.id)
-            .filter(Trip.record_status != RecordStatus.ELIMINADO)  # <-- PROTECCIÓN
+            .filter(Trip.record_status != RecordStatus.ELIMINADO)
             .order_by(Trip.created_at.desc())
             .limit(10)
             .all()
         )
 
         # --- 4. VENTAS DIARIAS VS META ---
-
         meta_config = (
             db.query(SystemConfig)
             .filter(SystemConfig.key == "meta_diaria_ventas")
             .first()
         )
 
-        # Si la configuración existe, la usamos. Si no, la dejamos en 0.0 por defecto
         try:
             META_DIARIA = (
                 float(meta_config.value) if meta_config and meta_config.value else 0.0
             )
         except ValueError:
-            META_DIARIA = 0.0  # Por si alguien guardó texto en lugar de números
+            META_DIARIA = 0.0
 
         daily_query = (
             db.query(
@@ -168,7 +164,7 @@ def get_dashboard_stats(
             for d in daily_query
         ]
 
-        # --- 5. MÉTRICAS DE TALLER (Órdenes cerradas y gastos por mecánico) ---
+        # --- 5. MÉTRICAS DE TALLER ---
         mechanic_query = (
             db.query(
                 Mechanic.nombre.label("mechanic_name"),
@@ -196,10 +192,86 @@ def get_dashboard_stats(
             for m in mechanic_query
         ]
 
-        # --- 3. MÉTRICAS MENSUALES PARA GRÁFICAS (Mantenemos por si las usas en DashboardTrends) ---
-        revenueTrend = []
-        tripConfigTrend = []
+        # --- 3. MÉTRICAS MENSUALES PARA GRÁFICAS ---
+
+        # 1. Tendencia de Ingresos (Últimos 6 meses)
+        revenue_trend_query = (
+            db.query(
+                func.to_char(Trip.start_date, "YYYY-MM").label("month"),
+                func.sum(Trip.tarifa_base).label("revenue"),
+            )
+            .filter(
+                Trip.start_date >= (date.today() - timedelta(days=180)),
+                Trip.record_status != RecordStatus.ELIMINADO,
+            )
+            .group_by(func.to_char(Trip.start_date, "YYYY-MM"))
+            .order_by("month")
+            .all()
+        )
+        revenueTrend = [
+            {"month": r.month, "revenue": float(r.revenue or 0.0)}
+            for r in revenue_trend_query
+        ]
+
+        # 2. Configuración de Viaje (Full vs Sencillo)
+        config_query = (
+            db.query(
+                func.to_char(Trip.start_date, "YYYY-MM").label("month"),
+                func.count(case((Unit.tipo_1.ilike("%full%"), 1), else_=None)).label(
+                    "fullCount"
+                ),
+                func.count(case((~Unit.tipo_1.ilike("%full%"), 1), else_=None)).label(
+                    "sencilloCount"
+                ),
+            )
+            .join(TripLeg, TripLeg.trip_id == Trip.id)
+            .join(Unit, TripLeg.unit_id == Unit.id)
+            .filter(
+                Trip.start_date >= (date.today() - timedelta(days=180)),
+                Trip.record_status != RecordStatus.ELIMINADO,
+                TripLeg.leg_type == "ruta_carretera",
+            )
+            .group_by(func.to_char(Trip.start_date, "YYYY-MM"))
+            .order_by("month")
+            .all()
+        )
+        tripConfigTrend = [
+            {
+                "month": r.month,
+                "fullCount": r.fullCount,
+                "sencilloCount": r.sencilloCount,
+            }
+            for r in config_query
+        ]
+
+        # 3. Tendencia de Combustible
+        fuel_query = (
+            db.query(
+                func.to_char(FuelLog.fecha_hora, "YYYY-MM").label("month"),
+                func.sum(FuelLog.litros).label("liters"),
+                func.sum(FuelLog.km_sm).label("kms"),
+            )
+            .filter(
+                FuelLog.fecha_hora >= (date.today() - timedelta(days=180)),
+                FuelLog.record_status != RecordStatus.ELIMINADO,
+            )
+            .group_by(func.to_char(FuelLog.fecha_hora, "YYYY-MM"))
+            .order_by("month")
+            .all()
+        )
         fuelTrend = []
+        for r in fuel_query:
+            liters = float(r.liters or 0.0)
+            kms = float(r.kms or 0.0)
+            rendimiento = round(kms / liters, 2) if liters > 0 else 0.0
+            fuelTrend.append(
+                {
+                    "month": r.month,
+                    "liters": liters,
+                    "kms": kms,
+                    "rendimiento": rendimiento,
+                }
+            )
 
         return {
             "serviceStats": {
@@ -220,7 +292,6 @@ def get_dashboard_stats(
                     "trips": o.trips,
                     "incidents": o.incidents,
                     "onTimeRate": 95.0,
-                    # Mapeo de los nuevos campos de rendimiento, protegidos contra nulos
                     "rendimiento_lectura": (
                         round(o.rendimiento_lectura, 2)
                         if o.rendimiento_lectura
@@ -238,7 +309,7 @@ def get_dashboard_stats(
                     "id": f"TRP-{t.id}",
                     "clientId": str(t.client_id),
                     "clientName": t.client.razon_social,
-                    "route": f"{t.origin} → {t.destination}",
+                    "route": f"{t.origin} -> {t.destination}",
                     "origin": t.origin,
                     "destination": t.destination,
                     "operator": (
@@ -256,8 +327,8 @@ def get_dashboard_stats(
             "revenueTrend": revenueTrend,
             "tripConfigTrend": tripConfigTrend,
             "fuelTrend": fuelTrend,
-            "dailyRevenue": daily_revenue_data,  # <-- NUEVO
-            "mechanicStats": mechanic_stats_data,  # <-- NUEVO
+            "dailyRevenue": daily_revenue_data,
+            "mechanicStats": mechanic_stats_data,
         }
 
     except Exception as e:

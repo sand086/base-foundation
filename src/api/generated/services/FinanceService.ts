@@ -6,9 +6,9 @@ import type { BankAccountCreate } from '../models/BankAccountCreate';
 import type { BankAccountResponse } from '../models/BankAccountResponse';
 import type { BankMovementCreate } from '../models/BankMovementCreate';
 import type { BankMovementResponse } from '../models/BankMovementResponse';
+import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
-import type { BulkUploadPayload } from '../models/BulkUploadPayload';
 import type { ProviderCreate } from '../models/ProviderCreate';
 import type { ProviderResponse } from '../models/ProviderResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -241,19 +241,21 @@ export class FinanceService {
     }
     /**
      * Bulk Upload Invoices
-     * Endpoint para procesar la carga masiva de facturas del SAT (CXP).
-     * @param requestBody
+     * Endpoint robusto para procesar el reporte SAT.
+     * 1. Guarda el archivo original en el servidor para auditoría.
+     * 2. Procesa los registros evitando duplicados por UUID.
+     * @param formData
      * @returns any Successful Response
      * @throws ApiError
      */
     public static bulkUploadInvoicesApiFinanceInvoicesBulkUploadPost(
-        requestBody: BulkUploadPayload,
+        formData: Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/finance/invoices/bulk-upload',
-            body: requestBody,
-            mediaType: 'application/json',
+            formData: formData,
+            mediaType: 'multipart/form-data',
             errors: {
                 422: `Validation Error`,
             },
@@ -261,8 +263,6 @@ export class FinanceService {
     }
     /**
      * Get Receivable Invoices
-     * Obtiene todas las facturas de clientes (Cuentas por Cobrar)
-     * con la información del cliente adjunta, ignorando las que no tienen folio.
      * @param skip
      * @param limit
      * @returns any Successful Response
@@ -279,6 +279,26 @@ export class FinanceService {
                 'skip': skip,
                 'limit': limit,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Create Manual Receivable
+     * Endpoint para crear una factura manual (CxC) generada por el usuario.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static createManualReceivableApiFinanceReceivablesPost(
+        requestBody: Record<string, any>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },
@@ -410,6 +430,28 @@ export class FinanceService {
             url: '/api/finance/petty-cash',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Reopen Receivable Invoice
+     * BOTÓN DE RESCATE: Restaura una cuenta por cobrar a su estado original (Pendiente).
+     * Elimina los pagos atascados y resetea el saldo al monto total para reintentar el REP.
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static reopenReceivableInvoiceApiFinanceReceivablesInvoiceIdReopenPost(
+        invoiceId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables/{invoice_id}/reopen',
+            path: {
+                'invoice_id': invoiceId,
+            },
             errors: {
                 422: `Validation Error`,
             },

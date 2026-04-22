@@ -12,7 +12,6 @@ import { KPICards } from "@/features/dashboard/components/KPICards";
 import { OnTimeChart } from "@/features/dashboard/components/OnTimeChart";
 import { TopClientsChart } from "@/features/dashboard/components/TopClientsChart";
 import { OperatorStatsCharts } from "@/features/dashboard/components/OperatorStatsCharts";
-import { RecentServicesTable } from "@/features/dashboard/components/RecentServicesTable";
 import { DashboardTrends } from "@/features/dashboard/components/DashboardTrends";
 // 1. IMPORTAMOS EL NUEVO COMPONENTE
 import { SalesAndWorkshopTrends } from "@/features/dashboard/components/SalesAndWorkshopTrends";
@@ -126,11 +125,6 @@ export default function Dashboard() {
             <div className="bento-card">
               <TopClientsChart clients={clientServices || []} />
             </div>
-          </div>
-
-          {/* Tabla de Servicios Recientes */}
-          <div className="bento-card">
-            <RecentServicesTable services={recentServices || []} />
           </div>
 
           {/* Estadísticas de Operadores */}
