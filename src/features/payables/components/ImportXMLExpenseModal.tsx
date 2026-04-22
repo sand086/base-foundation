@@ -8,23 +8,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { UploadCloud, FileCode2, CheckCircle2, XCircle } from "lucide-react";
+import { UploadCloud, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-export interface XMLParsedData {
-  uuid: string;
-  emisorNombre: string;
-  emisorRfc: string;
-  montoTotal: number;
-  fecha: string;
-  xmlFile: File;
-}
+import axiosClient from "@/api/axiosClient";
 
 interface ImportXMLExpenseModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: (data: XMLParsedData) => void;
+  onSuccess: (data?: any) => void;
 }
 
 export function ImportXMLExpenseModal({
@@ -33,6 +25,7 @@ export function ImportXMLExpenseModal({
   onSuccess,
 }: ImportXMLExpenseModalProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -45,58 +38,93 @@ export function ImportXMLExpenseModal({
   };
 
   const processFile = async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".xml")) {
+    // Validamos que sea un archivo de reporte (CSV o XLS del SAT)
+    if (!file.name.toLowerCase().match(/\.(csv|xls|xlsx)$/)) {
       toast.error("Formato inválido", {
-        description: "Por favor sube un archivo .xml",
+        description: "Por favor sube el reporte del SAT en formato CSV o XLS",
       });
       return;
     }
 
-    const text = await file.text();
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(text, "text/xml");
+    setIsUploading(true);
 
     try {
-      // Búsqueda inteligente de nodos sin importar el prefijo (cfdi: o tfd:)
-      const getTag = (name: string) =>
-        xmlDoc.getElementsByTagNameNS("*", name)[0] ||
-        xmlDoc.getElementsByTagName(name)[0] ||
-        xmlDoc.getElementsByTagName(`cfdi:${name}`)[0] ||
-        xmlDoc.getElementsByTagName(`tfd:${name}`)[0];
+      const text = await file.text();
+      const lines = text.split(/\r?\n/);
 
-      const comprobante = getTag("Comprobante");
-      const emisor = getTag("Emisor");
-      const timbre = getTag("TimbreFiscalDigital");
-
-      if (!comprobante || !emisor || !timbre) {
-        throw new Error("El archivo no parece ser un CFDI válido del SAT.");
+      // 1. Buscamos automáticamente dónde empiezan las cabeceras (Ignorando la basura del SAT)
+      let headerIndex = -1;
+      for (let i = 0; i < Math.min(10, lines.length); i++) {
+        const lineLower = lines[i].toLowerCase();
+        if (lineLower.includes("rfc emisor") || lineLower.includes("uuid")) {
+          headerIndex = i;
+          break;
+        }
       }
 
-      const uuid = timbre.getAttribute("UUID") || "";
-      const emisorNombre = emisor.getAttribute("Nombre") || "";
-      const emisorRfc = emisor.getAttribute("Rfc") || "";
-      const montoTotal = parseFloat(comprobante.getAttribute("Total") || "0");
-      const fechaFull = comprobante.getAttribute("Fecha") || "";
-      const fecha = fechaFull.split("T")[0]; // Solo YYYY-MM-DD
-
-      if (!uuid || montoTotal <= 0) {
-        throw new Error("No se pudo extraer el UUID o el monto total del XML.");
+      if (headerIndex === -1) {
+        throw new Error(
+          "No se encontraron las columnas válidas del SAT (Rfc Emisor, UUID, etc).",
+        );
       }
 
-      toast.success("XML procesado correctamente", {
-        description: `Proveedor: ${emisorNombre}`,
+      // Función robusta para separar por comas respetando las comillas internas del CSV
+      const splitCSV = (str: string) => {
+        const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+        return str.split(regex).map((s) => s.replace(/^"|"$/g, "").trim());
+      };
+
+      const headers = splitCSV(lines[headerIndex]);
+      const parsedData = [];
+
+      // 2. Parseamos las filas reales
+      for (let i = headerIndex + 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const values = splitCSV(line);
+        const obj: any = {};
+
+        headers.forEach((header, index) => {
+          obj[header] = values[index] || "";
+        });
+
+        // Solo agregamos si la fila tiene un UUID válido
+        if (obj["UUID"] || obj["uuid"]) {
+          parsedData.push(obj);
+        }
+      }
+
+      if (parsedData.length === 0) {
+        throw new Error(
+          "El archivo no contiene registros de facturas válidos.",
+        );
+      }
+
+      // 3. Enviamos el arreglo completo al Backend
+      const response = await axiosClient.post(
+        "/api/finance/invoices/bulk-upload",
+        {
+          data: parsedData,
+        },
+      );
+
+      toast.success("Reporte procesado correctamente", {
+        description:
+          response.data.message ||
+          `Se procesaron ${parsedData.length} facturas/pagos.`,
       });
 
-      onSuccess({
-        uuid,
-        emisorNombre,
-        emisorRfc,
-        montoTotal,
-        fecha,
-        xmlFile: file,
-      });
+      onSuccess(parsedData);
+      onOpenChange(false);
     } catch (error: any) {
-      toast.error("Error al leer XML", { description: error.message });
+      toast.error("Error al procesar el archivo", {
+        description: error.response?.data?.detail || error.message,
+      });
+    } finally {
+      setIsUploading(false);
+      // Reseteamos el input para permitir subir el mismo archivo si hubo error
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -113,49 +141,59 @@ export function ImportXMLExpenseModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={!isUploading ? onOpenChange : undefined}>
       <DialogContent className="sm:max-w-md bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-            <FileCode2 className="h-6 w-6" /> Importar Factura (XML)
+            <FileSpreadsheet className="h-6 w-6" /> Importar Reporte SAT
           </DialogTitle>
           <DialogDescription className="text-xs font-bold uppercase tracking-widest">
-            Sube el archivo XML del SAT para extraer los datos automáticamente.
+            Sube el archivo Excel/CSV descargado del portal del SAT.
           </DialogDescription>
         </DialogHeader>
 
         <div
           className={cn(
-            "mt-4 p-10 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 transition-all haptic-press cursor-pointer",
-            isDragging
+            "mt-4 p-10 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 transition-all",
+            !isUploading && "haptic-press cursor-pointer",
+            isDragging && !isUploading
               ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 scale-[0.98]"
               : "border-slate-300 dark:border-white/20 hover:border-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-900/50",
+            isUploading && "opacity-50 pointer-events-none",
           )}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onDragOver={!isUploading ? handleDragOver : undefined}
+          onDragLeave={!isUploading ? handleDragLeave : undefined}
+          onDrop={!isUploading ? handleDrop : undefined}
+          onClick={() => !isUploading && fileInputRef.current?.click()}
         >
-          <UploadCloud
-            className={cn(
-              "h-12 w-12",
-              isDragging ? "text-indigo-500" : "text-slate-400",
-            )}
-          />
+          {isUploading ? (
+            <Loader2 className="h-12 w-12 text-indigo-500 animate-spin" />
+          ) : (
+            <UploadCloud
+              className={cn(
+                "h-12 w-12",
+                isDragging ? "text-indigo-500" : "text-slate-400",
+              )}
+            />
+          )}
+
           <div className="text-center space-y-1">
             <p className="text-sm font-black text-slate-700 dark:text-slate-300">
-              Haz clic o arrastra tu archivo aquí
+              {isUploading
+                ? "Procesando registros..."
+                : "Haz clic o arrastra tu reporte aquí"}
             </p>
             <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">
-              Soporta archivos .XML
+              Soporta archivos .CSV y .XLS
             </p>
           </div>
           <input
             type="file"
-            accept=".xml"
+            accept=".csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="hidden"
             ref={fileInputRef}
             onChange={handleFileChange}
+            disabled={isUploading}
           />
         </div>
 
@@ -163,6 +201,7 @@ export function ImportXMLExpenseModal({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
+            disabled={isUploading}
             className="font-black uppercase tracking-widest text-[10px] w-full sm:w-auto"
           >
             Cancelar

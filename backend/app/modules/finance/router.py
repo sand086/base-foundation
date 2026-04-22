@@ -1,9 +1,21 @@
 import logging
+import os
+import shutil
+import json
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Any
 
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    UploadFile,
+    File,
+    Body,
+    status,
+    Form,
+)
 from sqlalchemy.orm import Session, joinedload
 from lxml import etree
 
@@ -149,23 +161,43 @@ def create_manual_movement(
 
 
 # =====================================================================
-# INVOICES (Carga Masiva CxP)
+# INVOICES (Carga Masiva CxP y Conciliación SAT)
 # =====================================================================
 
 
 @router.post("/invoices/bulk-upload")
-def bulk_upload_invoices(
-    payload: BulkUploadPayload,
+async def bulk_upload_invoices(
+    file: UploadFile = File(...),
+    json_data: str = Form(...),  # Recibimos los datos parseados como string
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """Endpoint para procesar la carga masiva de facturas del SAT (CXP)."""
+    """
+    Endpoint robusto para procesar el reporte SAT.
+    1. Guarda el archivo original en el servidor para auditoría.
+    2. Procesa los registros evitando duplicados por UUID.
+    """
     try:
-        resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
-        return resultado
+        # A. GUARDAR ARCHIVO ORIGINAL
+        upload_dir = "app/storage/bulk_uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = os.path.join(upload_dir, f"{timestamp}_{file.filename}")
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # B. PROCESAR DATOS
+        data = json.loads(json_data)
+        resultado = crud.process_sat_master_report(
+            db=db, payload_data=data, original_file_name=file.filename
+        )
+
+        return {**resultado, "file_stored": file_path}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error procesando facturas: {str(e)}"
+            status_code=500, detail=f"Error en la carga masiva: {str(e)}"
         )
 
 
@@ -178,18 +210,14 @@ def bulk_upload_invoices(
 def get_receivable_invoices(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
-    """
-    Obtiene TODAS las facturas de clientes (Cuentas por Cobrar),
-    incluso las provisionales que no se han timbrado en el SAT y no tienen folio.
-    """
     invoices = (
         db.query(models.ReceivableInvoice)
         .options(
             joinedload(models.ReceivableInvoice.client),
             joinedload(models.ReceivableInvoice.payments),
+            joinedload(models.ReceivableInvoice.trip),
         )
         .filter(
-            # ¡ÚNICO REQUISITO! Que no estén eliminadas de forma permanente
             models.ReceivableInvoice.record_status
             != models.RecordStatus.ELIMINADO.value
         )
@@ -201,40 +229,55 @@ def get_receivable_invoices(
 
     response = []
     for inv in invoices:
-        # Filtramos la de 1.12 desde el backend para que ni viajen por la red (optimización)
         if inv.monto_total and float(inv.monto_total) == 1.12:
             continue
 
-        pagos_list = []
-        for p in inv.payments:
-            pagos_list.append(
-                {
-                    "id": p.id,
-                    "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
-                    "monto": p.monto,
-                    "metodo_pago": p.metodo_pago,
-                    "referencia": p.referencia or "S/R",
-                    "cuenta_deposito": p.cuenta_deposito,
-                    "complemento_uuid": p.complemento_uuid,
-                }
-            )
+        pagos_list = [
+            {
+                "id": p.id,
+                "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                "monto": p.monto,
+                "metodo_pago": p.metodo_pago,
+                "referencia": p.referencia or "S/R",
+                "cuenta_deposito": p.cuenta_deposito,
+                "complemento_uuid": p.complemento_uuid,
+            }
+            for p in inv.payments
+        ]
 
-        # Rescate agresivo de folio si no existe (Provisional)
-        folio_display = inv.folio_interno
-        if not folio_display or folio_display == "":
-            if inv.viaje_id:
-                folio_display = f"CXC-VIAJE-{inv.viaje_id}"
-            elif inv.uuid:
-                folio_display = f"SAT-{str(inv.uuid)[:8]}"
-            else:
-                folio_display = f"PROVISIONAL-{inv.id}"
+        folio_display = inv.folio_interno or (
+            f"CXC-TRP-{inv.viaje_id}"
+            if inv.viaje_id
+            else (f"SAT-{str(inv.uuid)[:8]}" if inv.uuid else f"PROVISIONAL-{inv.id}")
+        )
+
+        trip_data = None
+        if inv.trip:
+            conts = []
+            if inv.trip.contenedor_1 and inv.trip.contenedor_1 not in ["N/A", ""]:
+                conts.append(inv.trip.contenedor_1)
+            if inv.trip.contenedor_2 and inv.trip.contenedor_2 not in ["N/A", ""]:
+                conts.append(inv.trip.contenedor_2)
+            contenedores_str = " / ".join(conts) if conts else "Sin contenedor"
+
+            trip_data = {
+                "origen": inv.trip.origin,
+                "destino": inv.trip.destination,
+                "peso_toneladas": inv.trip.peso_toneladas,
+                "contenedores": contenedores_str,
+                "producto_sat": f"[{inv.trip.sat_clave_producto or '01010101'}] {inv.trip.descripcion_mercancia or 'Carga General'}",
+            }
 
         response.append(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
+                "uuid_relacionado": inv.uuid_relacionado,
                 "folio_interno": folio_display,
                 "concepto": inv.concepto or "Servicio de Flete",
+                "subtotal": inv.subtotal,
+                "iva": inv.iva,
+                "retenciones": inv.retenciones,
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
                 "fecha_emision": (
@@ -245,6 +288,8 @@ def get_receivable_invoices(
                 ),
                 "estatus": inv.estatus,
                 "moneda": inv.moneda or "MXN",
+                "referencia": getattr(inv.trip, "referencia", "") if inv.trip else "",
+                "trip_info": trip_data,
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
                 "payments": pagos_list,
@@ -340,6 +385,7 @@ def register_receivable_payment(
         monto=monto_pago,
         concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]}",
         referencia=payment.get("referencia", ""),
+        origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI de Tesorería
     )
     crud.create_bank_movement(db, movimiento_schema, current_user.id)
 
@@ -351,6 +397,22 @@ def register_receivable_payment(
         "nuevo_saldo_factura": invoice.saldo_pendiente,
         "estatus": invoice.estatus,
     }
+
+
+@router.post("/receivables")
+def create_manual_receivable(
+    invoice_data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Endpoint para crear una factura manual (CxC) generada por el usuario.
+    """
+    try:
+        nueva_factura = crud.create_manual_receivable(db, invoice_data, current_user.id)
+        return nueva_factura
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/payments/upload-xml")
@@ -435,6 +497,7 @@ async def upload_payment_xml(
                     monto=monto_pagado,
                     concepto=f"Cobro XML Fra. {factura.folio_interno}",
                     referencia="Carga XML REP",
+                    origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI
                 )
                 crud.create_bank_movement(db, mov_schema, current_user.id)
 
@@ -498,6 +561,7 @@ def fix_orphan_payments(
                 referencia=(
                     pago.referencia if pago.referencia else "Sincronización Histórica"
                 ),
+                origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI
             )
 
             crud.create_bank_movement(db, mov_schema, current_user.id)

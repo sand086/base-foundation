@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   Sheet as SheetIcon,
   Loader2,
-  FileCode2,
   BadgeDollarSign,
   ReceiptText,
 } from "lucide-react";
@@ -47,12 +46,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
-import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
 
 import {
   ReceivableInvoice,
@@ -60,6 +57,7 @@ import {
   getInvoiceStatusInfo,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
+import axiosClient from "@/api/axiosClient";
 
 // HOOKS
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -86,7 +84,6 @@ export default function Receivables() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
-  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false);
 
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
@@ -98,7 +95,6 @@ export default function Receivables() {
     useState<ReceivableInvoice | null>(null);
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // FORMATEO DE DATOS DE LA API
   // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
@@ -137,12 +133,13 @@ export default function Receivables() {
           fecha_emision: inv.fecha_emision || inv.created_at,
           fecha_vencimiento: inv.fecha_vencimiento,
           estatus: inv.estatus || inv.status || "corriente",
+          referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
         })) as ReceivableInvoice[]
     );
   }, [receivables]);
 
-  // CÁLCULO DEL RESUMEN FINANCIERO (Facturado, Cobrado, Pendiente, Vencido)
+  // CÁLCULO DEL RESUMEN FINANCIERO
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
     let totalCobrado = 0;
@@ -154,11 +151,9 @@ export default function Receivables() {
       const saldo = Number(inv.saldo_pendiente) || 0;
       const cobrado = monto - saldo > 0 ? monto - saldo : 0;
 
-      // Sumamos a los totales históricos
       totalFacturado += monto;
       totalCobrado += cobrado;
 
-      // Evaluamos el saldo pendiente para saber si está vencido o a tiempo
       if (saldo > 0) {
         if (!inv.fecha_vencimiento) {
           porCobrarVigente += saldo;
@@ -264,10 +259,25 @@ export default function Receivables() {
     setIsCreateModalOpen(true);
   };
 
-  const handleCreateInvoice = async (
-    invoiceData: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
-  ) => {
-    toast.info("Función de creación manual en desarrollo");
+  const handleCreateInvoice = async (invoiceData: any) => {
+    try {
+      // Usamos directamente axiosClient ya que la función no existe en el hook
+      await axiosClient.post("/api/finance/receivables", invoiceData);
+
+      setIsCreateModalOpen(false);
+      setImportedServices(undefined);
+      toast.success("Factura generada y guardada exitosamente");
+
+      // Refrescamos la tabla de CxC
+      await refreshReceivables?.();
+    } catch (error: any) {
+      console.error("Error al crear factura:", error);
+      toast.error("Error al generar la factura", {
+        description:
+          error.response?.data?.detail ||
+          "Verifica la conexión con el servidor",
+      });
+    }
   };
 
   const handleRegisterPayment = async (payload: any) => {
@@ -531,61 +541,20 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
-            onClick={() => setIsImportXMLOpen(true)}
+          <ActionButton
+            size="md"
+            className="bg-brand-navy hover:bg-brand-navy/90"
+            onClick={() => {
+              setImportedServices(undefined);
+              setIsCreateModalOpen(true);
+            }}
           >
-            <FileCode2 className="h-4 w-4 mr-2 text-emerald-600" /> Cobro
-            Automático (XML)
-          </Button>
-
-          <Button
-            variant="outline"
-            className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
-            onClick={handleExportToExcel}
-          >
-            <SheetIcon className="h-4 w-4 mr-2 text-emerald-600" /> Exportar a
-            Excel
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <ActionButton
-                size="md"
-                className="bg-brand-navy hover:bg-brand-navy/90"
-              >
-                <Plus className="h-4 w-4 mr-2" /> Nueva Factura
-              </ActionButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-56 rounded-xl p-1 shadow-xl bg-white"
-            >
-              <DropdownMenuItem
-                onClick={() => setIsImportModalOpen(true)}
-                className="rounded-lg cursor-pointer py-2"
-              >
-                <FileInput className="h-4 w-4 mr-3 text-brand-navy" />{" "}
-                <span className="font-medium">Importar desde Operaciones</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setImportedServices(undefined);
-                  setIsCreateModalOpen(true);
-                }}
-                className="rounded-lg cursor-pointer py-2"
-              >
-                <Plus className="h-4 w-4 mr-3 text-slate-600" />{" "}
-                <span className="font-medium">Crear Factura Manual</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <Plus className="h-4 w-4 mr-2" /> Nueva Factura
+          </ActionButton>
         </div>
       </PageHeader>
 
-      {/* NUEVAS TARJETAS DE MÉTRICAS GLOBALES */}
+      {/* TARJETAS DE MÉTRICAS GLOBALES */}
       <div className="grid gap-4 md:grid-cols-4">
         {/* TOTAL FACTURADO */}
         <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
@@ -659,11 +628,12 @@ export default function Receivables() {
             selectedRows={selectedRows}
             onSelectedRowsChange={setSelectedRows}
             rowKey="id"
+            onCustomExport={handleExportToExcel}
           />
         </CardContent>
       </Card>
 
-      {/* PANEL FLOTANTE DE COBRO MULTIPLE   */}
+      {/* PANEL FLOTANTE DE COBRO MULTIPLE */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
@@ -695,12 +665,7 @@ export default function Receivables() {
       )}
 
       {/* MODALES */}
-      <ImportServicesModal
-        open={isImportModalOpen}
-        onOpenChange={setIsImportModalOpen}
-        services={services}
-        onImport={handleImportServices}
-      />
+
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -728,12 +693,6 @@ export default function Receivables() {
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={formattedInvoices}
-      />
-
-      <ImportXMLPaymentModal
-        open={isImportXMLOpen}
-        onOpenChange={setIsImportXMLOpen}
-        onSuccess={refreshReceivables}
       />
 
       <AlertDialog

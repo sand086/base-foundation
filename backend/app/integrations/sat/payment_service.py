@@ -207,8 +207,17 @@ class PaymentComplementService:
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
 
+    # 🚀 FASE A: Modificamos firma para recibir banco y cuenta ordenante
     def registrar_pago_y_timbrar_complemento(
-        self, client_id, pagos_data, forma_pago, fecha_pago, referencia, cuenta_deposito
+        self,
+        client_id,
+        pagos_data,
+        forma_pago,
+        fecha_pago,
+        referencia,
+        cuenta_deposito,
+        banco_ordenante: str = "",
+        cuenta_ordenante: str = "",
     ):
         logger.info(
             f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO (SERVICIO AISLADO) ---"
@@ -317,6 +326,17 @@ class PaymentComplementService:
             facturas_afectadas.append(factura)
             self.db.add(factura)
 
+        # 🚀 FASE A: OBTENEMOS TU CUENTA BANCARIA PARA EL XML
+        banco_info = None
+        if cuenta_deposito:
+            banco_info = (
+                self.db.query(BankAccount)
+                .filter(BankAccount.id == int(cuenta_deposito))
+                .first()
+            )
+        cuenta_benef = banco_info.numero_cuenta if banco_info else ""
+        banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
+
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         fecha_pago_sat = datetime.fromisoformat(fecha_pago.replace("Z", "")).strftime(
             "%Y-%m-%dT12:00:00"
@@ -329,8 +349,12 @@ class PaymentComplementService:
             .strip()
         )
 
+        # 🚀 FASE A: FOLIO CORTO CON PREFIJO COM
+        folio_corto = datetime.now().strftime("%H%M%S")
+
         datos_pago = {
-            "folio": f"REP-{int(datetime.now().timestamp())}",
+            "serie": "COM",  # 🚀 FASE A: SERIE ESTÁTICA
+            "folio": folio_corto,  # 🚀 FASE A: FOLIO CORTO
             "fecha": fecha_iso,
             "rfc_cliente": getattr(cliente, "rfc", "XAXX010101000").upper(),
             "nombre_cliente": nombre_limpio,
@@ -344,7 +368,12 @@ class PaymentComplementService:
             "total_retenciones_iva": f"{total_retenciones_iva.quantize(Decimal('0.00')):.2f}",
             "total_traslados_base_iva16": f"{total_traslados_base_iva16.quantize(Decimal('0.00')):.2f}",
             "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16.quantize(Decimal('0.00')):.2f}",
-            "cuenta_deposito": cuenta_deposito,  # 🚀 Pasamos el ID de la cuenta para extraer los datos del banco luego
+            "cuenta_deposito": cuenta_deposito,
+            # 🚀 FASE A: INYECTAMOS DATOS BANCARIOS AL DICCIONARIO
+            "cuenta_beneficiario": cuenta_benef,
+            "banco_beneficiario": banco_benef,
+            "banco_ordenante": banco_ordenante,
+            "cuenta_ordenante": cuenta_ordenante,
         }
 
         # 🚀 FIX: Cargamos correctamente el certificado en Base64 real
@@ -489,6 +518,7 @@ class PaymentComplementService:
                         concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
                         referencia=referencia or f"REP {complemento_uuid[:8]}",
                         conciliado=False,
+                        origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI de Tesorería
                     )
                     self.db.add(nuevo_ingreso)
                     # Sumamos el saldo a la cuenta bancaria
@@ -506,6 +536,7 @@ class PaymentComplementService:
             },
         }
 
+    # 🚀 FASE A: Modificamos el XML para inyectar bancos ordenantes y beneficiarios
     def _armar_xml_pago_sin_sello(self, d: dict) -> str:
         doctos_xml = ""
         for doc in d["doctos_relacionados"]:
@@ -538,8 +569,20 @@ class PaymentComplementService:
         if retenciones_p_xml or traslados_p_xml:
             impuestos_p_xml = f"<pago20:ImpuestosP>{retenciones_p_xml}{traslados_p_xml}</pago20:ImpuestosP>"
 
+        # 🚀 FASE A: Atributos dinámicos del XML
+        pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
+
+        if d.get("banco_ordenante"):
+            pago_attrs += f' NomBancoOrdExt="{d["banco_ordenante"]}"'
+
+        if d.get("cuenta_ordenante") and len(d["cuenta_ordenante"]) >= 10:
+            pago_attrs += f' CtaOrdenante="{d["cuenta_ordenante"]}"'
+
+        if d.get("cuenta_beneficiario") and len(d["cuenta_beneficiario"]) >= 10:
+            pago_attrs += f' CtaBeneficiario="{d["cuenta_beneficiario"]}"'
+
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="REP" Folio="{d['folio']}" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="{self.emisor_cp}">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="{self.emisor_cp}">
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
@@ -548,7 +591,7 @@ class PaymentComplementService:
     <cfdi:Complemento>
         <pago20:Pagos Version="2.0">
             {totales_xml}
-            <pago20:Pago FechaPago="{d['fecha_pago']}" FormaDePagoP="{d['forma_pago']}" MonedaP="MXN" Monto="{d['monto_total']}" TipoCambioP="1">{doctos_xml}{impuestos_p_xml}</pago20:Pago>
+            <pago20:Pago {pago_attrs}>{doctos_xml}{impuestos_p_xml}</pago20:Pago>
         </pago20:Pagos>
     </cfdi:Complemento>
 </cfdi:Comprobante>""".strip()

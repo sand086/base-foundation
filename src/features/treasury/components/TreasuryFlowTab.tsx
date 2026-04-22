@@ -36,13 +36,22 @@ import {
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
 
+// 🚀 FIX FASE 1: Importamos los logos reales en formato SVG
+import BanamexIcon from "@/assets/img/icons/banks/banamex.svg";
+import BanorteIcon from "@/assets/img/icons/banks/banorte.svg";
+import BbvaIcon from "@/assets/img/icons/banks/bbva.svg";
+import HsbcIcon from "@/assets/img/icons/banks/hsbc.svg";
+import SantanderIcon from "@/assets/img/icons/banks/santander.svg";
+import ScotiaIcon from "@/assets/img/icons/banks/scotia.svg";
+
+// 🚀 FIX FASE 1: Mapeamos los nombres a los SVGs importados
 const bankLogos: Record<string, string> = {
-  Banamex: "🏛️",
-  Santander: "🏦",
-  Banorte: "💳",
-  BBVA: "🏧",
-  HSBC: "🦁",
-  Scotiabank: "🍁",
+  Banamex: BanamexIcon,
+  Santander: SantanderIcon,
+  Banorte: BanorteIcon,
+  BBVA: BbvaIcon,
+  HSBC: HsbcIcon,
+  Scotiabank: ScotiaIcon,
 };
 
 interface TreasuryFlowTabProps {
@@ -80,7 +89,10 @@ export function TreasuryFlowTab({
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
+        >
           <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
             <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
@@ -93,7 +105,10 @@ export function TreasuryFlowTab({
             </p>
           </div>
         </Card>
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default"
+        >
           <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
             <TrendingDown className="h-6 w-6 text-rose-600 dark:text-rose-400" />
           </div>
@@ -106,7 +121,10 @@ export function TreasuryFlowTab({
             </p>
           </div>
         </Card>
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-cyan-300 dark:hover:border-cyan-500/50 transition-all cursor-default">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-cyan-300 dark:hover:border-cyan-500/50 transition-all cursor-default"
+        >
           <div className="p-3.5 bg-cyan-50 dark:bg-cyan-950/30 rounded-2xl border border-cyan-100 dark:border-cyan-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
             <CheckCircle2 className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
           </div>
@@ -119,7 +137,10 @@ export function TreasuryFlowTab({
             </p>
           </div>
         </Card>
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default">
+        <Card
+          variant="default"
+          className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default"
+        >
           <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
             <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
           </div>
@@ -224,7 +245,7 @@ export function TreasuryFlowTab({
             <TableBody>
               {isMovementsLoading ? (
                 <TableRow>
-                    <TableCell colSpan={7} className="p-16 text-center">
+                  <TableCell colSpan={7} className="p-16 text-center">
                     <Loader2 className="h-8 w-8 mx-auto animate-spin text-brand-red/50 dark:text-brand-red" />
                   </TableCell>
                 </TableRow>
@@ -244,7 +265,8 @@ export function TreasuryFlowTab({
                     key={mov.id}
                     className={cn(
                       "border-b border-slate-100 dark:border-white/5 interactive-row transition-colors duration-200",
-                      mov.conciliado && "bg-emerald-50/30 dark:bg-emerald-950/20",
+                      mov.conciliado &&
+                        "bg-emerald-50/30 dark:bg-emerald-950/20",
                     )}
                   >
                     <TableCell className="w-14 pl-6">
@@ -275,13 +297,22 @@ export function TreasuryFlowTab({
                               : "info"
                         }
                       >
-                        {mov.origen_modulo}
+                        {mov.origen_modulo || "Manual"}
                       </StatusBadge>
                     </TableCell>
                     <TableCell className="py-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-xl">
-                          {bankLogos[mov.banco] || "🏦"}
+                        {/* 🚀 FIX FASE 1: Renderizamos la imagen SVG en lugar del Emoji */}
+                        <span className="flex items-center justify-center w-6 h-6">
+                          {bankLogos[mov.banco] ? (
+                            <img
+                              src={bankLogos[mov.banco]}
+                              alt={mov.banco}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <Landmark className="h-5 w-5 text-slate-400" />
+                          )}
                         </span>
                         <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
                           {mov.banco}
@@ -320,7 +351,8 @@ export function TreasuryFlowTab({
                             onClick={() => onViewMovement(mov)}
                             className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer rounded-lg dark:text-slate-300 dark:focus:bg-slate-800"
                           >
-                            <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" /> Ver Detalle
+                            <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                            Ver Detalle
                           </DropdownMenuItem>
                           <DropdownMenuSeparator className="dark:bg-white/10" />
                           <DropdownMenuItem

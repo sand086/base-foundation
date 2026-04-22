@@ -67,6 +67,7 @@ interface EnhancedDataTableProps<T> {
   onSelectedRowsChange?: (rows: T[]) => void;
   rowKey?: keyof T;
   customFilters?: React.ReactNode; // <- Prop opcional para no romper otros módulos
+  onCustomExport?: () => void;
 }
 
 type SortDirection = "asc" | "desc" | null;
@@ -100,7 +101,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   selectedRows = [],
   onSelectedRowsChange,
   rowKey = "id" as keyof T,
-  customFilters, // <- Desestructuramos la prop
+  customFilters,
+  onCustomExport,
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -499,7 +501,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           <Button
             variant="outline"
             className="h-11 px-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-200 dark:hover:border-emerald-500/30 shadow-sm transition-all rounded-xl haptic-press"
-            onClick={handleExportExcel}
+            onClick={onCustomExport ? onCustomExport : handleExportExcel}
           >
             <Download className="h-4 w-4 mr-2" /> Excel
           </Button>

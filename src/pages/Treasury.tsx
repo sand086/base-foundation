@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Plus,
+  Coins,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -34,6 +35,9 @@ import { TreasuryFlowTab } from "@/features/treasury/components/TreasuryFlowTab"
 import { BankAccountModal } from "@/features/treasury/components/BankAccountModal";
 import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
 import { ManualMovementModal } from "@/features/treasury/components/ManualMovementModal";
+
+// 🚀 FIX FASE 3: Importamos el nuevo modal de Caja Chica
+import { PettyCashModal } from "@/features/treasury/components/PettyCashModal";
 
 export default function Treasury() {
   const { value: monedaBase } = useSystemConfig("moneda_base");
@@ -71,6 +75,9 @@ export default function Treasury() {
   );
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [isManualMovementOpen, setIsManualMovementOpen] = useState(false);
+
+  // 🚀 FIX FASE 3: Estado para el modal de Caja Chica
+  const [isPettyCashOpen, setIsPettyCashOpen] = useState(false);
 
   // States Modales Cuentas
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(
@@ -198,17 +205,16 @@ export default function Treasury() {
     cobranzaAccounts,
   ]);
 
-  const stats = useMemo(() => {
-    const conciliados = movimientos.filter((m) => m.conciliado).length;
-    const pendientes = movimientos.filter((m) => !m.conciliado).length;
-    const total_ingresos = movimientos
+  const stats = {
+    total_ingresos: movimientos
       .filter((m) => m.tipo === "ingreso")
-      .reduce((sum, m) => sum + m.monto, 0);
-    const total_egresos = movimientos
+      .reduce((acc, curr) => acc + curr.monto, 0),
+    total_egresos: movimientos
       .filter((m) => m.tipo === "egreso")
-      .reduce((sum, m) => sum + m.monto, 0);
-    return { conciliados, pendientes, total_ingresos, total_egresos };
-  }, [movimientos]);
+      .reduce((acc, curr) => acc + curr.monto, 0),
+    conciliados: movimientos.filter((m) => m.conciliado).length,
+    pendientes: movimientos.filter((m) => !m.conciliado).length,
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
@@ -219,8 +225,8 @@ export default function Treasury() {
       />
 
       <Tabs defaultValue="tesoreria" className="w-full">
-        <div className="flex justify-between items-center mb-6 w-full">
-          <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 w-full">
+          <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex overflow-x-auto">
             <TabsTrigger
               value="tesoreria"
               className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy data-[state=active]:shadow-sm h-full px-6 transition-all"
@@ -236,13 +242,25 @@ export default function Treasury() {
             </TabsTrigger>
           </TabsList>
 
-          <Button
-            onClick={() => setIsManualMovementOpen(true)}
-            className="rounded-xl shadow-md h-12 px-6 bg-brand-navy hover:bg-brand-navy/90 text-white font-bold tracking-wide"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Nuevo Movimiento
-          </Button>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* 🚀 FIX FASE 3: Botón de Caja Chica */}
+            <Button
+              onClick={() => setIsPettyCashOpen(true)}
+              variant="outline"
+              className="rounded-xl shadow-sm h-12 px-5 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/40 font-bold tracking-wide w-full sm:w-auto"
+            >
+              <Coins className="w-4 h-4 mr-2" />
+              Caja Chica
+            </Button>
+
+            <Button
+              onClick={() => setIsManualMovementOpen(true)}
+              className="rounded-xl shadow-md h-12 px-5 bg-brand-navy hover:bg-brand-navy/90 text-white font-bold tracking-wide w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Mov. Manual
+            </Button>
+          </div>
         </div>
 
         <TabsContent value="tesoreria" className="m-0">
@@ -301,6 +319,17 @@ export default function Treasury() {
       <ManualMovementModal
         open={isManualMovementOpen}
         onOpenChange={setIsManualMovementOpen}
+        bankAccounts={bankAccounts}
+        onSuccess={() => {
+          fetchMovements();
+          refreshAccounts();
+        }}
+      />
+
+      {/* 🚀 FIX FASE 3: Instancia del nuevo modal de Caja Chica */}
+      <PettyCashModal
+        open={isPettyCashOpen}
+        onOpenChange={setIsPettyCashOpen}
         bankAccounts={bankAccounts}
         onSuccess={() => {
           fetchMovements();
