@@ -26,6 +26,7 @@ dist-ssr
 # carpetas publicas y archivos generados
 /public
 /build
+/db/*
 
 # archivos de entorno
 .env
