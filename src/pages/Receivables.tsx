@@ -95,7 +95,7 @@ export default function Receivables() {
     useState<ReceivableInvoice | null>(null);
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // FORMATEO DE DATOS DE LA API
+  // FORMATEO DE DATOS DE LA API (CON CÁLCULO DE DÍAS DE CRÉDITO)
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -108,11 +108,23 @@ export default function Receivables() {
         [];
     }
 
-    return (
-      dataArray
-        // 🚀 NOVO FILTRO: Remove todas as faturas com o valor exato de 1.12
-        .filter((inv: any) => Number(inv.monto_total) !== 1.12)
-        .map((inv: any) => ({
+    return dataArray
+      .filter((inv: any) => Number(inv.monto_total) !== 1.12)
+      .map((inv: any) => {
+        // 🚀 EXTRAEMOS LOS DÍAS DE CRÉDITO DEL CLIENTE
+        const diasCredito =
+          inv.client?.dias_credito || inv.cliente?.dias_credito || 0;
+        const fechaEmision = inv.fecha_emision || inv.created_at;
+
+        // 🚀 CALCULAMOS LA FECHA DE VENCIMIENTO SI NO VIENE EN LA BD
+        let fechaVencimiento = inv.fecha_vencimiento;
+        if (!fechaVencimiento && fechaEmision) {
+          const fechaObj = new Date(fechaEmision);
+          fechaObj.setDate(fechaObj.getDate() + diasCredito);
+          fechaVencimiento = fechaObj.toISOString().split("T")[0];
+        }
+
+        return {
           ...inv,
           id: inv.id,
           client_id: inv.client_id || inv.cliente_id || inv.client?.id,
@@ -130,13 +142,14 @@ export default function Receivables() {
               ? Number(inv.saldo_pendiente)
               : Number(inv.monto_total) || 0,
           requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
-          fecha_emision: inv.fecha_emision || inv.created_at,
-          fecha_vencimiento: inv.fecha_vencimiento,
+          fecha_emision: fechaEmision,
+          fecha_vencimiento: fechaVencimiento,
+          dias_credito: diasCredito, // Guardamos para mostrar en la tabla
           estatus: inv.estatus || inv.status || "corriente",
           referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
-        })) as ReceivableInvoice[]
-    );
+        };
+      }) as ReceivableInvoice[];
   }, [receivables]);
 
   // CÁLCULO DEL RESUMEN FINANCIERO
@@ -214,6 +227,7 @@ export default function Receivables() {
       "Cliente",
       "Fecha Emisión",
       "Fecha Vencimiento",
+      "Días Crédito", // Nuevo campo en el excel
       "Monto Total",
       "Saldo Pendiente",
       "Estatus",
@@ -227,6 +241,7 @@ export default function Receivables() {
         `"${inv.cliente}"`,
         inv.fecha_emision,
         inv.fecha_vencimiento,
+        (inv as any).dias_credito || 0,
         inv.monto_total,
         inv.saldo_pendiente,
         inv.estatus?.toUpperCase() || "",
@@ -261,14 +276,12 @@ export default function Receivables() {
 
   const handleCreateInvoice = async (invoiceData: any) => {
     try {
-      // Usamos directamente axiosClient ya que la función no existe en el hook
       await axiosClient.post("/api/finance/receivables", invoiceData);
 
       setIsCreateModalOpen(false);
       setImportedServices(undefined);
       toast.success("Factura generada y guardada exitosamente");
 
-      // Refrescamos la tabla de CxC
       await refreshReceivables?.();
     } catch (error: any) {
       console.error("Error al crear factura:", error);
@@ -388,12 +401,21 @@ export default function Receivables() {
         header: "Vencimiento",
         type: "date",
         render: (value, row) => {
+          const diasCredito = (row as any).dias_credito || 0;
+
           if (!value) return "—";
           if (row.saldo_pendiente === 0)
             return (
-              <span className="text-emerald-600 font-bold uppercase text-[10px]">
-                Liquidado
-              </span>
+              <div className="flex flex-col">
+                <span className="text-emerald-600 font-bold uppercase text-xs">
+                  Liquidado
+                </span>
+                {diasCredito > 0 && (
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+                    Crédito: {diasCredito} Días
+                  </span>
+                )}
+              </div>
             );
 
           const daysOverdue = calculateDaysOverdue(value);
@@ -413,6 +435,11 @@ export default function Receivables() {
                 <span className="text-[10px] font-black uppercase tracking-widest text-red-500 dark:text-red-400 mt-1 animate-pulse">
                   +{daysOverdue} DÍAS VENCIDO
                 </span>
+                {diasCredito > 0 && (
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+                    Crédito Otor: {diasCredito} Días
+                  </span>
+                )}
               </div>
             );
           } else if (daysOverdue >= -5 && daysOverdue <= 0) {
@@ -424,6 +451,11 @@ export default function Receivables() {
                 <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 mt-1">
                   POR VENCER ({Math.abs(daysOverdue)}D)
                 </span>
+                {diasCredito > 0 && (
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+                    Crédito Otor: {diasCredito} Días
+                  </span>
+                )}
               </div>
             );
           } else {
@@ -435,6 +467,11 @@ export default function Receivables() {
                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mt-1">
                   A TIEMPO
                 </span>
+                {diasCredito > 0 && (
+                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
+                    Crédito Otor: {diasCredito} Días
+                  </span>
+                )}
               </div>
             );
           }
