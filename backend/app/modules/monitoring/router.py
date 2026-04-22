@@ -2,13 +2,14 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.db.database import get_db
 from app.models import models
 from app.models.models import AlertConfig, EmailTemplate, UserNotification, Trip
 from app.integrations.email.email_service import EmailService
 from app.modules.auth.router import get_current_active_user
+from app.models.models import TripLeg
 
 #  IMPORTACIONES LOCALES (FSD)
 from . import schemas
@@ -149,7 +150,16 @@ async def create_notification(
         if is_external and payload.reference_id:
             try:
                 trip_id = int(payload.reference_id)
-                trip = db.query(Trip).filter(Trip.id == trip_id).first()
+                trip = (
+                    db.query(Trip)
+                    .options(
+                        joinedload(Trip.client),
+                        selectinload(Trip.legs).joinedload(TripLeg.unit),
+                        selectinload(Trip.legs).joinedload(TripLeg.operator),
+                    )
+                    .filter(Trip.id == trip_id)
+                    .first()
+                )
 
                 if trip:
                     status_label = payload.metadata_info.get(

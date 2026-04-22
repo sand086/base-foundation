@@ -61,13 +61,27 @@ class EmailService:
         folio = str(trip.public_id or trip.id)
         cliente_nombre = trip.client.razon_social if trip.client else "Cliente"
         estatus_formateado = status.replace("_", " ").upper()
+        referencia = trip.referencia if trip.referencia else "N/A"
 
-        contenedor = getattr(trip, "contenedor", None) or "Sin asignar"
-        operador = getattr(trip, "operador_nombre", None) or "Sin asignar"
-        unidad = getattr(trip, "unidad", None) or "Sin asignar"
-        referencia = getattr(trip, "referencia", None) or "N/A"
-        origen = getattr(trip, "origen", None) or "N/A"
-        destino = getattr(trip, "destino", None) or "N/A"
+        # Corrección: Extraer los datos reales en inglés del modelo Trip
+        origen = trip.origin if trip.origin else "N/A"
+        destino = trip.destination if trip.destination else "N/A"
+
+        # Corrección: Manejo de los contenedores (Soporte para viajes FULL)
+        contenedor = trip.contenedor_1 if trip.contenedor_1 else "Sin asignar"
+        if trip.contenedor_2:
+            contenedor += f" / {trip.contenedor_2}"
+
+        # Corrección: Extraer unidad y operador del primer tramo (TripLeg)
+        operador = "Sin asignar"
+        unidad = "Sin asignar"
+
+        if trip.legs and len(trip.legs) > 0:
+            primer_tramo = trip.legs[0]
+            if primer_tramo.operator:
+                operador = primer_tramo.operator.name
+            if primer_tramo.unit:
+                unidad = primer_tramo.unit.numero_economico
 
         # 5. Construcción del HTML con Estilo "Bento/SaaS" y el LOGO
         html_content = f"""
