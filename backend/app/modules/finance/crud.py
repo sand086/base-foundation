@@ -543,15 +543,23 @@ def process_sat_master_report(
         else:
             tipo_comprobante = "ingreso"
 
-        # El SAT cambia los nombres dependiendo de la pestaña, buscamos en ambas:
-        metodo_pago = (
+        # 🚀 FIX APLICADO: Truncamiento de métodos y formas de pago para evitar error en BD
+        metodo_pago_raw = (
             str(item.get("Método de Pago") or item.get("MetodoDePagoDR") or "")
             .strip()
             .upper()
         )
-        forma_pago = str(
+        metodo_pago = (
+            metodo_pago_raw.split("-")[0].strip()[:5] if metodo_pago_raw else None
+        )
+
+        forma_pago_raw = str(
             item.get("Forma de Pago") or item.get("FormaDePago") or ""
         ).strip()
+        forma_pago = (
+            forma_pago_raw.split("-")[0].strip()[:5] if forma_pago_raw else None
+        )
+
         uuid_relacionado = str(
             item.get("Relacionados") or item.get("idDocumento") or ""
         ).strip()
@@ -665,23 +673,24 @@ def process_sat_master_report(
                 db.add(invoice)
                 resultados["cxc_creadas"] += 1
             else:
+                # 🚀 FIX APLICADO: Uso de models.Supplier en lugar de models.Provider
                 provider = (
-                    db.query(models.Provider)
+                    db.query(models.Supplier)
                     .filter(
-                        models.Provider.rfc == rfc_emisor,
-                        models.Provider.record_status != models.RecordStatus.ELIMINADO,
+                        models.Supplier.rfc == rfc_emisor,
+                        models.Supplier.record_status != models.RecordStatus.ELIMINADO,
                     )
                     .first()
                 )
                 if not provider:
-                    provider = models.Provider(
+                    provider = models.Supplier(
                         razon_social=nombre_emisor, rfc=rfc_emisor, estatus="activo"
                     )
                     db.add(provider)
                     db.flush()
 
                 invoice = models.PayableInvoice(
-                    supplier_id=provider.id,
+                    supplier_id=provider.id,  # Ahora conecta perfectamente
                     uuid=uuid_fiscal,
                     folio_interno=folio,
                     subtotal=subtotal,
@@ -692,7 +701,10 @@ def process_sat_master_report(
                     moneda=moneda,
                     fecha_emision=fecha_obj.date(),
                     fecha_vencimiento=(
-                        fecha_obj + timedelta(days=provider.dias_credito or 15)
+                        fecha_obj
+                        + timedelta(
+                            days=provider.dias_credito if provider.dias_credito else 15
+                        )
                     ).date(),
                     estatus=estatus_factura,
                     metodo_pago=metodo_pago,

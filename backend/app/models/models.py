@@ -829,6 +829,9 @@ class Provider(AuditMixin, Base):
     telefono = Column(String(20))
     direccion = Column(Text)
     dias_credito = Column(Integer, default=0)
+    estatus = Column(
+        String(20), nullable=True, default="activo", server_default="activo"
+    )
 
 
 class BulkUploadHistory(AuditMixin, Base):
