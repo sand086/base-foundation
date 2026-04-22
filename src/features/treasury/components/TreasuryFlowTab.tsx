@@ -35,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
 
-// 🚀 FIX: Importamos nuestra utilidad global en lugar de quemar los SVGs aquí
+// 🚀 Utilizamos nuestra utilidad global
 import { getBankLogo } from "../utils/bankUtils";
 
 interface TreasuryFlowTabProps {
@@ -242,8 +242,14 @@ export function TreasuryFlowTab({
                 </TableRow>
               ) : (
                 movimientos.map((mov) => {
-                  // 🚀 Obtenemos el logo SVG para cada fila
+                  // 1. Obtenemos el logo SVG
                   const logoSvg = getBankLogo(mov.banco);
+
+                  // 🚀 2. Filtro destructor de emojis para el texto:
+                  // Esto elimina cualquier caracter Unicode alto (donde viven los emojis) y deja solo texto limpio.
+                  const bankNameClean = mov.banco
+                    ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
+                    : "Banco";
 
                   return (
                     <TableRow
@@ -277,11 +283,25 @@ export function TreasuryFlowTab({
 
                       <TableCell className="py-4">
                         <div className="flex items-center gap-2">
-                          <span className="flex items-center justify-center w-6 h-6">
-                            {mov.banco}
+                          <span className="flex items-center justify-center w-6 h-6 shrink-0">
+                            {logoSvg ? (
+                              <img
+                                src={logoSvg}
+                                alt={bankNameClean}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <Landmark className="h-5 w-5 text-slate-400" />
+                            )}
+                          </span>
+
+                          {/* 🚀 3. Aquí renderizamos el nombre LIMPIO (bankNameClean) */}
+                          <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                            {bankNameClean}
                           </span>
                         </div>
                       </TableCell>
+
                       <TableCell className="py-4 text-right">
                         <span
                           className={cn(

@@ -38,10 +38,10 @@ export function ImportXMLExpenseModal({
   };
 
   const processFile = async (file: File) => {
-    // Validamos que sea un archivo de reporte (CSV o XLS del SAT)
-    if (!file.name.toLowerCase().match(/\.(csv|xls|xlsx)$/)) {
+    if (!file.name.toLowerCase().match(/\.(csv|xls|xlsx|txt)$/)) {
       toast.error("Formato inválido", {
-        description: "Por favor sube el reporte del SAT en formato CSV o XLS",
+        description:
+          "Por favor sube el reporte del SAT en formato CSV, TXT o XLS",
       });
       return;
     }
@@ -50,31 +50,62 @@ export function ImportXMLExpenseModal({
 
     try {
       const text = await file.text();
-      const lines = text.split(/\r?\n/);
 
-      // 1. Buscamos automáticamente dónde empiezan las cabeceras (Ignorando la basura del SAT)
+      // 🚀 FIX CRÍTICO SAT: Los CSV del SAT traen saltos de línea (\n) ADENTRO
+      // de la columna "Conceptos". Esto rompe cualquier parser normal.
+      // Vamos a limpiar el texto: si hay un \n dentro de comillas, lo volvemos un espacio.
+      let cleanText = "";
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') inQuotes = !inQuotes;
+
+        if (inQuotes && (char === "\n" || char === "\r")) {
+          cleanText += " "; // Sustituimos el salto maldito por un espacio
+        } else {
+          cleanText += char;
+        }
+      }
+
+      // Ahora sí, partimos por filas sabiendo que están intactas
+      const lines = cleanText.split(/\r?\n/);
+
+      // 1. Buscamos cabeceras y detectamos el separador del SAT
       let headerIndex = -1;
-      for (let i = 0; i < Math.min(10, lines.length); i++) {
+      let separator = ",";
+
+      for (let i = 0; i < Math.min(15, lines.length); i++) {
         const lineLower = lines[i].toLowerCase();
+        // Basado en tus archivos, las columnas se llaman "Rfc Emisor" y "UUID"
         if (lineLower.includes("rfc emisor") || lineLower.includes("uuid")) {
           headerIndex = i;
+
+          if (lines[i].includes("~")) separator = "~";
+          else if (lines[i].includes(";")) separator = ";";
+          else separator = ",";
+
           break;
         }
       }
 
       if (headerIndex === -1) {
         throw new Error(
-          "No se encontraron las columnas válidas del SAT (Rfc Emisor, UUID, etc).",
+          "No se encontraron las columnas del SAT (Rfc Emisor, UUID). Asegúrate de que el archivo sea original del SAT.",
         );
       }
 
-      // Función robusta para separar por comas respetando las comillas internas del CSV
-      const splitCSV = (str: string) => {
+      // Función robusta para separar basándonos en el separador detectado
+      const splitLine = (str: string) => {
+        if (separator === "~") return str.split("~").map((s) => s.trim());
+        if (separator === ";") return str.split(";").map((s) => s.trim());
+        // Regex clásico para CSV separado por comas respetando comillas
         const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
         return str.split(regex).map((s) => s.replace(/^"|"$/g, "").trim());
       };
 
-      const headers = splitCSV(lines[headerIndex]);
+      const headers = splitLine(lines[headerIndex]).map((h) =>
+        h.replace(/^"|"$/g, "").trim(),
+      );
       const parsedData = [];
 
       // 2. Parseamos las filas reales
@@ -82,15 +113,17 @@ export function ImportXMLExpenseModal({
         const line = lines[i].trim();
         if (!line) continue;
 
-        const values = splitCSV(line);
-        const obj: any = {};
+        const values = splitLine(line);
+        const obj: Record<string, string> = {};
 
         headers.forEach((header, index) => {
-          obj[header] = values[index] || "";
+          obj[header] = values[index]
+            ? values[index].replace(/^"|"$/g, "").trim()
+            : "";
         });
 
-        // Solo agregamos si la fila tiene un UUID válido
-        if (obj["UUID"] || obj["uuid"]) {
+        // Solo agregamos la fila si extrajimos exitosamente un UUID
+        if (obj["UUID"] || obj["uuid"] || obj["Uuid"]) {
           parsedData.push(obj);
         }
       }
@@ -101,29 +134,36 @@ export function ImportXMLExpenseModal({
         );
       }
 
-      // 3. Enviamos el arreglo completo al Backend
+      // 3. Empaquetamos para FastAPI como Multipart FormData
+      const formData = new FormData();
+      formData.append("file", file); // Archivo original
+      formData.append("json_data", JSON.stringify(parsedData)); // Data ya limpia
+
       const response = await axiosClient.post(
         "/api/finance/invoices/bulk-upload",
+        formData,
         {
-          data: parsedData,
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
         },
       );
 
       toast.success("Reporte procesado correctamente", {
         description:
           response.data.message ||
-          `Se procesaron ${parsedData.length} facturas/pagos.`,
+          `Se procesaron ${parsedData.length} facturas/pagos exitosamente.`,
       });
 
       onSuccess(parsedData);
       onOpenChange(false);
     } catch (error: any) {
+      console.error(error); // Para debug en consola
       toast.error("Error al procesar el archivo", {
         description: error.response?.data?.detail || error.message,
       });
     } finally {
       setIsUploading(false);
-      // Reseteamos el input para permitir subir el mismo archivo si hubo error
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -184,12 +224,12 @@ export function ImportXMLExpenseModal({
                 : "Haz clic o arrastra tu reporte aquí"}
             </p>
             <p className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">
-              Soporta archivos .CSV y .XLS
+              Soporta archivos .CSV y .TXT
             </p>
           </div>
           <input
             type="file"
-            accept=".csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            accept=".csv, .txt, text/plain, text/csv, application/vnd.ms-excel"
             className="hidden"
             ref={fileInputRef}
             onChange={handleFileChange}

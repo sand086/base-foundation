@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
@@ -137,8 +137,7 @@ def get_bank_movements(db: Session):
     try:
         return (
             db.query(models.BankMovement)
-            # Solución: Comparamos directamente contra el Enum (RecordStatus.ELIMINADO)
-            # sin usar .value
+            .options(joinedload(models.BankMovement.bank_account))
             .filter(models.BankMovement.record_status != RecordStatus.ELIMINADO)
             .order_by(models.BankMovement.fecha.desc())
             .all()

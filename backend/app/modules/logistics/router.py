@@ -1,4 +1,5 @@
 import os
+import time  # <-- NUEVO: Para el sleep de la sincronización masiva
 import datetime
 from datetime import date, timedelta
 from pathlib import Path
@@ -9,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
 from sqlalchemy.orm import Session, contains_eager, joinedload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
+from sqlalchemy import func, or_  # <-- NUEVO: Agregado or_ para la consulta masiva
 from jinja2 import Environment, FileSystemLoader
 
 from app.db.database import get_db
@@ -48,7 +49,8 @@ def get_osrm_distance(origen: str, destino: str) -> float:
     Calcula la distancia real en carretera usando la API gratuita de OpenStreetMap / OSRM.
     """
     try:
-        headers = {"User-Agent": "TMS-Rapidos3T/1.0"}
+        # Se agrega un correo ficticio al User-Agent para cumplir las políticas de Nominatim y evitar bloqueos
+        headers = {"User-Agent": "TMS-Rapidos3T/1.0 (contacto@tuempresa.com)"}
 
         # 1. Convertimos Origen a Coordenadas
         res_orig = requests.get(
@@ -1221,3 +1223,57 @@ def unhook_trip_in_yard(trip_id: int, db: Session = Depends(get_db)):
         return trip
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/rate-templates/sync-distances")
+def sync_distances(db: Session = Depends(get_db)):
+    """
+    Sincroniza masivamente las distancias en carretera de los RateTemplates
+    utilizando la función helper existente (Nominatim + OSRM).
+    """
+    # 1. Filtrar registros: Estatus 'A' y distancia_total_km igual a 0 o NULL
+    templates_to_sync = (
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.record_status == "A",
+            or_(
+                models.RateTemplate.distancia_total_km == 0,
+                models.RateTemplate.distancia_total_km.is_(None),
+            ),
+        )
+        .all()
+    )
+
+    actualizados = 0
+    errores = 0
+
+    for template in templates_to_sync:
+        try:
+            # Pausa de 1 segundo requerida por las políticas de la API gratuita de Nominatim
+            time.sleep(1)
+
+            # Reutilizamos tu helper existente para obtener la distancia
+            distancia_calculada = get_osrm_distance(template.origen, template.destino)
+
+            if distancia_calculada > 0:
+                template.distancia_total_km = distancia_calculada
+                db.commit()
+                actualizados += 1
+            else:
+                # Si el helper devolvió 0.0, asumimos que no se pudo geolocalizar/enrutar
+                errores += 1
+
+        except Exception as e:
+            # Capturamos cualquier error de base de datos o ejecución inesperada
+            print(
+                f"Error sincronizando plantilla ID {getattr(template, 'id', 'Desconocido')}: {str(e)}"
+            )
+            errores += 1
+            db.rollback()  # Limpiamos la transacción para no afectar el siguiente ciclo
+
+    # 2. Retornar el resumen solicitado
+    return {
+        "actualizados": actualizados,
+        "errores": errores,
+        "mensaje": "Sincronización completada",
+    }

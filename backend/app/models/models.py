@@ -1536,6 +1536,14 @@ class BankMovement(AuditMixin, Base):
 
     bank_account = relationship("BankAccount", backref="movements")
 
+    @property
+    def banco(self):
+        return self.bank_account.banco if self.bank_account else None
+
+    @property
+    def cuenta_bancaria(self):
+        return self.bank_account.numero_cuenta if self.bank_account else None
+
 
 class UserNotification(AuditMixin, Base):
     """
