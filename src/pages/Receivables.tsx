@@ -95,7 +95,7 @@ export default function Receivables() {
     useState<ReceivableInvoice | null>(null);
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // FORMATEO DE DATOS DE LA API (CON CÁLCULO DE DÍAS DE CRÉDITO)
+  // FORMATEO DE DATOS DE LA API (CON CÁLCULO DE DÍAS DE CRÉDITO BLINDADO)
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -111,17 +111,35 @@ export default function Receivables() {
     return dataArray
       .filter((inv: any) => Number(inv.monto_total) !== 1.12)
       .map((inv: any) => {
-        // 🚀 EXTRAEMOS LOS DÍAS DE CRÉDITO DEL CLIENTE
-        const diasCredito =
-          inv.client?.dias_credito || inv.cliente?.dias_credito || 0;
+        // 🚀 BUSCADOR AGRESIVO DE DÍAS DE CRÉDITO: Busca en todas las posibles anidaciones
+        const diasCredito = Number(
+          inv.dias_credito ||
+            inv.client?.dias_credito ||
+            inv.cliente?.dias_credito ||
+            inv.viaje?.client?.dias_credito ||
+            0,
+        );
+
         const fechaEmision = inv.fecha_emision || inv.created_at;
 
-        // 🚀 CALCULAMOS LA FECHA DE VENCIMIENTO SI NO VIENE EN LA BD
+        // 🚀 CALCULAMOS LA FECHA DE VENCIMIENTO
         let fechaVencimiento = inv.fecha_vencimiento;
+
+        // Si el backend NO mandó fecha de vencimiento, o si queremos forzar que se calcule con el día de crédito correcto:
         if (!fechaVencimiento && fechaEmision) {
-          const fechaObj = new Date(fechaEmision);
+          // Reemplazamos guiones por slashes para evitar el desfase de Timezone en Safari/Chrome
+          const cleanDateStr = fechaEmision.includes("T")
+            ? fechaEmision.split("T")[0]
+            : fechaEmision;
+          const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
+
           fechaObj.setDate(fechaObj.getDate() + diasCredito);
-          fechaVencimiento = fechaObj.toISOString().split("T")[0];
+
+          // Reconstruimos a formato YYYY-MM-DD
+          const yyyy = fechaObj.getFullYear();
+          const mm = String(fechaObj.getMonth() + 1).padStart(2, "0");
+          const dd = String(fechaObj.getDate()).padStart(2, "0");
+          fechaVencimiento = `${yyyy}-${mm}-${dd}`;
         }
 
         return {
@@ -144,7 +162,7 @@ export default function Receivables() {
           requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
           fecha_emision: fechaEmision,
           fecha_vencimiento: fechaVencimiento,
-          dias_credito: diasCredito, // Guardamos para mostrar en la tabla
+          dias_credito: diasCredito, // 🚀 GUARDAMOS EL VALOR CORRECTO PARA LA UI
           estatus: inv.estatus || inv.status || "corriente",
           referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
@@ -401,7 +419,7 @@ export default function Receivables() {
         header: "Vencimiento",
         type: "date",
         render: (value, row) => {
-          const diasCredito = (row as any).dias_credito || 0;
+          const diasCredito = Number((row as any).dias_credito) || 0;
 
           if (!value) return "—";
           if (row.saldo_pendiente === 0)
