@@ -96,6 +96,7 @@ export default function Receivables() {
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // FORMATEO DE DATOS DE LA API (CON CÁLCULO DE DÍAS DE CRÉDITO BLINDADO)
+  // FORMATEO DE DATOS DE LA API (CÁLCULO EXACTO EN DÍAS HÁBILES)
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -124,7 +125,7 @@ export default function Receivables() {
             inv.dias_credito,
         );
 
-        // 🚀 2. SALVAVIDAS DE EMERGENCIA: Si el backend no manda los días, los forzamos por el nombre para tu demo
+        // 🚀 2. SALVAVIDAS: Asignación forzada si el backend no los trae
         if (!diasCredito) {
           if (clienteNombre.toUpperCase().includes("HANSA")) {
             diasCredito = 15;
@@ -138,15 +139,22 @@ export default function Receivables() {
         const fechaEmision = inv.fecha_emision || inv.created_at;
         let fechaVencimientoCalculada = inv.fecha_vencimiento;
 
-        // 🚀 3. RECALCULAMOS A LA FUERZA: Ignoramos la fecha mala del backend y le sumamos los días reales a la fecha de emisión
+        // 🚀 3. CÁLCULO ESTRICTO EN DÍAS HÁBILES (Sin Sábados ni Domingos)
         if (fechaEmision) {
           const cleanDateStr = fechaEmision.includes("T")
             ? fechaEmision.split("T")[0]
             : fechaEmision;
           const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
 
-          // Le sumamos los días de crédito
-          fechaObj.setDate(fechaObj.getDate() + diasCredito);
+          let addedDays = 0;
+          // Sumamos días 1 por 1. Si es fin de semana, no cuenta para el crédito.
+          while (addedDays < diasCredito) {
+            fechaObj.setDate(fechaObj.getDate() + 1);
+            // getDay() devuelve 0 para Domingo y 6 para Sábado
+            if (fechaObj.getDay() !== 0 && fechaObj.getDay() !== 6) {
+              addedDays++;
+            }
+          }
 
           const yyyy = fechaObj.getFullYear();
           const mm = String(fechaObj.getMonth() + 1).padStart(2, "0");
@@ -170,8 +178,8 @@ export default function Receivables() {
               : Number(inv.monto_total) || 0,
           requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
           fecha_emision: fechaEmision,
-          fecha_vencimiento: fechaVencimientoCalculada, // USAMOS LA FECHA FORZADA
-          dias_credito: diasCredito, // MANDAMOS LOS DÍAS CORRECTOS (8 o 15)
+          fecha_vencimiento: fechaVencimientoCalculada, // USAMOS LA FECHA EN DÍAS HÁBILES
+          dias_credito: diasCredito,
           estatus: inv.estatus || inv.status || "corriente",
           referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
@@ -428,29 +436,31 @@ export default function Receivables() {
         header: "Vencimiento",
         type: "date",
         render: (value, row) => {
-          const diasCredito = Number((row as any).dias_credito) || 0;
-
           if (!value) return "—";
-          if (row.saldo_pendiente === 0)
+
+          if (row.saldo_pendiente === 0) {
             return (
               <div className="flex flex-col">
-                <span className="text-emerald-600 font-bold uppercase text-xs">
+                <span className="text-emerald-600 font-bold uppercase text-[10px] tracking-widest">
                   Liquidado
                 </span>
-                {diasCredito > 0 && (
-                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                    Crédito: {diasCredito} Días
-                  </span>
-                )}
               </div>
             );
+          }
 
-          const daysOverdue = calculateDaysOverdue(value);
+          // 🚀 MATEMÁTICA EN VIVO A PRUEBA DE BALAS PARA LA DEMO
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
           const safeDate = new Date(
             value.includes("-")
               ? value.split("T")[0].replace(/-/g, "/")
               : value,
           );
+          safeDate.setHours(0, 0, 0, 0);
+
+          const diffTime = today.getTime() - safeDate.getTime();
+          const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           const formattedDate = safeDate.toLocaleDateString("es-MX");
 
           if (daysOverdue > 0) {
@@ -462,43 +472,28 @@ export default function Receivables() {
                 <span className="text-[10px] font-black uppercase tracking-widest text-red-500 dark:text-red-400 mt-1 animate-pulse">
                   +{daysOverdue} DÍAS VENCIDO
                 </span>
-                {diasCredito > 0 && (
-                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                    Crédito Otor: {diasCredito} Días
-                  </span>
-                )}
-              </div>
-            );
-          } else if (daysOverdue >= -5 && daysOverdue <= 0) {
-            return (
-              <div className="flex flex-col">
-                <span className="font-mono text-sm font-bold uppercase text-amber-600 dark:text-amber-400">
-                  {formattedDate}
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 mt-1">
-                  POR VENCER ({Math.abs(daysOverdue)}D)
-                </span>
-                {diasCredito > 0 && (
-                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                    Crédito Otor: {diasCredito} Días
-                  </span>
-                )}
               </div>
             );
           } else {
+            // 🚀 SIEMPRE MOSTRAR LOS DÍAS FALTANTES
+            const diasFaltantes = Math.abs(daysOverdue);
+            const colorCls =
+              diasFaltantes <= 3
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-emerald-600 dark:text-emerald-400";
+
             return (
               <div className="flex flex-col">
-                <span className="font-mono text-sm font-bold uppercase text-slate-700 dark:text-slate-300">
+                <span
+                  className={`font-mono text-sm font-bold uppercase ${colorCls}`}
+                >
                   {formattedDate}
                 </span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mt-1">
-                  A TIEMPO
+                <span
+                  className={`text-[10px] font-black uppercase tracking-widest ${colorCls} mt-1`}
+                >
+                  VENCE EN {diasFaltantes} DÍA{diasFaltantes !== 1 ? "S" : ""}
                 </span>
-                {diasCredito > 0 && (
-                  <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                    Crédito Otor: {diasCredito} Días
-                  </span>
-                )}
               </div>
             );
           }
