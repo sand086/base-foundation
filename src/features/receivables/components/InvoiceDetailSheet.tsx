@@ -25,7 +25,6 @@ import {
   Banknote,
   FileCode2,
   Hash,
-  AlertCircle,
   Coins,
   X,
   Truck,
@@ -36,6 +35,8 @@ import {
   Weight,
   Tag,
   Link as LinkIcon,
+  MapPin,
+  User,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -93,7 +94,7 @@ export function InvoiceDetailSheet({
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
 
-  // 🚀 FIX: DESGLOSE CORRECTO
+  // 🚀 EXTRACCIÓN DE DESGLOSE
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const subtotal = toNumber(inv.subtotal);
   const iva = toNumber(inv.iva);
@@ -103,11 +104,15 @@ export function InvoiceDetailSheet({
 
   // 🚚 EXTRACCIÓN DE DATOS OPERATIVOS (VIAJE)
   const referenciaOperativa = safeStr(inv.referencia);
-  const origen = safeStr(inv.trip_info?.origen) || "N/A";
-  const destino = safeStr(inv.trip_info?.destino) || "N/A";
+  const origen = safeStr(inv.trip_info?.origen) || "No especificado";
+  const destino = safeStr(inv.trip_info?.destino) || "No especificado";
   const pesoTon = toNumber(inv.trip_info?.peso_toneladas);
-  const contenedores = safeStr(inv.trip_info?.contenedores) || "N/A";
-  const productoSat = safeStr(inv.trip_info?.producto_sat) || "N/A";
+  const contenedores =
+    safeStr(inv.trip_info?.contenedores) || "Sin contenedores registrados";
+  const productoSat = safeStr(inv.trip_info?.producto_sat) || "No especificado";
+  const numUnidad = safeStr(inv.trip_info?.unidad) || "N/A";
+  const numRemolque = safeStr(inv.trip_info?.remolque) || "N/A";
+  const nomOperador = safeStr(inv.trip_info?.operador) || "N/A";
 
   const payments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
@@ -165,15 +170,16 @@ export function InvoiceDetailSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-full sm:max-w-[600px] bg-slate-50 dark:bg-background/95 backdrop-blur-xl border-l-slate-200 dark:border-l-white/10 p-0 flex flex-col"
+        className="w-full sm:max-w-[650px] bg-slate-50 dark:bg-background/95 backdrop-blur-xl border-l-slate-200 dark:border-l-white/10 p-0 flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
       >
+        {/* ================= HEADER FIJO ================= */}
         <SheetHeader className="px-6 py-5 border-b border-border/50 flex flex-row items-center justify-between sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-40 shadow-sm">
           <SheetTitle className="flex items-center gap-3 text-brand-navy dark:text-white font-black text-xl tracking-tight m-0">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800/50">
               <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            CxC Detalle
+            Detalle de Factura
           </SheetTitle>
 
           <div className="flex items-center gap-3 mt-0">
@@ -195,51 +201,51 @@ export function InvoiceDetailSheet({
           </div>
         </SheetHeader>
 
+        {/* ================= CONTENEDOR SCROLL ================= */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
           {/* IDENTIFICACIÓN */}
-          <div className="flex items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group gap-4">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-navy group-hover:bg-blue-600 transition-colors"></div>
             <div className="flex-1 pl-2">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
                 <Hash className="w-3.5 h-3.5 text-blue-500" /> Comprobante
               </p>
-              <p className="font-mono font-black text-xl text-foreground tracking-tight">
+              <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
                 {displayFolio}
               </p>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <Barcode className="w-3 h-3 text-slate-500" />
-                  <span className="text-[9px] font-bold text-slate-500 uppercase">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <Barcode className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">
                     UUID:
                   </span>
-                  <span className="font-mono text-[10px] font-black text-slate-700 dark:text-slate-300">
-                    {uuid.length > 15
-                      ? `${uuid.substring(0, 8)}...${uuid.substring(uuid.length - 4)}`
-                      : uuid}
+                  <span className="font-mono text-[10px] font-black text-slate-700 dark:text-slate-300 break-all">
+                    {uuid}
                   </span>
                 </div>
 
-                {/* 🚀 MUESTRA EL UUID DE LA CARTA PORTE RELACIONADA SI EXISTE */}
+                {/* UUID DE CARTA PORTE RELACIONADA */}
                 {uuidRelacionado && (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
-                    <LinkIcon className="w-3 h-3 text-indigo-500" />
-                    <span className="text-[9px] font-bold text-indigo-600/70 dark:text-indigo-400/70 uppercase">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
+                    <LinkIcon className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="text-[10px] font-bold text-indigo-600/70 dark:text-indigo-400/70 uppercase">
                       CP Relacionada:
                     </span>
-                    <span className="font-mono text-[10px] font-black text-indigo-700 dark:text-indigo-300">
-                      {uuidRelacionado.substring(0, 8)}...
+                    <span className="font-mono text-[10px] font-black text-indigo-700 dark:text-indigo-300 break-all">
+                      {uuidRelacionado}
                     </span>
                   </div>
                 )}
 
+                {/* REFERENCIA OPERATIVA */}
                 {referenciaOperativa && (
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800/50">
-                    <FileText className="w-3 h-3 text-blue-500" />
-                    <span className="text-[9px] font-bold text-blue-600/70 dark:text-blue-400/70 uppercase">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800/50">
+                    <FileText className="w-3.5 h-3.5 text-blue-500" />
+                    <span className="text-[10px] font-bold text-blue-600/70 dark:text-blue-400/70 uppercase">
                       Ref:
                     </span>
-                    <span className="font-mono text-[10px] font-black text-blue-700 dark:text-blue-300">
+                    <span className="font-mono text-[10px] font-black text-blue-700 dark:text-blue-300 break-all">
                       {referenciaOperativa}
                     </span>
                   </div>
@@ -247,11 +253,11 @@ export function InvoiceDetailSheet({
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className="flex flex-col sm:items-end w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
               {!isPaid && onPayClick && (
                 <Button
                   onClick={() => onPayClick(invoice)}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-black h-10 px-5 text-[11px] tracking-widest uppercase rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                  className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-black h-11 px-6 text-[11px] tracking-widest uppercase rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
                 >
                   <Banknote className="w-4 h-4 mr-2" /> Cobrar
                 </Button>
@@ -259,71 +265,168 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* CLIENTE */}
-          <div className="p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+          {/* CLIENTE Y CONCEPTO (GRID) */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {/* Cliente */}
+            <div className="md:col-span-2 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                  <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </div>
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Receptor
+                </span>
               </div>
-              <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                Cliente Facturado
-              </span>
+              <p className="font-black text-foreground text-base leading-tight mb-3 break-words">
+                {entidadNombre}
+              </p>
+              <div className="mt-auto">
+                <span className="inline-flex items-center px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  RFC: {entidadRfc}
+                </span>
+              </div>
             </div>
-            <p className="font-black text-foreground text-lg leading-tight mb-2">
-              {entidadNombre}
-            </p>
-            <div className="inline-flex items-center px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-              RFC: {entidadRfc}
+
+            {/* Concepto */}
+            <div className="md:col-span-3 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Concepto de Facturación
+              </p>
+              {/* Se eliminó el truncate, ahora hace salto de línea automático */}
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed flex-1 break-words whitespace-pre-wrap">
+                {concepto}
+              </p>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end items-center">
+                <span className="font-mono text-xs font-black text-brand-navy dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded border border-blue-100 dark:border-blue-800/50">
+                  Moneda: {moneda}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* CONCEPTO Y DESGLOSE */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Concepto
-              </p>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed flex-1">
-                {concepto}
-              </p>
-              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                  Moneda
+          {/* DESGLOSE FINANCIERO Y FECHAS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Fechas y Saldo */}
+            <div className="grid grid-cols-2 gap-3">
+              <div
+                className={cn(
+                  "col-span-2 p-4 rounded-2xl border flex flex-col justify-center shadow-sm",
+                  isPaid
+                    ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/40"
+                    : "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40",
+                )}
+              >
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <CreditCard
+                    className={cn(
+                      "h-4 w-4",
+                      isPaid ? "text-emerald-600" : "text-amber-600",
+                    )}
+                  />
+                  <p
+                    className={cn(
+                      "text-[10px] font-black uppercase tracking-widest",
+                      isPaid ? "text-emerald-600/70" : "text-amber-600/70",
+                    )}
+                  >
+                    Saldo Pendiente
+                  </p>
+                </div>
+                <p
+                  className={cn(
+                    "text-3xl font-black tracking-tighter",
+                    isPaid
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-500",
+                  )}
+                >
+                  {fC(saldoPendiente)}
+                </p>
+              </div>
+
+              <div className="p-4 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col justify-center">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">
+                    Emisión
+                  </span>
+                </div>
+                <span className="font-bold text-sm text-foreground">
+                  {fD(fechaEmision)}
                 </span>
-                <span className="font-mono text-sm font-black text-brand-navy dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-800/50">
-                  {moneda}
+              </div>
+
+              <div
+                className={cn(
+                  "p-4 rounded-2xl border shadow-sm flex flex-col justify-center",
+                  statusInfo.status === "danger"
+                    ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40"
+                    : "bg-white dark:bg-card border-slate-200 dark:border-border/50",
+                )}
+              >
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Clock
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      statusInfo.status === "danger"
+                        ? "text-rose-500"
+                        : "text-slate-400",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "text-[10px] font-black uppercase tracking-wider",
+                      statusInfo.status === "danger"
+                        ? "text-rose-600/70 dark:text-rose-400/70"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    Vencimiento
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "font-bold text-sm",
+                    statusInfo.status === "danger"
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-foreground",
+                  )}
+                >
+                  {fD(fechaVencimiento)}
                 </span>
               </div>
             </div>
 
-            <div className="p-5 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <DollarSign className="w-3.5 h-3.5 text-slate-400" /> Desglose
+            {/* Desglose */}
+            <div className="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner flex flex-col justify-center">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4 text-slate-400" /> Resumen
+                Financiero
               </p>
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
                   <span className="font-bold text-slate-500">Subtotal:</span>
-                  <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
                     {fC(subtotal)}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between items-center text-sm">
                   <span className="font-bold text-slate-500">IVA (16%):</span>
-                  <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
                     {fC(iva)}
                   </span>
                 </div>
-                <div className="flex justify-between text-xs pb-2 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex justify-between items-center text-sm pb-3 border-b border-slate-200 dark:border-slate-800">
                   <span className="font-bold text-slate-500">Retenciones:</span>
-                  <span className="font-mono font-medium text-rose-600 dark:text-rose-400">
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                     -{fC(retenciones)}
                   </span>
                 </div>
-                <div className="flex justify-between pt-1">
-                  <span className="font-black text-[13px] text-brand-navy dark:text-white uppercase tracking-wider">
-                    Total:
+                <div className="flex justify-between items-center pt-1">
+                  <span className="font-black text-sm text-brand-navy dark:text-white uppercase tracking-wider">
+                    Total Facturado:
                   </span>
-                  <span className="font-mono text-base font-black text-brand-navy dark:text-white">
+                  <span className="font-mono text-xl font-black text-brand-navy dark:text-white">
                     {fC(montoTotal)}
                   </span>
                 </div>
@@ -331,136 +434,63 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* TARJETAS RESUMEN: SALDO Y FECHAS */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div
-              className={cn(
-                "col-span-2 p-4 rounded-2xl border flex flex-col justify-center",
-                isPaid
-                  ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/40"
-                  : "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40",
-              )}
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <CreditCard
-                  className={cn(
-                    "h-3.5 w-3.5",
-                    isPaid ? "text-emerald-600" : "text-amber-600",
-                  )}
-                />
-                <p
-                  className={cn(
-                    "text-[9px] font-black uppercase tracking-widest",
-                    isPaid ? "text-emerald-600/70" : "text-amber-600/70",
-                  )}
-                >
-                  Saldo Pendiente
-                </p>
-              </div>
-              <p
-                className={cn(
-                  "text-2xl font-black tracking-tighter",
-                  isPaid
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-amber-600 dark:text-amber-500",
-                )}
-              >
-                {fC(saldoPendiente)}
-              </p>
-            </div>
+          <Separator className="bg-slate-200 dark:bg-border/50" />
 
-            <div className="p-3 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col justify-center">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Calendar className="h-3 w-3 text-slate-400" />
-                <span className="text-[9px] font-black uppercase text-muted-foreground tracking-wider">
-                  Emisión
-                </span>
-              </div>
-              <span className="font-bold text-xs text-foreground">
-                {fD(fechaEmision)}
-              </span>
-            </div>
-
-            <div
-              className={cn(
-                "p-3 rounded-2xl border shadow-sm flex flex-col justify-center",
-                statusInfo.status === "danger"
-                  ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40"
-                  : "bg-white dark:bg-card border-slate-200 dark:border-border/50",
-              )}
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <Clock
-                  className={cn(
-                    "h-3 w-3",
-                    statusInfo.status === "danger"
-                      ? "text-rose-500"
-                      : "text-slate-400",
-                  )}
-                />
-                <span
-                  className={cn(
-                    "text-[9px] font-black uppercase tracking-wider",
-                    statusInfo.status === "danger"
-                      ? "text-rose-600/70 dark:text-rose-400/70"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  Vencimiento
-                </span>
-              </div>
-              <span
-                className={cn(
-                  "font-bold text-xs",
-                  statusInfo.status === "danger"
-                    ? "text-rose-600 dark:text-rose-400"
-                    : "text-foreground",
-                )}
-              >
-                {fD(fechaVencimiento)}
-              </span>
-            </div>
-          </div>
-
-          {/* 🚀 NUEVO: DATOS OPERATIVOS ENRIQUECIDOS */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-border/50 border-dashed">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <Truck className="w-3.5 h-3.5 text-slate-400" /> Contexto
-              Operativo
+          {/* DATOS OPERATIVOS ENRIQUECIDOS (CON ESPACIOS Y WRAP) */}
+          <div className="space-y-4">
+            <p className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
+              <Truck className="w-5 h-5 text-blue-500" /> Detalles de Operación
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-              <div className="flex flex-col items-center justify-center text-center">
-                <span className="block font-bold text-slate-500 mb-0.5">
-                  Ruta:
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Tarjeta Ruta */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ruta del
+                  Viaje
                 </span>
-                <span
-                  className="font-black text-slate-700 dark:text-slate-300 w-full"
-                  title={`${origen} - ${destino}`}
-                >
-                  <span className="truncate block">{origen}</span>
-                  <ArrowDown className="w-3 h-3 text-slate-400 mx-auto my-1" />
-                  <span className="truncate block">{destino}</span>
-                </span>
+                <div className="flex-1 flex flex-col justify-center space-y-2">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
+                    {origen}
+                  </span>
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <ArrowDown className="w-4 h-4" />
+                  </div>
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
+                    {destino}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex flex-col justify-center">
-                <span className="font-bold text-center text-slate-500 mb-1 flex items-center gap-1">
-                  <Weight className="w-3 h-3" /> Peso:
-                </span>
-                <span className="font-black text-slate-700 dark:text-slate-300">
-                  {pesoTon > 0 ? `${pesoTon} Ton` : "N/A"}
-                </span>
-              </div>
-              <div className="flex flex-col justify-center">
-                <span className="font-bold text-slate-500 mb-1 flex items-center gap-1">
-                  <Box className="w-3 h-3" /> Contenedores:
-                </span>
-                <span
-                  className="font-black text-slate-700 dark:text-slate-300 block break-words"
-                  title={contenedores}
-                >
-                  {contenedores}
-                </span>
+              {/* Tarjeta Carga y Producto */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-4">
+                <div>
+                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-slate-400" /> Producto
+                    (Clave SAT)
+                  </span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight block">
+                    {productoSat}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+                  <div>
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <Weight className="w-3 h-3 text-slate-400" /> Peso
+                    </span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">
+                      {pesoTon > 0 ? `${pesoTon} Toneladas` : "No registrado"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                      <Box className="w-3 h-3 text-slate-400" /> Contenedores
+                    </span>
+                    <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal block">
+                      {contenedores}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -474,7 +504,7 @@ export function InvoiceDetailSheet({
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
                   <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                 </div>
-                Historial de Cobros
+                Historial de Cobros y REP
                 <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black ml-1">
                   {payments.length}
                 </span>
@@ -487,8 +517,9 @@ export function InvoiceDetailSheet({
                 <p className="text-sm font-bold text-slate-500">
                   No hay cobros registrados
                 </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[200px] leading-tight">
-                  Los abonos que registres aparecerán aquí junto con su REP.
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[250px] leading-tight mx-auto">
+                  Los abonos que registres aparecerán aquí junto con su
+                  Complemento de Pago (REP).
                 </p>
               </div>
             ) : (
@@ -503,7 +534,7 @@ export function InvoiceDetailSheet({
                         Monto
                       </DataTableHead>
                       <DataTableHead className="text-center text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
-                        Comprobante (REP)
+                        Archivos SAT
                       </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>

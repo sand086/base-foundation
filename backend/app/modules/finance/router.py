@@ -1,9 +1,21 @@
 import logging
+import os
+import shutil
+import json
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Any
 
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    UploadFile,
+    File,
+    Body,
+    status,
+    Form,
+)
 from sqlalchemy.orm import Session, joinedload
 from lxml import etree
 
@@ -149,23 +161,43 @@ def create_manual_movement(
 
 
 # =====================================================================
-# INVOICES (Carga Masiva CxP)
+# INVOICES (Carga Masiva CxP y Conciliación SAT)
 # =====================================================================
 
 
 @router.post("/invoices/bulk-upload")
-def bulk_upload_invoices(
-    payload: BulkUploadPayload,
+async def bulk_upload_invoices(
+    file: UploadFile = File(...),
+    json_data: str = Form(...),  # Recibimos los datos parseados como string
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """Endpoint para procesar la carga masiva de facturas del SAT (CXP)."""
+    """
+    Endpoint robusto para procesar el reporte SAT.
+    1. Guarda el archivo original en el servidor para auditoría.
+    2. Procesa los registros evitando duplicados por UUID.
+    """
     try:
-        resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
-        return resultado
+        # A. GUARDAR ARCHIVO ORIGINAL
+        upload_dir = "app/storage/bulk_uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = os.path.join(upload_dir, f"{timestamp}_{file.filename}")
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # B. PROCESAR DATOS
+        data = json.loads(json_data)
+        resultado = crud.process_sat_master_report(
+            db=db, payload_data=data, original_file_name=file.filename
+        )
+
+        return {**resultado, "file_stored": file_path}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error procesando facturas: {str(e)}"
+            status_code=500, detail=f"Error en la carga masiva: {str(e)}"
         )
 
 
@@ -219,7 +251,6 @@ def get_receivable_invoices(
             else (f"SAT-{str(inv.uuid)[:8]}" if inv.uuid else f"PROVISIONAL-{inv.id}")
         )
 
-        # 🚀 FIX: Extraemos la información de Carga y Producto del Viaje
         trip_data = None
         if inv.trip:
             conts = []
@@ -241,10 +272,9 @@ def get_receivable_invoices(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
-                "uuid_relacionado": inv.uuid_relacionado,  # 🚀 Agregamos el UUID de la Carta Porte relacionada
+                "uuid_relacionado": inv.uuid_relacionado,
                 "folio_interno": folio_display,
                 "concepto": inv.concepto or "Servicio de Flete",
-                # 🚀 FIX: ENVIAMOS EL DESGLOSE DE IMPUESTOS PARA EVITAR EL $0.00
                 "subtotal": inv.subtotal,
                 "iva": inv.iva,
                 "retenciones": inv.retenciones,
@@ -259,7 +289,7 @@ def get_receivable_invoices(
                 "estatus": inv.estatus,
                 "moneda": inv.moneda or "MXN",
                 "referencia": getattr(inv.trip, "referencia", "") if inv.trip else "",
-                "trip_info": trip_data,  # 🚀 Pasamos la info de carga a React
+                "trip_info": trip_data,
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
                 "payments": pagos_list,
@@ -355,6 +385,7 @@ def register_receivable_payment(
         monto=monto_pago,
         concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]}",
         referencia=payment.get("referencia", ""),
+        origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI de Tesorería
     )
     crud.create_bank_movement(db, movimiento_schema, current_user.id)
 
@@ -450,6 +481,7 @@ async def upload_payment_xml(
                     monto=monto_pagado,
                     concepto=f"Cobro XML Fra. {factura.folio_interno}",
                     referencia="Carga XML REP",
+                    origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI
                 )
                 crud.create_bank_movement(db, mov_schema, current_user.id)
 
@@ -513,6 +545,7 @@ def fix_orphan_payments(
                 referencia=(
                     pago.referencia if pago.referencia else "Sincronización Histórica"
                 ),
+                origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI
             )
 
             crud.create_bank_movement(db, mov_schema, current_user.id)

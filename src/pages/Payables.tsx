@@ -24,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,7 +54,6 @@ import { es } from "date-fns/locale";
 import { ManageCategoriesModal } from "@/features/suppliers/components/ManageCategoriesModal";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
-// FIX: Importamos el LocalPrefillData (que ahora está extendido)
 import {
   RegisterExpenseModal,
   LocalPrefillData,
@@ -62,11 +61,8 @@ import {
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
 
-// FIX: Importamos el nuevo Importador de XML
-import {
-  ImportXMLExpenseModal,
-  XMLParsedData,
-} from "@/features/payables/components/ImportXMLExpenseModal";
+// 🚀 FIX FASE 3: Importamos el Modal de Carga Masiva (Ya no necesitamos XMLParsedData)
+import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -79,8 +75,6 @@ import {
 } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
-const safeLower = (v: unknown) =>
-  typeof v === "string" ? v.toLowerCase() : "";
 const isValidDate = (d: Date) => !Number.isNaN(d.getTime());
 const parseDateSafe = (v: unknown): Date | null => {
   if (!v) return null;
@@ -118,7 +112,7 @@ export default function Payables() {
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
 
-  // FIX: Estado para el modal de arrastrar XML
+  // Estado para el modal de Carga Masiva SAT
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
@@ -162,20 +156,10 @@ export default function Payables() {
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
 
-  // FIX: Función que recibe el XML parseado y abre el formulario final
-  const handleXmlParsed = (data: XMLParsedData) => {
+  // 🚀 FIX FASE 3: Al terminar la carga masiva, solo cerramos y recargamos la tabla.
+  const handleBulkUploadSuccess = () => {
     setIsXmlModalOpen(false);
-    setPrefillData({
-      proveedor: data.emisorNombre,
-      proveedorId: "", // Buscaremos por nombre en el UseEffect del Modal
-      concepto: `Gasto amparado por CFDI (${data.emisorRfc})`,
-      montoTotal: data.montoTotal,
-      uuid: data.uuid,
-      fecha_emision: data.fecha,
-      xml_file: data.xmlFile,
-    });
-    setEditingInvoice(null);
-    setIsExpenseModalOpen(true); // Abre el modal de siempre, pero ya Lleno!
+    refreshInvoices?.();
   };
 
   // 1. FORMATEO DE DATOS DE FACTURAS
@@ -594,14 +578,14 @@ export default function Payables() {
         }
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* FIX: BOTÓN QUE ABRE EL MODAL DE ARRASTRAR XML */}
+          {/* BOTÓN PARA ABRIR MODAL DE CARGA MASIVA */}
           <Button
             variant="outline"
             className="border-indigo-500 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-black tracking-wide shadow-sm haptic-press transition-all"
             onClick={() => setIsXmlModalOpen(true)}
           >
-            <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer XML /
-            Gasto
+            <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer Reporte
+            SAT
           </Button>
 
           <ActionButton
@@ -738,11 +722,11 @@ export default function Payables() {
 
       {/* MODALES */}
 
-      {/* FIX: Componente Drag & Drop para Leer XML */}
+      {/* 🚀 MODAL DE IMPORTACIÓN MASIVA SAT */}
       <ImportXMLExpenseModal
         open={isXmlModalOpen}
         onOpenChange={setIsXmlModalOpen}
-        onSuccess={handleXmlParsed}
+        onSuccess={handleBulkUploadSuccess}
       />
 
       <RegisterExpenseModal

@@ -198,17 +198,16 @@ export default function Treasury() {
     cobranzaAccounts,
   ]);
 
-  const stats = useMemo(() => {
-    const conciliados = movimientos.filter((m) => m.conciliado).length;
-    const pendientes = movimientos.filter((m) => !m.conciliado).length;
-    const total_ingresos = movimientos
+  const stats = {
+    total_ingresos: movimientos
       .filter((m) => m.tipo === "ingreso")
-      .reduce((sum, m) => sum + m.monto, 0);
-    const total_egresos = movimientos
+      .reduce((acc, curr) => acc + curr.monto, 0),
+    total_egresos: movimientos
       .filter((m) => m.tipo === "egreso")
-      .reduce((sum, m) => sum + m.monto, 0);
-    return { conciliados, pendientes, total_ingresos, total_egresos };
-  }, [movimientos]);
+      .reduce((acc, curr) => acc + curr.monto, 0),
+    conciliados: movimientos.filter((m) => m.conciliado).length,
+    pendientes: movimientos.filter((m) => !m.conciliado).length,
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">

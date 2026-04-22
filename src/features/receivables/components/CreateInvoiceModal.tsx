@@ -4,7 +4,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, FileText, DollarSign, Loader2 } from "lucide-react";
+// 🚀 FIX FASE 4: Importamos los componentes de Autocompletado (Combobox)
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Plus,
+  Trash2,
+  FileText,
+  DollarSign,
+  Loader2,
+  Check,
+  ChevronsUpDown,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import {
@@ -55,6 +75,8 @@ export function CreateInvoiceModal({
   const { clients, isLoading: loadingClients } = useClients();
 
   const [clienteId, setClienteId] = useState("");
+  const [openCombobox, setOpenCombobox] = useState(false); // 🚀 Estado del Autocomplete
+
   const [diasCredito, setDiasCredito] = useState(30);
   const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
   const [fechaEmision, setFechaEmision] = useState(
@@ -170,9 +192,7 @@ export function CreateInvoiceModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* CAPA 1: CASCARÓN TAHOE */}
       <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
-        {/* CAPA 2: HEADER */}
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -192,39 +212,66 @@ export function CreateInvoiceModal({
           </div>
         </DialogHeader>
 
-        {/* CAPA 3: BODY */}
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-6">
-          {/* SECCIÓN CLIENTE */}
+          {/* SECCIÓN CLIENTE CON BUSCADOR INTELIGENTE */}
           <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                   Cliente Receptor *
                 </Label>
-                <Select
-                  value={clienteId}
-                  onValueChange={setClienteId}
-                  disabled={loadingClients || !!importedServices}
-                >
-                  <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                    <SelectValue
-                      placeholder={
-                        loadingClients ? "Cargando..." : "Seleccionar cliente"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((client) => (
-                      <SelectItem
-                        key={client.id}
-                        value={client.id.toString()}
-                        className="font-bold text-xs uppercase"
-                      >
-                        {client.razon_social}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openCombobox} onOpenChange={setOpenCombobox}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openCombobox}
+                      className="w-full h-11 justify-between font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 uppercase overflow-hidden"
+                      disabled={loadingClients || !!importedServices}
+                    >
+                      <span className="truncate">
+                        {clienteId
+                          ? clients.find((c) => c.id.toString() === clienteId)
+                              ?.razon_social
+                          : loadingClients
+                            ? "Cargando..."
+                            : "Buscar cliente..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] sm:w-[400px] p-0 border-slate-200 dark:border-white/10 z-[100]">
+                    <Command>
+                      <CommandInput placeholder="Escribe para buscar..." />
+                      <CommandEmpty>
+                        No se encontró ningún cliente.
+                      </CommandEmpty>
+                      <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                        {clients.map((client) => (
+                          <CommandItem
+                            key={client.id}
+                            value={client.razon_social} // El buscador filtra sobre este valor
+                            onSelect={() => {
+                              setClienteId(client.id.toString());
+                              setOpenCombobox(false);
+                            }}
+                            className="font-bold text-xs uppercase cursor-pointer"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                clienteId === client.id.toString()
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
+                            {client.razon_social}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">

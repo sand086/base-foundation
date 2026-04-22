@@ -518,6 +518,7 @@ class PaymentComplementService:
                         concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
                         referencia=referencia or f"REP {complemento_uuid[:8]}",
                         conciliado=False,
+                        origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI de Tesorería
                     )
                     self.db.add(nuevo_ingreso)
                     # Sumamos el saldo a la cuenta bancaria
