@@ -178,18 +178,14 @@ def bulk_upload_invoices(
 def get_receivable_invoices(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
-    """
-    Obtiene TODAS las facturas de clientes (Cuentas por Cobrar),
-    incluso las provisionales que no se han timbrado en el SAT y no tienen folio.
-    """
     invoices = (
         db.query(models.ReceivableInvoice)
         .options(
             joinedload(models.ReceivableInvoice.client),
             joinedload(models.ReceivableInvoice.payments),
+            joinedload(models.ReceivableInvoice.trip),
         )
         .filter(
-            # ¡ÚNICO REQUISITO! Que no estén eliminadas de forma permanente
             models.ReceivableInvoice.record_status
             != models.RecordStatus.ELIMINADO.value
         )
@@ -201,40 +197,57 @@ def get_receivable_invoices(
 
     response = []
     for inv in invoices:
-        # Filtramos la de 1.12 desde el backend para que ni viajen por la red (optimización)
         if inv.monto_total and float(inv.monto_total) == 1.12:
             continue
 
-        pagos_list = []
-        for p in inv.payments:
-            pagos_list.append(
-                {
-                    "id": p.id,
-                    "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
-                    "monto": p.monto,
-                    "metodo_pago": p.metodo_pago,
-                    "referencia": p.referencia or "S/R",
-                    "cuenta_deposito": p.cuenta_deposito,
-                    "complemento_uuid": p.complemento_uuid,
-                }
-            )
+        pagos_list = [
+            {
+                "id": p.id,
+                "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                "monto": p.monto,
+                "metodo_pago": p.metodo_pago,
+                "referencia": p.referencia or "S/R",
+                "cuenta_deposito": p.cuenta_deposito,
+                "complemento_uuid": p.complemento_uuid,
+            }
+            for p in inv.payments
+        ]
 
-        # Rescate agresivo de folio si no existe (Provisional)
-        folio_display = inv.folio_interno
-        if not folio_display or folio_display == "":
-            if inv.viaje_id:
-                folio_display = f"CXC-VIAJE-{inv.viaje_id}"
-            elif inv.uuid:
-                folio_display = f"SAT-{str(inv.uuid)[:8]}"
-            else:
-                folio_display = f"PROVISIONAL-{inv.id}"
+        folio_display = inv.folio_interno or (
+            f"CXC-VIAJE-{inv.viaje_id}"
+            if inv.viaje_id
+            else (f"SAT-{str(inv.uuid)[:8]}" if inv.uuid else f"PROVISIONAL-{inv.id}")
+        )
+
+        # 🚀 FIX: Extraemos la información de Carga y Producto del Viaje
+        trip_data = None
+        if inv.trip:
+            conts = []
+            if inv.trip.contenedor_1 and inv.trip.contenedor_1 not in ["N/A", ""]:
+                conts.append(inv.trip.contenedor_1)
+            if inv.trip.contenedor_2 and inv.trip.contenedor_2 not in ["N/A", ""]:
+                conts.append(inv.trip.contenedor_2)
+            contenedores_str = " / ".join(conts) if conts else "Sin contenedor"
+
+            trip_data = {
+                "origen": inv.trip.origin,
+                "destino": inv.trip.destination,
+                "peso_toneladas": inv.trip.peso_toneladas,
+                "contenedores": contenedores_str,
+                "producto_sat": f"[{inv.trip.sat_clave_producto or '01010101'}] {inv.trip.descripcion_mercancia or 'Carga General'}",
+            }
 
         response.append(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
+                "uuid_relacionado": inv.uuid_relacionado,  # 🚀 Agregamos el UUID de la Carta Porte relacionada
                 "folio_interno": folio_display,
                 "concepto": inv.concepto or "Servicio de Flete",
+                # 🚀 FIX: ENVIAMOS EL DESGLOSE DE IMPUESTOS PARA EVITAR EL $0.00
+                "subtotal": inv.subtotal,
+                "iva": inv.iva,
+                "retenciones": inv.retenciones,
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
                 "fecha_emision": (
@@ -245,6 +258,8 @@ def get_receivable_invoices(
                 ),
                 "estatus": inv.estatus,
                 "moneda": inv.moneda or "MXN",
+                "referencia": getattr(inv.trip, "referencia", "") if inv.trip else "",
+                "trip_info": trip_data,  # 🚀 Pasamos la info de carga a React
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
                 "payments": pagos_list,

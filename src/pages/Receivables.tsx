@@ -137,6 +137,7 @@ export default function Receivables() {
           fecha_emision: inv.fecha_emision || inv.created_at,
           fecha_vencimiento: inv.fecha_vencimiento,
           estatus: inv.estatus || inv.status || "corriente",
+          referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
         })) as ReceivableInvoice[]
     );
@@ -531,24 +532,6 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
-            onClick={() => setIsImportXMLOpen(true)}
-          >
-            <FileCode2 className="h-4 w-4 mr-2 text-emerald-600" /> Cobro
-            Automático (XML)
-          </Button>
-
-          <Button
-            variant="outline"
-            className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
-            onClick={handleExportToExcel}
-          >
-            <SheetIcon className="h-4 w-4 mr-2 text-emerald-600" /> Exportar a
-            Excel
-          </Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <ActionButton
@@ -659,6 +642,7 @@ export default function Receivables() {
             selectedRows={selectedRows}
             onSelectedRowsChange={setSelectedRows}
             rowKey="id"
+            onCustomExport={handleExportToExcel}
           />
         </CardContent>
       </Card>
