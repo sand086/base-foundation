@@ -1,18 +1,12 @@
 import * as React from "react";
 import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -43,6 +37,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import {
   EnhancedDataTable,
@@ -54,23 +49,20 @@ import {
   FileText,
   Gauge,
   Loader2,
-  Search,
   CheckCircle,
   Calculator,
   ShieldAlert,
-  RotateCcw,
   RefreshCw,
   History,
+  RotateCcw,
   MoreVertical,
   Pencil,
   Trash2,
   Eye,
-  XCircle,
   Save,
   AlertTriangle,
   ShieldCheck,
   Truck,
-  MapPin,
   Calendar,
   User,
 } from "lucide-react";
@@ -89,6 +81,7 @@ interface AuditFormData {
   kilometrosECM: string;
   litrosECM: string;
   odometroFinal: string;
+  maxOdoVales: number;
 }
 
 // ============================================================================
@@ -97,10 +90,14 @@ interface AuditFormData {
 export default function FuelConciliation() {
   const { trips, fetchTrips } = useTrips();
 
-  const { valueAsNumber: tolerancePct, isLoading: loadingTol } =
-    useSystemConfig("tolerancia_diesel_pct");
   const { valueAsNumber: rendimientoConfig, isLoading: loadingRend } =
     useSystemConfig("rendimiento_diesel_esperado");
+
+  // ==========================================================
+  // REGLAS DE NEGOCIO ESTRICTAS
+  // ==========================================================
+  const TOLERANCIA_FIJA = 0.03; // 3%
+  const PRECIO_DIESEL_ESTANDAR = 24.0; // Precio para cuantificar el descuento
 
   const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [selectedLegId, setSelectedLegId] = useState<string>("");
@@ -110,17 +107,20 @@ export default function FuelConciliation() {
     kilometrosECM: "",
     litrosECM: "",
     odometroFinal: "",
+    maxOdoVales: 0,
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingVales, setIsFetchingVales] = useState(false);
+  const [valesRawData, setValesRawData] = useState<any[]>([]);
 
   // Estados de Modales y Edición
   const [legToReset, setLegToReset] = useState<string | null>(null);
   const [legToView, setLegToView] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [cobrarOperador, setCobrarOperador] = useState(true);
 
-  //  HISTÓRICO DE AUDITORÍAS: Filtramos los tramos que ya tienen un odómetro final capturado
+  // 1. FILTRADO DE HISTÓRICOS
   const auditedLegs = useMemo(() => {
     return trips
       .flatMap((t) => t.legs?.map((l) => ({ ...l, trip: t })) || [])
@@ -137,7 +137,20 @@ export default function FuelConciliation() {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
-  const tripLegs = useMemo(() => activeTrip?.legs || [], [activeTrip]);
+  // 2. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
+  const tripLegs = useMemo(() => {
+    if (!activeTrip || !activeTrip.legs) return [];
+    return activeTrip.legs.filter((leg) => {
+      const legStatus = String(leg.status ?? "").toLowerCase();
+      // 🚀 EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
+      return (
+        ["entregado", "cerrado", "finalizado", "liquidado"].includes(
+          legStatus,
+        ) || String(leg.id) === selectedLegId
+      );
+    });
+  }, [activeTrip, selectedLegId]);
+
   const activeLeg = useMemo(
     () => tripLegs.find((l) => String(l.id) === selectedLegId) || null,
     [tripLegs, selectedLegId],
@@ -162,19 +175,32 @@ export default function FuelConciliation() {
     };
   }, [activeTrip, activeLeg]);
 
-  //  OBTENER VALES DEL TRAMO DESDE LA BD
+  // =========================================================================
+  // EXTRACCIÓN DE DATOS Y PUNTO DE REFERENCIA (INTELIGENCIA DE ODÓMETROS)
+  // =========================================================================
   const fetchValesCombustible = async (legIdToFetch: string) => {
     setIsFetchingVales(true);
     try {
       const response = await axiosClient.get("/api/fleet/fuel-logs");
 
+      let mayorOdometroEnVales = 0;
+
       const valesDiesel = response.data.filter((log: any) => {
-        return (
+        const esValido =
           log.tipo_combustible === "diesel" &&
           String(log.trip_leg_id) === String(legIdToFetch) &&
-          log.record_status === "A"
-        );
+          log.record_status === "A";
+
+        if (esValido) {
+          const odoLog = Number(log.odometro) || 0;
+          if (odoLog > mayorOdometroEnVales) {
+            mayorOdometroEnVales = odoLog;
+          }
+        }
+        return esValido;
       });
+
+      setValesRawData(valesDiesel);
 
       const totalVales = valesDiesel.reduce(
         (sum: number, log: any) => sum + Number(log.litros),
@@ -184,15 +210,16 @@ export default function FuelConciliation() {
       setFormData((prev) => ({
         ...prev,
         litrosVales: totalVales.toString(),
+        maxOdoVales: mayorOdometroEnVales,
       }));
 
       if (totalVales > 0) {
         toast.success("Suministro Sincronizado", {
-          description: `Se detectaron ${totalVales.toFixed(2)} L en vales.`,
+          description: `Se detectaron ${totalVales.toFixed(2)} L en vales. Odo Ref: ${mayorOdometroEnVales || "N/A"}`,
         });
       } else {
         toast.info("Sin vales detectados", {
-          description: `El tramo no tiene vales (Probable movimiento de patio).`,
+          description: `El tramo no tiene vales físicos registrados.`,
         });
       }
     } catch (error) {
@@ -207,29 +234,38 @@ export default function FuelConciliation() {
     setSelectedTripId(id);
     setSelectedLegId("");
     setIsEditing(false);
-    setFormData({
-      litrosVales: "0",
-      kilometrosECM: "",
-      litrosECM: "",
-      odometroFinal: "",
-    });
+    handleResetState();
   };
 
   const handleLegSelect = async (legId: string) => {
     setSelectedLegId(legId);
     setIsEditing(false);
-    setFormData({
-      litrosVales: "0",
-      kilometrosECM: "",
-      litrosECM: "",
-      odometroFinal: "",
-    });
-
+    handleResetState();
     await fetchValesCombustible(legId);
   };
 
-  //  CARGAR PARA EDITAR CON EXTRACCIÓN (Regex)
+  // 🚀 LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
+  const handleAutoCalculateOdometer = () => {
+    const kms = Number(formData.kilometrosECM);
+    if (kms > 0 && activeLeg) {
+      const baseOdo =
+        formData.maxOdoVales > 0
+          ? formData.maxOdoVales
+          : Number(activeLeg.odometro_inicial) || 0;
+
+      const odoFinal = baseOdo + kms;
+
+      setFormData((prev) => ({ ...prev, odometroFinal: String(odoFinal) }));
+
+      toast.info("Odómetro auto-calculado", {
+        description: `Base: ${baseOdo.toLocaleString()} km + Recorrido ECM: ${kms.toLocaleString()} km`,
+      });
+    }
+  };
+
+  // 🚀 REPARACIÓN DEL EDITAR
   const handleEditAudit = async (leg: any) => {
+    // Al setear estos IDs, los Selects los agarran gracias a la lista blanca modificada
     setSelectedTripId(String(leg.trip_id));
     setSelectedLegId(String(leg.id));
     setIsEditing(true);
@@ -237,7 +273,7 @@ export default function FuelConciliation() {
     const auditEvent = leg.timeline_events?.find(
       (e: any) =>
         e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Registro de detalles Fase"),
+        e.comments?.includes("Detalles Fase"),
     );
 
     let kmEcmVal = "";
@@ -246,7 +282,6 @@ export default function FuelConciliation() {
     if (auditEvent && auditEvent.comments) {
       const kmMatch = auditEvent.comments.match(/Km ECM:\s*([\d.]+)/);
       const ltMatch = auditEvent.comments.match(/Litros ECM:\s*([\d.]+)/);
-
       if (kmMatch) kmEcmVal = kmMatch[1];
       if (ltMatch) ltEcmVal = ltMatch[1];
     }
@@ -256,6 +291,7 @@ export default function FuelConciliation() {
       kilometrosECM: kmEcmVal,
       litrosECM: ltEcmVal,
       odometroFinal: String(leg.odometro_final || ""),
+      maxOdoVales: 0,
     });
 
     await fetchValesCombustible(String(leg.id));
@@ -264,20 +300,19 @@ export default function FuelConciliation() {
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    handleReset();
+    handleResetAll();
   };
 
-  //  ELIMINAR / REVERTIR AUDITORÍA
+  // Eliminar (Revertir)
   const handleResetAudit = async () => {
     if (!legToReset) return;
     const toastId = toast.loading("Revirtiendo auditoría...");
 
     try {
-      // 🚀 Corrección de la URL (ruta completa)
       await axiosClient.post(
         `/api/logistics/trips/legs/${legToReset}/reset-audit`,
       );
-      toast.success("Registro de detalles Revertida", {
+      toast.success("Registro de detalles Revertido", {
         id: toastId,
         description: "El tramo ha vuelto a estatus pendiente.",
       });
@@ -292,30 +327,32 @@ export default function FuelConciliation() {
     }
   };
 
-  //  LA MATEMÁTICA EXACTA DE GUSTAVO (Blindada contra División por Cero en Patios)
+  // =========================================================================
+  // LA MATEMÁTICA FINANCIERA Y EL RECIBO DE SANCIÓN (REGLA DEL 3%)
+  // =========================================================================
   const auditResult = useMemo(() => {
     const litrosVales = Number(formData.litrosVales) || 0;
     const kmECM = Number(formData.kilometrosECM) || 0;
     const litrosECM = Number(formData.litrosECM) || 0;
 
-    // Evitar Infinity. Si es patio y ponen 0, el rendimiento es 0.
     const rendimientoECM = litrosECM > 0 ? kmECM / litrosECM : 0;
     const rendimientoReal = litrosVales > 0 ? kmECM / litrosVales : 0;
 
-    // Diferencia = Lo que dice el camión - Lo que dice el recibo del despachador
-    const diferenciaLitros = litrosECM - litrosVales;
-    const toleranciaPermitida = litrosECM * (tolerancePct || 0.05);
+    // 👇 SOLUCIÓN GUSTAVO: Vales (Físico) - ECM (Computadora)
+    const diferenciaLitros = litrosVales - litrosECM;
+    const toleranciaPermitida = litrosECM * TOLERANCIA_FIJA;
 
     let estatus: "CONCILIADO" | "COBRO_OPERADOR" = "CONCILIADO";
     let esRoboSospechado = false;
+    let descuentoPesos = 0;
+    let mensajeDeduccion = "";
 
-    // Si cargó más en bomba de lo que el camión justifica (y excede la tolerancia)
-    if (
-      diferenciaLitros < 0 &&
-      Math.abs(diferenciaLitros) > toleranciaPermitida
-    ) {
+    // Si la diferencia es positiva y excede la tolerancia del 3%
+    if (diferenciaLitros > 0 && diferenciaLitros > toleranciaPermitida) {
       estatus = "COBRO_OPERADOR";
       esRoboSospechado = true;
+      descuentoPesos = diferenciaLitros * PRECIO_DIESEL_ESTANDAR;
+      mensajeDeduccion = `Cargo por diésel: Excedente de ${diferenciaLitros.toFixed(1)}L sobre lo marcado por ECM, generando un descuento de $${descuentoPesos.toFixed(2)}`;
     }
 
     return {
@@ -328,34 +365,42 @@ export default function FuelConciliation() {
       toleranciaPermitida,
       estatus,
       esRoboSospechado,
+      descuentoPesos,
+      mensajeDeduccion,
     };
-  }, [formData, tolerancePct]);
+  }, [formData]);
 
   const handleInputChange = (field: keyof AuditFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleReset = () => {
-    setSelectedTripId("");
-    setSelectedLegId("");
-    setIsEditing(false);
+  const handleResetState = () => {
     setFormData({
       litrosVales: "0",
       kilometrosECM: "",
       litrosECM: "",
       odometroFinal: "",
+      maxOdoVales: 0,
     });
+    setCobrarOperador(true);
   };
 
-  //  GUARDAR AUDITORÍA Y VOLVER A LA TABLA
-  //  GUARDAR AUDITORÍA Y VOLVER A LA TABLA
+  const handleResetAll = () => {
+    setSelectedTripId("");
+    setSelectedLegId("");
+    setIsEditing(false);
+    handleResetState();
+  };
+
+  // =========================================================================
+  // 🚀 GUARDAR Y APLICAR SANCIÓN AL BACKEND (CORREGIDO STATUS "EN CURSO")
+  // =========================================================================
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
 
     if (!formData.odometroFinal) {
       toast.error("Falta Odómetro Final", {
-        description:
-          "Debe ingresar el Odómetro Final de la unidad para cerrar la auditoría.",
+        description: "Debe calcular/ingresar el Odómetro Final de la unidad.",
       });
       return;
     }
@@ -363,27 +408,28 @@ export default function FuelConciliation() {
     setIsProcessing(true);
 
     try {
-      const kmECM = auditResult?.kmECM || formData.kilometrosECM || 0;
-      const ltECM = auditResult?.litrosECM || formData.litrosECM || 0;
-      const vales = auditResult?.litrosVales || formData.litrosVales || 0;
+      const kmECM = auditResult?.kmECM || 0;
+      const ltECM = auditResult?.litrosECM || 0;
+      const vales = auditResult?.litrosVales || 0;
       const rReal = auditResult?.rendimientoReal || 0;
       const est = auditResult?.estatus || "CONCILIADO";
       const isRobo = auditResult?.esRoboSospechado || false;
 
-      // Creamos el comentario de la bitácora
-      const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}.`;
+      const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
 
-      // Armamos el payload EXACTO que el backend de FastAPI (schemas_trips.py) espera
       const payload = {
-        status: isRobo ? "incidencia" : "info",
+        status: "entregado", // 🚀 ESTO ARREGLA EL BUG QUE LO REGRESABA A "EN CURSO"
         location: "Conciliación de Combustible",
-        comments: comentarioBitacora,
-        odometro: Number(formData.odometroFinal), // <- Este es tu Odómetro Final
+        comments: comentarioBitacora.trim(),
+        odometro: Number(formData.odometroFinal),
         combustible_litros: Number(vales),
-        trip_leg_id: Number(selectedLegId), // <- MUY IMPORTANTE: Forzamos la fase seleccionada
+        trip_leg_id: Number(selectedLegId),
+        penalizacion_monto: cobrarOperador ? auditResult.descuentoPesos : 0,
+        penalizacion_motivo: cobrarOperador
+          ? auditResult.mensajeDeduccion
+          : "Excedente perdonado por el auditor.",
       };
 
-      // Se lo enviamos al servidor
       await axiosClient.post(
         `/api/logistics/trips/${selectedTripId}/timeline`,
         payload,
@@ -391,16 +437,16 @@ export default function FuelConciliation() {
 
       toast.success(
         isEditing
-          ? "Registro de detalles Actualizada"
-          : "Registro de detalles Registrada",
+          ? "Registro de detalles Actualizado"
+          : "Registro de detalles Registrado",
         {
           description:
-            "Se aplicará automáticamente en la Liquidación del chofer.",
+            "La liquidación absorberá automáticamente la penalización si aplica.",
         },
       );
 
       await fetchTrips();
-      handleReset();
+      handleResetAll();
     } catch (error) {
       console.error("Error al conciliar:", error);
       toast.error("Error de Servidor", {
@@ -411,13 +457,12 @@ export default function FuelConciliation() {
     }
   };
 
-  //  EXTRACCIÓN DE DATOS PARA EL MODAL DE VISTA (Regex Avanzado)
   const parsedAuditDetails = useMemo(() => {
     if (!legToView) return null;
     const auditEvent = legToView.timeline_events?.find(
       (e: any) =>
         e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Registro de detalles Fase"),
+        e.comments?.includes("Detalles Fase"),
     );
     const text = auditEvent?.comments || "";
 
@@ -440,12 +485,11 @@ export default function FuelConciliation() {
     };
   }, [legToView]);
 
-  // Columnas para la tabla
   const auditedColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
         key: "last_update",
-        header: "Fecha Registro de detalles",
+        header: "Fecha",
         render: (v) => (
           <span className="text-xs font-mono text-slate-500">
             {new Date(String(v)).toLocaleDateString("es-MX")}
@@ -560,7 +604,6 @@ export default function FuelConciliation() {
                       onClick={() => setLegToReset(String(row.id))}
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Registro
-                      de detalles de detalles
                     </DropdownMenuItem>
                   </>
                 )}
@@ -577,14 +620,13 @@ export default function FuelConciliation() {
     <div className="p-4 md:p-8 space-y-6 bg-[#F8FAFC] dark:bg-brand-navy min-h-screen animate-in fade-in duration-700">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <PageHeader
-          title="Conciliacion Operativa"
+          title="Conciliación Operativa"
           description="Conciliación de combustible físico (Vales) vs Computadora (ECM)."
           className="mb-0"
         />
       </div>
 
       <div className="space-y-4 max-w-7xl mx-auto pb-12">
-        {/* COMPACT LAYOUT: Selectores + Configuración juntos */}
         <Card
           className={cn(
             "shadow-sm border-slate-200 dark:border-white/10 dark:bg-slate-900 transition-all",
@@ -599,14 +641,9 @@ export default function FuelConciliation() {
             <div className="flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
               <Badge
                 variant="outline"
-                className="border-slate-200 dark:border-white/10"
+                className="border-slate-200 dark:border-white/10 bg-emerald-50 text-emerald-700"
               >
-                Tol:{" "}
-                {loadingTol ? (
-                  <Loader2 className="h-2 w-2 animate-spin" />
-                ) : (
-                  `${((tolerancePct || 0.05) * 100).toFixed(0)}%`
-                )}
+                Tolerancia Estricta: {TOLERANCIA_FIJA * 100}%
               </Badge>
               <Badge
                 variant="outline"
@@ -624,7 +661,7 @@ export default function FuelConciliation() {
           <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-xl">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
-                1. Buscar Viaje:
+                1. Buscar Viaje (Entregado/Cerrado):
               </Label>
               <Select
                 value={selectedTripId}
@@ -636,9 +673,28 @@ export default function FuelConciliation() {
                 </SelectTrigger>
                 <SelectContent className="max-h-[300px]">
                   {trips
-                    .filter(
-                      (t) => String(t.status).toLowerCase() !== "liquidado",
-                    )
+                    .filter((t) => {
+                      if (String(t.id) === selectedTripId) return true;
+
+                      const tripStatus = String(t.status ?? "").toLowerCase();
+                      const estatusValidos = [
+                        "entregado",
+                        "cerrado",
+                        "finalizado",
+                        "liquidado",
+                      ];
+
+                      if (estatusValidos.includes(tripStatus)) return true;
+
+                      // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos listos, ¡muéstralo!
+                      const tieneTramosListos = t.legs?.some((leg) =>
+                        estatusValidos.includes(
+                          String(leg.status ?? "").toLowerCase(),
+                        ),
+                      );
+
+                      return tieneTramosListos;
+                    })
                     .map((t) => {
                       const clientName =
                         t.client?.razon_social || "Sin Cliente";
@@ -687,7 +743,6 @@ export default function FuelConciliation() {
           </CardContent>
         </Card>
 
-        {/*  INFO DEL VIAJE (VIAJE EN CAPTURA) - Diseño Compacto y Elegante */}
         {tripData && (
           <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl animate-in slide-in-from-top-2">
             <div className="flex items-center gap-4 w-full md:w-auto">
@@ -732,7 +787,6 @@ export default function FuelConciliation() {
           </div>
         )}
 
-        {/* RENDER CONDICIONAL FORMULARIOS / TABLA */}
         {!tripData ? (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
             <div className="flex items-center gap-2 px-1">
@@ -754,14 +808,13 @@ export default function FuelConciliation() {
           </div>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
-            {/* LADO FÍSICO Y DIGITAL JUNTOS */}
             <div className="grid md:grid-cols-2 gap-4">
               {/* LADO FÍSICO */}
               <Card className="border-t-4 border-t-amber-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
                 <CardHeader className="bg-amber-50/50 dark:bg-amber-900/10 p-4 border-b border-amber-100 dark:border-amber-900/30">
                   <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center justify-between text-amber-700 dark:text-amber-500">
                     <span className="flex items-center gap-2">
-                      <Fuel className="h-4 w-4" /> 1. Suministro Vales
+                      <Fuel className="h-4 w-4" /> 1. Suministro Físico
                     </span>
                     <Button
                       variant="ghost"
@@ -820,6 +873,7 @@ export default function FuelConciliation() {
                         onChange={(e) =>
                           handleInputChange("kilometrosECM", e.target.value)
                         }
+                        onBlur={handleAutoCalculateOdometer}
                         className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
                       />
                     </div>
@@ -835,13 +889,19 @@ export default function FuelConciliation() {
                         onChange={(e) =>
                           handleInputChange("litrosECM", e.target.value)
                         }
+                        onBlur={handleAutoCalculateOdometer}
                         className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
                       />
                     </div>
                   </div>
                   <div className="space-y-2 border-t border-slate-100 dark:border-white/5 pt-3">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      Odómetro Final (Siguiente Viaje) *
+                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                      <span>Odómetro Final Calculado *</span>
+                      {formData.maxOdoVales > 0 && (
+                        <span className="text-amber-500 lowercase opacity-80">
+                          (Base vale físico)
+                        </span>
+                      )}
                     </Label>
                     <Input
                       type="number"
@@ -849,8 +909,13 @@ export default function FuelConciliation() {
                       onChange={(e) =>
                         handleInputChange("odometroFinal", e.target.value)
                       }
-                      className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
-                      placeholder="Ej. 145000"
+                      className={cn(
+                        "h-10 font-mono font-bold text-lg dark:text-white transition-colors",
+                        formData.odometroFinal
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20"
+                          : "bg-slate-50 dark:bg-slate-800 text-slate-700",
+                      )}
+                      placeholder="Autocalculado..."
                     />
                   </div>
                 </CardContent>
@@ -868,7 +933,6 @@ export default function FuelConciliation() {
                 )}
               />
               <CardContent className="p-4 flex flex-col lg:flex-row items-center justify-between gap-6">
-                {/* Métricas Calculadas */}
                 <div className="flex flex-wrap gap-4 md:gap-8 justify-center lg:justify-start divide-x divide-slate-200 dark:divide-white/10 w-full lg:w-auto">
                   <div className="flex flex-col pr-2">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
@@ -888,7 +952,10 @@ export default function FuelConciliation() {
                   </div>
                   <div className="flex flex-col pl-4 md:pl-8">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      Diferencia
+                      {auditResult?.diferenciaLitros != null &&
+                      auditResult.diferenciaLitros > 0
+                        ? "Faltante / Exceso"
+                        : "Ahorro Diésel"}
                     </span>
                     <span
                       className={cn(
@@ -908,14 +975,22 @@ export default function FuelConciliation() {
                   </div>
                 </div>
 
-                {/* Botones de Acción */}
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
                   {auditResult?.esRoboSospechado && (
-                    <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
-                      <AlertTriangle className="h-4 w-4 animate-pulse" />
-                      <span className="font-black uppercase text-[10px] tracking-widest">
-                        Excede Tol.
-                      </span>
+                    <div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
+                      <div className="flex flex-col text-right">
+                        <span className="font-black uppercase text-[10px] tracking-widest leading-none">
+                          Excede Tol.
+                        </span>
+                        <span className="text-[9px] font-medium text-rose-800 dark:text-rose-300 mt-0.5">
+                          ¿Cobrar ${auditResult.descuentoPesos.toFixed(2)}?
+                        </span>
+                      </div>
+                      <Switch
+                        checked={cobrarOperador}
+                        onCheckedChange={setCobrarOperador}
+                        className="data-[state=checked]:bg-rose-600"
+                      />
                     </div>
                   )}
                   {isEditing ? (
@@ -929,10 +1004,10 @@ export default function FuelConciliation() {
                   ) : (
                     <Button
                       variant="outline"
-                      onClick={handleReset}
+                      onClick={handleResetAll}
                       className="w-full sm:w-auto font-bold uppercase tracking-widest text-[10px] text-slate-500 hover:text-slate-700 h-11 px-6"
                     >
-                      Cancelar y regresar
+                      Cancelar y Limpiar
                     </Button>
                   )}
 
@@ -951,9 +1026,7 @@ export default function FuelConciliation() {
                     ) : (
                       <Save className="h-4 w-4 mr-2" />
                     )}
-                    {isEditing
-                      ? "Guardar Cambios"
-                      : "Guardar Registro de detalles"}
+                    Confirmar y Cerrar
                   </Button>
                 </div>
               </CardContent>
@@ -961,15 +1034,13 @@ export default function FuelConciliation() {
           </div>
         )}
       </div>
-      {/* ============================================================================ */}
-      {/* MODAL: VISTA ENRIQUECIDA DE DETALLES DE AUDITORÍA */}
-      {/* ============================================================================ */}
+
+      {/* DIALOG DE VISTA DE DETALLES */}
       <Dialog
         open={!!legToView}
         onOpenChange={(open) => !open && setLegToView(null)}
       >
         <DialogContent className="sm:max-w-xl rounded-3xl p-0 overflow-hidden border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shadow-2xl">
-          {/* CABECERA: FOLIO Y FECHA */}
           <div className="bg-slate-100 dark:bg-slate-800 p-6 border-b border-slate-200 dark:border-white/10 flex items-start justify-between">
             <div>
               <DialogTitle className="text-lg font-black uppercase tracking-widest flex items-center gap-2 text-slate-800 dark:text-white">
@@ -998,7 +1069,6 @@ export default function FuelConciliation() {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* SECCIÓN OPERADOR */}
             <div className="flex items-center justify-between bg-slate-50 dark:bg-white/5 p-4 rounded-2xl border border-slate-100 dark:border-white/5">
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm border border-slate-200 dark:border-white/10">
@@ -1024,8 +1094,7 @@ export default function FuelConciliation() {
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            {/* MÉTRICAS PRINCIPALES: KMs y Litros */}
+          <div className="p-6 pt-0 space-y-6">
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center shadow-sm">
                 <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
@@ -1055,9 +1124,7 @@ export default function FuelConciliation() {
               </div>
             </div>
 
-            {/* RENDIMIENTO Y VEREDICTO */}
             <div className="flex gap-3">
-              {/* Rendimiento Real */}
               <div className="flex-1 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30 flex flex-col justify-center">
                 <p className="text-[9px] uppercase font-black text-blue-600 dark:text-blue-400 mb-1 tracking-widest">
                   Rendimiento Real
@@ -1070,7 +1137,6 @@ export default function FuelConciliation() {
                 </p>
               </div>
 
-              {/* Estatus Final con Lógica Dinámica */}
               <div
                 className={cn(
                   "flex-1 p-4 rounded-2xl border flex flex-col justify-center items-center text-center shadow-sm transition-colors",
@@ -1089,32 +1155,29 @@ export default function FuelConciliation() {
                 </p>
                 <p className="font-black text-sm uppercase leading-tight tracking-tight">
                   {parsedAuditDetails?.veredicto?.replace(/_/g, " ") ||
-                    "PENDIENTE"}
+                    "CONCILIADO"}
                 </p>
               </div>
             </div>
 
-            {/* RESUMEN TÉCNICO (LOG) */}
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-800 relative overflow-hidden group">
+            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-white/10 relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50 group-hover:bg-blue-500 transition-colors" />
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-3 flex items-center gap-2">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-2">
                 <FileText className="h-3 w-3 text-blue-400" />
-                Detalles de ruta.
+                Detalles / Deducción de ruta.
               </p>
-              <div className=" p-3 rounded-lg">
-                <p className="text-[11px] font-mono font-medium  leading-relaxed italic">
+              <div className="rounded-lg">
+                <p className="text-[11px] font-mono font-medium leading-relaxed italic dark:text-white/80">
                   {parsedAuditDetails?.textOriginal ||
                     "No hay registros adicionales para este tramo."}
                 </p>
               </div>
             </div>
 
-            {/* FOOTER: ODÓMETRO FINAL */}
             <div className="pt-2 text-center border-t border-slate-100 dark:border-white/5">
               <div className="inline-flex flex-col items-center py-2 px-6 rounded-full bg-slate-50 dark:bg-white/5">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-1">
-                  <Gauge className="h-3.5 w-3.5" /> Lectura de Odómetro al
-                  Cierre
+                  <Gauge className="h-3.5 w-3.5" /> Odómetro Cerrado
                 </p>
                 <p className="font-mono text-xl font-black text-slate-800 dark:text-blue-400">
                   {Number(legToView?.odometro_final || 0).toLocaleString()}
@@ -1126,19 +1189,19 @@ export default function FuelConciliation() {
             </div>
           </div>
 
-          {/* BOTÓN DE CIERRE */}
           <DialogFooter className="p-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-white/10">
             <Button
               onClick={() => setLegToView(null)}
               variant="outline"
               className="w-full font-black text-xs uppercase tracking-widest h-12 rounded-xl bg-white dark:bg-slate-800 shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
             >
-              Cerrar Detalles
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Modal Confirmación de Eliminación */}
+
+      {/* Modal Confirmación de Reversión */}
       <AlertDialog
         open={!!legToReset}
         onOpenChange={(open) => !open && setLegToReset(null)}
@@ -1152,10 +1215,10 @@ export default function FuelConciliation() {
               </div>
               <div className="flex flex-col gap-1 text-left">
                 <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
-                  Revertir Registro
+                  Revertir Conciliación
                 </AlertDialogTitle>
                 <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
-                  Acción Irreversible • Conciliación Combustible
+                  Acción Irreversible
                 </p>
               </div>
             </div>
@@ -1174,9 +1237,9 @@ export default function FuelConciliation() {
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Los cálculos se borrarán y la fase{" "}
-                  <b className="font-black">volverá a quedar pendiente</b> de
-                  auditar.
+                  Los cálculos se borrarán, el odómetro volverá al estado
+                  anterior y la fase{" "}
+                  <b className="font-black">volverá a quedar en curso</b>.
                 </p>
               </div>
             </AlertDialogDescription>
@@ -1197,7 +1260,7 @@ export default function FuelConciliation() {
                 onClick={handleResetAudit}
                 className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Sí, Revertir
+                <RotateCcw className="h-4 w-4 mr-2" /> Revertir Fase
               </AlertDialogAction>
             </div>
           </AlertDialogFooter>

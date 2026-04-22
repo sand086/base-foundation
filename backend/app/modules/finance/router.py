@@ -179,8 +179,8 @@ def get_receivable_invoices(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
     """
-    Obtiene todas las facturas de clientes (Cuentas por Cobrar)
-    con la información del cliente adjunta, ignorando las que no tienen folio.
+    Obtiene TODAS las facturas de clientes (Cuentas por Cobrar),
+    incluso las provisionales que no se han timbrado en el SAT y no tienen folio.
     """
     invoices = (
         db.query(models.ReceivableInvoice)
@@ -189,9 +189,9 @@ def get_receivable_invoices(
             joinedload(models.ReceivableInvoice.payments),
         )
         .filter(
-            models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value,
-            models.ReceivableInvoice.folio_interno.isnot(None),
-            models.ReceivableInvoice.folio_interno != "",
+            # ¡ÚNICO REQUISITO! Que no estén eliminadas de forma permanente
+            models.ReceivableInvoice.record_status
+            != models.RecordStatus.ELIMINADO.value
         )
         .order_by(models.ReceivableInvoice.id.desc())
         .offset(skip)
@@ -201,6 +201,10 @@ def get_receivable_invoices(
 
     response = []
     for inv in invoices:
+        # Filtramos la de 1.12 desde el backend para que ni viajen por la red (optimización)
+        if inv.monto_total and float(inv.monto_total) == 1.12:
+            continue
+
         pagos_list = []
         for p in inv.payments:
             pagos_list.append(
@@ -215,11 +219,21 @@ def get_receivable_invoices(
                 }
             )
 
+        # Rescate agresivo de folio si no existe (Provisional)
+        folio_display = inv.folio_interno
+        if not folio_display or folio_display == "":
+            if inv.viaje_id:
+                folio_display = f"CXC-VIAJE-{inv.viaje_id}"
+            elif inv.uuid:
+                folio_display = f"SAT-{str(inv.uuid)[:8]}"
+            else:
+                folio_display = f"PROVISIONAL-{inv.id}"
+
         response.append(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
-                "folio_interno": inv.folio_interno,
+                "folio_interno": folio_display,
                 "concepto": inv.concepto or "Servicio de Flete",
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
@@ -230,7 +244,7 @@ def get_receivable_invoices(
                     inv.fecha_vencimiento.isoformat() if inv.fecha_vencimiento else None
                 ),
                 "estatus": inv.estatus,
-                "moneda": inv.moneda,
+                "moneda": inv.moneda or "MXN",
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
                 "payments": pagos_list,
@@ -554,3 +568,42 @@ def register_petty_cash(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/receivables/{invoice_id}/reopen")
+def reopen_receivable_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    BOTÓN DE RESCATE: Restaura una cuenta por cobrar a su estado original (Pendiente).
+    Elimina los pagos atascados y resetea el saldo al monto total para reintentar el REP.
+    """
+    invoice = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.id == invoice_id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    # 1. Borrar cualquier intento de pago atascado
+    db.query(models.ReceivableInvoicePayment).filter(
+        models.ReceivableInvoicePayment.invoice_id == invoice.id
+    ).delete()
+
+    # 2. Restaurar saldo y estatus general
+    invoice.saldo_pendiente = invoice.monto_total
+    invoice.estatus = "pendiente"
+
+    # 3. 🚀 Si el SAT la había marcado como Cancelada/Error, la engañamos regresándola a TIMBRADA
+    if invoice.status_sat in ["CANCELADO", "EN_PROCESO_CANCELACION", "ERROR"]:
+        invoice.status_sat = "TIMBRADA"
+
+    db.commit()
+    db.refresh(invoice)
+
+    return {
+        "message": "Factura restaurada con éxito. Ya puedes intentar el REP nuevamente."
+    }

@@ -19,6 +19,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import axiosClient from "@/api/axiosClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -189,10 +191,51 @@ export const WorkOrdersTable = () => {
   const handleCloseOrder = async () => {
     if (!orderToClose) return;
     setIsProcessing(true);
-    await updateOrderStatus(orderToClose.id, "cerrada");
-    setIsProcessing(false);
-    setOrderToClose(null);
-    // Nota: Aquí el backend o tu hook disparará la integración con CxP Proveedores
+
+    try {
+      // 1. Cerramos la orden de trabajo para que ya no se pueda editar
+      await updateOrderStatus(orderToClose.id, "cerrada");
+
+      // 2. Calculamos el costo total a mandar a finanzas
+      const costoTotal =
+        orderToClose.parts?.reduce(
+          (acc, p) => acc + p.cantidad * p.costo_unitario_snapshot,
+          0,
+        ) || 0;
+
+      // 3. 🚀 CREAMOS LA CUENTA POR PAGAR (CxP)
+      // OJO: Los nombres de estas propiedades deben coincidir exactamente
+      // con tu esquema PayableInvoiceCreate en FastAPI.
+      const payloadCxP = {
+        supplier_id: orderToClose.mechanic_id, // El ID del mecánico/taller (Debe existir en la tabla suppliers)
+        folio_interno: `OT-${orderToClose.folio}`, // Usamos el folio de la orden
+        monto_total: costoTotal,
+        saldo_pendiente: costoTotal,
+        fecha_emision: new Date().toISOString().split("T")[0], // "YYYY-MM-DD"
+        concepto: `Liquidación de Orden de Trabajo: ${orderToClose.descripcion_problema || "Mantenimiento"}`,
+        estatus: "pendiente", // O el default que use tu backend
+        moneda: "MXN",
+      };
+
+      // Hacemos el POST al endpoint que descubrimos en tu código de FastAPI
+      await axiosClient.post("/api/suppliers/invoices", payloadCxP);
+
+      toast.success("¡Orden Finalizada!", {
+        description:
+          "La orden se cerró y la factura de proveedor se envió a Tesorería.",
+      });
+    } catch (error: any) {
+      console.error("Error al generar la CxP:", error);
+      // Si el backend rechaza el payload, mostramos el error exacto
+      const errMsg =
+        error.response?.data?.detail || "Fallo la integración con CxP.";
+      toast.error("Orden cerrada con advertencia", {
+        description: `La orden se cerró, pero la CxP falló: ${errMsg}`,
+      });
+    } finally {
+      setIsProcessing(false);
+      setOrderToClose(null);
+    }
   };
 
   const handleCancelOrder = async (orderId: number) => {
@@ -364,7 +407,8 @@ export const WorkOrdersTable = () => {
                       setIsModalOpen(true);
                     }}
                   >
-                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Editar Orden
+                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+                    Editar Orden
                   </DropdownMenuItem>
                 )}
 
@@ -700,8 +744,10 @@ export const WorkOrdersTable = () => {
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Se borrará todo su historial y registro de sistema de forma permanente.{" "}
-                  <b className="font-black">Esta acción no se puede deshacer</b>.
+                  Se borrará todo su historial y registro de sistema de forma
+                  permanente.{" "}
+                  <b className="font-black">Esta acción no se puede deshacer</b>
+                  .
                 </p>
               </div>
             </AlertDialogDescription>

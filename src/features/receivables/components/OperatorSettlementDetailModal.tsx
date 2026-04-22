@@ -10,6 +10,14 @@ import {
   Clock,
   Route,
   Activity,
+  Fuel,
+  GaugeCircle,
+  Download,
+  ShieldCheck,
+  CheckCircle,
+  ShieldAlert,
+  FileText,
+  Gauge,
 } from "lucide-react";
 import {
   Dialog,
@@ -19,6 +27,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import { toast } from "sonner";
 
 interface ConceptoExtra {
   id: string;
@@ -27,11 +40,22 @@ interface ConceptoExtra {
   tipo: "ingreso" | "deduccion";
 }
 
+interface LiquidacionData {
+  pagoBaseBruto?: number;
+  neto_a_pagar?: number;
+  combustibleFaltante?: number;
+  consumoEsperadoLitros?: number;
+  consumoRealLitros?: number;
+  diferenciaLitros?: number;
+  rendimientoReal?: number;
+  [key: string]: any;
+}
+
 interface ModalDetailsProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedLegsData: any[];
-  liquidacion: any;
+  liquidacion: LiquidacionData;
   conceptosExtra: ConceptoExtra[];
   previewData: any;
   activeTab: "pendientes" | "historico";
@@ -40,6 +64,7 @@ interface ModalDetailsProps {
   empresaDireccion: string;
   empresaTelefono: string;
   empresaLogo: string;
+  auditDetails?: any;
 }
 
 export function OperatorSettlementDetailModal({
@@ -47,7 +72,7 @@ export function OperatorSettlementDetailModal({
   onOpenChange,
   selectedLegsData,
   liquidacion,
-  conceptosExtra, // Lo que escribes en vivo
+  conceptosExtra,
   previewData,
   activeTab,
   empresaNombre,
@@ -55,7 +80,11 @@ export function OperatorSettlementDetailModal({
   empresaDireccion,
   empresaTelefono,
   empresaLogo,
+  auditDetails,
 }: ModalDetailsProps) {
+  const [isGeneratingPDF, setIsGeneratingPDF] = React.useState(false);
+  const pdfRef = React.useRef<HTMLDivElement>(null);
+
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -65,11 +94,45 @@ export function OperatorSettlementDetailModal({
 
   const leg = selectedLegsData[0];
 
-  // MAGIA: Decidimos de dónde leer los conceptos desmenuzados
+  // ==========================================
+  // 🚀 LA MAGIA SUCEDE AQUÍ: CONSTRUCTOR DE CONCILIACIÓN
+  // ==========================================
+  const finalAuditDetails = React.useMemo(() => {
+    // 1. PRIORIDAD AL HISTÓRICO: Si el padre nos mandó los datos directos de la BD, es la verdad absoluta.
+    if (auditDetails && auditDetails.hasData) {
+      return auditDetails;
+    }
+
+    // 2. SI ES NUEVO (Por Pagar): Sacamos los datos de previewData para que el auditor vea cómo va a quedar.
+    if (
+      activeTab === "pendientes" &&
+      previewData &&
+      (previewData.consumo_real > 0 || previewData.consumo_esperado > 0)
+    ) {
+      const kms = previewData.total_kms || 0;
+      const vales = previewData.consumo_real || 0;
+      const ecm = previewData.consumo_esperado || 0;
+      const rend = vales > 0 ? (kms / vales).toFixed(2) : "0.00";
+      const tieneMulta = (previewData.deduccion_combustible || 0) > 0;
+
+      return {
+        km: kms,
+        ltEcm: ecm,
+        vales: vales,
+        rend: rend,
+        veredicto: tieneMulta ? "COBRO_OPERADOR" : "CONCILIADO",
+        fechaAudit: format(new Date(), "dd/MM/yyyy HH:mm"),
+        textOriginal: `Calculado en pre-liquidación. Dif: ${previewData.diferencia_litros?.toFixed(2)}L. ${previewData.alertas?.length > 0 ? "Alertas: " + previewData.alertas.join(", ") : ""}`,
+      };
+    }
+
+    // 3. Si el viaje de plano no tiene combustible (ej. un patio), mandamos null para pintar el recuadro de "Sin Diésel"
+    return null;
+  }, [auditDetails, previewData, activeTab]);
+
   const listaConceptos =
     activeTab === "pendientes" ? conceptosExtra : leg?.desglose_conceptos || [];
 
-  // Cálculos operativos (Tiempo, Distancia, Paradas)
   const calcOperativos = React.useMemo(() => {
     if (!leg) return { distancia: "N/A", tiempo: "N/A", paradas: 0 };
 
@@ -98,301 +161,486 @@ export function OperatorSettlementDetailModal({
     return { distancia, tiempo, paradas };
   }, [leg, previewData]);
 
+  const handleDownloadPDF = async () => {
+    if (!pdfRef.current) return;
+    setIsGeneratingPDF(true);
+
+    try {
+      const canvas = await html2canvas(pdfRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "letter",
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(
+        `Liquidacion_${leg?.operator?.name || "Operador"}_${format(new Date(), "dd-MMM-yyyy")}.pdf`,
+      );
+
+      toast?.success?.("Documento PDF descargado con éxito");
+    } catch (error) {
+      console.error("Error generando PDF:", error);
+      toast?.error?.("Error al generar el documento PDF");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
   if (!leg) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-card/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:fixed print:inset-0 print:w-screen print:h-screen print:max-h-none print:max-w-none print:border-none print:shadow-none print:rounded-none print:bg-white print:m-0 print:z-50 print:block">
-        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-[0.02] pointer-events-none print:opacity-5 print:hidden">
-          <Truck className="w-[400px] h-[400px] transform -rotate-12" />
-        </div>
+    <div>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          id="print-modal"
+          className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-card/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:static print:transform-none print:max-h-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0 print:overflow-visible print:block"
+        >
+          <style media="print">{`
+          @page { size: letter; margin: 15mm; }
+          html, body {
+            height: auto !important;
+            overflow: visible !important;
+            background: white !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          body > *:not([data-radix-portal]) { display: none !important; }
+          [data-radix-portal] > div:first-child { display: none !important; }
+          [data-radix-portal], [role="dialog"], #print-modal {
+            position: static !important;
+            transform: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+        `}</style>
 
-        {/* HEADER TAHOE */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden print:bg-white print:border-black print:pb-4 print:pt-8">
-          <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none print:hidden" />
-
-          <div className="relative z-10 flex justify-between items-start">
-            <div className="flex items-center gap-4 sm:gap-5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-inner shrink-0 border border-slate-200 dark:border-slate-700 overflow-hidden print:border-none print:shadow-none">
-                {empresaLogo ? (
-                  <img
-                    src={empresaLogo}
-                    alt="Logo"
-                    className="w-full h-full object-contain p-1"
-                  />
-                ) : (
-                  <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-brand-navy print:text-black" />
-                )}
-              </div>
-              <div className="flex flex-col text-left">
-                <DialogTitle className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none print:text-black">
-                  {empresaNombre || "Operador Logístico"}
-                </DialogTitle>
-                <p className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs font-mono font-bold mt-1 print:text-slate-600">
-                  RFC: {empresaRFC || "XAXX010101000"}
-                </p>
-                <p className="text-slate-600 dark:text-slate-500 text-[9px] sm:text-[10px] max-w-sm mt-0.5 leading-tight print:text-slate-500">
-                  {empresaDireccion} • Tel: {empresaTelefono}
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right flex flex-col items-end gap-1.5">
-              <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg font-mono font-black text-xs sm:text-sm tracking-wider border border-slate-200 dark:border-slate-700 shadow-sm print:bg-transparent print:border-slate-400 print:text-black print:shadow-none">
-                LIQ-{leg.id}-{String(Date.now()).slice(-4)}
-              </span>
-              <p className="text-slate-500 text-[10px] sm:text-xs font-mono print:text-slate-600">
-                {format(new Date(), "dd/MMM/yyyy HH:mm", { locale: es })}
-              </p>
-            </div>
-          </div>
-        </DialogHeader>
-
-        {/* BODY */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar print:overflow-visible print:bg-white print:p-8">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 print:gap-8">
-            {/* COLUMNA IZQUIERDA (Info Viaje y Estadísticas) */}
-            <div className="md:col-span-7 space-y-4">
-              <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm print:shadow-none print:border-slate-300">
-                <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 mb-3 block border-b pb-2 border-slate-100 dark:border-slate-800 print:border-slate-200">
-                  Detalles de la Operación
-                </span>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
-                      Operador
-                    </span>
-                    <span className="font-black text-brand-navy dark:text-white text-sm truncate print:text-black">
-                      {leg.operator?.name || "N/A"}
-                    </span>
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-900 print:bg-white">
+            <div
+              ref={pdfRef}
+              className="bg-white text-slate-900 w-full min-h-max p-6 sm:p-8"
+            >
+              {/* HEADER */}
+              <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
+                <div className="flex items-center gap-4 sm:gap-5">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner shrink-0 border border-slate-200 overflow-hidden">
+                    {empresaLogo ? (
+                      <img
+                        src={empresaLogo}
+                        alt="Logo"
+                        crossOrigin="anonymous"
+                        className="w-full h-full object-contain p-1"
+                      />
+                    ) : (
+                      <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-slate-900" />
+                    )}
                   </div>
-                  <div>
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
-                      Tracto / Eco
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 text-xs print:text-black">
-                      {leg.unit
-                        ? `${leg.unit.marca || ""} ${leg.unit.modelo || ""} • Eco: ${leg.unit.numero_economico} (${leg.unit.placas})`
-                        : "N/A"}
-                    </span>
+                  <div className="flex flex-col text-left">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">
+                      {empresaNombre || "OPERADOR LOGÍSTICO"}
+                    </h2>
+                    <p className="text-slate-500 text-[10px] sm:text-xs font-mono font-bold mt-1">
+                      RFC: {empresaRFC || "XAXX010101000"}
+                    </p>
+                    <p className="text-slate-600 text-[9px] sm:text-[10px] max-w-sm mt-0.5 leading-tight">
+                      {empresaDireccion} • Tel: {empresaTelefono}
+                    </p>
                   </div>
-                  <div className="col-span-2">
-                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
-                      Trayecto
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 text-xs print:text-black flex items-center gap-2">
-                      <MapPin className="h-3 w-3 text-emerald-500" />{" "}
-                      {leg.trip?.origin || "S/D"}
-                      <span className="text-slate-300 mx-1">➔</span>
-                      <MapPin className="h-3 w-3 text-rose-500" />{" "}
-                      {leg.trip?.destination || "S/D"}
-                    </span>
-                  </div>
+                </div>
+
+                <div className="text-right flex flex-col items-end gap-1.5">
+                  <span className="bg-slate-100 text-slate-700 px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg font-mono font-black text-xs sm:text-sm tracking-wider border border-slate-200 shadow-sm">
+                    LIQ-{leg.id}-{String(Date.now()).slice(-4)}
+                  </span>
+                  <p className="text-slate-500 text-[10px] sm:text-xs font-mono">
+                    {format(new Date(), "dd/MMM/yyyy HH:mm", { locale: es })}
+                  </p>
                 </div>
               </div>
 
-              {/* Estadísticas Extraídas de Bitácora */}
-              <div className="grid grid-cols-3 gap-3 print:gap-4">
-                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 print:bg-white print:border-slate-300 flex flex-col items-center justify-center text-center">
-                  <Route className="h-5 w-5 text-blue-500 mb-1" />
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Recorrido
-                  </span>
-                  <span className="font-black text-slate-800 dark:text-slate-200 text-sm print:text-black">
-                    {calcOperativos.distancia}
-                  </span>
-                </div>
-                <div className="bg-amber-50/50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-900/30 print:bg-white print:border-slate-300 flex flex-col items-center justify-center text-center">
-                  <Clock className="h-5 w-5 text-amber-500 mb-1" />
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Duración
-                  </span>
-                  <span className="font-black text-slate-800 dark:text-slate-200 text-sm print:text-black">
-                    {calcOperativos.tiempo}
-                  </span>
-                </div>
-                <div className="bg-purple-50/50 dark:bg-purple-900/10 p-3 rounded-xl border border-purple-100 dark:border-purple-900/30 print:bg-white print:border-slate-300 flex flex-col items-center justify-center text-center">
-                  <Activity className="h-5 w-5 text-purple-500 mb-1" />
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
-                    Paradas / Evt
-                  </span>
-                  <span className="font-black text-slate-800 dark:text-slate-200 text-sm print:text-black">
-                    {calcOperativos.paradas} reg.
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* COLUMNA DERECHA (Finanzas) */}
-            <div className="md:col-span-5 flex flex-col justify-between">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-5 rounded-xl shadow-sm space-y-4 flex-1 mb-4 print:shadow-none print:border-slate-300 print:p-0 print:mb-8">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-100 dark:border-slate-800 pb-2 print:text-slate-600 print:border-slate-300">
-                  Desglose Financiero
-                </h4>
-
-                <div className="space-y-3 text-xs font-medium">
-                  {/* SECCIÓN 1: INGRESOS Y BONOS */}
-                  <div className="flex justify-between items-center text-slate-700 dark:text-slate-300 print:text-black">
-                    <span>Sueldo Base Operativo</span>
-                    <span className="font-mono font-semibold">
-                      {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
+              {/* BODY */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <div className="md:col-span-7 space-y-4">
+                  {/* Detalles Operación */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 mb-3 block border-b pb-2 border-slate-200">
+                      Detalles de la Operación
                     </span>
-                  </div>
-
-                  {listaConceptos
-                    .filter((c: ConceptoExtra) => c.tipo === "ingreso")
-                    .map((c: ConceptoExtra) => (
-                      <div
-                        key={c.id}
-                        className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 print:text-black"
-                      >
-                        <span>{c.descripcion}</span>
-                        <span className="font-mono font-semibold">
-                          +{formatCurrencyLocal(c.monto)}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
+                          Operador
+                        </span>
+                        <span className="font-black text-slate-900 text-sm truncate">
+                          {leg.operator?.name || "N/A"}
                         </span>
                       </div>
-                    ))}
-
-                  <div className="my-2 border-b border-dashed border-slate-200 dark:border-slate-700 print:border-slate-300"></div>
-
-                  {/* SECCIÓN 2: ANTICIPOS Y VALES */}
-                  {(leg?.anticipo_viaticos || 0) > 0 && (
-                    <div className="flex justify-between items-center text-rose-600 dark:text-rose-400 print:text-black">
-                      <span>Anticipo de Viáticos</span>
-                      <span className="font-mono font-semibold">
-                        -{formatCurrencyLocal(leg.anticipo_viaticos)}
-                      </span>
-                    </div>
-                  )}
-
-                  {(leg?.anticipo_combustible || 0) > 0 && (
-                    <div className="flex justify-between items-center text-rose-600 dark:text-rose-400 print:text-black">
-                      <span>Vales de Combustible (Anticipos)</span>
-                      <span className="font-mono font-semibold">
-                        -{formatCurrencyLocal(leg.anticipo_combustible)}
-                      </span>
-                    </div>
-                  )}
-
-                  {(leg?.otros_anticipos || 0) > 0 && (
-                    <div className="flex justify-between items-center text-rose-600 dark:text-rose-400 print:text-black">
-                      <span>Otros Anticipos Operativos</span>
-                      <span className="font-mono font-semibold">
-                        -{formatCurrencyLocal(leg.otros_anticipos)}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* SECCIÓN 3: PENALIZACIONES Y DESCUENTOS */}
-                  {(liquidacion?.combustibleFaltante || 0) > 0 && (
-                    <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 print:text-black font-bold">
-                      <div className="flex flex-col">
-                        <span>Faltante Diésel (Registro de detalles)</span>
-                      </div>
-                      <span className="font-mono font-black mt-0.5">
-                        -
-                        {formatCurrencyLocal(
-                          liquidacion?.combustibleFaltante || 0,
-                        )}
-                      </span>
-                    </div>
-                  )}
-
-                  {listaConceptos
-                    .filter((c: ConceptoExtra) => c.tipo === "deduccion")
-                    .map((c: ConceptoExtra) => (
-                      <div
-                        key={c.id}
-                        className="flex justify-between items-center text-rose-600 dark:text-rose-400 print:text-black"
-                      >
-                        <span>{c.descripcion}</span>
-                        <span className="font-mono font-semibold">
-                          -{formatCurrencyLocal(c.monto)}
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
+                          Tracto / Eco
+                        </span>
+                        <span className="font-bold text-slate-700 text-xs">
+                          {leg.unit
+                            ? `${leg.unit.marca || ""} ${leg.unit.modelo || ""} • Eco: ${leg.unit.numero_economico} (${leg.unit.placas})`
+                            : "N/A"}
                         </span>
                       </div>
-                    ))}
+                      <div className="col-span-2">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
+                          Trayecto
+                        </span>
+                        <span className="font-bold text-slate-700 text-xs flex items-center gap-2">
+                          <MapPin className="h-3 w-3 text-emerald-500" />{" "}
+                          {leg.trip?.origin || "S/D"}
+                          <span className="text-slate-300 mx-1">➔</span>
+                          <MapPin className="h-3 w-3 text-rose-500" />{" "}
+                          {leg.trip?.destination || "S/D"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Estadísticas */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col items-center justify-center text-center">
+                      <Route className="h-5 w-5 text-blue-500 mb-1" />
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                        Recorrido
+                      </span>
+                      <span className="font-black text-slate-800 text-sm">
+                        {calcOperativos.distancia}
+                      </span>
+                    </div>
+                    <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100 flex flex-col items-center justify-center text-center">
+                      <Clock className="h-5 w-5 text-amber-500 mb-1" />
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                        Duración
+                      </span>
+                      <span className="font-black text-slate-800 text-sm">
+                        {calcOperativos.tiempo}
+                      </span>
+                    </div>
+                    <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100 flex flex-col items-center justify-center text-center">
+                      <Activity className="h-5 w-5 text-purple-500 mb-1" />
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                        Paradas / Evt
+                      </span>
+                      <span className="font-black text-slate-800 text-sm">
+                        {calcOperativos.paradas} reg.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ========================================== */}
+                  {/* 4. BLOQUE UI DE AUDITORÍA DINÁMICO */}
+                  {/* ========================================== */}
+                  {finalAuditDetails ? (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm break-inside-avoid mt-4">
+                      <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
+                        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 flex items-center gap-2">
+                          <ShieldCheck className="h-3 w-3 text-blue-500" />
+                          Auditoría y Conciliación de Diésel
+                        </span>
+                        <span className="text-[9px] uppercase font-bold text-slate-400">
+                          Fecha Audit: {finalAuditDetails.fechaAudit}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        <div className="bg-white p-3 rounded-lg border border-slate-100 text-center shadow-sm">
+                          <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
+                            KMs ECM
+                          </p>
+                          <p className="font-mono font-black text-slate-800 text-sm">
+                            {Number(finalAuditDetails.km || 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-slate-100 text-center shadow-sm">
+                          <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
+                            Litros ECM
+                          </p>
+                          <p className="font-mono font-black text-slate-800 text-sm">
+                            {Number(finalAuditDetails.ltEcm || 0).toFixed(1)}
+                          </p>
+                        </div>
+                        <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-center shadow-sm">
+                          <p className="text-[9px] uppercase font-bold text-amber-600 mb-1 tracking-tighter">
+                            Litros Vales
+                          </p>
+                          <p className="font-mono font-black text-amber-700 text-sm">
+                            {Number(finalAuditDetails.vales || 0).toFixed(1)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex flex-col justify-center items-center text-center shadow-sm">
+                          <p className="text-[9px] uppercase font-black text-blue-600 mb-1 tracking-widest">
+                            Rendimiento Real
+                          </p>
+                          <p className="font-mono font-black text-blue-700 text-xl flex items-baseline gap-1">
+                            {finalAuditDetails.rend || "0.00"}
+                            <span className="text-[10px] font-bold uppercase opacity-60">
+                              km/L
+                            </span>
+                          </p>
+                        </div>
+                        <div
+                          className={cn(
+                            "p-3 rounded-lg border flex flex-col justify-center items-center text-center shadow-sm",
+                            finalAuditDetails.veredicto === "COBRO_OPERADOR"
+                              ? "bg-rose-50 border-rose-200 text-rose-700"
+                              : "bg-emerald-50 border-emerald-200 text-emerald-700",
+                          )}
+                        >
+                          {finalAuditDetails.veredicto === "COBRO_OPERADOR" ? (
+                            <ShieldAlert className="h-4 w-4 mb-1 text-rose-500" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 mb-1 text-emerald-500" />
+                          )}
+                          <p className="text-[9px] uppercase font-black tracking-widest mb-0.5 opacity-80">
+                            Estatus Final
+                          </p>
+                          <p className="font-black text-xs uppercase leading-tight">
+                            {finalAuditDetails.veredicto?.replace(/_/g, " ") ||
+                              "CONCILIADO"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1.5">
+                          <FileText className="h-3 w-3 text-blue-400" />{" "}
+                          Detalles / Deducción de ruta
+                        </p>
+                        <p className="text-[10px] font-mono font-medium leading-relaxed italic text-slate-600">
+                          {finalAuditDetails.textOriginal ||
+                            "Sin observaciones adicionales registradas en la auditoría."}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 flex justify-end">
+                        <div className="inline-flex items-center gap-2 py-1.5 px-3 rounded-full bg-slate-100 border border-slate-200">
+                          <Gauge className="h-3 w-3 text-slate-500" />
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                            Odómetro Cerrado:
+                          </span>
+                          <span className="font-mono text-xs font-black text-slate-800">
+                            {Number(leg?.odometro_final || 0).toLocaleString()}{" "}
+                            km
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    // 🚀 ALERTA DE QUE ESTE TRAMO NO TIENE DIÉSEL REGISTRADO
+                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center mt-4">
+                      <Fuel className="h-8 w-8 text-slate-300 mb-2" />
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                        Sin datos de Combustible
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-1 max-w-xs">
+                        Este movimiento no cuenta con un dictamen de auditoría
+                        de diésel o es un movimiento que no requiere combustible
+                        (Ej. Patio).
+                      </p>
+                    </div>
+                  )}
+                  {/* FIN BLOQUE AUDITORIA */}
+                </div>
+
+                <div className="md:col-span-5 flex flex-col justify-between">
+                  <div className="bg-slate-50 border border-slate-200 p-5 rounded-xl shadow-sm space-y-4 flex-1 mb-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">
+                      Desglose Financiero
+                    </h4>
+
+                    <div className="space-y-3 text-xs font-medium">
+                      <div className="flex justify-between items-center text-slate-700">
+                        <span>Sueldo Base Operativo</span>
+                        <span className="font-mono font-semibold">
+                          {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
+                        </span>
+                      </div>
+
+                      {listaConceptos
+                        .filter((c: ConceptoExtra) => c.tipo === "ingreso")
+                        .map((c: ConceptoExtra) => (
+                          <div
+                            key={c.id}
+                            className="flex justify-between items-center text-emerald-600"
+                          >
+                            <span>{c.descripcion}</span>
+                            <span className="font-mono font-semibold">
+                              +{formatCurrencyLocal(c.monto)}
+                            </span>
+                          </div>
+                        ))}
+
+                      <div className="my-2 border-b border-dashed border-slate-200"></div>
+
+                      {(leg?.anticipo_viaticos || 0) > 0 && (
+                        <div className="flex justify-between items-center text-rose-600">
+                          <span>Anticipo de Viáticos</span>
+                          <span className="font-mono font-semibold">
+                            -{formatCurrencyLocal(leg.anticipo_viaticos)}
+                          </span>
+                        </div>
+                      )}
+
+                      {(leg?.anticipo_combustible || 0) > 0 && (
+                        <div className="flex justify-between items-center text-rose-600">
+                          <span>Vales de Combustible (Anticipos)</span>
+                          <span className="font-mono font-semibold">
+                            -{formatCurrencyLocal(leg.anticipo_combustible)}
+                          </span>
+                        </div>
+                      )}
+
+                      {(leg?.otros_anticipos || 0) > 0 && (
+                        <div className="flex justify-between items-center text-rose-600">
+                          <span>Otros Anticipos Operativos</span>
+                          <span className="font-mono font-semibold">
+                            -{formatCurrencyLocal(leg.otros_anticipos)}
+                          </span>
+                        </div>
+                      )}
+
+                      {(liquidacion?.combustibleFaltante || 0) > 0 && (
+                        <div className="flex justify-between items-start text-rose-600 font-bold">
+                          <div className="flex flex-col">
+                            <span>Faltante Diésel (Penalización)</span>
+                          </div>
+                          <span className="font-mono font-black mt-0.5">
+                            -
+                            {formatCurrencyLocal(
+                              liquidacion?.combustibleFaltante || 0,
+                            )}
+                          </span>
+                        </div>
+                      )}
+
+                      {listaConceptos
+                        .filter((c: ConceptoExtra) => c.tipo === "deduccion")
+                        .map((c: ConceptoExtra) => (
+                          <div
+                            key={c.id}
+                            className="flex justify-between items-center text-rose-600"
+                          >
+                            <span>{c.descripcion}</span>
+                            <span className="font-mono font-semibold">
+                              -{formatCurrencyLocal(c.monto)}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* GRAN TOTAL */}
+                  <div className="relative bg-slate-900 p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0">
+                    <div className="relative z-10">
+                      <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">
+                        Total Depositado
+                      </span>
+                      <span className="text-3xl font-black font-mono text-white tracking-tight">
+                        {formatCurrencyLocal(liquidacion?.neto_a_pagar || 0)}
+                      </span>
+                    </div>
+                    <div className="relative z-10 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center border border-white/10">
+                      <DollarSign className="h-6 w-6 text-emerald-400" />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* GRAN TOTAL */}
-              <div className="relative bg-slate-900 p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 print:bg-white print:border-2 print:border-black print:shadow-none print:mt-4">
-                <div className="absolute inset-0 bg-gradient-to-r from-brand-navy to-slate-900 z-0 print:hidden"></div>
-                <div className="relative z-10">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1 print:text-black">
-                    Total Depositado
-                  </span>
-                  <span className="text-3xl font-black font-mono text-white tracking-tight print:text-black">
-                    {formatCurrencyLocal(liquidacion?.neto_a_pagar || 0)}
-                  </span>
+              {/* FIRMAS */}
+              <div className="mt-12 pt-8 break-inside-avoid">
+                <div className="relative flex items-center pb-8 mb-8">
+                  <div className="w-full border-t-2 border-dashed border-slate-300"></div>
                 </div>
-                <div className="relative z-10 w-12 h-12 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 print:border-none print:bg-transparent">
-                  <DollarSign className="h-6 w-6 text-emerald-400 print:text-black" />
+                <div className="flex justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8">
+                  <div className="flex-1 text-center">
+                    <div className="border-t border-slate-800 pt-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-800">
+                        Conformidad
+                      </p>
+                      <p className="text-xs font-bold text-slate-600 mt-1 truncate">
+                        {leg.operator?.name || "Firma del Operador"}
+                      </p>
+                      <p className="text-[8px] text-slate-500 font-medium mt-0.5">
+                        Recibe
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex-1 text-center">
+                    <div className="border-t border-slate-800 pt-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-800">
+                        Autorización
+                      </p>
+                      <p className="text-xs font-bold text-slate-600 mt-1 truncate">
+                        Depto. Finanzas / Dispatch
+                      </p>
+                      <p className="text-[8px] text-slate-500 font-medium mt-0.5">
+                        Entrega
+                      </p>
+                    </div>
+                  </div>
                 </div>
+                <p className="text-[8px] text-slate-500 text-center leading-relaxed px-4 md:px-12">
+                  Este documento ampara la liquidación de los movimientos
+                  descritos. Al firmar, el operador acepta de conformidad los
+                  descuentos y pagos realizados, no reservándose acción ni
+                  derecho legal en contra de la empresa.
+                </p>
               </div>
             </div>
           </div>
 
-          {/* FIRMAS */}
-          <div className="mt-12 pt-8 print:pt-16 print:mt-16">
-            <div className="relative flex items-center pb-8 mb-8 print:pb-12 ">
-              <div className="w-full border-t-2 border-dashed border-slate-300 print:border-black/40"></div>
-            </div>
-            <div className="flex justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8 print:px-12">
-              <div className="flex-1 text-center">
-                <div className="border-t border-slate-800 print:border-black pt-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-800 print:text-black">
-                    Conformidad
-                  </p>
-                  <p className="text-xs font-bold text-slate-600 mt-1 truncate print:text-slate-800">
-                    {leg.operator?.name || "Firma del Operador"}
-                  </p>
-                  <p className="text-[8px] text-slate-500 font-medium mt-0.5 print:text-slate-600">
-                    Recibe
-                  </p>
-                </div>
-              </div>
-              <div className="flex-1 text-center">
-                <div className="border-t border-slate-800 print:border-black pt-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-800 print:text-black">
-                    Autorización
-                  </p>
-                  <p className="text-xs font-bold text-slate-600 mt-1 truncate print:text-slate-800">
-                    Depto. Finanzas / Dispatch
-                  </p>
-                  <p className="text-[8px] text-slate-500 font-medium mt-0.5 print:text-slate-600">
-                    Entrega
-                  </p>
-                </div>
-              </div>
-            </div>
-            <p className="text-[8px] text-slate-500 text-center leading-relaxed px-4 md:px-12 print:text-slate-600 print:max-w-2xl print:mx-auto">
-              Este documento ampara la liquidación de los movimientos descritos.
-              Al firmar, el operador acepta de conformidad los descuentos y
-              pagos realizados, no reservándose acción ni derecho legal en
-              contra de la empresa.
-            </p>
-          </div>
-        </div>
+          {/* FOOTER - BOTONES */}
+          <DialogFooter className="p-4 sm:p-6 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden shrink-0 z-10">
+            <Button
+              className="w-full sm:w-auto min-w-[120px] font-black uppercase tracking-widest text-[10px]"
+              variant="outline"
+              size="lg"
+              onClick={() => onOpenChange(false)}
+              disabled={isGeneratingPDF}
+            >
+              Cerrar
+            </Button>
 
-        {/* FOOTER */}
-        <DialogFooter className="p-4 sm:p-6 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden">
-          <Button
-            className="w-full sm:w-auto min-w-[120px] haptic-press font-black uppercase tracking-widest text-[10px]"
-            variant="outline"
-            size="lg"
-            onClick={() => onOpenChange(false)}
-          >
-            Cerrar
-          </Button>
-          <Button
-            className="w-full sm:w-auto min-w-[220px] gap-2 haptic-press font-black uppercase tracking-widest text-[10px] border-none text-white bg-brand-dark hover:bg-brand-dark/90 shadow-lg"
-            size="lg"
-            onClick={() => window.print()}
-          >
-            <Printer className="h-4 w-4" /> Imprimir Documento
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <Button
+              className="w-full sm:w-auto min-w-[220px] gap-2 font-black uppercase tracking-widest text-[10px] border-none text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 shadow-lg transition-transform active:scale-95"
+              size="lg"
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+            >
+              {isGeneratingPDF ? (
+                "Generando Documento..."
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Descargar / Guardar PDF
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

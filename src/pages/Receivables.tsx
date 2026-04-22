@@ -73,6 +73,7 @@ export default function Receivables() {
     deleteReceivable,
     registerMultiplePaymentRep,
     registerPayment,
+    reopenReceivable,
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -98,6 +99,7 @@ export default function Receivables() {
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // FORMATEO DE DATOS DE LA API
+  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -110,29 +112,34 @@ export default function Receivables() {
         [];
     }
 
-    return dataArray.map((inv: any) => ({
-      ...inv,
-      id: inv.id,
-      client_id: inv.client_id || inv.cliente_id || inv.client?.id,
-      folio:
-        inv.folio_interno ||
-        (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
-      cliente:
-        inv.client?.razon_social ||
-        inv.clientName ||
-        inv.client_razon_social ||
-        "Cliente Desconocido",
-      monto_total: Number(inv.monto_total) || 0,
-      saldo_pendiente:
-        inv.saldo_pendiente !== undefined
-          ? Number(inv.saldo_pendiente)
-          : Number(inv.monto_total) || 0,
-      requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
-      fecha_emision: inv.fecha_emision || inv.created_at,
-      fecha_vencimiento: inv.fecha_vencimiento,
-      estatus: inv.estatus || inv.status || "corriente",
-      cobros: inv.payments || [],
-    })) as ReceivableInvoice[];
+    return (
+      dataArray
+        // 🚀 NOVO FILTRO: Remove todas as faturas com o valor exato de 1.12
+        .filter((inv: any) => Number(inv.monto_total) !== 1.12)
+        .map((inv: any) => ({
+          ...inv,
+          id: inv.id,
+          client_id: inv.client_id || inv.cliente_id || inv.client?.id,
+          folio:
+            inv.folio_interno ||
+            (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
+          cliente:
+            inv.client?.razon_social ||
+            inv.clientName ||
+            inv.client_razon_social ||
+            "Cliente Desconocido",
+          monto_total: Number(inv.monto_total) || 0,
+          saldo_pendiente:
+            inv.saldo_pendiente !== undefined
+              ? Number(inv.saldo_pendiente)
+              : Number(inv.monto_total) || 0,
+          requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
+          fecha_emision: inv.fecha_emision || inv.created_at,
+          fecha_vencimiento: inv.fecha_vencimiento,
+          estatus: inv.estatus || inv.status || "corriente",
+          cobros: inv.payments || [],
+        })) as ReceivableInvoice[]
+    );
   }, [receivables]);
 
   // CÁLCULO DEL RESUMEN FINANCIERO (Facturado, Cobrado, Pendiente, Vencido)
@@ -488,13 +495,18 @@ export default function Receivables() {
 
               <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
-                onClick={() => {
-                  setInvoiceToDelete(row);
-                  setIsDeleteDialogOpen(true);
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      "¿Estás seguro de restaurar esta factura? El saldo volverá a estar pendiente para que puedas intentar el REP de nuevo.",
+                    )
+                  ) {
+                    await reopenReceivable(Number(row.id));
+                  }
                 }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                className="gap-2 font-bold text-xs uppercase tracking-tight text-blue-600 dark:text-blue-500 cursor-pointer dark:focus:bg-blue-950/30"
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Factura
+                <Clock className="h-4 w-4 mr-2" /> Restaurar / Reintentar Pago
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

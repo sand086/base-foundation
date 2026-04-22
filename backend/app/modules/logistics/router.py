@@ -15,7 +15,7 @@ from app.db.database import get_db
 from app.models import models
 from app.models.models import SystemConfig
 
-#  importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+#  importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
 from . import schemas, crud
 
 # Autenticación
@@ -27,7 +27,7 @@ except Exception as e:
     print(f" Advertencia: WeasyPrint no se cargó correctamente ({e})")
     HTML = None
 
-#  ÚNICA INSTANCIA DEL ROUTER
+#  ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Logistics"])
 
 # Configuración de Plantillas para PDFs
@@ -498,7 +498,8 @@ def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
         if not unit:
             raise HTTPException(status_code=404, detail="La unidad principal no existe")
 
-        estatus_permitidos = ["disponible", "bloqueado"]
+        estatus_permitidos = ["disponible", "bloqueado", "en_ruta"]
+
         if unit.status.lower() not in estatus_permitidos:
             raise HTTPException(
                 status_code=400,
@@ -609,12 +610,15 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
 
+    # 1. ACTUALIZAMOS EL TRAMO ACTUAL
     leg.status = "cerrado"
     leg.saldo_operador = data.get("neto_a_pagar", 0.0)
     db.commit()
     db.refresh(leg)
 
     trip = db.query(models.Trip).filter(models.Trip.id == leg.trip_id).first()
+
+    # 2. EVALUACIÓN DE CIERRE DEL VIAJE
     all_completed = all(
         l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
     )
@@ -624,16 +628,29 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         trip.status = "cerrado"
         trip.closed_at = func.now()
 
+    # 3. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
+    # 🔧 AQUÍ ESTÁ EL FIX APLICADO: Validamos el Enum de SQLAlchemy y el Estatus.
+    carretera_liquidada = any(
+        (
+            l.leg_type == "ruta_carretera"
+            or l.leg_type == getattr(models, "TripLegType", None)
+            and l.leg_type == models.TripLegType.RUTA
+        )
+        and l.status in ["liquidado", "cerrado"]
+        for l in trip.legs
+    )
+
+    if carretera_liquidada:
         existing_cxc = (
             db.query(models.ReceivableInvoice)
             .filter(models.ReceivableInvoice.viaje_id == trip.id)
             .first()
         )
 
+        # Si ya liquidamos la carretera y NO hay CxC, la generamos
         if not existing_cxc:
             base = trip.tarifa_base or 0.0
-            casetas = trip.costo_casetas or 0.0
-            subtotal = base + casetas
+            subtotal = base
             iva = subtotal * 0.16
             retencion = subtotal * 0.04
             monto_total = subtotal + iva - retencion
@@ -662,7 +679,8 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
             db.add(nueva_cxc)
             cxc_creada = True
 
-        db.commit()
+    # 4. GUARDAMOS TODOS LOS CAMBIOS DE GOLPE
+    db.commit()
 
     return {
         "message": "Liquidación guardada correctamente",
@@ -996,6 +1014,9 @@ def update_timeline_event(
 def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     # 1. IMPORTAMOS EL SERVICIO DE FINANZAS
     from app.integrations.sat.billing_service import BillingService
+    from app.integrations.sat.payment_service import (
+        PaymentComplementService,
+    )  # <-- ¡ESTA ES LA NUEVA!
 
     # 2. USAMOS BILLING SERVICE
     billing = BillingService(db)

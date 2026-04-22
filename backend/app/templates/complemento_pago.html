@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      {% include "assets/style.css" %}
+      .table-pago { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 7pt; }
+      .table-pago th { background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 6px; text-align: left; color: #475569; text-transform: uppercase; font-weight: bold; }
+      .table-pago td { border-bottom: 1px solid #f1f5f9; padding: 6px; color: #1e293b; }
+      .table-pago .right { text-align: right; }
+      .table-pago .center { text-align: center; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <table style="table-layout: fixed; width: 100%">
+          <tr>
+            <td width="20%" valign="middle">
+              {% if logo_src %}
+              <img src="{{ logo_src }}" class="logo-img" alt="Logo" />
+              {% else %}
+              <div class="header-company">TRANSPORTES RAPIDOS 3T</div>
+              {% endif %}
+            </td>
+            <td
+              width="55%"
+              valign="top"
+              style="font-size: 7pt; line-height: 1.35; padding-left: 10px"
+            >
+              <div
+                class="bold text-dark"
+                style="font-size: 10pt; margin-bottom: 2px"
+              >
+                {{ remitente_nombre }}
+              </div>
+              <div>
+                <span class="bold text-muted">RFC:</span>
+                <span class="text-dark">{{ remitente_rfc }}</span>
+              </div>
+              <div class="text-muted">C.P. EXPEDICIÓN: {{ cp_emisor }}</div>
+              <div>
+                <span class="bold text-muted">Régimen Fiscal:</span>
+                <span class="text-dark">{{ regimen_emisor }}</span>
+              </div>
+            </td>
+            <td width="25%" valign="top">
+              <div class="folio-badge center" style="margin-left: auto">
+                <div
+                  class="folio-badge-title"
+                  style="background-color: #0f172a; color: white"
+                >
+                  Recibo de Pago
+                </div>
+                <div class="folio-badge-content">
+                  <div
+                    class="text-primary bold"
+                    style="font-size: 11pt; margin-bottom: 3px; color: #0f172a"
+                  >
+                    {{ folio_interno }}
+                  </div>
+                  <div style="font-size: 5.5pt; color: #64748b">
+                    Fecha y Hora de Emisión:<br />
+                    <span class="text-dark bold">{{ fecha_emision }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="bento-card" style="margin-top: 15px">
+        <div class="bento-card-header">RECEPTOR</div>
+        <table class="grid-table">
+          <tr>
+            <td width="50%">
+              <span class="grid-label">Razón Social</span>
+              <span class="bold text-dark" style="font-size: 7.5pt"
+                >{{ destinatario_nombre }}</span
+              >
+            </td>
+            <td width="25%">
+              <span class="grid-label">RFC</span>
+              <span class="bold text-dark">{{ destinatario_rfc }}</span>
+            </td>
+            <td width="25%">
+              <span class="grid-label text-primary">Uso CFDI</span>
+              <span class="bold text-dark">{{ uso_cfdi }}</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="grid-label">Código Postal Fiscal</span>
+              <span class="text-dark">{{ cp_cliente }}</span>
+            </td>
+            <td colspan="2">
+              <span class="grid-label">Régimen Fiscal</span>
+              <span class="text-dark">{{ regimen_cliente }}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </header>
+
+    <main>
+      <div class="bento-card" style="margin-top: 10px">
+        <div class="bento-card-header">Documentos Relacionados de Pago</div>
+        <table class="table-pago">
+          <thead>
+            <tr>
+              <th width="5%">Serie</th>
+              <th width="10%">Folio</th>
+              <th width="30%">UUID</th>
+              <th width="5%" class="center">Parc.</th>
+              <th width="15%" class="right">Saldo Anterior</th>
+              <th width="15%" class="right">Monto Pagado</th>
+              <th width="15%" class="right">Saldo Insoluto</th>
+              <th width="5%" class="center">Mon</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in doctos_relacionados %}
+            <tr>
+              <td>{{ doc.serie }}</td>
+              <td class="bold">{{ doc.folio }}</td>
+              <td style="font-size: 6pt">{{ doc.uuid }}</td>
+              <td class="center">{{ doc.parcialidad }}</td>
+              <td class="right text-muted">$ {{ doc.saldo_anterior }}</td>
+              <td class="right bold text-primary">$ {{ doc.monto_pagado }}</td>
+              <td class="right">$ {{ doc.saldo_insoluto }}</td>
+              <td class="center">{{ doc.moneda }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bento-card" style="margin-top: 10px">
+        <div class="bento-card-header">Información del Complemento Pago</div>
+        <table class="table-pago" style="margin-top: 0">
+          <thead>
+            <tr>
+              <th>Fecha del Pago</th>
+              <th class="center">Forma Pago</th>
+              <th class="center">Tipo Cambio</th>
+              <th class="right">Total Pago</th>
+              <th class="center">Moneda</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="bold">{{ fecha_pago }}</td>
+              <td class="center bold">{{ forma_pago }}</td>
+              <td class="center">1</td>
+              <td class="right bold" style="font-size: 9pt; color: #0f172a">
+                $ {{ total }}
+              </td>
+              <td class="center bold">MXN</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div
+        style="
+          margin-top: 15px;
+          padding: 10px;
+          background-color: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+        "
+      >
+        <div
+          class="bold text-dark"
+          style="font-size: 7.5pt; margin-bottom: 2px"
+        >
+          Importe con letra:
+        </div>
+        <div style="font-size: 7pt; margin-bottom: 8px; color: #64748b">
+          {{ importe_letra }}
+        </div>
+
+        <table style="width: 100%; font-size: 7pt">
+          <tr>
+            <td width="50%">
+              <div>
+                <span class="text-muted">Banco Ordenante:</span>
+                <span class="bold">No Identificado</span>
+              </div>
+              <div style="margin-top: 3px">
+                <span class="text-muted">Cuenta Ordenante:</span>
+                <span class="bold">No Identificada</span>
+              </div>
+            </td>
+            <td width="50%">
+              <div>
+                <span class="text-muted">Banco Beneficiario:</span>
+                <span class="bold">{{ banco_beneficiario }}</span>
+              </div>
+              <div style="margin-top: 3px">
+                <span class="text-muted">Cuenta Beneficiario:</span>
+                <span class="bold">{{ cuenta_beneficiario }}</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </main>
+
+    <footer style="margin-top: 20px">
+      <div class="elegant-divider"></div>
+      <table style="table-layout: fixed; width: 100%">
+        <tr>
+          <td style="width: 120px; vertical-align: top">
+            <div
+              style="
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.5rem;
+                padding: 4px;
+                display: inline-block;
+              "
+            >
+              <img
+                src="{{ qr_src }}"
+                style="width: 108px; height: 108px; display: block"
+              />
+            </div>
+          </td>
+          <td style="vertical-align: top; padding-left: 8px">
+            <table class="sat-table">
+              <tr class="sat-table-header">
+                <td style="width: 40%">Folio Fiscal (UUID)</td>
+                <td style="width: 30%">No. Certificado SAT</td>
+                <td style="width: 30%">Fecha Certificación</td>
+              </tr>
+              <tr>
+                <td class="bold text-dark" style="font-size: 6.5pt">
+                  {{ uuid }}
+                </td>
+                <td class="bold text-dark">{{ cert_sat }}</td>
+                <td class="bold text-dark">{{ fecha_certificacion }}</td>
+              </tr>
+            </table>
+
+            <div class="sello-wrapper">
+              <div class="sello-title">Sello Digital del Emisor</div>
+              <div class="sello-text">{{ sello_emisor }}</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="sello-wrapper">
+        <div class="sello-title">Sello Digital del SAT</div>
+        <div class="sello-text">{{ sello_sat }}</div>
+      </div>
+      <div class="sello-wrapper" style="margin-bottom: 0">
+        <div class="sello-title">
+          Cadena Original del Complemento de Certificación digital del SAT
+        </div>
+        <div class="sello-text">{{ cadena_original }}</div>
+      </div>
+      <div
+        class="center"
+        style="margin-top: 5px; font-size: 6pt; color: #94a3b8"
+      >
+        Este documento es una representación impresa de un CFDI de Pagos.
+      </div>
+    </footer>
+  </body>
+</html>

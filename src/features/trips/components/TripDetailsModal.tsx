@@ -351,7 +351,7 @@ export function TripDetailsModal({
 
   //  FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
-    if (!activeLeg) return; // Quitamos la validación de emptyTerminal
+    if (!activeLeg) return;
     setFinishingLeg(true);
 
     try {
@@ -360,7 +360,7 @@ export function TripDetailsModal({
         activeLeg.id,
         {
           status: "entregado",
-          location: "Patio de Retorno Asignado", // Ya no dependemos del input
+          location: "Patio de Retorno Asignado",
           comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente.`,
         },
         true,
@@ -373,7 +373,10 @@ export function TripDetailsModal({
 
       toast.success("Viaje concluido y equipo liberado exitosamente.");
 
-      await refreshLocalTrip();
+      // 🚀 FIX: Cerramos el modal inmediatamente y recargamos la tabla principal
+      onOpenChange(false);
+      await fetchTrips();
+      window.location.href = "/dispatch"; // Redirigimos al usuario al tablero principal
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {
@@ -895,13 +898,14 @@ export function TripDetailsModal({
                                           /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
                                           <div className="flex flex-wrap gap-2">
                                             {/* 1. BOTÓN DE SIGUIENTE FASE / PASAR A RUTA */}
-                                            {/* FIX: Agregamos "entregado" y "detenido" para que NO desaparezca tras desenganchar */}
-                                            {[
-                                              "creado",
-                                              "en_transito",
-                                              "entregado",
-                                              "detenido",
-                                            ].includes(leg.status) &&
+                                            {/* FIX: Solo la fase ACTIVA puede detonar la siguiente fase */}
+                                            {leg.id === activeLeg?.id &&
+                                              [
+                                                "creado",
+                                                "en_transito",
+                                                "entregado",
+                                                "detenido",
+                                              ].includes(leg.status) &&
                                               leg.leg_type !==
                                                 "entrega_vacio" && (
                                                 <Button
@@ -927,60 +931,6 @@ export function TripDetailsModal({
                                                     btnUI.icon
                                                   )}
                                                   {btnUI.text}
-                                                </Button>
-                                              )}
-
-                                            {/* 2. BOTÓN DE DESENGANCHAR EN PATIO */}
-                                            {/* Este SÍ desaparece después de usarse para no duplicar desenganches */}
-                                            {/*                                           {leg.leg_type === "carga_muelle" &&
-                                              [
-                                                "creado",
-                                                "en_transito",
-                                              ].includes(leg.status) && (
-                                                <Button
-                                                  size="sm"
-                                                  className="h-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-purple-500/20 haptic-press border-none"
-                                                  disabled={
-                                                    finishingLeg || isUnhooking
-                                                  }
-                                                  onClick={async () => {
-                                                    setIsUnhooking(true);
-                                                    const success =
-                                                      await unhookTrip(
-                                                        String(localTrip.id),
-                                                      );
-                                                    if (success) {
-                                                      await fetchTrips();
-                                                      onOpenChange(false);
-                                                    }
-                                                    setIsUnhooking(false);
-                                                  }}
-                                                >
-                                                  {isUnhooking ? (
-                                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                                  ) : (
-                                                    <Container className="h-3.5 w-3.5 mr-1.5" />
-                                                  )}
-                                                  Desenganchar Carga
-                                                </Button>
-                                              )} */}
-
-                                            {/* 3. BOTÓN DE LIQUIDAR OP. */}
-                                            {leg.status === "entregado" &&
-                                              onSettleClick && (
-                                                <Button
-                                                  size="sm"
-                                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase shadow-lg shadow-emerald-500/20"
-                                                  onClick={() => {
-                                                    onOpenChange(false);
-                                                    onSettleClick(
-                                                      leg as any,
-                                                      localTrip!,
-                                                    );
-                                                  }}
-                                                >
-                                                  <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
-                                                  LIQUIDAR OP.
                                                 </Button>
                                               )}
                                           </div>

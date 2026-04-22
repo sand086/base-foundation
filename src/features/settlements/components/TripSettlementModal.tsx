@@ -258,18 +258,6 @@ export default function TripSettlementModal({
           esAutomatico: c.esAutomatico || false,
         }));
 
-      if (diferenciaLitros > consumoEsperado * 0.05 && cobrarExcedenteDiesel) {
-        conceptosFinales.push({
-          id: `diesel-penalidad-${Date.now()}`,
-          tipo: "deduccion",
-          categoria: "combustible",
-          descripcion: `Exceso Diésel Detectado (${diferenciaLitros.toFixed(1)} L)`,
-          // Nota: Asumiendo un precio promedio de $24.50 (lo ideal es traerlo del back, pero es seguro hardcodearlo temporalmente si el back no lo manda en la raíz)
-          monto: diferenciaLitros * 24.5,
-          esAutomatico: true,
-        });
-      }
-
       const payloadLiquidacion = {
         conceptos: conceptosFinales,
         total_ingresos: totalPercepciones,

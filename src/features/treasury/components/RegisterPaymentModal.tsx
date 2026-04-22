@@ -1,4 +1,3 @@
-// src/features/cxp/RegisterPaymentModal.tsx
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -56,7 +55,7 @@ export function RegisterPaymentModal({
   invoice,
   bankAccounts,
   onSubmit,
-  defaultMethod = "Transferencia",
+  defaultMethod = "03", // "03" es Transferencia en el SAT
 }: RegisterPaymentModalProps) {
   const [formData, setFormData] = useState<{
     fecha_pago: string;
@@ -98,8 +97,9 @@ export function RegisterPaymentModal({
       fecha_pago: today(),
       monto: saldoPendiente,
       metodo_pago: defaultMethod,
-      cuenta_retiro: "", // Obliga al usuario a seleccionar una cuenta consciente
-      referencia: "",
+      cuenta_retiro: "",
+      // 👇 AQUÍ ES DONDE JALAMOS EL FOLIO AUTOMÁTICAMENTE
+      referencia: invoice.folio_interno || "",
     });
     setError("");
   }, [invoice, open, saldoPendiente, defaultMethod]);
@@ -119,6 +119,8 @@ export function RegisterPaymentModal({
     }
     if (!formData.cuenta_retiro)
       errors.push("Debes seleccionar una cuenta de retiro o Caja General");
+    if (!formData.metodo_pago)
+      errors.push("Debes seleccionar un método de pago");
 
     const msg = errors[0] ?? "";
     setError(msg);
@@ -137,22 +139,14 @@ export function RegisterPaymentModal({
       return;
     }
 
-    // Determinamos si es un banco real o la caja general virtual
     const isVirtualCash = formData.cuenta_retiro === "virtual";
 
-    //  PAYLOAD EXACTO PARA Pydantic + Tesorería
     const payload = {
       fecha_pago: formData.fecha_pago,
       monto: toNumber(formData.monto),
       metodo_pago: formData.metodo_pago,
-
-      // Siempre un string, así evitamos validación fallida en FastAPI
       referencia: formData.referencia.trim() || "",
-
-      // Enviamos el bank_account_id explícitamente (o null para forzar Caja General en backend)
       bank_account_id: isVirtualCash ? null : toInt(formData.cuenta_retiro),
-
-      // Pydantic requiere un string válido
       cuenta_retiro: isVirtualCash ? "Caja General" : formData.cuenta_retiro,
     };
 
@@ -228,20 +222,49 @@ export function RegisterPaymentModal({
             </div>
           </div>
 
-          {/* Fecha pago */}
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
-              Fecha de Pago <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              type="date"
-              value={formData.fecha_pago}
-              onChange={(e) => {
-                setFormData((p) => ({ ...p, fecha_pago: e.target.value }));
-                setError("");
-              }}
-              className="h-11 shadow-sm font-mono font-bold bg-muted border-slate-200 dark:border-white/5"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            {/* Fecha pago */}
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                Fecha de Pago <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={formData.fecha_pago}
+                onChange={(e) => {
+                  setFormData((p) => ({ ...p, fecha_pago: e.target.value }));
+                  setError("");
+                }}
+                className="h-11 shadow-sm font-mono font-bold bg-muted border-slate-200 dark:border-white/5"
+              />
+            </div>
+
+            {/* 👇 NUEVO: Método de Pago (SAT) */}
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                Método de Pago <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.metodo_pago}
+                onValueChange={(value) => {
+                  setFormData((p) => ({ ...p, metodo_pago: value }));
+                  setError("");
+                }}
+              >
+                <SelectTrigger className="h-11 shadow-sm font-bold bg-card border-slate-200 dark:border-white/10">
+                  <SelectValue placeholder="Seleccionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="01">01 - Efectivo</SelectItem>
+                  <SelectItem value="02">02 - Cheque nominativo</SelectItem>
+                  <SelectItem value="03">
+                    03 - Transferencia electrónica
+                  </SelectItem>
+                  <SelectItem value="04">04 - Tarjeta de crédito</SelectItem>
+                  <SelectItem value="99">99 - Por definir</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Monto */}
@@ -294,7 +317,6 @@ export function RegisterPaymentModal({
                 <SelectValue placeholder="Seleccionar cuenta de origen" />
               </SelectTrigger>
               <SelectContent>
-                {/* Opción Virtual: Efectivo/Caja General */}
                 <SelectItem value="virtual" className="cursor-pointer">
                   <div className="flex items-center gap-2">
                     <span className="text-lg leading-none">💵</span>
@@ -303,8 +325,6 @@ export function RegisterPaymentModal({
                     </span>
                   </div>
                 </SelectItem>
-
-                {/* Cuentas Reales */}
                 {bankAccounts.map((acc) => (
                   <SelectItem
                     key={acc.id}
@@ -328,7 +348,7 @@ export function RegisterPaymentModal({
             </Select>
           </div>
 
-          {/* Referencia */}
+          {/* Referencia (AHORA SE LLENA SOLA CON EL FOLIO) */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               Referencia / Número de Operación

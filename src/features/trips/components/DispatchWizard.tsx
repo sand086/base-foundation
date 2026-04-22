@@ -464,7 +464,10 @@ export const DispatchWizard = ({
             `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`.toLowerCase();
           return (
             (searchIn.includes("tracto") || searchIn.includes("camion")) &&
-            ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
+            // 👇 AQUÍ SE AGREGÓ EL ESTATUS DE RUTA
+            ["disponible", "bloqueado", "en_ruta", "en ruta"].includes(
+              u.status?.toLowerCase(),
+            )
           );
         })
         .map((u: any) => ({
@@ -516,7 +519,8 @@ export const DispatchWizard = ({
     () =>
       arrOperadores
         .filter((o: any) =>
-          ["activo", "disponible", "inactivo"].includes(
+          // 👇 AQUÍ TAMBIÉN SE AGREGÓ EL ESTATUS DE RUTA
+          ["activo", "disponible", "inactivo", "en_ruta", "en ruta"].includes(
             o.status?.toLowerCase(),
           ),
         )
@@ -743,11 +747,13 @@ export const DispatchWizard = ({
         if (onSuccess) {
           onSuccess();
         } else {
-          // Usamos replace: true para que el usuario no pueda "volver atrás" al wizard con el botón del navegador
-          navigate("/Dispatch", { replace: true });
-
-          // Opcional: Si necesitas forzar que recargue los datos de la tabla, descomenta la siguiente línea:
-          // window.location.href = "/Dispatch";
+          if (finalStatus === "creado") {
+            // Le dio al botón "Planeador" -> Lo mandamos al Calendario
+            navigate("/dispatch?tab=planner&view=calendar", { replace: true });
+          } else {
+            // Le dio al botón "Despachar" -> Lo mandamos a la Tabla
+            navigate("/dispatch?tab=planner&view=table", { replace: true });
+          }
         }
       }
     } catch (error: any) {

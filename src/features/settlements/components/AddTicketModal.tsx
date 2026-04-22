@@ -55,7 +55,7 @@ interface SubTicket {
 export interface TicketFormData {
   unit_id: string;
   operator_id: string;
-  trip_leg_ids: string[]; // <-- CAMBIADO A ARRAY PARA MULTI-VIAJE
+  trip_leg_ids: string[];
   odometro: string | number;
   tickets: SubTicket[];
 }
@@ -65,6 +65,112 @@ interface AddTicketModalProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: TicketFormData) => void;
   initialData?: any;
+}
+
+// Catálogo de Estaciones Fijas
+const ESTACIONES_CATALOGO = [
+  "Estación de Servicio Rápidos 3T",
+  "San Marcos",
+  "BP",
+  "Shell",
+  "Pemex",
+  "Mobil",
+  "Oxxo Gas",
+  "Repsol",
+  "G500",
+];
+
+/** =========================
+ * Custom Combobox para Estaciones (Permite texto libre)
+ * ========================= */
+function StationCombobox({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+
+  // Determinar si lo que el usuario escribió ya existe exactamente en el catálogo
+  const isExactMatch = ESTACIONES_CATALOGO.some(
+    (est) => est.toLowerCase() === inputValue.toLowerCase(),
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between h-10 px-3 bg-background text-xs font-bold shadow-sm"
+        >
+          <span className="truncate">{value || "Seleccione o escriba..."}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-[300px] p-0 rounded-xl shadow-xl"
+        align="start"
+      >
+        <Command>
+          <CommandInput
+            placeholder="Buscar o escribir nueva estación..."
+            value={inputValue}
+            onValueChange={setInputValue}
+            className="text-xs"
+          />
+          <CommandList className="max-h-[200px] custom-scrollbar">
+            <CommandEmpty className="py-3 text-center text-xs text-slate-500">
+              No se encontraron coincidencias.
+            </CommandEmpty>
+            <CommandGroup>
+              {ESTACIONES_CATALOGO.map((est) => (
+                <CommandItem
+                  key={est}
+                  value={est}
+                  onSelect={() => {
+                    onChange(est);
+                    setOpen(false);
+                    setInputValue("");
+                  }}
+                  className="text-xs cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === est
+                        ? "opacity-100 text-emerald-500"
+                        : "opacity-0",
+                    )}
+                  />
+                  {est}
+                </CommandItem>
+              ))}
+
+              {/* Opción dinámica para agregar texto libre */}
+              {inputValue.trim() !== "" && !isExactMatch && (
+                <CommandItem
+                  value={inputValue}
+                  onSelect={() => {
+                    onChange(inputValue.trim());
+                    setOpen(false);
+                    setInputValue("");
+                  }}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 cursor-pointer border-t border-slate-100 dark:border-white/10 mt-1 pt-2"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Usar "{inputValue.trim()}"
+                </CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 /** =========================
@@ -200,7 +306,7 @@ export function AddTicketModal({
     {
       id: crypto.randomUUID(),
       fecha_hora: toDatetimeLocalValue(new Date()),
-      estacion: "",
+      estacion: "Estación de Servicio Rápidos 3T", // <-- PREDETERMINADO A RÁPIDOS 3T
       litros_diesel: 0,
       precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
       evidencia: null,
@@ -214,7 +320,8 @@ export function AddTicketModal({
       {
         id: crypto.randomUUID(),
         fecha_hora: lastTicket?.fecha_hora || toDatetimeLocalValue(new Date()),
-        estacion: lastTicket?.estacion || "",
+        // Hereda del anterior, o por defecto Rápidos 3T
+        estacion: lastTicket?.estacion || "Estación de Servicio Rápidos 3T",
         litros_diesel: 0,
         precio_diesel:
           lastTicket?.precio_diesel || FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
@@ -237,15 +344,23 @@ export function AddTicketModal({
 
   const activeTrips = useMemo(
     () =>
-      (trips as any[]).filter(
-        (t) => String(t.status ?? "").toLowerCase() !== "liquidado",
-      ),
+      (trips as any[]).filter((t) => {
+        const status = String(t.status ?? "").toLowerCase();
+        // Dejamos pasar ÚNICAMENTE los que están como "entregado"
+        return ["entregado"].includes(status);
+      }),
     [trips],
   );
 
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
-      return (t.legs || []).map((leg: any) => ({
+      // 🚀 En los tramos (legs), también aplicamos la misma lista blanca
+      const validLegs = (t.legs || []).filter((leg: any) => {
+        const legStatus = String(leg.status ?? "").toLowerCase();
+        return ["entregado", "cerrado"].includes(legStatus);
+      });
+
+      return validLegs.map((leg: any) => ({
         label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`,
         value: `${t.id}|${leg.id}|${leg.unit_id}|${leg.operator_id}`,
       }));
@@ -290,6 +405,8 @@ export function AddTicketModal({
       return toast.error("Selecciona al menos un viaje.");
     if (tickets.some((t) => t.litros_diesel <= 0))
       return toast.error("Todos los tickets deben tener litros registrados.");
+    if (tickets.some((t) => !t.estacion || t.estacion.trim() === ""))
+      return toast.error("Debes indicar una estación para cada vale.");
 
     const legIds = parentData.selected_legs.map((val) => val.split("|")[1]);
 
@@ -302,7 +419,7 @@ export function AddTicketModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="w-[95vw] sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0 gap-0 border-none shadow-2xl overflow-hidden animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
+      <DialogContent className="w-[95vw] sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0 gap-0 border-none shadow-2xl overflow-hidden animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -400,19 +517,15 @@ export function AddTicketModal({
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end">
+                      {/* SELECTOR DE ESTACIÓN MEJORADO (CON TEXTO LIBRE) */}
                       <div className="space-y-1.5 lg:col-span-2">
                         <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Estación / Gasolinera
                         </Label>
-                        <Input
-                          placeholder="Ej: San Marcos"
+                        <StationCombobox
                           value={ticket.estacion}
-                          onChange={(e) =>
-                            updateSubTicket(
-                              ticket.id,
-                              "estacion",
-                              e.target.value,
-                            )
+                          onChange={(val) =>
+                            updateSubTicket(ticket.id, "estacion", val)
                           }
                         />
                       </div>

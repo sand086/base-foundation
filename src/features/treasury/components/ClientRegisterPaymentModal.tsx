@@ -66,7 +66,7 @@ export function ClientRegisterPaymentModal({
     fecha: new Date().toISOString().split("T")[0],
     metodoPago: "03",
     referencia: "",
-    cuenta_deposito: "", // Aquí guardaremos el ID de la cuenta bancaria
+    cuenta_deposito: "", // Inicializado correctamente como string vacío
   });
 
   const [abonos, setAbonos] = useState<Record<number, number>>({});
@@ -79,10 +79,18 @@ export function ClientRegisterPaymentModal({
         initialAbonos[inv.id] = inv.saldo_pendiente;
       });
       setAbonos(initialAbonos);
+
+      // 👇 1. EXTRAEMOS Y UNIMOS LOS FOLIOS DE LAS FACTURAS SELECCIONADAS
+      const defaultReferencia = invoices
+        .map((inv) => inv.folio_interno)
+        .filter(Boolean)
+        .join(", ");
+
       setFormData((prev) => ({
         ...prev,
         fecha: new Date().toISOString().split("T")[0],
-        referencia: "",
+        // 👇 2. LO INYECTAMOS AQUÍ EN VEZ DE DEJARLO VACÍO
+        referencia: defaultReferencia,
         cuenta_deposito: "", // Limpiamos la cuenta al abrir
       }));
       setError("");
@@ -143,7 +151,8 @@ export function ClientRegisterPaymentModal({
       forma_pago: formData.metodoPago,
       fecha_pago: formData.fecha,
       referencia: formData.referencia,
-      cuenta_deposito: Number(formData.cuenta_deposito), // Enviamos el ID numérico al backend
+      // 🚀 FIX APLICADO: Lo forzamos a String para evitar el Error 422 de Pydantic
+      cuenta_deposito: String(formData.cuenta_deposito),
     };
 
     await onSubmit(payloadBackend);

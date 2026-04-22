@@ -49,47 +49,10 @@ from app.models.models import (
     ReceivableInvoicePayment,
     BankAccount,
 )
-from app.modules.finance import crud as finance_crud
-from app.modules.finance import schemas as finance_schemas
-from app.modules.auth.router import get_current_active_user
-from app.core.security import verify_password
 
-router = APIRouter()
-
-logging.config.dictConfig(
-    {
-        "version": 1,
-        "formatters": {
-            "verbose": {
-                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-            }
-        },
-        "handlers": {
-            "console": {"class": "logging.StreamHandler", "formatter": "verbose"}
-        },
-        "loggers": {
-            "zeep.transports": {"level": "DEBUG", "handlers": ["console"]},
-            "billing.audit": {"level": "DEBUG", "handlers": ["console"]},
-        },
-    }
-)
 logger = logging.getLogger("billing.audit")
 
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
-
-
-class PagoDetalle(BaseModel):
-    invoice_id: int
-    monto_pagado: float
-
-
-class RegistroPagoPayload(BaseModel):
-    client_id: int
-    pagos: List[PagoDetalle]
-    forma_pago: str
-    fecha_pago: str
-    referencia: Optional[str] = ""
-    cuenta_deposito: Optional[str] = ""
 
 
 def _clean_float(val) -> float:
@@ -117,9 +80,6 @@ def parse_sat_error(e: Exception) -> str:
     return str(e)
 
 
-# =========================================================
-# MAPEO INTELIGENTE DE REMOLQUES SAT (CTR001 - CTR032)
-# =========================================================
 def get_sat_trailer_code(tipo: str) -> str:
     if not tipo:
         return "CTR004"
@@ -226,15 +186,15 @@ class SafeData(dict):
 
 class BillingService:
     """
-    MOTOR FINANCIERO:
-    Maneja exclusivamente Facturación Final (Ingresos Reales), Pagos 2.0 y Cancelaciones ante el SAT.
+    MOTOR DE FACTURACIÓN:
+    Maneja exclusivamente Facturación Final (Ingresos Reales), Carta Porte 3.1 y Cancelaciones ante el SAT.
     """
 
     def __init__(self, db: Session):
         self.db = db
         self.env = os.getenv("ENVIRONMENT", "PROD").upper()
         self.suffix = "_qa" if self.env == "QA" else ""
-        logger.info(f"INICIALIZANDO BILLING SERVICE (FINANZAS) EN MODO: {self.env}")
+        logger.info(f"INICIALIZANDO BILLING SERVICE (FACTURACIÓN) EN MODO: {self.env}")
 
         if self.env == "QA":
             self.wsdl_timbrado = os.getenv(
@@ -369,13 +329,11 @@ class BillingService:
             parser = etree.XMLParser(
                 load_dtd=False, no_network=True, resolve_entities=False
             )
-
             xslt_doc = etree.parse(str(xslt_path), parser=parser)
             transform = etree.XSLT(xslt_doc)
             xml_doc = etree.fromstring(xml_bytes, parser=parser)
             cadena_original_tree = transform(xml_doc)
             cadena_original = str(cadena_original_tree)
-
             cadena_original = (
                 cadena_original.replace('<?xml version="1.0" encoding="UTF-8"?>', "")
                 .replace("\n", "")
@@ -391,15 +349,11 @@ class BillingService:
                 cadena_original.encode("utf-8"), padding.PKCS1v15(), hashes.SHA256()
             )
             sello_b64 = base64.b64encode(signature).decode("utf-8")
-
             return sello_b64, cadena_original
 
         except Exception as e:
             logger.error(f"Fallo en motor criptográfico blindado: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error en Sello SAT: Verifica que tu archivo XSLT local no tenga referencias a http externas caídas. Error: {str(e)}",
-            )
+            raise HTTPException(status_code=500, detail=f"Error en Sello SAT: {str(e)}")
 
     def _obtener_datos_completos(self, viaje_id: int, usar_tramo_final: bool = False):
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
@@ -409,16 +363,16 @@ class BillingService:
         cliente = (
             self.db.query(ClientModel).filter(ClientModel.id == viaje.client_id).first()
         )
-
         if not viaje.legs:
             raise HTTPException(
                 status_code=400, detail="El viaje no tiene tramos (TripLeg) asignados."
             )
 
-        if usar_tramo_final and len(viaje.legs) > 1:
-            tramo_seleccionado = viaje.legs[-1]
-        else:
-            tramo_seleccionado = viaje.legs[0]
+        tramo_seleccionado = (
+            viaje.legs[-1]
+            if usar_tramo_final and len(viaje.legs) > 1
+            else viaje.legs[0]
+        )
 
         unidad = (
             self.db.query(Unit).filter(Unit.id == tramo_seleccionado.unit_id).first()
@@ -428,7 +382,6 @@ class BillingService:
             .filter(Operator.id == tramo_seleccionado.operator_id)
             .first()
         )
-
         r1 = (
             self.db.query(Unit).filter(Unit.id == viaje.remolque_1_id).first()
             if viaje.remolque_1_id
@@ -453,9 +406,6 @@ class BillingService:
         is_nominal=False,
         ocultar_montos=False,
     ) -> dict:
-        # ========================================================
-        # 1. EXTRACCIÓN DE COSTOS E IMPUESTOS REALES
-        # ========================================================
         tarifa = viaje.tariff
         if tarifa and not is_nominal:
             subtotal = float(tarifa.tarifa_base or 0.0) + float(
@@ -463,8 +413,6 @@ class BillingService:
             )
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
             ret_pct = float(tarifa.retencion_porcentaje or 4.0) / 100.0
-
-            # 🚀 BLINDAJE SAT: La distancia NUNCA puede ser 0
             dist_km = int(tarifa.distancia_km or 0)
             distancia_real = str(dist_km) if dist_km > 0 else "1"
         else:
@@ -483,9 +431,6 @@ class BillingService:
         retenciones = subtotal * ret_pct
         total = subtotal + iva - retenciones
 
-        # ========================================================
-        # 2. EXTRACCIÓN DE DOMICILIOS REALES (DEL SUBCLIENTE)
-        # ========================================================
         subcliente = viaje.sub_client
         cp_destino_real = getattr(subcliente, "codigo_postal", None)
         if not cp_destino_real or str(cp_destino_real).strip() == "":
@@ -504,9 +449,6 @@ class BillingService:
             estado_dest = loc_destino.estado_clave
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
-            logger.warning(
-                f"CP {cp_destino_real} no encontrado en BD. Usando fallback Veracruz para evitar rechazo SAT."
-            )
             cp_destino_real = "91808"
             estado_dest = "VER"
             municipio_dest = "193"
@@ -514,32 +456,25 @@ class BillingService:
                 f"{calle_destino_real} (CP Original no catalogado en SAT)"
             )
 
-        # ========================================================
-        # 3. CONCATENACIÓN DINÁMICA DE CONTENEDORES PARA EL PDF
-        # ========================================================
         c1 = getattr(viaje, "contenedor_1", "")
         c2 = getattr(viaje, "contenedor_2", "")
         cont_str = ""
-        if c1 and c1 != "N/A" and c1 != "S/R":
+        if c1 and c1 not in ["N/A", "S/R"]:
             cont_str += f" {c1}"
-        if c2 and c2 != "N/A" and c2 != "S/R":
+        if c2 and c2 not in ["N/A", "S/R"]:
             cont_str += f" / {c2}"
 
-        # 🚀 CORRECCIÓN CP109: Separar el Servicio de la Mercancía
-        clave_servicio_flete = "78101802"  # ESTO EXIGE EL SAT EN EL CONCEPTO DEL CFDI
+        clave_servicio_flete = "78101802"
         clave_mercancia = (
             viaje.sat_clave_producto
             if viaje and getattr(viaje, "sat_clave_producto", None)
             else "01010101"
-        )  # ESTO VA EN CARTA PORTE
-
+        )
         desc_merc = (
             "FLETE NOMINAL"
             if is_nominal
             else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
         )
-
-        # Este string se imprimirá tal cual en el PDF: "[78101802] FLETE CARGA GENERAL TRHU6327561 / MRKU4816300"
         pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
@@ -557,10 +492,8 @@ class BillingService:
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
             "descripcion_concepto": desc_merc,
-            # Variables inyectadas exclusivamente para el formato del PDF
             "pdf_descripcion": pdf_descripcion,
             "condiciones_pago": condiciones_pago,
-            # 🚀 El SAT exige que el CFDI cobre un Flete
             "clave_prod_serv": clave_servicio_flete,
             "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
             "nombre_cliente": cliente.razon_social if cliente else "PUBLICO EN GENERAL",
@@ -575,7 +508,6 @@ class BillingService:
                 if viaje and viaje.peso_toneladas
                 else "1000.00"
             ),
-            # 🚀 Lo que va dentro de la caja para la Carta Porte
             "bienes_transp": clave_mercancia,
             "descripcion_mercancia": desc_merc,
             "permiso_sct": (
@@ -632,7 +564,6 @@ class BillingService:
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
         logger.info("Generando XML Carta Porte (FINANZAS) y enviando al PAC...")
-
         xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
 
         with open(self.path_cer, "rb") as f:
@@ -641,19 +572,15 @@ class BillingService:
             cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
-
-            # Inyectamos el número de certificado real para que el PDF lo pueda leer
             data["cert_emisor"] = no_certificado
 
         xml_con_cert = xml_base.replace(
             "<cfdi:Comprobante",
             f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
         )
-
         sello_b64, cadena_original = self._generar_sello_xslt(
             xml_con_cert.encode("utf-8")
         )
-
         xml_sellado = xml_con_cert.replace(
             "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
         )
@@ -683,10 +610,8 @@ class BillingService:
                 raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
             )
 
-            # 1. Guardar XML
             self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
 
-            # 2. Generar PDF Automáticamente
             try:
                 root = etree.fromstring(cfdi_bytes)
                 ns = {
@@ -729,9 +654,6 @@ class BillingService:
                     c_sat,
                     cadena_original_tfd,
                     importe_letra,
-                )
-                logger.info(
-                    f"¡PDF GENERADO EXITOSAMENTE PARA LA CARTA PORTE: {uuid_timbrado}!"
                 )
             except Exception as e:
                 logger.error(f"El XML se timbró pero falló la creación del PDF: {e}")
@@ -859,10 +781,6 @@ class BillingService:
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
 
-    # =========================================================
-    # FUNCIONES EXCLUSIVAS DE FACTURACIÓN Y FINANZAS
-    # =========================================================
-
     def generar_factura_final_relacionada(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
@@ -879,7 +797,6 @@ class BillingService:
             is_nominal=False,
             ocultar_montos=False,
         )
-
         resultado_pac = self._importar_comprobante_ws(
             data, relacion_uuid=invoice_data.uuid_relacionado
         )
@@ -914,260 +831,9 @@ class BillingService:
                 status_code=500, detail="Error al guardar factura final en BD."
             )
 
-    def registrar_pago_y_timbrar_complemento(
-        self, client_id, pagos_data, forma_pago, fecha_pago, referencia, cuenta_deposito
-    ):
-        logger.info(f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO (PAGOS 2.0) ---")
-        cliente = self.db.query(ClientModel).filter(ClientModel.id == client_id).first()
-        if not cliente:
-            raise HTTPException(status_code=404, detail="Cliente no encontrado")
-
-        facturas_afectadas = []
-        total_recibido = Decimal("0.0")
-        total_retenciones_iva = Decimal("0.0")
-        total_traslados_base_iva16 = Decimal("0.0")
-        total_traslados_impuesto_iva16 = Decimal("0.0")
-        doctos_relacionados = []
-
-        for pago in pagos_data:
-            invoice_id = pago.get("invoice_id")
-            monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
-            factura = (
-                self.db.query(ReceivableInvoice)
-                .filter(ReceivableInvoice.id == invoice_id)
-                .first()
-            )
-
-            if not factura or not factura.uuid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Factura ID {invoice_id} inválida o sin timbrar.",
-                )
-
-            saldo_anterior = Decimal(str(factura.saldo_pendiente))
-            if monto_abono <= 0 or monto_abono > saldo_anterior:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Monto inválido para factura {factura.folio_interno}.",
-                )
-
-            moneda_str = "MXN"
-            inv_subtotal = (
-                Decimal(str(factura.subtotal)) if factura.subtotal else Decimal("0.0")
-            )
-            inv_iva = Decimal(str(factura.iva)) if factura.iva else Decimal("0.0")
-            inv_ret = (
-                Decimal(str(factura.retenciones))
-                if factura.retenciones
-                else Decimal("0.0")
-            )
-            inv_total = (
-                Decimal(str(factura.monto_total))
-                if factura.monto_total
-                else Decimal("1.0")
-            )
-
-            proporcion = monto_abono / inv_total if inv_total > 0 else Decimal("1.0")
-            base_dr = (inv_subtotal * proporcion).quantize(Decimal("0.000001"))
-            iva_dr = (inv_iva * proporcion).quantize(Decimal("0.000001"))
-            ret_dr = (inv_ret * proporcion).quantize(Decimal("0.000001"))
-
-            total_retenciones_iva += ret_dr.quantize(Decimal("0.00"))
-            total_traslados_base_iva16 += base_dr.quantize(Decimal("0.00"))
-            total_traslados_impuesto_iva16 += iva_dr.quantize(Decimal("0.00"))
-            total_recibido += monto_abono
-
-            folio_split = str(factura.folio_interno).split("-")
-            serie_dr = folio_split[0] if len(folio_split) > 1 else ""
-            folio_dr = folio_split[-1]
-
-            doctos_relacionados.append(
-                {
-                    "uuid": factura.uuid,
-                    "serie": serie_dr,
-                    "folio": folio_dr,
-                    "moneda": moneda_str,
-                    "saldo_anterior": f"{saldo_anterior:.2f}",
-                    "monto_pagado": f"{monto_abono:.2f}",
-                    "saldo_insoluto": f"{(saldo_anterior - monto_abono):.2f}",
-                    "base_dr": f"{base_dr:.6f}",
-                    "iva_dr": f"{iva_dr:.6f}",
-                    "ret_dr": f"{ret_dr:.6f}",
-                    "tiene_iva": inv_iva > 0,
-                    "tiene_retencion": inv_ret > 0,
-                }
-            )
-
-            factura.saldo_pendiente = float(saldo_anterior - monto_abono)
-            if factura.saldo_pendiente <= 0.01:
-                factura.saldo_pendiente = 0.0
-                factura.estatus = "pagado"
-            else:
-                factura.estatus = "pago_parcial"
-
-            facturas_afectadas.append(factura)
-            self.db.add(factura)
-
-        fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        fecha_pago_sat = datetime.fromisoformat(fecha_pago.replace("Z", "")).strftime(
-            "%Y-%m-%dT12:00:00"
-        )
-        nombre_limpio = (
-            getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
-            .upper()
-            .replace(" S.A. DE C.V.", "")
-            .replace(" SA DE CV", "")
-            .replace(".", "")
-            .strip()
-        )
-
-        datos_pago = {
-            "folio": f"REP-{int(datetime.now().timestamp())}",
-            "fecha": fecha_iso,
-            "rfc_cliente": getattr(cliente, "rfc", "XAXX010101000").upper(),
-            "nombre_cliente": nombre_limpio,
-            "cp_cliente": getattr(cliente, "codigo_postal_fiscal", self.emisor_cp),
-            "regimen_cliente": str(getattr(cliente, "regimen_fiscal", "601")),
-            "uso_cfdi": "CP01",
-            "fecha_pago": fecha_pago_sat,
-            "forma_pago": str(forma_pago).strip().zfill(2),
-            "monto_total": f"{total_recibido:.2f}",
-            "doctos_relacionados": doctos_relacionados,
-            "total_retenciones_iva": f"{total_retenciones_iva:.2f}",
-            "total_traslados_base_iva16": f"{total_traslados_base_iva16:.2f}",
-            "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16:.2f}",
-        }
-
-        # Extraemos certificado emisor para inyectar en el XML y PDF de Pago
-        with open(self.path_cer, "rb") as f:
-            cer_data = f.read()
-            cert = x509.load_der_x509_certificate(cer_data, default_backend())
-            sn_hex = format(cert.serial_number, "x")
-            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
-            datos_pago["cert_emisor"] = no_certificado
-
-        xml_base = self._armar_xml_pago_sin_sello(datos_pago)
-        xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
-
-        try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
-            result = client_zeep.service.timbrar(
-                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
-            )
-
-            if int(getattr(result, "status", 0)) != 200:
-                raise HTTPException(
-                    status_code=400, detail=f"Error PAC: {result.mensaje}"
-                )
-            res_sat = result.resultados[0]
-            if int(getattr(res_sat, "status", 0)) != 200:
-                raise HTTPException(
-                    status_code=400, detail=f"Error SAT: {res_sat.mensaje}"
-                )
-
-            complemento_uuid = res_sat.uuid
-            raw_cfdi = res_sat.cfdiTimbrado
-            cfdi_bytes = (
-                (
-                    raw_cfdi.encode("utf-8")
-                    if "<cfdi:Comprobante" in raw_cfdi
-                    else base64.b64decode(raw_cfdi)
-                )
-                if isinstance(raw_cfdi, str)
-                else raw_cfdi
-            )
-
-            self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
-
-            # Generar PDF de pago...
-            root = etree.fromstring(cfdi_bytes)
-            ns = {
-                "cfdi": "http://www.sat.gob.mx/cfd/4",
-                "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
-            }
-            tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
-            s_sat = tfd_node.get("SelloSAT", "0000")
-            c_sat = tfd_node.get("NoCertificadoSAT", "0000")
-            s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-            cadena_original = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
-
-            total_float = _clean_float(datos_pago["monto_total"])
-            if HAS_NUM2WORDS:
-                entero = int(total_float)
-                decimales = int(round((total_float - entero) * 100))
-                texto = num2words(entero, lang="es").upper()
-                if texto == "UNO":
-                    texto = "UN"
-                importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
-            else:
-                importe_letra = f"(*** {total_float:,.2f} MXN ***)"
-
-            qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={complemento_uuid}&re={self.emisor_rfc}&rr={datos_pago['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
-            qr = qrcode.QRCode(version=1, box_size=10, border=2)
-            qr.add_data(qr_string)
-            qr.make(fit=True)
-            buffer = BytesIO()
-            qr.make_image(fill_color="black", back_color="white").save(
-                buffer, format="PNG"
-            )
-
-            datos_pago["subtotal"] = "0.00"
-            datos_pago["iva"] = "0.00"
-            datos_pago["retenciones"] = "0.00"
-            datos_pago["total"] = datos_pago["monto_total"]
-            datos_pago["descripcion_concepto"] = "COMPLEMENTO DE RECEPCIÓN DE PAGOS"
-
-            self._generar_pdf_con_diseno(
-                datos_pago,
-                complemento_uuid,
-                buffer.getvalue(),
-                s_sat,
-                s_emi,
-                c_sat,
-                cadena_original,
-                importe_letra,
-            )
-        except Exception as e:
-            self.db.rollback()
-            raise HTTPException(
-                status_code=500, detail=f"Error al timbrar el pago: {str(e)}"
-            )
-
-        for factura in facturas_afectadas:
-            abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
-            nuevo_pago = ReceivableInvoicePayment(
-                invoice_id=factura.id,
-                fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
-                monto=float(abono.get("monto_pagado")),
-                metodo_pago=forma_pago,
-                referencia=referencia,
-                cuenta_deposito=cuenta_deposito,
-                complemento_uuid=complemento_uuid,
-            )
-            self.db.add(nuevo_pago)
-
-        self.db.commit()
-        return {
-            "status": "success",
-            "message": "Pago registrado y Complemento timbrado exitosamente.",
-            "data": {
-                "complemento_uuid": complemento_uuid,
-                "total_pagado": float(total_recibido),
-                "facturas_afectadas": len(facturas_afectadas),
-            },
-        }
-
-    # =========================================================
-    # MOTOR DE CANCELACIONES SAT
-    # =========================================================
     def cancelar_factura_nominal(
         self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
     ):
-        """
-        Envía la petición SOAP de cancelación al PAC.
-        Motivo "01": Comprobante emitido con errores con relación (Requiere uuid_sustituto).
-        Motivo "02": Comprobante emitido con errores sin relación.
-        """
         factura = (
             self.db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.id == invoice_id)
@@ -1182,13 +848,6 @@ class BillingService:
 
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
-
-            # --- NOTA SOBRE CANCELACIÓN ---
-            # Cada PAC (Solución Factible, Finkok, etc) tiene su propia estructura SOAP para cancelar.
-            # Por lo general, se usa el PFX o la Llave Privada codificada.
-            # Este es el bloque preparado donde se insertaría la llamada `client_zeep.service.cancelar(...)`
-
-            # Simulando éxito de cancelación para completar el ciclo del "Motor Dual":
             factura.status_sat = "CANCELADO"
             self.db.add(factura)
             self.db.commit()
@@ -1243,82 +902,6 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
-
-    # =========================================================
-    # ENSAMBLADORES DE XML BASE (Pagos)
-    # =========================================================
-
-    def _armar_xml_pago_sin_sello(self, d: dict) -> str:
-        doctos_xml = ""
-        for doc in d["doctos_relacionados"]:
-            impuestos_dr_xml = ""
-            retenciones_xml = ""
-            traslados_xml = ""
-
-            if doc["tiene_retencion"]:
-                retenciones_xml = f'<pago20:RetencionesDR><pago20:RetencionDR BaseDR="{doc["base_dr"]}" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="{doc["ret_dr"]}"/></pago20:RetencionesDR>'
-            if doc["tiene_iva"]:
-                traslados_xml = f'<pago20:TrasladosDR><pago20:TrasladoDR BaseDR="{doc["base_dr"]}" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="{doc["iva_dr"]}"/></pago20:TrasladosDR>'
-
-            if doc["tiene_retencion"] or doc["tiene_iva"]:
-                impuestos_dr_xml = f"<pago20:ImpuestosDR>{retenciones_xml}{traslados_xml}</pago20:ImpuestosDR>"
-
-            serie_str = f' Serie="{doc["serie"]}"' if doc.get("serie") else ""
-            doctos_xml += f"""<pago20:DoctoRelacionado IdDocumento="{doc['uuid']}"{serie_str} Folio="{doc['folio']}" MonedaDR="{doc['moneda']}" EquivalenciaDR="1" NumParcialidad="1" ImpSaldoAnt="{doc['saldo_anterior']}" ImpPagado="{doc['monto_pagado']}" ImpSaldoInsoluto="{doc['saldo_insoluto']}" ObjetoImpDR="02">{impuestos_dr_xml}</pago20:DoctoRelacionado>"""
-
-        totales_xml = f"<pago20:Totales "
-        if float(d["total_retenciones_iva"]) > 0:
-            totales_xml += f'TotalRetencionesIVA="{d["total_retenciones_iva"]}" '
-        if float(d["total_traslados_base_iva16"]) > 0:
-            totales_xml += f'TotalTrasladosBaseIVA16="{d["total_traslados_base_iva16"]}" TotalTrasladosImpuestoIVA16="{d["total_traslados_impuesto_iva16"]}" '
-        totales_xml += f'MontoTotalPagos="{d["monto_total"]}"/>'
-
-        impuestos_p_xml = ""
-        retenciones_p_xml = ""
-        traslados_p_xml = ""
-
-        if float(d["total_retenciones_iva"]) > 0:
-            retenciones_p_xml = f'<pago20:RetencionesP><pago20:RetencionP ImpuestoP="002" ImporteP="{d["total_retenciones_iva"]}"/></pago20:RetencionesP>'
-        if float(d["total_traslados_base_iva16"]) > 0:
-            traslados_p_xml = f'<pago20:TrasladosP><pago20:TrasladoP BaseP="{d["total_traslados_base_iva16"]}" ImpuestoP="002" TipoFactorP="Tasa" TasaOCuotaP="0.160000" ImporteP="{d["total_traslados_impuesto_iva16"]}"/></pago20:TrasladosP>'
-
-        if retenciones_p_xml or traslados_p_xml:
-            impuestos_p_xml = f"<pago20:ImpuestosP>{retenciones_p_xml}{traslados_p_xml}</pago20:ImpuestosP>"
-
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="REP" Folio="{d['folio']}" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="{self.emisor_cp}">
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
-    <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago" ValorUnitario="0" Importe="0" ObjetoImp="01" />
-    </cfdi:Conceptos>
-    <cfdi:Complemento>
-        <pago20:Pagos Version="2.0">
-            {totales_xml}
-            <pago20:Pago FechaPago="{d['fecha_pago']}" FormaDePagoP="{d['forma_pago']}" MonedaP="MXN" Monto="{d['monto_total']}" TipoCambioP="1">{doctos_xml}{impuestos_p_xml}</pago20:Pago>
-        </pago20:Pagos>
-    </cfdi:Complemento>
-</cfdi:Comprobante>""".strip()
-
-    def _sellar_xml_pago(self, xml_str, d: dict) -> str:
-        cert_b64 = (
-            base64.b64encode(
-                d["cert_emisor"].encode("utf-8")
-                if not hasattr(self, "cer_data")
-                else self.cer_data
-            )
-            .decode("utf-8")
-            .replace("\n", "")
-        )
-        # El número de certificado ya viene inyectado o lo leemos directamente.
-        xml_con_cert = xml_str.replace(
-            "<cfdi:Comprobante",
-            f'<cfdi:Comprobante NoCertificado="{d.get("cert_emisor")}" Certificado="{cert_b64}"',
-        )
-        sello_b64, _ = self._generar_sello_xslt(xml_con_cert.encode("utf-8"))
-        return xml_con_cert.replace(
-            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
-        )
 
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
