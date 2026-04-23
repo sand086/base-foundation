@@ -494,7 +494,7 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        # 🚀 FIX TESORERÍA BLINDADO: GUARDAR PAGOS MÚLTIPLES Y EL BANCO
+        # 🚀 FIX TESORERÍA BLINDADO: GUARDAR PAGOS Y MOVIMIENTO BANCARIO (1 a 1)
         # =========================================================================
         try:
             # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
@@ -528,9 +528,9 @@ class PaymentComplementService:
             except Exception:
                 fecha_pago_date = datetime.now().date()
 
-            # 2. GUARDAMOS EL HISTORIAL DE PAGOS EN CXC POR CADA FACTURA
+            # 2. GUARDAMOS EL HISTORIAL DE PAGOS Y CREAMOS EL MOVIMIENTO BANCARIO POR CADA FACTURA
             for factura in facturas_afectadas:
-                # 🚀 FIX VITAL: Buscamos coincidencia comparando strings para evitar fallos de int vs str
+                # Buscamos coincidencia comparando strings
                 abono = next(
                     (
                         p
@@ -544,6 +544,7 @@ class PaymentComplementService:
                 )
 
                 if monto_abono_float > 0:
+                    # A) Registro en CxC
                     nuevo_pago = ReceivableInvoicePayment(
                         invoice_id=factura.id,
                         bank_account_id=int(bank_account_id),
@@ -556,17 +557,15 @@ class PaymentComplementService:
                     )
                     self.db.add(nuevo_pago)
 
-            # 3. CREAMOS UN UNICO MOVIMIENTO BANCARIO POR EL TOTAL (Tesorería Consolidada)
-            total_recibido_float = float(total_recibido)
-            if total_recibido_float > 0:
-                mov_schema = finance_schemas.BankMovementCreate(
-                    bank_account_id=int(bank_account_id),
-                    tipo="ingreso",
-                    monto=total_recibido_float,
-                    concepto=f"Cobro Múltiple (REP) Cliente: {nombre_limpio}"[:250],
-                    referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
-                )
-                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+                    # B) Registro individual en Bancos (Tesorería 1 a 1)
+                    mov_schema = finance_schemas.BankMovementCreate(
+                        bank_account_id=int(bank_account_id),
+                        tipo="ingreso",
+                        monto=monto_abono_float,
+                        concepto=f"Cobro Fra. {factura.folio_interno or factura.id} (REP)",
+                        referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
+                    )
+                    create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 
         except Exception as e:
             # Si el banco truena, NO hacemos rollback porque el SAT ya hizo el timbre.

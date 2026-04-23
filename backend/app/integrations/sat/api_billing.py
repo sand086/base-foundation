@@ -576,7 +576,7 @@ def registrar_pago_multiple(
 ):
     """
     Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-    el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA BLINDADO PARA BANCOS)
+    el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA BLINDADO PARA BANCOS 1 A 1)
     """
     import uuid
     from datetime import datetime
@@ -615,12 +615,11 @@ def registrar_pago_multiple(
 
     except Exception as e:
         # 🚀 2. BYPASS DE EMERGENCIA: Si el SAT lo rebota,
-        # descontamos CxC, registramos el pago y metemos el dinero al Banco localmente.
+        # descontamos CxC, registramos el pago y metemos el dinero al Banco localmente (1 a 1).
 
         print(f"Bypass activado por error de SAT: {str(e)}")
 
         fake_uuid = str(uuid.uuid4()).upper()
-        total_pagado = 0.0
 
         try:
             # A. GARANTIZAMOS QUE HAYA UNA CUENTA BANCARIA PARA EL REPORTE
@@ -648,7 +647,7 @@ def registrar_pago_multiple(
                     db.flush()
                 bank_account_id = caja_general.id
 
-            # B. ACTUALIZAMOS FACTURAS Y GUARDAMOS HISTORIAL EN CXC
+            # B. ACTUALIZAMOS FACTURAS Y GUARDAMOS MOVIMIENTOS 1 a 1
             for pago in payload.pagos:
                 factura = (
                     db.query(models.ReceivableInvoice)
@@ -664,8 +663,6 @@ def registrar_pago_multiple(
                     else:
                         factura.estatus = "pago_parcial"
 
-                    total_pagado += pago.monto_pagado
-
                     # Extraemos la fecha de forma segura
                     fecha_pago_clean = (
                         str(payload.fecha_pago).replace("Z", "").split("T")[0]
@@ -677,7 +674,7 @@ def registrar_pago_multiple(
                     except Exception:
                         fecha_pago_date = datetime.now().date()
 
-                    # Guardamos la tablilla del pago
+                    # 1. Guardamos la tablilla del pago en CxC
                     nuevo_pago = models.ReceivableInvoicePayment(
                         invoice_id=factura.id,
                         bank_account_id=int(bank_account_id),
@@ -694,23 +691,25 @@ def registrar_pago_multiple(
                     )
                     db.add(nuevo_pago)
 
-            # C. EJECUTAMOS LA TRANSACCIÓN BANCARIA PARA QUE SE REFLEJE EN TESORERÍA
-            if total_pagado > 0:
-                mov_schema = finance_schemas.BankMovementCreate(
-                    bank_account_id=int(bank_account_id),
-                    tipo="ingreso",
-                    monto=total_pagado,
-                    concepto=f"Cobro BYPASS (REP Fallido SAT) - Cliente ID: {payload.client_id}",
-                    referencia=(payload.referencia or f"BYP {fake_uuid[:8]}")[:100],
-                )
-                create_bank_movement(db, mov_schema, current_user_id=1)
+                    # 2. Cremos el movimiento individual en el Banco
+                    if pago.monto_pagado > 0:
+                        mov_schema = finance_schemas.BankMovementCreate(
+                            bank_account_id=int(bank_account_id),
+                            tipo="ingreso",
+                            monto=pago.monto_pagado,
+                            concepto=f"Cobro BYPASS Fra. {factura.folio_interno or factura.id} (REP Fallido SAT)",
+                            referencia=(payload.referencia or f"BYP {fake_uuid[:8]}")[
+                                :100
+                            ],
+                        )
+                        create_bank_movement(db, mov_schema, current_user_id=1)
 
             db.commit()
 
             # Retornamos una respuesta falsa pero exitosa al frontend
             return {
                 "status": "success",
-                "message": "Pago y movimiento bancario registrados internamente (Simulación REP).",
+                "message": "Pago y movimiento bancario registrados internamente (Simulación REP 1 a 1).",
                 "data": {"rep_uuid": fake_uuid},
             }
 
