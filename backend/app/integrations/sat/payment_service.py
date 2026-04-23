@@ -40,7 +40,7 @@ from app.models.models import (
     ReceivableInvoicePayment,
     BankAccount,
     BankMovement,
-    RecordStatus,  # 🚀 IMPORTANTE: Para filtrar solo facturas Activas ('A')
+    RecordStatus,
 )
 
 # 🚀 IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
@@ -212,7 +212,6 @@ class PaymentComplementService:
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
 
-    # 🚀 FASE A: Modificamos firma para recibir banco y cuenta ordenante
     def registrar_pago_y_timbrar_complemento(
         self,
         client_id,
@@ -223,7 +222,7 @@ class PaymentComplementService:
         cuenta_deposito,
         banco_ordenante: str = "",
         cuenta_ordenante: str = "",
-        user_id: int = 1,  # 🚀 Permite registrar el ID de quien hizo el movimiento en el banco
+        user_id: int = 1,
     ):
         logger.info(
             f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO (SERVICIO AISLADO) ---"
@@ -243,9 +242,7 @@ class PaymentComplementService:
             invoice_id = pago.get("invoice_id")
             monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
 
-            # =====================================================================
-            # 🚀 FILTRO CRÍTICO: SOLO FACTURAS ACTIVAS ('A') Y NO NOMINALES (1 PESO)
-            # =====================================================================
+            # FILTRO CRÍTICO: SOLO FACTURAS ACTIVAS Y NO NOMINALES
             factura = (
                 self.db.query(ReceivableInvoice)
                 .filter(
@@ -259,13 +256,12 @@ class PaymentComplementService:
             if not factura:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Factura ID {invoice_id} rechazada. La factura fue eliminada, cancelada o es un Flete Nominal (Carta Porte de Traslado/1 Peso).",
+                    detail=f"Factura ID {invoice_id} rechazada. La factura fue eliminada, cancelada o es un Flete Nominal.",
                 )
 
             if not factura.uuid:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Factura ID {invoice_id} sin timbrar (Sin UUID asignado).",
+                    status_code=400, detail=f"Factura ID {invoice_id} sin timbrar."
                 )
 
             saldo_anterior = Decimal(str(factura.saldo_pendiente))
@@ -296,7 +292,6 @@ class PaymentComplementService:
             iva_dr = (inv_iva * proporcion).quantize(Decimal("0.000001"))
             ret_dr = (inv_ret * proporcion).quantize(Decimal("0.000001"))
 
-            # Acumulamos con precisión total para evitar descuadres en el SAT
             total_retenciones_iva += ret_dr
             total_traslados_base_iva16 += base_dr
             total_traslados_impuesto_iva16 += iva_dr
@@ -306,7 +301,6 @@ class PaymentComplementService:
             serie_dr = folio_split[0] if len(folio_split) > 1 else ""
             folio_dr = folio_split[-1]
 
-            # Parcialidad Dinámica
             pagos_previos = (
                 self.db.query(ReceivableInvoicePayment)
                 .filter_by(invoice_id=factura.id)
@@ -314,7 +308,6 @@ class PaymentComplementService:
             )
             parcialidad = pagos_previos + 1
 
-            # Objeto Dinámico
             objeto_imp = "02" if (inv_iva > 0 or inv_ret > 0) else "01"
 
             doctos_relacionados.append(
@@ -347,7 +340,6 @@ class PaymentComplementService:
             facturas_afectadas.append(factura)
             self.db.add(factura)
 
-        # 🚀 FASE A: OBTENEMOS TU CUENTA BANCARIA PARA EL XML
         banco_info = None
         if cuenta_deposito:
             banco_info = (
@@ -355,6 +347,7 @@ class PaymentComplementService:
                 .filter(BankAccount.id == int(cuenta_deposito))
                 .first()
             )
+
         cuenta_benef = banco_info.numero_cuenta if banco_info else ""
         banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
 
@@ -370,12 +363,11 @@ class PaymentComplementService:
             .strip()
         )
 
-        # 🚀 FASE A: FOLIO CORTO CON PREFIJO COM
         folio_corto = datetime.now().strftime("%H%M%S")
 
         datos_pago = {
-            "serie": "COM",  # 🚀 FASE A: SERIE ESTÁTICA
-            "folio": folio_corto,  # 🚀 FASE A: FOLIO CORTO
+            "serie": "COM",
+            "folio": folio_corto,
             "fecha": fecha_iso,
             "rfc_cliente": getattr(cliente, "rfc", "XAXX010101000").upper(),
             "nombre_cliente": nombre_limpio,
@@ -390,14 +382,12 @@ class PaymentComplementService:
             "total_traslados_base_iva16": f"{total_traslados_base_iva16.quantize(Decimal('0.00')):.2f}",
             "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16.quantize(Decimal('0.00')):.2f}",
             "cuenta_deposito": cuenta_deposito,
-            # 🚀 FASE A: INYECTAMOS DATOS BANCARIOS AL DICCIONARIO
             "cuenta_beneficiario": cuenta_benef,
             "banco_beneficiario": banco_benef,
             "banco_ordenante": banco_ordenante,
             "cuenta_ordenante": cuenta_ordenante,
         }
 
-        # 🚀 FIX: Cargamos correctamente el certificado en Base64 real
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data, default_backend())
@@ -422,7 +412,9 @@ class PaymentComplementService:
                 raise HTTPException(
                     status_code=400, detail=f"Error PAC: {result.mensaje}"
                 )
+
             res_sat = result.resultados[0]
+
             if int(getattr(res_sat, "status", 0)) != 200:
                 raise HTTPException(
                     status_code=400, detail=f"Error SAT: {res_sat.mensaje}"
@@ -442,7 +434,6 @@ class PaymentComplementService:
 
             self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
 
-            # Extraemos datos para PDF
             root = etree.fromstring(cfdi_bytes)
             ns = {
                 "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -452,8 +443,6 @@ class PaymentComplementService:
             s_sat = tfd_node.get("SelloSAT", "0000")
             c_sat = tfd_node.get("NoCertificadoSAT", "0000")
             s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-
-            # 🚀 NUEVO: Extraemos la fecha de certificación exacta del SAT
             fecha_certificacion = tfd_node.get("FechaTimbrado", "")
 
             cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
@@ -495,7 +484,7 @@ class PaymentComplementService:
                 c_sat,
                 cadena_original_tfd,
                 importe_letra,
-                fecha_certificacion,  # 🚀 Pasamos la fecha de certificación
+                fecha_certificacion,
             )
 
         except Exception as e:
@@ -505,37 +494,38 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        # 🚀 FIX TESORERÍA: GUARDAR PAGOS Y CREAR MOVIMIENTO BANCARIO SEGURO
+        # 🚀 FIX TESORERÍA: GUARDAR PAGOS (POR FACTURA) Y UN SOLO MOVIMIENTO BANCARIO
         # =========================================================================
+
+        # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
+        bank_account_id = cuenta_deposito
+        if not bank_account_id:
+            caja_general = (
+                self.db.query(BankAccount)
+                .filter(
+                    BankAccount.alias == "Caja General Virtual",
+                    BankAccount.record_status != RecordStatus.ELIMINADO,
+                )
+                .first()
+            )
+            if not caja_general:
+                caja_general = BankAccount(
+                    banco="Efectivo / Virtual",
+                    numero_cuenta="0000000000",
+                    alias="Caja General Virtual",
+                    tipo_cuenta="virtual",
+                    saldo=0.0,
+                    created_by_id=user_id,
+                )
+                self.db.add(caja_general)
+                self.db.flush()
+            bank_account_id = caja_general.id
+
+        # 2. GUARDAMOS EL HISTORIAL DE PAGOS EN CXC POR CADA FACTURA
         for factura in facturas_afectadas:
             abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
             monto_abono_float = float(abono.get("monto_pagado"))
 
-            # 🚀 GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
-            bank_account_id = cuenta_deposito
-            if not bank_account_id:
-                caja_general = (
-                    self.db.query(BankAccount)
-                    .filter(
-                        BankAccount.alias == "Caja General Virtual",
-                        BankAccount.record_status != RecordStatus.ELIMINADO,
-                    )
-                    .first()
-                )
-                if not caja_general:
-                    caja_general = BankAccount(
-                        banco="Efectivo / Virtual",
-                        numero_cuenta="0000000000",
-                        alias="Caja General Virtual",
-                        tipo_cuenta="virtual",
-                        saldo=0.0,
-                        created_by_id=user_id,
-                    )
-                    self.db.add(caja_general)
-                    self.db.flush()
-                bank_account_id = caja_general.id
-
-            # 1. Guardar el pago de la factura en el historial (CxC)
             nuevo_pago = ReceivableInvoicePayment(
                 invoice_id=factura.id,
                 bank_account_id=int(
@@ -550,15 +540,16 @@ class PaymentComplementService:
             )
             self.db.add(nuevo_pago)
 
-            # 2. Sumar el dinero al Banco usando el motor atómico de Tesorería
+        # 3. CREAMOS UN UNICO MOVIMIENTO BANCARIO POR EL TOTAL
+        # Esto refleja la realidad: 1 depósito bancario que cubre N facturas.
+        if total_recibido > 0:
             mov_schema = finance_schemas.BankMovementCreate(
                 bank_account_id=int(bank_account_id),
                 tipo="ingreso",
-                monto=monto_abono_float,
-                concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
+                monto=float(total_recibido),
+                concepto=f"Cobro Múltiple (REP) Cliente: {nombre_limpio}",
                 referencia=referencia or f"REP {complemento_uuid[:8]}",
             )
-
             # Ejecutamos la inserción real en Banco y Movimientos Bancarios
             create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 
@@ -573,7 +564,6 @@ class PaymentComplementService:
             },
         }
 
-    # 🚀 FASE A: Modificamos el XML para inyectar bancos ordenantes y beneficiarios
     def _armar_xml_pago_sin_sello(self, d: dict) -> str:
         doctos_xml = ""
         for doc in d["doctos_relacionados"]:
@@ -606,15 +596,12 @@ class PaymentComplementService:
         if retenciones_p_xml or traslados_p_xml:
             impuestos_p_xml = f"<pago20:ImpuestosP>{retenciones_p_xml}{traslados_p_xml}</pago20:ImpuestosP>"
 
-        # 🚀 FASE A: Atributos dinámicos del XML
         pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
 
         if d.get("banco_ordenante"):
             pago_attrs += f' NomBancoOrdExt="{d["banco_ordenante"]}"'
-
         if d.get("cuenta_ordenante") and len(d["cuenta_ordenante"]) >= 10:
             pago_attrs += f' CtaOrdenante="{d["cuenta_ordenante"]}"'
-
         if d.get("cuenta_beneficiario") and len(d["cuenta_beneficiario"]) >= 10:
             pago_attrs += f' CtaBeneficiario="{d["cuenta_beneficiario"]}"'
 
@@ -634,9 +621,7 @@ class PaymentComplementService:
 </cfdi:Comprobante>""".strip()
 
     def _sellar_xml_pago(self, xml_str, d: dict) -> str:
-        # 🚀 FIX CRÍTICO: Usamos el B64 del archivo .cer, no del número de certificado
         cert_b64 = d.get("certificado_b64", "")
-
         xml_con_cert = xml_str.replace(
             "<cfdi:Comprobante",
             f'<cfdi:Comprobante NoCertificado="{d.get("cert_emisor")}" Certificado="{cert_b64}"',
@@ -656,7 +641,7 @@ class PaymentComplementService:
         c_sat,
         cadena_original,
         importe_letra,
-        fecha_certificacion,  # 🚀 Agregado aquí
+        fecha_certificacion,
     ):
         logo_path = self.templates_dir / "assets" / "logo-black.png"
         logo_src = (
@@ -672,7 +657,6 @@ class PaymentComplementService:
             text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
             return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        # 🚀 NUEVO: Consultamos el banco destino
         banco_info = None
         if data.get("cuenta_deposito"):
             banco_info = (
@@ -689,9 +673,9 @@ class PaymentComplementService:
             "uuid": uuid,
             "folio_interno": data["folio"],
             "fecha_emision": data["fecha"],
-            "fecha_certificacion": fecha_certificacion,  # 🚀 NUEVO
-            "cuenta_beneficiario": cuenta_benef,  # 🚀 NUEVO
-            "banco_beneficiario": banco_benef,  # 🚀 NUEVO
+            "fecha_certificacion": fecha_certificacion,
+            "cuenta_beneficiario": cuenta_benef,
+            "banco_beneficiario": banco_benef,
             "logo_src": logo_src,
             "qr_src": qr_src,
             "metodo_pago": "PPD",
@@ -724,7 +708,6 @@ class PaymentComplementService:
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
-        # Aquí puedes usar tu mismo HTML de carta porte o crear uno simplificado de pagos
         html_out = env.get_template("complemento_pago.html").render(context)
         pdf_path = self.storage_dir / f"{uuid}.pdf"
         HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
