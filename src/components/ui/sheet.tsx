@@ -137,7 +137,7 @@ const SheetTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "text-brand-red",
-      // 🛠 TIPOGRAFÍA INDUSTRIAL
+      //   TIPOGRAFÍA INDUSTRIAL
       "text-[11px] font-black uppercase tracking-[0.25em]",
       className,
     )}

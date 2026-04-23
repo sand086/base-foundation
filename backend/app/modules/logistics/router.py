@@ -730,7 +730,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 client_id=trip.client_id,
                 sub_client_id=trip.sub_client_id,
                 viaje_id=trip.id,
-                folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
+                folio_interno=f"CXC-TRP-{trip.public_id or trip.id}",
                 concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
                 subtotal=subtotal,
                 iva=iva,

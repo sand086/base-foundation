@@ -172,7 +172,7 @@ const DropdownMenuLabel = React.forwardRef<
     ref={ref}
     className={cn(
       "px-3 py-2 text-brand-red",
-      // 🛠 TIPOGRAFÍA INDUSTRIAL
+      //   TIPOGRAFÍA INDUSTRIAL
       "text-[10px] font-black uppercase tracking-[0.2em]",
       inset && "pl-9",
       className,

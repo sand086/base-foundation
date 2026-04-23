@@ -35,7 +35,7 @@ const BreadcrumbList = React.forwardRef<
     ref={ref}
     className={cn(
       "flex flex-wrap items-center gap-1.5 break-words sm:gap-2.5",
-      // 🛠 TIPOGRAFÍA INDUSTRIAL: Pequeña, negrita y espaciada
+      //   TIPOGRAFÍA INDUSTRIAL: Pequeña, negrita y espaciada
       "text-[10px] font-bold uppercase tracking-[0.15em]",
       "text-slate-500 dark:text-white/40",
       className,

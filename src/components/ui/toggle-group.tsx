@@ -61,7 +61,7 @@ const ToggleGroupItem = React.forwardRef<
           variant: context.variant || variant,
           size: context.size || size,
         }),
-        // 🛠 REFINAMIENTO INDUSTRIAL
+        //   REFINAMIENTO INDUSTRIAL
         "relative transition-all duration-300 ease-out",
         "rounded-lg border-transparent",
 

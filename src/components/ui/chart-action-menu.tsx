@@ -73,7 +73,7 @@ export function ChartActionMenu({
 
   return (
     <div className="flex items-center justify-between w-full">
-      <span className="text-sm font-semibold text-brand-dark uppercase tracking-wider">
+      <span className="text-sm font-semibold text-brand-dark dark:text-white uppercase tracking-wider">
         {title}
       </span>
       <DropdownMenu>

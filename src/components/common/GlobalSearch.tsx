@@ -246,7 +246,7 @@ export function GlobalSearch() {
       // Aplicamos la animación Tahoe y el estilo de panel de cristal
       className="max-w-[650px] p-0 overflow-hidden border-none bg-card/90 dark:bg-brand-navy/95 backdrop-blur-xl animate-modal-show shadow-2xl rounded-2xl"
     >
-      {/* 🛠 CORRECCIÓN ACCESIBILIDAD: Título invisible para lectores de pantalla */}
+      {/*   CORRECCIÓN ACCESIBILIDAD: Título invisible para lectores de pantalla */}
       <DialogTitle className="sr-only">Buscador Global Spotlight</DialogTitle>
 
       <div className="relative border-b border-border px-2 py-1">

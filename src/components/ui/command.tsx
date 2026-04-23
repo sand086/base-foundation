@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { type DialogProps } from "@radix-ui/react-dialog";
-// 🛠️ CORRECCIÓN: Importamos el hook por separado según la definición de tipos
+//  ️ CORRECCIÓN: Importamos el hook por separado según la definición de tipos
 import { Command as CommandPrimitive, useCommandState } from "cmdk";
 import { Search } from "lucide-react";
 
@@ -104,7 +104,7 @@ const CommandList = React.forwardRef<
 CommandList.displayName = CommandPrimitive.List.displayName;
 
 /**
- * 🛠️ MEJORA: CommandEmpty
+ *  ️ MEJORA: CommandEmpty
  * Solo se renderiza si hay una búsqueda activa y no hay resultados.
  */
 const CommandEmpty = React.forwardRef<

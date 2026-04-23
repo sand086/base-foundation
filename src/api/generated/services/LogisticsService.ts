@@ -692,4 +692,17 @@ export class LogisticsService {
             },
         });
     }
+    /**
+     * Sync Distances
+     * Sincroniza masivamente las distancias en carretera de los RateTemplates
+     * utilizando la función helper existente (Nominatim + OSRM).
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncDistancesApiLogisticsRateTemplatesSyncDistancesPost(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/logistics/rate-templates/sync-distances',
+        });
+    }
 }
