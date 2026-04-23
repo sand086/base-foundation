@@ -40,6 +40,7 @@ from app.models.models import (
     ReceivableInvoicePayment,
     BankAccount,
     BankMovement,
+    RecordStatus,  # 🚀 IMPORTANTE: Para filtrar solo facturas Activas ('A')
 )
 
 # 🚀 IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
@@ -241,22 +242,37 @@ class PaymentComplementService:
         for pago in pagos_data:
             invoice_id = pago.get("invoice_id")
             monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
+
+            # =====================================================================
+            # 🚀 FILTRO CRÍTICO: SOLO FACTURAS ACTIVAS ('A') Y NO NOMINALES (1 PESO)
+            # =====================================================================
             factura = (
                 self.db.query(ReceivableInvoice)
-                .filter(ReceivableInvoice.id == invoice_id)
+                .filter(
+                    ReceivableInvoice.id == invoice_id,
+                    ReceivableInvoice.record_status == RecordStatus.ACTIVO,
+                    ReceivableInvoice.is_nominal == False,
+                )
                 .first()
             )
 
-            if not factura or not factura.uuid:
+            if not factura:
                 raise HTTPException(
-                    status_code=400, detail=f"Factura ID {invoice_id} sin timbrar."
+                    status_code=400,
+                    detail=f"Factura ID {invoice_id} rechazada. La factura fue eliminada, cancelada o es un Flete Nominal (Carta Porte de Traslado/1 Peso).",
+                )
+
+            if not factura.uuid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Factura ID {invoice_id} sin timbrar (Sin UUID asignado).",
                 )
 
             saldo_anterior = Decimal(str(factura.saldo_pendiente))
             if monto_abono <= 0 or monto_abono > saldo_anterior:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Monto inválido para factura {factura.folio_interno}.",
+                    detail=f"Monto inválido o supera el saldo restante para la factura {factura.folio_interno}.",
                 )
 
             moneda_str = "MXN"
@@ -517,6 +533,7 @@ class PaymentComplementService:
                     referencia=referencia or f"REP {complemento_uuid[:8]}",
                 )
 
+                # Ejecutamos la inserción real en Banco y Movimientos Bancarios
                 create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 
         self.db.commit()
