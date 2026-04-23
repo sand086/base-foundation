@@ -30,20 +30,41 @@ class EmailService:
     ):
         """
         Envía un correo con diseño SaaS/Bento UI usando el LOGO OFICIAL de la BD.
-        Usa CCO para enviar copia oculta a Gerencia y Desarrollo.
+        Usa CCO para enviar copia oculta y deduplica correos repetidos (TO > CC > BCC).
         """
-        # 1. Definir Destinatario Principal (El Cliente)
-        to_email = (
+        # 1. Definir Destinatario Principal (El Cliente) y Ocultos
+        correo_cliente = (
             trip.client.email
             if trip.client and trip.client.email
             else "desarrolloSoft@asicomsystems.com.mx"
         )
 
-        # 2. DEFINIR CORREOS OCULTOS (CCO / Bcc)
-        cco_emails = ["desarrolloSoft@asicomsystems.com.mx"]
+        raw_to = [correo_cliente]
+        raw_cc = []  # Vacío por ahora, pero listo por si lo necesitas a futuro
+        raw_bcc = ["desarrolloSoft@asicomsystems.com.mx"]
 
-        # La lista total de destinatarios para el servidor SMTP (Para + CCO)
-        destinatarios_totales = list(set([to_email] + cco_emails))
+        # 2. LÓGICA DE DEDUPLICACIÓN (Regla de oro: TO > CC > BCC)
+        # dict.fromkeys() elimina duplicados dentro de la misma lista manteniendo el orden.
+        final_to = list(dict.fromkeys(raw_to))
+
+        # Filtramos CC: Solo se quedan los que NO estén ya en TO
+        final_cc = [
+            email for email in list(dict.fromkeys(raw_cc)) if email not in final_to
+        ]
+
+        # Filtramos BCC: Solo se quedan los que NO estén en TO ni en CC
+        final_bcc = [
+            email
+            for email in list(dict.fromkeys(raw_bcc))
+            if email not in final_to and email not in final_cc
+        ]
+
+        # La lista total de destinatarios para el servidor SMTP (La que ejecuta el envío real)
+        destinatarios_totales = final_to + final_cc + final_bcc
+
+        if not destinatarios_totales:
+            logger.warning("No hay destinatarios válidos para enviar el correo.")
+            return False
 
         # 3. Buscar Plantilla y Logo en BD
         template = self.db.query(EmailTemplate).filter_by(codigo="TPL-001").first()
@@ -172,8 +193,13 @@ class EmailService:
         msg = MIMEMultipart("related")
         msg["From"] = f"{self.from_name} <{self.from_email}>"
 
-        # El "Para" solo lo ve el cliente. Los CCO se envían por detrás.
-        msg["To"] = to_email
+        # Asignamos las cabeceras unidas por comas para los clientes de correo
+        msg["To"] = ", ".join(final_to)
+
+        # Solo agregamos la cabecera CC si realmente quedaron correos
+        if final_cc:
+            msg["Cc"] = ", ".join(final_cc)
+
         msg["Subject"] = template.asunto.replace("[SERVICIO_ID]", folio)
 
         msg.attach(MIMEText(html_content, "html"))
@@ -181,20 +207,20 @@ class EmailService:
         # 7. Envío Real por SMTP
         try:
             logger.info(
-                f"Iniciando envío de tracking a {to_email} y copias ocultas a gerencia/desarrollo..."
+                f"Iniciando envío de tracking a TO: {final_to} | CC: {final_cc} | BCC: {final_bcc}"
             )
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
             server.starttls()
             server.login(self.smtp_user, self.smtp_pass)
 
-            # MAGIA CCO: Mandamos a la lista completa por el ruteo interno del servidor
+            # Mandamos a la lista completa por el ruteo interno del servidor usando destinatarios_totales
             server.send_message(
                 msg, from_addr=self.from_email, to_addrs=destinatarios_totales
             )
 
             server.quit()
             logger.info(
-                "Correo SaaS de Tracking enviado exitosamente con LOGO OFICIAL y CCO."
+                "Correo SaaS de Tracking enviado exitosamente con LOGO OFICIAL y deduplicación."
             )
             return True
         except Exception as e:

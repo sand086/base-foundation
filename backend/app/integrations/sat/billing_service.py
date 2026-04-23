@@ -76,18 +76,21 @@ def parse_sat_error(e: Exception) -> str:
         or "cer" in error_msg
         or "key" in error_msg
     ):
-        return "Fallo el timbrado: Actualiza tus sellos (CSD) en configuración. Al parecer no se encuentran, la contraseña es incorrecta o ya no son vigentes."
+        return "_Fallo el timbrado: Actualiza tus sellos (CSD) en configuración. Al parecer no se encuentran, la contraseña es incorrecta o ya no son vigentes."
     return str(e)
 
 
+# =========================================================
+# MAPEO INTELIGENTE DE REMOLQUES SAT (CTR001 - CTR032)
+# =========================================================
 def get_sat_trailer_code(tipo: str) -> str:
     if not tipo:
         return "CTR004"
     tipo_upper = str(tipo).strip().upper()
     if re.match(r"^CTR0[0-9]{2}$", tipo_upper):
         return tipo_upper
-
     tipo_lower = tipo_upper.lower()
+
     if "caballete" in tipo_lower:
         return "CTR001"
     if "abierta" in tipo_lower and "caja" in tipo_lower:
@@ -152,7 +155,6 @@ def get_sat_trailer_code(tipo: str) -> str:
         return "CTR031"
     if "caja" in tipo_lower:
         return "CTR002"
-
     return "CTR004"
 
 
@@ -160,9 +162,6 @@ class SafeData(dict):
     def __getitem__(self, key):
         val = self.get(key)
         if val is None or str(val).strip() == "" or str(val).strip() == "None":
-            logger.warning(
-                f" [BLINDAJE ACTIVO] Llave faltante o vacía: '{key}'. Inyectando default."
-            )
             if key in [
                 "subtotal",
                 "total",
@@ -175,9 +174,11 @@ class SafeData(dict):
             if key in ["total_dist_rec", "cantidad", "tc"]:
                 return "1"
             if "rfc" in key.lower():
+                if key.lower() in ["rfc_operador", "rfc_cliente"]:
+                    return ""
                 return "XAXX010101000"
             if "cp" in key.lower():
-                return "91700"
+                return ""
             if key in ["contenedor_1", "contenedor_2"]:
                 return "N/A"
             return "NO_ESPECIFICADO"
@@ -185,11 +186,6 @@ class SafeData(dict):
 
 
 class BillingService:
-    """
-    MOTOR DE FACTURACIÓN:
-    Maneja exclusivamente Facturación Final (Ingresos Reales), Carta Porte 3.1 y Cancelaciones ante el SAT.
-    """
-
     def __init__(self, db: Session):
         self.db = db
         self.env = os.getenv("ENVIRONMENT", "PROD").upper()
@@ -298,7 +294,7 @@ class BillingService:
         self.emisor_regimen = (
             regimen_conf.value if regimen_conf and regimen_conf.value else "624"
         )
-        self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91808"
+        self.emisor_cp = str(cp_conf.value).strip() if cp_conf and cp_conf.value else ""
 
         loc_emisor = (
             self.db.query(SatLocationCode)
@@ -309,9 +305,10 @@ class BillingService:
             self.emisor_estado = loc_emisor.estado_clave
             self.emisor_municipio = str(loc_emisor.municipio_clave).zfill(3)
         else:
-            self.emisor_cp = "91808"
-            self.emisor_estado = "VER"
-            self.emisor_municipio = "193"
+            raise HTTPException(
+                status_code=400,
+                detail=f"ERROR INTERNO: El CP de tu empresa (Emisor) '{self.emisor_cp}' está vacío o no existe en tu tabla sat_location_codes.",
+            )
 
     def _generar_sello_xslt(self, xml_bytes: bytes) -> tuple[str, str]:
         xslt_path = (
@@ -333,9 +330,9 @@ class BillingService:
             transform = etree.XSLT(xslt_doc)
             xml_doc = etree.fromstring(xml_bytes, parser=parser)
             cadena_original_tree = transform(xml_doc)
-            cadena_original = str(cadena_original_tree)
             cadena_original = (
-                cadena_original.replace('<?xml version="1.0" encoding="UTF-8"?>', "")
+                str(cadena_original_tree)
+                .replace('<?xml version="1.0" encoding="UTF-8"?>', "")
                 .replace("\n", "")
                 .strip()
             )
@@ -431,30 +428,86 @@ class BillingService:
         retenciones = subtotal * ret_pct
         total = subtotal + iva - retenciones
 
-        subcliente = viaje.sub_client
-        cp_destino_real = getattr(subcliente, "codigo_postal", None)
-        if not cp_destino_real or str(cp_destino_real).strip() == "":
-            cp_destino_real = getattr(cliente, "codigo_postal_fiscal", "91808")
-
-        calle_destino_real = (
-            getattr(subcliente, "direccion", viaje.destination) or "DOMICILIO CONOCIDO"
+        nombre_cliente = (
+            getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
+            if cliente
+            else "PUBLICO EN GENERAL"
         )
+
+        cp_cliente_fiscal = (
+            str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
+        )
+        if not cp_cliente_fiscal:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal.",
+            )
+
+        rfc_cliente = (
+            str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
+        )
+        if not rfc_cliente or rfc_cliente == "XAXX010101000":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido. No se permite RFC genérico.",
+            )
+
+        subcliente = viaje.sub_client
+        cp_destino_fisico = (
+            str(getattr(subcliente, "codigo_postal", "")).strip() if subcliente else ""
+        )
+        if not cp_destino_fisico:
+            cp_destino_fisico = cp_cliente_fiscal
 
         loc_destino = (
             self.db.query(SatLocationCode)
-            .filter(SatLocationCode.codigo_postal == cp_destino_real)
+            .filter(SatLocationCode.codigo_postal == cp_destino_fisico)
             .first()
         )
         if loc_destino:
             estado_dest = loc_destino.estado_clave
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
-            cp_destino_real = "91808"
-            estado_dest = "VER"
-            municipio_dest = "193"
-            calle_destino_real = (
-                f"{calle_destino_real} (CP Original no catalogado en SAT)"
+            nombre_lugar = (
+                getattr(subcliente, "razon_social", nombre_cliente)
+                if subcliente
+                else nombre_cliente
             )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' (perteneciente a {nombre_lugar}) NO existe en la BD.",
+            )
+
+        tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
+        tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
+
+        raw_rfc = getattr(operador, "rfc", "")
+        rfc_op_final = (
+            re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
+        )
+        nombre_op = getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
+
+        if (
+            not rfc_op_final
+            or rfc_op_final == "XAXX010101000"
+            or len(rfc_op_final) != 13
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido de 13 caracteres. Detectado: '{rfc_op_final}'.",
+            )
+
+        # 🚀 LIMPIEZA ESTRICTA DE DIRECCIONES (SAT exige máximo 100 caracteres y sin símbolo pipe "|")
+        origen_real = (
+            str(viaje.origin or "DOMICILIO CONOCIDO").replace("|", "").strip()[:100]
+        )
+
+        raw_destino = (
+            getattr(subcliente, "direccion", viaje.destination)
+            if subcliente
+            else (viaje.destination or "DOMICILIO CONOCIDO")
+        )
+        calle_destino_real = str(raw_destino).replace("|", "").strip()[:100]
 
         c1 = getattr(viaje, "contenedor_1", "")
         c2 = getattr(viaje, "contenedor_2", "")
@@ -480,9 +533,6 @@ class BillingService:
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
-        tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
-        tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
-
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
@@ -491,13 +541,19 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
+            "forma_pago": "99",
+            "metodo_pago": "PPD",
+            "moneda": "MXN",
+            "tc": "1",
+            "tipo_comprobante": "I",
+            "condiciones_pago": condiciones_pago,
             "descripcion_concepto": desc_merc,
             "pdf_descripcion": pdf_descripcion,
-            "condiciones_pago": condiciones_pago,
             "clave_prod_serv": clave_servicio_flete,
-            "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
-            "nombre_cliente": cliente.razon_social if cliente else "PUBLICO EN GENERAL",
-            "cp_cliente": cp_destino_real,
+            "rfc_cliente": rfc_cliente,
+            "nombre_cliente": nombre_cliente,
+            "cp_cliente": cp_cliente_fiscal,
+            "cp_destino": cp_destino_fisico,
             "regimen_cliente": (
                 getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
             ),
@@ -542,28 +598,22 @@ class BillingService:
             "placa_remolque_2": (
                 getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
             ),
-            "rfc_operador": (
-                getattr(operador, "rfc", "XAXX010101000")
-                if operador
-                else "XAXX010101000"
-            ),
-            "nombre_operador": (
-                getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
-            ),
+            "rfc_operador": rfc_op_final,
+            "nombre_operador": nombre_op,
             "licencia": (
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
-            "domicilio_origen": viaje.origin or "DOMICILIO CONOCIDO",
-            "domicilio_destino": calle_destino_real,
-            "cp_destino": cp_destino_real,
             "estado_destino": estado_dest,
             "municipio_destino": municipio_dest,
+            # Asignamos las rutas ya cortadas a 100 caracteres max
+            "domicilio_origen": origen_real,
+            "domicilio_destino": calle_destino_real,
             "leyenda_legal": DEFAULT_LEYENDA,
             "ocultar_montos": ocultar_montos,
         }
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
-        logger.info("Generando XML Carta Porte (FINANZAS) y enviando al PAC...")
+        logger.info("Generando XML Factura/Carta Porte (FINANZAS) y enviando al PAC...")
         xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
 
         with open(self.path_cer, "rb") as f:
@@ -603,7 +653,7 @@ class BillingService:
                 )
 
             uuid_timbrado = res_sat.uuid
-            logger.info(f"¡CARTA PORTE TIMBRADA! UUID: {uuid_timbrado}")
+            logger.info(f"¡FACTURA TIMBRADA! UUID: {uuid_timbrado}")
 
             raw_cfdi = res_sat.cfdiTimbrado
             cfdi_bytes = (
@@ -668,8 +718,82 @@ class BillingService:
         except Exception as e:
             logger.error(f"Error en comunicación con PAC: {e}")
             raise HTTPException(
-                status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
+                status_code=500,
+                detail=f"Error al timbrar Factura/Carta Porte: {str(e)}",
             )
+
+    def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
+        d = SafeData(data)
+
+        rfc_op_final = str(d.get("rfc_operador", "")).strip()
+        nombre_op = str(d.get("nombre_operador", "Desconocido"))
+
+        if (
+            not rfc_op_final
+            or rfc_op_final == "XAXX010101000"
+            or len(rfc_op_final) != 13
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido de Persona Física (13 caracteres).",
+            )
+
+        relacion_xml = (
+            f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
+            if relacion_uuid
+            else ""
+        )
+
+        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque_1"]}" />'
+        if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
+            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
+
+        mat_peligroso = (
+            ' MaterialPeligroso="No"' if d["bienes_transp"] == "01010101" else ""
+        )
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="{d['forma_pago']}" CondicionesDePago="{d['condiciones_pago']}" SubTotal="{d['subtotal']}" Moneda="{d['moneda']}" TipoCambio="{d['tc']}" Total="{d['total']}" TipoDeComprobante="{d['tipo_comprobante']}" Exportacion="01" MetodoPago="{d['metodo_pago']}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+            <cfdi:Impuestos>
+                <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
+                <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
+        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
+        <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+        <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['total_dist_rec']}">
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
+                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['total_dist_rec']}">
+                    <cartaporte31:Domicilio Calle="{d['domicilio_destino']}" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>
+            <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
+                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
+                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
+                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
+                    <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
+                </cartaporte31:Autotransporte>
+            </cartaporte31:Mercancias>
+            <cartaporte31:FiguraTransporte>
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{rfc_op_final}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
+                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                </cartaporte31:TiposFigura>
+            </cartaporte31:FiguraTransporte>
+        </cartaporte31:CartaPorte>
+    </cfdi:Complemento>
+</cfdi:Comprobante>""".strip()
 
     def _generar_pdf_con_diseno(
         self, data, uuid, qr_bytes, s_sat, s_emi, c_sat, cadena_original, importe_letra
@@ -704,15 +828,7 @@ class BillingService:
             "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', 0))):,}",
             "conceptos": [
                 {
-                    "clave": d.get(
-                        "clave_prod_serv",
-                        (
-                            "84111506"
-                            if "Pago" in d.get("descripcion_concepto", "")
-                            else "78101802"
-                        ),
-                    ),
-                    "no_identificacion": "001",
+                    "clave": d.get("clave_prod_serv", "78101802"),
                     "cantidad": "1.00",
                     "unidad": (
                         "ACT"
@@ -740,16 +856,8 @@ class BillingService:
                 "metodo_pago",
                 "PUE" if _clean_float(d.get("total", 0)) <= 1.50 else "PPD",
             ),
-            "tipo_comprobante": (
-                "P (Pago)"
-                if "PAGO" in d.get("descripcion_concepto", "").upper()
-                else "I (Ingreso)"
-            ),
-            "moneda": (
-                "MXN"
-                if "PAGO" not in d.get("descripcion_concepto", "").upper()
-                else "XXX"
-            ),
+            "tipo_comprobante": "I (Ingreso)",
+            "moneda": "MXN",
             "tc": "1",
             "forma_pago": d.get("forma_pago", "99"),
             "condiciones_pago": d.get("condiciones_pago", "CONTADO"),
@@ -767,7 +875,7 @@ class BillingService:
             "destinatario_nombre": d.get("nombre_cliente", ""),
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
-            "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_cliente', '')}",
+            "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
@@ -848,6 +956,7 @@ class BillingService:
 
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+
             factura.status_sat = "CANCELADO"
             self.db.add(factura)
             self.db.commit()
@@ -873,6 +982,7 @@ class BillingService:
         )
         if not facturas_pendientes:
             return {"mensaje": "Sin pendientes", "procesadas": 0, "resultados": []}
+
         resultados = []
         for factura in facturas_pendientes:
             try:
@@ -902,61 +1012,3 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
-
-    def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
-        d = SafeData(data)
-        relacion_xml = (
-            f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
-            if relacion_uuid
-            else ""
-        )
-        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque_1"]}" />'
-        if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
-            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
-
-        mat_peligroso = (
-            ' MaterialPeligroso="No"' if d["bienes_transp"] == "01010101" else ""
-        )
-
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
-    <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
-            <cfdi:Impuestos>
-                <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-                <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-            </cfdi:Impuestos>
-        </cfdi:Concepto>
-    </cfdi:Conceptos>
-    <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
-        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-        <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-    </cfdi:Impuestos>
-    <cfdi:Complemento>
-        <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['total_dist_rec']}">
-            <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['total_dist_rec']}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
-                </cartaporte31:Ubicacion>
-            </cartaporte31:Ubicaciones>
-            <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
-                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
-                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
-                    <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
-                </cartaporte31:Autotransporte>
-            </cartaporte31:Mercancias>
-            <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:TiposFigura>
-            </cartaporte31:FiguraTransporte>
-        </cartaporte31:CartaPorte>
-    </cfdi:Complemento>
-</cfdi:Comprobante>""".strip()

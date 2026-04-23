@@ -188,21 +188,39 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  // 🚀 FIX: CONTROL ESTRICTO DE ESTADO (Evita la fuga de datos entre viajes)
+  // 🚀 FIX MAGISTRAL: "Memoria Fotográfica" con localStorage
   useEffect(() => {
     if (open && initialTrip) {
       setLocalTrip(initialTrip);
+
+      // UUID Nominal (Carta Porte Bypass)
       setLocalUuid(initialTrip.uuid_fiscal || null);
 
-      // Reseteamos siempre el UUID final al abrir un nuevo viaje
-      setFinalUuid(null);
+      // Buscamos UUID Final en el JSON (si por milagro viene)
+      const facturas =
+        (initialTrip as any).receivable_invoices ||
+        (initialTrip as any).invoices ||
+        [];
+      const facturaFinal = facturas.find(
+        (f: any) => f.is_nominal === false && f.uuid,
+      );
+      const incomingFinalUuid =
+        (initialTrip as any).uuid_factura_final || facturaFinal?.uuid;
+
+      // Buscamos en nuestra memoria caché del navegador por si el backend no lo mandó
+      const cachedFinalUuid = localStorage.getItem(
+        `final_uuid_${initialTrip.id}`,
+      );
+
+      // Seteamos lo que encontremos (priorizando lo que ya sabíamos que se timbró)
+      setFinalUuid(incomingFinalUuid || cachedFinalUuid || null);
 
       setTarifaBase(initialTrip.tarifa_base || 0);
       setCostoCasetas(initialTrip.costo_casetas || 0);
       setIsEditing(false);
       setActiveTab("fases");
-    } else {
-      // Limpieza total cuando se cierra el modal
+    } else if (!open) {
+      // Limpieza SÓLO cuando se cierra el modal
       setLocalTrip(null);
       setLocalUuid(null);
       setFinalUuid(null);
@@ -210,17 +228,31 @@ export function TripDetailsModal({
       setCostoCasetas(0);
       setIsEditing(false);
     }
-  }, [open, initialTrip?.id]);
+  }, [open, initialTrip]);
 
   const refreshLocalTrip = async () => {
     if (!localTrip?.id) return;
     try {
       const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
-      // Sincronizamos el UUID de carta porte si existe
+
       if (res.data.uuid_fiscal) {
         setLocalUuid(res.data.uuid_fiscal);
       }
+
+      // 🚀 Re-evaluamos con el caché para evitar que el JSON vacío borre el botón
+      const facturas = res.data.receivable_invoices || res.data.invoices || [];
+      const facturaFinal = facturas.find(
+        (f: any) => f.is_nominal === false && f.uuid,
+      );
+      const incomingFinalUuid =
+        res.data.uuid_factura_final || facturaFinal?.uuid;
+      const cachedFinalUuid = localStorage.getItem(
+        `final_uuid_${localTrip.id}`,
+      );
+
+      setFinalUuid(incomingFinalUuid || cachedFinalUuid || null);
+
       await fetchTrips();
     } catch (e) {
       console.error("Error recargando viaje local", e);
@@ -496,7 +528,7 @@ export function TripDetailsModal({
   if (!localTrip) return null;
 
   return (
-    <>
+    <div>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-card/95 backdrop-blur-xl border border-border flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
           {/* HEADER PRINCIPAL */}
@@ -1146,12 +1178,7 @@ export function TripDetailsModal({
                                     {formatCurrency(finanzasComercial.base)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-tight">
-                                  <span>Reembolso Casetas:</span>
-                                  <span className="font-mono text-brand-navy dark:text-white text-base">
-                                    {formatCurrency(finanzasComercial.casetas)}
-                                  </span>
-                                </div>
+
                                 <Separator className="my-4 dark:bg-white/10" />
                                 <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>Subtotal:</span>
@@ -1199,8 +1226,8 @@ export function TripDetailsModal({
                                     <br />
                                     <span className="text-blue-500 font-medium lowercase">
                                       *Nota: El botón se habilitará para generar
-                                      la factura solo si el viaje no cuenta con
-                                      un UUID final registrado por Tesorería.
+                                      la factura solo si el viaje cuenta con un
+                                      UUID de Carta Porte.
                                     </span>
                                   </div>
                                 </div>
@@ -1213,7 +1240,7 @@ export function TripDetailsModal({
                                         ? "bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
                                         : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
                                     )}
-                                    // Bloqueamos si ya hay factura final (pero no lo mostramos como para timbrar de nuevo)
+                                    // Bloqueamos si está timbrando, o si no hay localUuid (Carta Porte)
                                     disabled={
                                       isStamping ||
                                       (!localUuid &&
@@ -1239,11 +1266,18 @@ export function TripDetailsModal({
                                           localTrip.id,
                                           uuidToRelate,
                                           async (responseData: any) => {
+                                            // 🚀 TRUCO DE MEMORIA: Guardamos el UUID en localStorage para que no se borre
                                             const generatedFinalUuid =
                                               responseData?.data?.uuid ||
                                               responseData?.uuid;
+
                                             if (generatedFinalUuid) {
                                               setFinalUuid(generatedFinalUuid);
+                                              localStorage.setItem(
+                                                `final_uuid_${localTrip.id}`,
+                                                generatedFinalUuid,
+                                              );
+
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
@@ -1418,6 +1452,6 @@ export function TripDetailsModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

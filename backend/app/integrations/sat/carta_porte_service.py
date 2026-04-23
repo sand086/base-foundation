@@ -121,17 +121,11 @@ def parse_sat_error(e: Exception) -> str:
 # MAPEO INTELIGENTE DE REMOLQUES SAT (CTR001 - CTR032)
 # =========================================================
 def get_sat_trailer_code(tipo: str) -> str:
-    """
-    Convierte descripciones libres de tu Base de Datos (ej. 'Caja Seca', 'Chasis', 'Dolly')
-    a los códigos oficiales del SAT CTRXXX.
-    """
     if not tipo:
-        return "CTR004"  # Default: Caja Cerrada
-
+        return "CTR004"
     tipo_upper = str(tipo).strip().upper()
     if re.match(r"^CTR0[0-9]{2}$", tipo_upper):
-        return tipo_upper  # Ya es un código CTR válido
-
+        return tipo_upper
     tipo_lower = tipo_upper.lower()
 
     if "caballete" in tipo_lower:
@@ -198,8 +192,7 @@ def get_sat_trailer_code(tipo: str) -> str:
         return "CTR031"
     if "caja" in tipo_lower:
         return "CTR002"
-
-    return "CTR004"  # Respaldo seguro si no se reconoce
+    return "CTR004"
 
 
 class SafeData(dict):
@@ -221,9 +214,11 @@ class SafeData(dict):
             if key in ["total_dist_rec", "cantidad", "tc"]:
                 return "1"
             if "rfc" in key.lower():
+                if key.lower() in ["rfc_operador", "rfc_cliente"]:
+                    return ""
                 return "XAXX010101000"
             if "cp" in key.lower():
-                return "91700"
+                return ""
             if key in ["contenedor_1", "contenedor_2"]:
                 return "N/A"
             return "NO_ESPECIFICADO"
@@ -341,7 +336,7 @@ class CartaPorteService:
         )
         self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91808"
 
-        # 🚀 CORRECCIÓN DE LA TRÍADA PARA EL EMISOR
+        # VALIDACIÓN DEL CP ORIGEN (EMISOR)
         loc_emisor = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == self.emisor_cp)
@@ -351,9 +346,10 @@ class CartaPorteService:
             self.emisor_estado = loc_emisor.estado_clave
             self.emisor_municipio = str(loc_emisor.municipio_clave).zfill(3)
         else:
-            self.emisor_cp = "91808"
-            self.emisor_estado = "VER"
-            self.emisor_municipio = "193"
+            raise HTTPException(
+                status_code=400,
+                detail=f"ERROR INTERNO: El CP de Origen (Emisor) '{self.emisor_cp}' no existe en el catálogo sat_location_codes. Debes insertarlo en la base de datos.",
+            )
 
     def _generar_sello_xslt(self, xml_bytes: bytes) -> tuple[str, str]:
         xslt_path = (
@@ -398,10 +394,10 @@ class CartaPorteService:
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
+
         cliente = (
             self.db.query(ClientModel).filter(ClientModel.id == viaje.client_id).first()
         )
-
         if not viaje.legs:
             raise HTTPException(
                 status_code=400, detail="El viaje no tiene tramos (TripLeg)."
@@ -449,30 +445,66 @@ class CartaPorteService:
         retenciones = subtotal * 0.04
         total = subtotal + iva - retenciones
 
-        # 🚀 CORRECCIÓN DE LA TRÍADA PARA EL DESTINO
-        cp_cliente = (
-            getattr(cliente, "codigo_postal_fiscal", "91808") if cliente else "91808"
+        nombre_cliente = (
+            getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
+            if cliente
+            else "PUBLICO EN GENERAL"
         )
+
+        # 🚀 VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
+        cp_cliente = (
+            str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
+        )
+        if not cp_cliente:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal guardado en el catálogo de clientes.",
+            )
+
+        # 🚀 VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
+        rfc_cliente = (
+            str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
+        )
+        if not rfc_cliente or rfc_cliente == "XAXX010101000":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido. No se permite RFC genérico en Carta Porte 3.1.",
+            )
+
+        # 🚀 VALIDACIÓN CRÍTICA SAT CP147: ESTADO Y MUNICIPIO DEL CLIENTE
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_cliente)
             .first()
         )
-
         if loc_destino:
             estado_dest = loc_destino.estado_clave
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
-            logger.warning(
-                f"CP {cp_cliente} no encontrado en BD. Usando tríada fallback Veracruz."
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error Carta Porte 3.1 (CP147): El código postal '{cp_cliente}' de tu cliente '{nombre_cliente}' NO existe en la base de datos 'sat_location_codes'. Insértalo en tu base de datos para que el sistema pueda encontrar su Estado y Municipio.",
             )
-            cp_cliente = "91808"
-            estado_dest = "VER"
-            municipio_dest = "193"
 
-        # 🚀 Aplicando mapeo inteligente
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
         tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
+
+        # 🚀 VALIDACIÓN CRÍTICA SAT CP195: OPERADOR
+        raw_rfc = getattr(operador, "rfc", "")
+        rfc_op_final = (
+            re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
+        )
+        nombre_op = getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
+
+        if (
+            not rfc_op_final
+            or rfc_op_final == "XAXX010101000"
+            or len(rfc_op_final) != 13
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC de Persona Física válido (13 caracteres). RFC detectado: '{rfc_op_final}'.",
+            )
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
@@ -487,8 +519,8 @@ class CartaPorteService:
                 if is_nominal
                 else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
             ),
-            "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
-            "nombre_cliente": cliente.razon_social if cliente else "PUBLICO EN GENERAL",
+            "rfc_cliente": rfc_cliente,
+            "nombre_cliente": nombre_cliente,
             "cp_cliente": cp_cliente,
             "regimen_cliente": (
                 getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
@@ -536,7 +568,6 @@ class CartaPorteService:
             "poliza": (
                 getattr(unidad, "poliza_resp_civil", "123456") if unidad else "123456"
             ),
-            # MAGIA DEL MAPEO
             "subtipo_remolque": get_sat_trailer_code(tipo_r1_bruto),
             "placa_remolque_1": (
                 getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
@@ -545,14 +576,8 @@ class CartaPorteService:
             "placa_remolque_2": (
                 getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
             ),
-            "rfc_operador": (
-                getattr(operador, "rfc", "XAXX010101000")
-                if operador
-                else "XAXX010101000"
-            ),
-            "nombre_operador": (
-                getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
-            ),
+            "rfc_operador": rfc_op_final,
+            "nombre_operador": nombre_op,
             "licencia": (
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
@@ -672,11 +697,13 @@ class CartaPorteService:
 
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
+
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
             if relacion_uuid
             else ""
         )
+
         remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d["subtipo_remolque"]}" Placa="{d["placa_remolque_1"]}" />'
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
