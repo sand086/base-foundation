@@ -494,66 +494,90 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        # 🚀 FIX TESORERÍA: GUARDAR PAGOS (POR FACTURA) Y UN SOLO MOVIMIENTO BANCARIO
+        # 🚀 FIX TESORERÍA BLINDADO: GUARDAR PAGOS MÚLTIPLES Y EL BANCO
         # =========================================================================
-
-        # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
-        bank_account_id = cuenta_deposito
-        if not bank_account_id:
-            caja_general = (
-                self.db.query(BankAccount)
-                .filter(
-                    BankAccount.alias == "Caja General Virtual",
-                    BankAccount.record_status != RecordStatus.ELIMINADO,
+        try:
+            # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
+            bank_account_id = cuenta_deposito
+            if not bank_account_id:
+                caja_general = (
+                    self.db.query(BankAccount)
+                    .filter(
+                        BankAccount.alias == "Caja General Virtual",
+                        BankAccount.record_status != RecordStatus.ELIMINADO,
+                    )
+                    .first()
                 )
-                .first()
-            )
-            if not caja_general:
-                caja_general = BankAccount(
-                    banco="Efectivo / Virtual",
-                    numero_cuenta="0000000000",
-                    alias="Caja General Virtual",
-                    tipo_cuenta="virtual",
-                    saldo=0.0,
-                    created_by_id=user_id,
+                if not caja_general:
+                    caja_general = BankAccount(
+                        banco="Efectivo / Virtual",
+                        numero_cuenta="0000000000",
+                        alias="Caja General Virtual",
+                        tipo_cuenta="virtual",
+                        saldo=0.0,
+                        created_by_id=user_id,
+                    )
+                    self.db.add(caja_general)
+                    self.db.flush()
+                bank_account_id = caja_general.id
+
+            # Parseo súper seguro para que no truene si la fecha viene mal
+            fecha_pago_clean = str(fecha_pago).replace("Z", "").split("T")[0]
+            try:
+                fecha_pago_date = datetime.strptime(fecha_pago_clean, "%Y-%m-%d").date()
+            except Exception:
+                fecha_pago_date = datetime.now().date()
+
+            # 2. GUARDAMOS EL HISTORIAL DE PAGOS EN CXC POR CADA FACTURA
+            for factura in facturas_afectadas:
+                # 🚀 FIX VITAL: Buscamos coincidencia comparando strings para evitar fallos de int vs str
+                abono = next(
+                    (
+                        p
+                        for p in pagos_data
+                        if str(p.get("invoice_id")) == str(factura.id)
+                    ),
+                    None,
                 )
-                self.db.add(caja_general)
-                self.db.flush()
-            bank_account_id = caja_general.id
+                monto_abono_float = (
+                    float(abono.get("monto_pagado", 0)) if abono else 0.0
+                )
 
-        # 2. GUARDAMOS EL HISTORIAL DE PAGOS EN CXC POR CADA FACTURA
-        for factura in facturas_afectadas:
-            abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
-            monto_abono_float = float(abono.get("monto_pagado"))
+                if monto_abono_float > 0:
+                    nuevo_pago = ReceivableInvoicePayment(
+                        invoice_id=factura.id,
+                        bank_account_id=int(bank_account_id),
+                        fecha_pago=fecha_pago_date,
+                        monto=monto_abono_float,
+                        metodo_pago=str(forma_pago),
+                        referencia=str(referencia) if referencia else "",
+                        cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
+                        complemento_uuid=str(complemento_uuid),
+                    )
+                    self.db.add(nuevo_pago)
 
-            nuevo_pago = ReceivableInvoicePayment(
-                invoice_id=factura.id,
-                bank_account_id=int(
-                    bank_account_id
-                ),  # 🚀 Ligar con la cuenta bancaria real
-                fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
-                monto=monto_abono_float,
-                metodo_pago=forma_pago,
-                referencia=referencia,
-                cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
-                complemento_uuid=complemento_uuid,
+            # 3. CREAMOS UN UNICO MOVIMIENTO BANCARIO POR EL TOTAL (Tesorería Consolidada)
+            total_recibido_float = float(total_recibido)
+            if total_recibido_float > 0:
+                mov_schema = finance_schemas.BankMovementCreate(
+                    bank_account_id=int(bank_account_id),
+                    tipo="ingreso",
+                    monto=total_recibido_float,
+                    concepto=f"Cobro Múltiple (REP) Cliente: {nombre_limpio}"[:250],
+                    referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
+                )
+                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+
+        except Exception as e:
+            # Si el banco truena, NO hacemos rollback porque el SAT ya hizo el timbre.
+            # Solo avisamos a consola, pero aseguramos que las facturas queden pagadas.
+            logger.error(
+                f"Error crítico al guardar movimientos bancarios del REP {complemento_uuid}: {str(e)}"
             )
-            self.db.add(nuevo_pago)
 
-        # 3. CREAMOS UN UNICO MOVIMIENTO BANCARIO POR EL TOTAL
-        # Esto refleja la realidad: 1 depósito bancario que cubre N facturas.
-        if total_recibido > 0:
-            mov_schema = finance_schemas.BankMovementCreate(
-                bank_account_id=int(bank_account_id),
-                tipo="ingreso",
-                monto=float(total_recibido),
-                concepto=f"Cobro Múltiple (REP) Cliente: {nombre_limpio}",
-                referencia=referencia or f"REP {complemento_uuid[:8]}",
-            )
-            # Ejecutamos la inserción real en Banco y Movimientos Bancarios
-            create_bank_movement(self.db, mov_schema, current_user_id=user_id)
-
+        # Aplicamos todos los cambios finales a las facturas y al banco
         self.db.commit()
+
         return {
             "status": "success",
             "message": "Pago registrado y Complemento timbrado exitosamente.",
