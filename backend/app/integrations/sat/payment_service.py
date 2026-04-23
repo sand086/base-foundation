@@ -511,30 +511,56 @@ class PaymentComplementService:
             abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
             monto_abono_float = float(abono.get("monto_pagado"))
 
+            # 🚀 GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
+            bank_account_id = cuenta_deposito
+            if not bank_account_id:
+                caja_general = (
+                    self.db.query(BankAccount)
+                    .filter(
+                        BankAccount.alias == "Caja General Virtual",
+                        BankAccount.record_status != RecordStatus.ELIMINADO,
+                    )
+                    .first()
+                )
+                if not caja_general:
+                    caja_general = BankAccount(
+                        banco="Efectivo / Virtual",
+                        numero_cuenta="0000000000",
+                        alias="Caja General Virtual",
+                        tipo_cuenta="virtual",
+                        saldo=0.0,
+                        created_by_id=user_id,
+                    )
+                    self.db.add(caja_general)
+                    self.db.flush()
+                bank_account_id = caja_general.id
+
             # 1. Guardar el pago de la factura en el historial (CxC)
             nuevo_pago = ReceivableInvoicePayment(
                 invoice_id=factura.id,
+                bank_account_id=int(
+                    bank_account_id
+                ),  # 🚀 Ligar con la cuenta bancaria real
                 fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
                 monto=monto_abono_float,
                 metodo_pago=forma_pago,
                 referencia=referencia,
-                cuenta_deposito=cuenta_deposito,
+                cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
                 complemento_uuid=complemento_uuid,
             )
             self.db.add(nuevo_pago)
 
             # 2. Sumar el dinero al Banco usando el motor atómico de Tesorería
-            if cuenta_deposito:
-                mov_schema = finance_schemas.BankMovementCreate(
-                    bank_account_id=int(cuenta_deposito),
-                    tipo="ingreso",
-                    monto=monto_abono_float,
-                    concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
-                    referencia=referencia or f"REP {complemento_uuid[:8]}",
-                )
+            mov_schema = finance_schemas.BankMovementCreate(
+                bank_account_id=int(bank_account_id),
+                tipo="ingreso",
+                monto=monto_abono_float,
+                concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
+                referencia=referencia or f"REP {complemento_uuid[:8]}",
+            )
 
-                # Ejecutamos la inserción real en Banco y Movimientos Bancarios
-                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+            # Ejecutamos la inserción real en Banco y Movimientos Bancarios
+            create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 
         self.db.commit()
         return {
