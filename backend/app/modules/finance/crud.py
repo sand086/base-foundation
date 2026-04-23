@@ -783,6 +783,35 @@ def process_sat_master_report(
                     else models.InvoiceStatus.PAGO_PARCIAL
                 )
 
+                # --- 🚀 NUEVO: AFECTAR BANCOS EN CARGA MASIVA ---
+                # Busca una cuenta comodín para ingresos/egresos del SAT
+                cuenta_comodin = (
+                    db.query(models.BankAccount)
+                    .filter_by(alias="Por Conciliar (SAT)")
+                    .first()
+                )
+                if not cuenta_comodin:
+                    cuenta_comodin = models.BankAccount(
+                        banco="SAT Virtual",
+                        numero_cuenta="000",
+                        alias="Por Conciliar (SAT)",
+                        tipo_cuenta="virtual",
+                    )
+                    db.add(cuenta_comodin)
+                    db.flush()
+
+                tipo_movimiento = "ingreso" if is_cxc else "egreso"
+                mov_schema = schemas.BankMovementCreate(
+                    bank_account_id=cuenta_comodin.id,
+                    tipo=tipo_movimiento,
+                    monto=total,
+                    concepto=f"Carga SAT REP - {uuid_fiscal[:8]}",
+                    referencia="Carga SAT",
+                )
+
+                # Usamos el motor atómico para afectar el saldo bancario de forma segura
+                create_bank_movement(db, mov_schema, current_user_id=1)
+
             resultados["complementos_procesados"] += 1
 
     db.commit()

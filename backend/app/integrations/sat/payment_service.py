@@ -42,6 +42,10 @@ from app.models.models import (
     BankMovement,
 )
 
+# 🚀 IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
+from app.modules.finance.crud import create_bank_movement
+from app.modules.finance import schemas as finance_schemas
+
 logger = logging.getLogger("billing.audit")
 
 
@@ -218,6 +222,7 @@ class PaymentComplementService:
         cuenta_deposito,
         banco_ordenante: str = "",
         cuenta_ordenante: str = "",
+        user_id: int = 1,  # 🚀 Permite registrar el ID de quien hizo el movimiento en el banco
     ):
         logger.info(
             f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO (SERVICIO AISLADO) ---"
@@ -484,13 +489,13 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        # 🚀 FIX TESORERÍA: GUARDAR PAGOS Y CREAR MOVIMIENTO BANCARIO
+        # 🚀 FIX TESORERÍA: GUARDAR PAGOS Y CREAR MOVIMIENTO BANCARIO SEGURO
         # =========================================================================
         for factura in facturas_afectadas:
             abono = next(p for p in pagos_data if p["invoice_id"] == factura.id)
             monto_abono_float = float(abono.get("monto_pagado"))
 
-            # 1. Guardar el pago de la factura
+            # 1. Guardar el pago de la factura en el historial (CxC)
             nuevo_pago = ReceivableInvoicePayment(
                 invoice_id=factura.id,
                 fecha_pago=datetime.fromisoformat(fecha_pago.replace("Z", "")).date(),
@@ -502,28 +507,17 @@ class PaymentComplementService:
             )
             self.db.add(nuevo_pago)
 
-            # 2. Sumar el dinero al Banco
+            # 2. Sumar el dinero al Banco usando el motor atómico de Tesorería
             if cuenta_deposito:
-                banco = (
-                    self.db.query(BankAccount)
-                    .filter(BankAccount.id == int(cuenta_deposito))
-                    .first()
+                mov_schema = finance_schemas.BankMovementCreate(
+                    bank_account_id=int(cuenta_deposito),
+                    tipo="ingreso",
+                    monto=monto_abono_float,
+                    concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
+                    referencia=referencia or f"REP {complemento_uuid[:8]}",
                 )
-                if banco:
-                    nuevo_ingreso = BankMovement(
-                        bank_account_id=banco.id,
-                        tipo="ingreso",
-                        monto=monto_abono_float,
-                        fecha=datetime.now(),
-                        concepto=f"Cobro Fra. {factura.folio_interno} (REP)",
-                        referencia=referencia or f"REP {complemento_uuid[:8]}",
-                        conciliado=False,
-                        origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI de Tesorería
-                    )
-                    self.db.add(nuevo_ingreso)
-                    # Sumamos el saldo a la cuenta bancaria
-                    banco.saldo += monto_abono_float
-                    self.db.add(banco)
+
+                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 
         self.db.commit()
         return {

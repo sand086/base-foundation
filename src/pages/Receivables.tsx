@@ -110,7 +110,14 @@ export default function Receivables() {
     }
 
     return dataArray
-      .filter((inv: any) => Number(inv.monto_total) !== 1.12)
+      .filter((inv: any) => {
+        const montoValido = Number(inv.monto_total) !== 1.12;
+        const folioValido =
+          inv.folio_interno === null ||
+          inv.folio_interno !== "folio interno bueno";
+
+        return montoValido && folioValido;
+      })
       .map((inv: any) => {
         const clienteNombre =
           inv.client?.razon_social ||
