@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-// 👉 1. IMPORTAMOS TODOS LOS ICONOS DEL SIDEBAR
+//  1. IMPORTAMOS TODOS LOS ICONOS DEL SIDEBAR
 import {
   Shield,
   Plus,
@@ -67,7 +67,7 @@ import { useRoles } from "@/features/users/hooks/useRoles";
 import { ca } from "date-fns/locale";
 
 /**
- * 👉 2. TIPOS ACTUALIZADOS AL INGLÉS (Homologado con BD)
+ *  2. TIPOS ACTUALIZADOS AL INGLÉS (Homologado con BD)
  */
 type Permiso = {
   read: boolean;
@@ -101,7 +101,7 @@ type MeUser = {
   avatar_url?: string | null;
 };
 
-// 👉 3. MAPA DE ICONOS DINÁMICOS PARA EMPATAR CON EL SIDEBAR
+//  3. MAPA DE ICONOS DINÁMICOS PARA EMPATAR CON EL SIDEBAR
 const iconMap: Record<string, React.ElementType> = {
   dashboard: LayoutDashboard,
   clients: Users,
@@ -400,7 +400,7 @@ const RolesPermissions: React.FC = () => {
     return out;
   };
 
-  // 👉 4. TOGGLES REFACTORIZADOS AL INGLÉS
+  //  4. TOGGLES REFACTORIZADOS AL INGLÉS
 
   const handleTogglePermiso = (
     moduloId: string,
@@ -494,7 +494,7 @@ const RolesPermissions: React.FC = () => {
     setNewRoleName(role?.nombre || "");
     setNewRoleDescription(role?.descripcion || "");
 
-    // 👉 AQUÍ CARGAMOS EL BORRADOR LIMPIO
+    //  AQUÍ CARGAMOS EL BORRADOR LIMPIO
     setDraftPermisos(normalizePerms(role?.permisos, availableModules));
     setShowRoleEditor(true);
   };
@@ -838,7 +838,7 @@ const RolesPermissions: React.FC = () => {
                     </thead>
 
                     <tbody className="divide-y">
-                      {/* 👉 5. ITERAMOS LOS MÓDULOS DE LA BD */}
+                      {/*  5. ITERAMOS LOS MÓDULOS DE LA BD */}
                       {availableModules.map((modulo) => {
                         const permiso =
                           draftPermisos[modulo.id.toLowerCase()] ||

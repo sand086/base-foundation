@@ -467,7 +467,7 @@ export default function TripSettlement() {
       );
 
       // Para que veas en tu consola qué te manda realmente el backend
-      console.log("👉 API DE LIQUIDACIÓN DEVOLVIÓ:", response.data);
+      console.log(" API DE LIQUIDACIÓN DEVOLVIÓ:", response.data);
 
       // 2. 🚀 RESCATE DE BITÁCORA:
       // Buscamos si existe el texto de la auditoría en el historial del viaje

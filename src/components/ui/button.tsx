@@ -4,7 +4,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
-// 👉 1. IMPORTAMOS TU HOOK DE SEGURIDAD
+//  1. IMPORTAMOS TU HOOK DE SEGURIDAD
 import { usePermissions } from "@/hooks/use-permissions";
 
 const buttonVariants = cva(
@@ -46,7 +46,7 @@ const buttonVariants = cva(
   },
 );
 
-// 👉 2. AGREGAMOS LAS PROPS DE PERMISOS
+//  2. AGREGAMOS LAS PROPS DE PERMISOS
 export interface ButtonProps
   extends
     React.ButtonHTMLAttributes<HTMLButtonElement>,
@@ -61,11 +61,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     { className, variant, size, asChild = false, module, actionType, ...props },
     ref,
   ) => {
-    // 👉 3. OBTENEMOS LOS PERMISOS (Si no se pasa module, evalúa como true automáticamente)
+    //  3. OBTENEMOS LOS PERMISOS (Si no se pasa module, evalúa como true automáticamente)
     const { canRead, canCreate, canUpdate, canDelete, isAdmin } =
       usePermissions(module);
 
-    // 👉 4. LÓGICA DE INTERCEPCIÓN
+    //  4. LÓGICA DE INTERCEPCIÓN
     // Si el botón exige permisos y el usuario no es admin, evaluamos:
     if (module && actionType && !isAdmin) {
       if (actionType === "read" && !canRead) return null;

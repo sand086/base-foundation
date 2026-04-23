@@ -35,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuditLogs } from "@/features/audit/hooks/useAuditLogs";
 
-// 👉 1. IMPORTAMOS TU COMPONENTE MÁGICO
+//  1. IMPORTAMOS TU COMPONENTE MÁGICO
 import {
   EnhancedDataTable,
   ColumnDef,
@@ -194,7 +194,7 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
     [uiLogs],
   );
 
-  // 👉 2. DEFINICIÓN DE COLUMNAS PARA EL ENHANCED DATA TABLE
+  //  2. DEFINICIÓN DE COLUMNAS PARA EL ENHANCED DATA TABLE
   const columns: ColumnDef<AuditLogEntry>[] = useMemo(
     () => [
       {
@@ -306,7 +306,7 @@ export function AuditLogPanel({ open, onOpenChange }: AuditLogPanelProps) {
     [uniqueModules],
   );
 
-  // 👉 3. BOTÓN DE ACTUALIZAR INYECTADO EN LA BARRA DE FILTROS
+  //  3. BOTÓN DE ACTUALIZAR INYECTADO EN LA BARRA DE FILTROS
   const RefreshButton = (
     <Button
       variant="outline"
