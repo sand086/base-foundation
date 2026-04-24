@@ -1084,7 +1084,6 @@ class PayableInvoice(AuditMixin, Base):
     supplier_id = Column(
         Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True
     )
-
     viaje_id = Column(
         Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
     )
@@ -1094,29 +1093,51 @@ class PayableInvoice(AuditMixin, Base):
     categoria_indirecto_id = Column(
         Integer, ForeignKey("indirect_expense_categories.id"), nullable=True
     )
-
     orden_compra_id = Column(
         Integer, ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # NUEVO: Relación a CECO (nullable=True para no romper registros existentes)
+    cost_center_id = Column(
+        Integer, ForeignKey("cost_centers.id", ondelete="RESTRICT"), nullable=True
     )
 
     uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
 
+    # NUEVO: Campos SAT (nullable=True)
+    serie = Column(String(20), nullable=True)
+    folio = Column(String(50), nullable=True)
+
     subtotal = Column(Float, default=0.0)
+    # NUEVO: Descuento
+    descuento = Column(Float, default=0.0)
     iva = Column(Float, default=0.0)
     retenciones = Column(Float, default=0.0)
     monto_total = Column(Float, nullable=False)
     saldo_pendiente = Column(Float, nullable=False)
 
+    # NUEVO: Impuestos detallados (usamos server_default para que la BD no llore con los viejos)
+    desglose_impuestos = Column(JSONB, default=dict, server_default="{}")
+
     moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
+    # NUEVO: Tipo de cambio
+    tipo_cambio = Column(Float, default=1.0)
+
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
     concepto = Column(String(200))
+
+    # MANTENIDO: No borramos este campo para no romper tu código actual
     clasificacion = Column(String(50))
 
-    metodo_pago = Column(String(5), nullable=True)  # PUE o PPD
-    forma_pago = Column(String(5), nullable=True)  # 01, 03, 99...
+    metodo_pago = Column(String(5), nullable=True)
+    forma_pago = Column(String(5), nullable=True)
     tipo_comprobante = Column(String(5), nullable=True)
+
+    # NUEVO: Clasificadores SAT
+    uso_cfdi = Column(String(5), nullable=True)
+    validacion_efos = Column(Boolean, default=False, server_default="false")
 
     estatus = Column(
         pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
@@ -1126,10 +1147,26 @@ class PayableInvoice(AuditMixin, Base):
     xml_url = Column(String(500))
 
     supplier = relationship("Supplier", back_populates="invoices")
+    cost_center = relationship("CostCenter", back_populates="invoices")
     payments = relationship(
         "InvoicePayment", back_populates="invoice", cascade="all, delete-orphan"
     )
     document_history = relationship("InvoiceDocumentHistory", back_populates="invoice")
+
+
+## =========================================================
+# COSTOS (CECOS)
+# =========================================================
+class CostCenter(AuditMixin, Base):
+    __tablename__ = "cost_centers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(20), unique=True, nullable=False, index=True)
+    nombre = Column(String(100), nullable=False)
+    presupuesto_mensual = Column(Float, default=0.0)
+    activo = Column(Boolean, default=True)
+
+    invoices = relationship("PayableInvoice", back_populates="cost_center")
 
 
 class InvoiceDocumentHistory(AuditMixin, Base):
@@ -1156,6 +1193,12 @@ class InvoicePayment(AuditMixin, Base):
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
+
+    # NUEVOS: Complementos de pago (nullable=True para no romper pagos viejos)
+    parcialidad = Column(Integer, default=1, server_default="1")
+    saldo_anterior = Column(Float, nullable=True)
+    saldo_insoluto = Column(Float, nullable=True)
+
     metodo_pago = Column(String(50))
     referencia = Column(String(100))
     cuenta_retiro = Column(String(50))

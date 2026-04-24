@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BankAccount } from "../types";
 
-// 🚀 FIX: Importamos nuestra función global para los logos
+//   FIX: Importamos nuestra función global para los logos
 import { getBankLogo } from "../utils/bankUtils";
 
 interface BankAccountsTabProps {
@@ -150,7 +150,7 @@ export function BankAccountsTab({
                 {/* CONTENIDO DE LA TARJETA */}
                 <CardContent className="p-6 flex flex-col justify-between h-full pt-7">
                   <div className="flex items-center gap-4 mb-5">
-                    {/* 🚀 FIX: Contenedor visual del nuevo Logo SVG */}
+                    {/*   FIX: Contenedor visual del nuevo Logo SVG */}
                     <div className="flex items-center justify-center w-12 h-12 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-100 dark:border-white/5 shadow-inner shrink-0">
                       {logoSvg ? (
                         <img

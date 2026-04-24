@@ -98,7 +98,7 @@ export type WizardData = {
 
   leg_type: string;
 
-  // 🚀 CAMPOS PARA EL MOTOR DUAL (1 TIMBRE)
+  //   CAMPOS PARA EL MOTOR DUAL (1 TIMBRE)
   conoceRutaCompleta: boolean;
   unit2Id: string;
   driver2Id: string;
@@ -332,11 +332,16 @@ export const DispatchWizard = ({
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { unidades } = useUnits();
+  // 🚀 INYECCIÓN PASO 3.1: Obtenemos fetchLastOdometer
+  const { unidades, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { createTrip, trips } = useTrips();
   const { clients } = useClients();
   const { products: satProducts } = useSatCatalogs();
+
+  // 🚀 INYECCIÓN PASO 3.2: Estados para almacenar la memoria de los camiones
+  const [odoTramo1, setOdoTramo1] = useState(0);
+  const [odoTramo2, setOdoTramo2] = useState(0);
 
   const availableSatProducts = useMemo(
     () =>
@@ -382,6 +387,23 @@ export const DispatchWizard = ({
     anticipo_combustible: initialData?.anticipo_combustible || 0,
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
   });
+
+  // 🚀 INYECCIÓN PASO 3.3: Efectos silenciosos que consultan el backend cuando se escoge un camión
+  useEffect(() => {
+    if (data.unitId) {
+      fetchLastOdometer(data.unitId).then(setOdoTramo1);
+    } else {
+      setOdoTramo1(0);
+    }
+  }, [data.unitId, fetchLastOdometer]);
+
+  useEffect(() => {
+    if (data.unit2Id) {
+      fetchLastOdometer(data.unit2Id).then(setOdoTramo2);
+    } else {
+      setOdoTramo2(0);
+    }
+  }, [data.unit2Id, fetchLastOdometer]);
 
   useEffect(() => {
     if (!data.clienteId && tripIdParam && trips.length > 0 && !tripFromState) {
@@ -658,7 +680,7 @@ export const DispatchWizard = ({
           unit_id: cleanId(data.unitId) || null,
           leg_type: data.leg_type || "carga_muelle",
           operator_id: cleanId(data.driverId) || null,
-          odometro_inicial: 0,
+          odometro_inicial: odoTramo1, // 🚀 PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
           nivel_tanque_inicial: 0,
         };
 
@@ -667,7 +689,7 @@ export const DispatchWizard = ({
             unit_id: cleanId(data.unit2Id) || null,
             operator_id: cleanId(data.driver2Id) || null,
             leg_type: "ruta_carretera",
-            odometro_inicial: 0,
+            odometro_inicial: odoTramo2, // 🚀 PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
             nivel_tanque_inicial: 0,
           };
         }
@@ -697,7 +719,7 @@ export const DispatchWizard = ({
                 "Vinculando viaje y timbrando documento con SAT. Por favor espera.",
             });
 
-            // 🚀 DECISIÓN DEL MOTOR DUAL
+            //   DECISIÓN DEL MOTOR DUAL
             const isOneShot = data.conoceRutaCompleta;
             const endpoint = isOneShot
               ? "/api/sat/stamp/one-shot"
@@ -1642,7 +1664,7 @@ export const DispatchWizard = ({
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
                   <div className="flex items-center gap-3">
                     <TahoeIconPlate tone="blue" className="h-10 w-10">
-                      <MapPin className="h-5 w-5" />
+                      <MapPin className="h-5 w-5 text-slate-500 dark:text-white/70" />
                     </TahoeIconPlate>
                     <CardTitle className="text-sm text-blue-900 dark:text-blue-300 font-black uppercase tracking-widest">
                       Datos de la Ruta
@@ -1698,7 +1720,7 @@ export const DispatchWizard = ({
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
                   <div className="flex items-center gap-3">
                     <TahoeIconPlate tone="green" className="h-10 w-10">
-                      <ClipboardList className="h-5 w-5" />
+                      <ClipboardList className="h-5 w-5 text-slate-500 dark:text-white/70" />
                     </TahoeIconPlate>
                     <CardTitle className="text-sm text-emerald-900 dark:text-emerald-300 font-black uppercase tracking-widest">
                       Asignación y Mercancía

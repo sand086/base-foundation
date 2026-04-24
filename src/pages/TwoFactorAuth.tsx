@@ -233,7 +233,7 @@ export default function TwoFactorAuth() {
                   </span>
                 ) : (
                   <span className="flex items-center justify-center gap-2">
-                    <CheckCircle2 className="h-5 w-5" />
+                    <CheckCircle2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
                     Verificar Acceso
                   </span>
                 )}

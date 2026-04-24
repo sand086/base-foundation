@@ -130,7 +130,7 @@ def get_dashboard_stats(
 
             rend_real = 0.0
 
-            # 🚀 LA REGLA DE ORO: Si hay más de 1 ticket, calculamos. Si no, es 0.0
+            #   LA REGLA DE ORO: Si hay más de 1 ticket, calculamos. Si no, es 0.0
             if len(fuel_logs_op) > 1:
                 odometros = [f.odometro for f in fuel_logs_op]
                 litros = [f.litros for f in fuel_logs_op]

@@ -88,7 +88,7 @@ const creditDaysOptions = [
   { value: 60, label: "60 días" },
 ];
 
-// 🚀 FIX: Lista Inteligente de Unidades de Medida SAT (Las más usadas en Logística y Transporte)
+//   FIX: Lista Inteligente de Unidades de Medida SAT (Las más usadas en Logística y Transporte)
 const SAT_UNITS = [
   { clave: "E48", descripcion: "Unidad de servicio" },
   { clave: "ACT", descripcion: "Actividad" },
@@ -665,7 +665,7 @@ export function CreateInvoiceModal({
             </div>
           </div>
 
-          {/* 🚀 FIX FASE 4: LISTA DE CONCEPTOS INTELIGENTE (CON CLAVES Y UNIDADES SAT AUTOCOMPLETABLES) */}
+          {/*   FIX FASE 4: LISTA DE CONCEPTOS INTELIGENTE (CON CLAVES Y UNIDADES SAT AUTOCOMPLETABLES) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">

@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom"; // 🚀 NUEVO IMPORT
+import { useSearchParams } from "react-router-dom"; //   NUEVO IMPORT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
@@ -10,7 +10,7 @@ import { Clock, LayoutDashboard, PlusCircle, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Dispatch = () => {
-  // 🚀 FIX: Leemos la pestaña desde la URL
+  //   FIX: Leemos la pestaña desde la URL
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get("tab") || "planner";
 
@@ -30,7 +30,7 @@ const Dispatch = () => {
       />
 
       <Tabs
-        value={currentTab} // 🚀 FIX: Pestaña controlada por estado
+        value={currentTab} //   FIX: Pestaña controlada por estado
         onValueChange={handleTabChange}
         className="w-full flex-1 flex flex-col min-h-0"
       >

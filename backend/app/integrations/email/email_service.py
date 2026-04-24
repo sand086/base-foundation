@@ -74,7 +74,7 @@ class EmailService:
             )
             return False
 
-        # 🚀 EXTRAEMOS EL LOGO OFICIAL EN BASE64 DESDE LA TABLA SYSTEM_CONFIGS
+        #   EXTRAEMOS EL LOGO OFICIAL EN BASE64 DESDE LA TABLA SYSTEM_CONFIGS
         logo_config = self.db.query(SystemConfig).filter_by(key="empresa_logo").first()
         empresa_logo = logo_config.value if logo_config and logo_config.value else ""
 

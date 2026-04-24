@@ -45,13 +45,13 @@ def create_supplier(db: Session, supplier_in: schemas.SupplierCreate):
         return db_supplier
     except IntegrityError as e:
         db.rollback()
-        print(f"🚨 IntegrityError al crear proveedor: {str(e.orig)}")
+        print(f"  IntegrityError al crear proveedor: {str(e.orig)}")
         raise HTTPException(
             status_code=400, detail=f"Error de integridad: {str(e.orig)}"
         )
     except Exception as e:
         db.rollback()
-        print("🚨 Error inesperado al crear proveedor:")
+        print("  Error inesperado al crear proveedor:")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Error interno al crear proveedor")
 
@@ -72,13 +72,13 @@ def update_supplier(db: Session, supplier_id: int, supplier_in: schemas.Supplier
         return db_supplier
     except IntegrityError as e:
         db.rollback()
-        print(f"🚨 IntegrityError al actualizar proveedor {supplier_id}: {str(e.orig)}")
+        print(f"  IntegrityError al actualizar proveedor {supplier_id}: {str(e.orig)}")
         raise HTTPException(
             status_code=400, detail=f"Error de integridad: {str(e.orig)}"
         )
     except Exception as e:
         db.rollback()
-        print(f"🚨 Error inesperado al actualizar proveedor {supplier_id}:")
+        print(f"  Error inesperado al actualizar proveedor {supplier_id}:")
         traceback.print_exc()
         raise HTTPException(
             status_code=500, detail="Error interno al actualizar proveedor"
@@ -97,7 +97,7 @@ def delete_supplier(db: Session, supplier_id: int):
         return True
     except Exception as e:
         db.rollback()
-        print(f"🚨 Error al eliminar proveedor {supplier_id}:")
+        print(f"  Error al eliminar proveedor {supplier_id}:")
         traceback.print_exc()
         raise HTTPException(
             status_code=500, detail="Error interno al eliminar proveedor"
@@ -192,7 +192,7 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
 
     except IntegrityError as e:
         db.rollback()
-        print(f"🚨 IntegrityError al crear factura: {str(e.orig)}")
+        print(f"  IntegrityError al crear factura: {str(e.orig)}")
         raise HTTPException(
             status_code=400,
             detail=f"Falta un dato obligatorio o conflicto de llave foránea: {str(e.orig)}",
@@ -200,7 +200,7 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
 
     except Exception as e:
         db.rollback()
-        print("🚨 Error inesperado al crear factura:")
+        print("  Error inesperado al crear factura:")
         traceback.print_exc()
         raise HTTPException(
             status_code=500, detail=f"Error interno al crear factura: {str(e)}"
@@ -234,13 +234,13 @@ def update_invoice(
 
     except IntegrityError as e:
         db.rollback()
-        print(f"🚨 IntegrityError al actualizar factura {invoice_id}: {str(e.orig)}")
+        print(f"  IntegrityError al actualizar factura {invoice_id}: {str(e.orig)}")
         raise HTTPException(
             status_code=400, detail=f"Error de integridad: {str(e.orig)}"
         )
     except Exception as e:
         db.rollback()
-        print(f"🚨 Error al actualizar factura {invoice_id}:")
+        print(f"  Error al actualizar factura {invoice_id}:")
         traceback.print_exc()
         raise HTTPException(
             status_code=500, detail="Error interno al actualizar factura"
@@ -259,7 +259,7 @@ def delete_invoice(db: Session, invoice_id: int):
         return True
     except Exception as e:
         db.rollback()
-        print(f"🚨 Error al eliminar factura {invoice_id}:")
+        print(f"  Error al eliminar factura {invoice_id}:")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail="Error interno al eliminar factura")
 
@@ -307,14 +307,14 @@ def register_payment(
     except IntegrityError as e:
         db.rollback()
         print(
-            f"🚨 IntegrityError al registrar pago en factura {invoice_id}: {str(e.orig)}"
+            f"  IntegrityError al registrar pago en factura {invoice_id}: {str(e.orig)}"
         )
         raise HTTPException(
             status_code=400, detail=f"Datos inválidos para el pago: {str(e.orig)}"
         )
     except Exception as e:
         db.rollback()
-        print(f"🚨 Error inesperado al registrar pago en factura {invoice_id}:")
+        print(f"  Error inesperado al registrar pago en factura {invoice_id}:")
         traceback.print_exc()
         raise HTTPException(
             status_code=500, detail="Error interno al registrar el pago"

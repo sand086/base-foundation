@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
 
-// 🚀 IMPORTAMOS LA LIBRERÍA LECTORA DE EXCEL
+//   IMPORTAMOS LA LIBRERÍA LECTORA DE EXCEL
 import * as XLSX from "xlsx";
 
 interface ImportXMLExpenseModalProps {
@@ -52,7 +52,7 @@ export function ImportXMLExpenseModal({
     setIsUploading(true);
 
     try {
-      // 🚀 1. LECTURA NATIVA DE EXCEL (Soporta XLS, XLSX y CSV)
+      //   1. LECTURA NATIVA DE EXCEL (Soporta XLS, XLSX y CSV)
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];

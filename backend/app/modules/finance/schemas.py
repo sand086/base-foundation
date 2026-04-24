@@ -1,9 +1,11 @@
-# --- Fuente: schemas_finance.py ---
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime, date
 
 
+# ==========================================
+# PROVIDER SCHEMAS
+# ==========================================
 class ProviderBase(BaseModel):
     razon_social: str = Field(..., min_length=1, max_length=200)
     rfc: str = Field(..., min_length=12, max_length=13)
@@ -32,6 +34,9 @@ class ProviderResponse(ProviderBase):
     created_at: Optional[datetime] = None
 
 
+# ==========================================
+# BANK ACCOUNT SCHEMAS
+# ==========================================
 class BankAccountBase(BaseModel):
     banco: str
     banco_logo: Optional[str] = "🏦"
@@ -53,23 +58,25 @@ class BankAccountResponse(BankAccountBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# Esquemas para Movimientos
+# ==========================================
+# BANK MOVEMENT SCHEMAS
+# ==========================================
 class BankMovementResponse(BaseModel):
     id: int
     tipo: str
     monto: float
-    moneda: str = "MXN"  # <-- Agregamos valor por defecto
+    moneda: str = "MXN"  # <-- Valor por defecto
     concepto: str
     fecha: date
 
-    # <-- A todos los Optional les agregamos '= None' al final
+    # <-- Todos los Optional tienen su '= None' preventivo
     banco: Optional[str] = None
     cuenta_bancaria: Optional[str] = None
     referencia_bancaria: Optional[str] = None
     origen_modulo: Optional[str] = None
 
-    conciliado: bool = False  # <-- Agregamos valor por defecto
-    fecha_conciliacion: Optional[date] = None  # <-- Agregamos '= None'
+    conciliado: bool = False  # <-- Valor por defecto
+    fecha_conciliacion: Optional[date] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -84,3 +91,122 @@ class BankMovementCreate(BaseModel):
     )
     concepto: str = Field(..., min_length=3, max_length=255)
     referencia: Optional[str] = None
+
+
+# ==========================================
+# NUEVO: COST CENTER (CECOS)
+# ==========================================
+class CostCenterBase(BaseModel):
+    codigo: str = Field(..., description="Ej: ADM-01")
+    nombre: str
+    presupuesto_mensual: Optional[float] = 0.0
+    activo: Optional[bool] = True
+
+
+class CostCenterCreate(CostCenterBase):
+    pass
+
+
+class CostCenterResponse(CostCenterBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# PAYABLE INVOICE SCHEMAS (Cuentas por Pagar)
+# ==========================================
+class PayableInvoiceBase(BaseModel):
+    # Relaciones existentes
+    supplier_id: Optional[int] = None
+    viaje_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    categoria_indirecto_id: Optional[int] = None
+    orden_compra_id: Optional[int] = None
+
+    # NUEVO (100% Opcional para no romper)
+    cost_center_id: Optional[int] = None
+
+    # Identificadores
+    uuid: Optional[str] = None
+    folio_interno: Optional[str] = None
+    serie: Optional[str] = None  # NUEVO SAT
+    folio: Optional[str] = None  # NUEVO SAT
+
+    # Montos
+    subtotal: float = 0.0
+    descuento: Optional[float] = 0.0  # NUEVO SAT
+    iva: float = 0.0
+    retenciones: float = 0.0
+    monto_total: float
+    saldo_pendiente: float
+
+    # Granularidad de Impuestos (JSON)
+    desglose_impuestos: Optional[Dict[str, Any]] = Field(default_factory=dict)  # NUEVO
+
+    # Moneda y Fechas
+    moneda: str = "MXN"
+    tipo_cambio: Optional[float] = 1.0  # NUEVO SAT
+    fecha_emision: date
+    fecha_vencimiento: date
+    concepto: Optional[str] = None
+    clasificacion: Optional[str] = None
+
+    # Metadatos Fiscales
+    metodo_pago: Optional[str] = None
+    forma_pago: Optional[str] = None
+    tipo_comprobante: Optional[str] = None
+    uso_cfdi: Optional[str] = None  # NUEVO SAT
+    validacion_efos: Optional[bool] = False  # NUEVO Compliance
+
+    estatus: str = "pendiente"
+    pdf_url: Optional[str] = None
+    xml_url: Optional[str] = None
+
+
+class PayableInvoiceCreate(PayableInvoiceBase):
+    pass
+
+
+class PayableInvoiceUpdate(BaseModel):
+    # Update permite enviar solo los campos a modificar
+    estatus: Optional[str] = None
+    saldo_pendiente: Optional[float] = None
+    cost_center_id: Optional[int] = None
+    uso_cfdi: Optional[str] = None
+    validacion_efos: Optional[bool] = None
+    clasificacion: Optional[str] = None
+
+
+class PayableInvoiceResponse(PayableInvoiceBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# INVOICE PAYMENT SCHEMAS (Recibos de Pago)
+# ==========================================
+class InvoicePaymentBase(BaseModel):
+    invoice_id: int
+    bank_account_id: Optional[int] = None
+    fecha_pago: date
+    monto: float
+
+    # NUEVOS CAMPOS (Complemento de Pago / REP)
+    parcialidad: Optional[int] = 1
+    saldo_anterior: Optional[float] = None
+    saldo_insoluto: Optional[float] = None
+
+    metodo_pago: Optional[str] = None
+    referencia: Optional[str] = None
+    cuenta_retiro: Optional[str] = None
+    complemento_uuid: Optional[str] = None
+    comprobante_url: Optional[str] = None
+
+
+class InvoicePaymentCreate(InvoicePaymentBase):
+    pass
+
+
+class InvoicePaymentResponse(InvoicePaymentBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)

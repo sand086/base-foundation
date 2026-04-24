@@ -98,15 +98,15 @@ export default function TripSettlement() {
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
-  // 🚀 ESTADO OPTIMISTA: Para ocultar al instante los liquidados
+  //   ESTADO OPTIMISTA: Para ocultar al instante los liquidados
   const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
     [],
   );
 
-  // 🚀 NUEVO: Estado universal para el Sueldo Base
+  //   NUEVO: Estado universal para el Sueldo Base
   const [sueldoBasePactado, setSueldoBasePactado] = useState<number>(0);
 
-  // 🚀 NUEVO: Estado para guardar la información histórica de la auditoría de diésel
+  //   NUEVO: Estado para guardar la información histórica de la auditoría de diésel
   const [auditDetails, setAuditDetails] = useState<any>(null);
 
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
@@ -148,7 +148,7 @@ export default function TripSettlement() {
     );
   }, [trips, clients]);
 
-  // 🚀 FILTRO ACTUALIZADO: Quita los liquidados al instante
+  //   FILTRO ACTUALIZADO: Quita los liquidados al instante
   const pendingLegs = useMemo(
     () =>
       allLegs.filter(
@@ -159,7 +159,7 @@ export default function TripSettlement() {
     [allLegs, locallyLiquidatedIds],
   );
 
-  // 🚀 FILTRO ACTUALIZADO: Muestra los liquidados al instante en el histórico
+  //   FILTRO ACTUALIZADO: Muestra los liquidados al instante en el histórico
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
@@ -430,7 +430,7 @@ export default function TripSettlement() {
         })),
       };
 
-      // 🚀 ACTUALIZACIÓN OPTIMISTA: Ocultamos de inmediato
+      //   ACTUALIZACIÓN OPTIMISTA: Ocultamos de inmediato
       setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
       // Enviamos al backend
@@ -443,7 +443,7 @@ export default function TripSettlement() {
       if (refresh) refresh();
       setShowReceiptModal(true);
     } catch (error) {
-      // 🚨 REVERSIÓN DE EMERGENCIA: Si el PAC/SAT o la BD fallan, los regresamos a la pantalla
+      //   REVERSIÓN DE EMERGENCIA: Si el PAC/SAT o la BD fallan, los regresamos a la pantalla
       setLocallyLiquidatedIds((prev) =>
         prev.filter((id) => !selectedLegIds.includes(id)),
       );
@@ -457,7 +457,7 @@ export default function TripSettlement() {
     }
   };
 
-  // 🚀 LÓGICA DE EXTRACCIÓN ASÍNCRONA PARA EL MODAL HISTÓRICO
+  //   LÓGICA DE EXTRACCIÓN ASÍNCRONA PARA EL MODAL HISTÓRICO
   const handleViewReceipt = async (leg: any) => {
     try {
       setIsLoadingPreview(true);
@@ -469,7 +469,7 @@ export default function TripSettlement() {
       // Para que veas en tu consola qué te manda realmente el backend
       console.log(" API DE LIQUIDACIÓN DEVOLVIÓ:", response.data);
 
-      // 2. 🚀 RESCATE DE BITÁCORA:
+      // 2.   RESCATE DE BITÁCORA:
       // Buscamos si existe el texto de la auditoría en el historial del viaje
       const auditEvent = leg.timeline_events?.find(
         (e: any) =>
@@ -937,7 +937,7 @@ export default function TripSettlement() {
                 <CardContent className="p-0">
                   <div className="p-6 space-y-6">
                     <div className="space-y-4">
-                      {/* 🚀 NUEVO: Input Dinámico para Sueldo Base */}
+                      {/*   NUEVO: Input Dinámico para Sueldo Base */}
                       <div className="flex justify-between items-center text-sm bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 mb-4">
                         <span className="text-blue-800 dark:text-blue-400 font-bold text-[11px] uppercase tracking-widest">
                           Sueldo Base (Ruta/Maniobras)
@@ -1352,7 +1352,7 @@ export default function TripSettlement() {
             setCombustibleFaltante(0);
             setSueldoBasePactado(0);
             setPreviewData(null);
-            setAuditDetails(null); // 🚀 Limpiamos el histórico al cerrar
+            setAuditDetails(null); //   Limpiamos el histórico al cerrar
           }
         }}
         selectedLegsData={selectedLegsData}
@@ -1365,7 +1365,7 @@ export default function TripSettlement() {
         empresaDireccion={empresaDireccion}
         empresaTelefono={empresaTelefono}
         empresaLogo={empresaLogo}
-        auditDetails={auditDetails} // 🚀 Pasamos el dato del historial al hijo
+        auditDetails={auditDetails} //   Pasamos el dato del historial al hijo
       />
     </div>
   );

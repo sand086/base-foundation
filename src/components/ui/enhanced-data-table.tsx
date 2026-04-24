@@ -53,7 +53,6 @@ export interface ColumnDef<T> {
   width?: string;
 }
 
-// ⚠️ AQUÍ ESTÁ LA MAGIA: Declaramos customFilters como Opcional (?)
 interface EnhancedDataTableProps<T> {
   data: T[];
   columns: ColumnDef<T>[];
@@ -66,8 +65,10 @@ interface EnhancedDataTableProps<T> {
   selectedRows?: T[];
   onSelectedRowsChange?: (rows: T[]) => void;
   rowKey?: keyof T;
-  customFilters?: React.ReactNode; // <- Prop opcional para no romper otros módulos
+  customFilters?: React.ReactNode;
   onCustomExport?: () => void;
+  // 🚀 NUEVA PROP: Permite decidir qué filas tienen el checkbox habilitado
+  isRowSelectable?: (row: T) => boolean;
 }
 
 type SortDirection = "asc" | "desc" | null;
@@ -103,6 +104,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   rowKey = "id" as keyof T,
   customFilters,
   onCustomExport,
+  isRowSelectable, // 🚀 RECIBIMOS LA REGLA
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -271,6 +273,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
       return <ChevronUp className="h-3.5 w-3.5 text-brand-red ml-2" />;
     return <ChevronDown className="h-3.5 w-3.5 text-brand-red ml-2" />;
   };
+
+  // 🚀 LÓGICA INTELIGENTE PARA EL CHECKBOX MAESTRO
+  const selectablePaginatedData = useMemo(() => {
+    return paginatedData.filter((row) =>
+      isRowSelectable ? isRowSelectable(row) : true,
+    );
+  }, [paginatedData, isRowSelectable]);
 
   return (
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
@@ -516,10 +525,12 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
+                    {/* 🚀 CHECKBOX HEADER: Solo reacciona a las filas seleccionables */}
                     <Checkbox
+                      disabled={selectablePaginatedData.length === 0}
                       checked={
-                        paginatedData.length > 0 &&
-                        paginatedData.every((row) =>
+                        selectablePaginatedData.length > 0 &&
+                        selectablePaginatedData.every((row) =>
                           selectedRows?.some(
                             (sr) => sr[rowKey] === row[rowKey],
                           ),
@@ -529,7 +540,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         if (!onSelectedRowsChange) return;
                         if (checked) {
                           const newRows = [...selectedRows];
-                          paginatedData.forEach((row) => {
+                          selectablePaginatedData.forEach((row) => {
                             if (
                               !newRows.some((sr) => sr[rowKey] === row[rowKey])
                             ) {
@@ -540,7 +551,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         } else {
                           const newRows = selectedRows.filter(
                             (sr) =>
-                              !paginatedData.some(
+                              !selectablePaginatedData.some(
                                 (row) => row[rowKey] === sr[rowKey],
                               ),
                           );
@@ -602,59 +613,69 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    className={cn(
-                      "interactive-row transition-all duration-300 outline-none group",
-                      "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
-                      selectedRows?.some((sr) => sr[rowKey] === row[rowKey]) &&
-                        "bg-brand-navy/5 dark:bg-brand-navy/20",
-                      onRowClick && "cursor-pointer active:scale-[0.998]",
-                    )}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {enableRowSelection && (
-                      <td
-                        className="px-6 py-4 align-middle text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Checkbox
-                          checked={selectedRows?.some(
-                            (sr) => sr[rowKey] === row[rowKey],
-                          )}
-                          onCheckedChange={(checked) => {
-                            if (!onSelectedRowsChange) return;
-                            if (checked) {
-                              onSelectedRowsChange([...selectedRows, row]);
-                            } else {
-                              onSelectedRowsChange(
-                                selectedRows.filter(
-                                  (sr) => sr[rowKey] !== row[rowKey],
-                                ),
-                              );
-                            }
-                          }}
-                        />
-                      </td>
-                    )}
+                paginatedData.map((row, idx) => {
+                  // 🚀 VALIDACIÓN INDIVIDUAL DE FILA
+                  const isSelectable = isRowSelectable
+                    ? isRowSelectable(row)
+                    : true;
 
-                    {columns.map((col) => (
-                      <td
-                        key={col.key as string}
-                        className={cn(
-                          "px-6 py-4 align-middle transition-all duration-300",
-                          "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
-                          "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
-                        )}
-                      >
-                        {col.render
-                          ? col.render(getValue(row, col.key as string), row)
-                          : getValue(row, col.key as string)}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                  return (
+                    <tr
+                      key={idx}
+                      className={cn(
+                        "interactive-row transition-all duration-300 outline-none group",
+                        "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
+                        selectedRows?.some(
+                          (sr) => sr[rowKey] === row[rowKey],
+                        ) && "bg-brand-navy/5 dark:bg-brand-navy/20",
+                        onRowClick && "cursor-pointer active:scale-[0.998]",
+                      )}
+                      onClick={() => onRowClick?.(row)}
+                    >
+                      {enableRowSelection && (
+                        <td
+                          className="px-6 py-4 align-middle text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            disabled={!isSelectable} // 🚀 BLOQUEAMOS CHECKBOX
+                            checked={selectedRows?.some(
+                              (sr) => sr[rowKey] === row[rowKey],
+                            )}
+                            onCheckedChange={(checked) => {
+                              if (!onSelectedRowsChange || !isSelectable)
+                                return; // 🚀 PREVENIMOS ONCHANGE
+                              if (checked) {
+                                onSelectedRowsChange([...selectedRows, row]);
+                              } else {
+                                onSelectedRowsChange(
+                                  selectedRows.filter(
+                                    (sr) => sr[rowKey] !== row[rowKey],
+                                  ),
+                                );
+                              }
+                            }}
+                          />
+                        </td>
+                      )}
+
+                      {columns.map((col) => (
+                        <td
+                          key={col.key as string}
+                          className={cn(
+                            "px-6 py-4 align-middle transition-all duration-300",
+                            "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
+                            "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
+                          )}
+                        >
+                          {col.render
+                            ? col.render(getValue(row, col.key as string), row)
+                            : getValue(row, col.key as string)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

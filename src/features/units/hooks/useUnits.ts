@@ -3,6 +3,7 @@ import { FleetUnitsService } from "@/api/generated";
 import { ApiError } from "@/api/generated/core/ApiError";
 import { Unit } from "@/features/units/types";
 import { toast } from "sonner";
+import axiosClient from "@/api/axiosClient"; // 🚀 NUEVO: Importación para el endpoint personalizado
 
 export const useUnits = () => {
   const [unidades, setUnidades] = useState<Unit[]>([]);
@@ -117,6 +118,22 @@ export const useUnits = () => {
     }
   };
 
+  // 🚀 NUEVO: Función para consultar el último odómetro de la unidad (Persistencia)
+  const fetchLastOdometer = async (
+    unitId: string | number,
+  ): Promise<number> => {
+    try {
+      if (!unitId) return 0;
+      const res = await axiosClient.get(
+        `/api/fleet/units/${unitId}/last-odometer`,
+      );
+      return Number(res.data?.last_odometer || 0);
+    } catch (error) {
+      console.error("Error obteniendo último odómetro", error);
+      return 0; // Si falla, retorna 0 por seguridad para no bloquear el sistema
+    }
+  };
+
   return {
     unidades,
     isLoading,
@@ -126,6 +143,7 @@ export const useUnits = () => {
     deleteUnit,
     importBulkUnits,
     updateLoadStatus,
+    fetchLastOdometer, // 🚀 NUEVO: Exportamos la función para que otros componentes la usen
     refreshUnits: fetchUnits,
   };
 };

@@ -215,7 +215,7 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // 🚀 ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
+  //   ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
   const [tableKey, setTableKey] = useState(Date.now());
 
   useEffect(() => {
@@ -301,9 +301,9 @@ export const TripPlanner = () => {
     if (ok) {
       setUpdateModalOpen(false);
       await fetchTrips();
-      setTableKey(Date.now()); // 🚀 Destruye y recrea la tabla internamente
+      setTableKey(Date.now()); //   Destruye y recrea la tabla internamente
 
-      // 🚀 CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
+      //   CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
 
@@ -388,7 +388,7 @@ export const TripPlanner = () => {
             onClick={async () => {
               toast.info("Sincronizando datos...");
               await fetchTrips();
-              setTableKey(Date.now()); // 🚀 Forzar destrucción y recreación de tabla sin recargar página
+              setTableKey(Date.now()); //   Forzar destrucción y recreación de tabla sin recargar página
             }}
             disabled={loading}
             className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
@@ -437,7 +437,7 @@ export const TripPlanner = () => {
         <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              {/* 🚀 EL KEY MÁGICO: Al cambiar tableKey, esta tabla muere y renace */}
+              {/*   EL KEY MÁGICO: Al cambiar tableKey, esta tabla muere y renace */}
               <DataTable key={tableKey} className="min-w-[800px]">
                 <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
                   <DataTableRow className="hover:bg-transparent border-none">

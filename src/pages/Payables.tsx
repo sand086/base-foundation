@@ -61,7 +61,7 @@ import {
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
 
-// 🚀 FIX FASE 3: Importamos el Modal de Carga Masiva (Ya no necesitamos XMLParsedData)
+//   FIX FASE 3: Importamos el Modal de Carga Masiva (Ya no necesitamos XMLParsedData)
 import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
@@ -156,7 +156,7 @@ export default function Payables() {
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
 
-  // 🚀 FIX FASE 3: Al terminar la carga masiva, solo cerramos y recargamos la tabla.
+  //   FIX FASE 3: Al terminar la carga masiva, solo cerramos y recargamos la tabla.
   const handleBulkUploadSuccess = () => {
     setIsXmlModalOpen(false);
     refreshInvoices?.();
@@ -722,7 +722,7 @@ export default function Payables() {
 
       {/* MODALES */}
 
-      {/* 🚀 MODAL DE IMPORTACIÓN MASIVA SAT */}
+      {/*   MODAL DE IMPORTACIÓN MASIVA SAT */}
       <ImportXMLExpenseModal
         open={isXmlModalOpen}
         onOpenChange={setIsXmlModalOpen}

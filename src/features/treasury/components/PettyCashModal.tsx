@@ -49,7 +49,7 @@ export function PettyCashModal({
 
     setIsLoading(true);
     try {
-      // 🚀 FIX FASE 3: Apuntamos al endpoint específico de Caja Chica
+      //   FIX FASE 3: Apuntamos al endpoint específico de Caja Chica
       await axiosClient.post("/api/finance/petty-cash", {
         bank_account_id: parseInt(formData.bank_account_id),
         monto: parseFloat(formData.monto),

@@ -188,7 +188,7 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  // 🚀 FIX MAGISTRAL: "Memoria Fotográfica" con localStorage
+  //   FIX MAGISTRAL: "Memoria Fotográfica" con localStorage
   useEffect(() => {
     if (open && initialTrip) {
       setLocalTrip(initialTrip);
@@ -240,7 +240,7 @@ export function TripDetailsModal({
         setLocalUuid(res.data.uuid_fiscal);
       }
 
-      // 🚀 Re-evaluamos con el caché para evitar que el JSON vacío borre el botón
+      //   Re-evaluamos con el caché para evitar que el JSON vacío borre el botón
       const facturas = res.data.receivable_invoices || res.data.invoices || [];
       const facturaFinal = facturas.find(
         (f: any) => f.is_nominal === false && f.uuid,
@@ -1216,8 +1216,8 @@ export function TripDetailsModal({
                               <div className="bg-card p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
                                   <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
-                                    <FileText className="h-5 w-5" /> Emisión
-                                    Factura Ingreso (CFDI 4.0)
+                                    <FileText className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                                    Emisión Factura Ingreso (CFDI 4.0)
                                   </h4>
                                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mt-2">
                                     Genera la factura real del servicio
@@ -1266,7 +1266,7 @@ export function TripDetailsModal({
                                           localTrip.id,
                                           uuidToRelate,
                                           async (responseData: any) => {
-                                            // 🚀 TRUCO DE MEMORIA: Guardamos el UUID en localStorage para que no se borre
+                                            //   TRUCO DE MEMORIA: Guardamos el UUID en localStorage para que no se borre
                                             const generatedFinalUuid =
                                               responseData?.data?.uuid ||
                                               responseData?.uuid;

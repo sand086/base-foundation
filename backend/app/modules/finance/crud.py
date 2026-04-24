@@ -298,7 +298,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
             saldo_pendiente=total,  # Al importarse, se debe todo
             fecha_emision=fecha_obj.date(),
             fecha_vencimiento=vencimiento.date(),
-            dias_credito=dias_finales,
+            # NOTA: quitamos dias_credito porque PayableInvoice no lo tiene en tu modelo Base
             moneda=str(item.get("moneda") or "MXN").strip()[:3],
             estatus="pendiente",
             clasificacion="gasto_indirecto_variable",  # Clasificación por defecto al subir
@@ -372,16 +372,27 @@ def register_payable_payment(
                 db.flush()  # Guardamos temporalmente para obtener su ID
             bank_account_id = caja_general.id
 
-        # 1. Crear el registro del abono
-        # Aseguramos que referencia y cuenta_retiro sean strings ("") para evitar el error de Pydantic
+        # ======================================================
+        #   1. Crear el registro del abono (CON NUEVOS CAMPOS)
+        # ======================================================
         nuevo_pago = models.InvoicePayment(
             invoice_id=invoice.id,
             bank_account_id=bank_account_id,
             fecha_pago=payment_data.get("fecha_pago", date.today()),
             monto=monto_pago,
+            # CAMPOS DEL SAT/REP AÑADIDOS AQUI:
+            parcialidad=int(payment_data.get("parcialidad", 1)),
+            saldo_anterior=float(
+                payment_data.get("saldo_anterior") or invoice.saldo_pendiente
+            ),
+            saldo_insoluto=float(
+                payment_data.get("saldo_insoluto")
+                or max(0, invoice.saldo_pendiente - monto_pago)
+            ),
             metodo_pago=payment_data.get("metodo_pago", "TRANSFERENCIA"),
             referencia=payment_data.get("referencia", ""),
             cuenta_retiro=payment_data.get("cuenta_retiro", ""),
+            complemento_uuid=payment_data.get("complemento_uuid"),
             created_by_id=user_id,
         )
         db.add(nuevo_pago)
@@ -483,7 +494,7 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
         moneda=data.get("moneda", "MXN"),
         fecha_emision=emision_obj,
         fecha_vencimiento=vencimiento_obj,
-        dias_credito=int(data.get("dias_credito", 0)),
+        # NO usamos dias_credito directamente aqui si tu modelo no lo tiene declarado
         metodo_pago=data.get("metodo_pago", "PPD"),
         forma_pago=data.get("forma_pago", "99"),
         tipo_comprobante="I",
@@ -516,6 +527,7 @@ def process_sat_master_report(
         "notas_credito_aplicadas": 0,
         "ignorados_duplicados": 0,
         "ignorados_cancelados": 0,
+        "cecos_creados_al_vuelo": 0,  # <-- NUEVA METRICA
     }
 
     for item in payload_data:
@@ -543,7 +555,7 @@ def process_sat_master_report(
         else:
             tipo_comprobante = "ingreso"
 
-        # 🚀 FIX APLICADO: Truncamiento de métodos y formas de pago para evitar error en BD
+        #   FIX APLICADO: Truncamiento de métodos y formas de pago para evitar error en BD
         metodo_pago_raw = (
             str(item.get("Método de Pago") or item.get("MetodoDePagoDR") or "")
             .strip()
@@ -594,6 +606,53 @@ def process_sat_master_report(
             ) + float(str(raw_ret_iva).replace("$", "").replace(",", ""))
         except (ValueError, TypeError):
             subtotal, total, iva, retenciones = 0.0, 0.0, 0.0, 0.0
+
+        # ==========================================
+        #   EXTRACCIÓN DE NUEVOS CAMPOS DEL SAT
+        # ==========================================
+        descuento_raw = item.get("Descuento", 0)
+        tc_raw = item.get("Tipo de Cambio", 1.0)
+        uso_cfdi_raw = str(item.get("Uso CFDI", "")).split("-")[0].strip()[:5]
+        serie_raw = str(item.get("Serie", "")).strip()[:20]
+
+        try:
+            descuento = (
+                float(str(descuento_raw).replace("$", "").replace(",", ""))
+                if descuento_raw
+                else 0.0
+            )
+            tipo_cambio = (
+                float(str(tc_raw).replace("$", "").replace(",", "")) if tc_raw else 1.0
+            )
+        except:
+            descuento, tipo_cambio = 0.0, 1.0
+
+        # Desglose de impuestos en JSON
+        ish_raw = item.get("ISH:0.03%") or item.get("ISH:0.30%") or 0
+        try:
+            val_isr = (
+                float(str(raw_ret_isr).replace("$", "").replace(",", ""))
+                if raw_ret_isr
+                else 0.0
+            )
+            val_iva_ret = (
+                float(str(raw_ret_iva).replace("$", "").replace(",", ""))
+                if raw_ret_iva
+                else 0.0
+            )
+            val_ish = (
+                float(str(ish_raw).replace("$", "").replace(",", ""))
+                if ish_raw
+                else 0.0
+            )
+        except:
+            val_isr, val_iva_ret, val_ish = 0.0, 0.0, 0.0
+
+        desglose_impuestos = {
+            "retencion_isr": val_isr,
+            "retencion_iva": val_iva_ret,
+            "ish": val_ish,
+        }
 
         is_cxc = rfc_emisor.upper() == my_rfc.upper()
 
@@ -673,7 +732,7 @@ def process_sat_master_report(
                 db.add(invoice)
                 resultados["cxc_creadas"] += 1
             else:
-                # 🚀 FIX APLICADO: Uso de models.Supplier en lugar de models.Provider
+                #   FIX APLICADO: Uso de models.Supplier en lugar de models.Provider
                 provider = (
                     db.query(models.Supplier)
                     .filter(
@@ -689,16 +748,49 @@ def process_sat_master_report(
                     db.add(provider)
                     db.flush()
 
+                # ==============================================================
+                #   LÓGICA DE CENTROS DE COSTOS AUTOMÁTICA (SOLO APLICA A CXP)
+                # ==============================================================
+                cost_center_id = None
+                ceco_name = str(
+                    item.get("Centro de Costos ") or item.get("Centro de Costos") or ""
+                ).strip()
+                if ceco_name:
+                    ceco = (
+                        db.query(models.CostCenter)
+                        .filter(models.CostCenter.nombre.ilike(f"%{ceco_name}%"))
+                        .first()
+                    )
+                    if not ceco:
+                        # Si no existe, lo creamos al vuelo para que no se pierda la agrupación en reportes
+                        nuevo_ceco_codigo = ceco_name[:15].upper().replace(" ", "-")
+                        ceco = models.CostCenter(
+                            codigo=nuevo_ceco_codigo, nombre=ceco_name
+                        )
+                        db.add(ceco)
+                        db.flush()
+                        resultados["cecos_creados_al_vuelo"] += 1
+                    cost_center_id = ceco.id
+
+                # ==============================================================
+                # INYECCIÓN DE NUEVOS CAMPOS EN PAYABLE INVOICE
+                # ==============================================================
                 invoice = models.PayableInvoice(
-                    supplier_id=provider.id,  # Ahora conecta perfectamente
+                    supplier_id=provider.id,
+                    cost_center_id=cost_center_id,  # <- Asignación del CECO
                     uuid=uuid_fiscal,
+                    serie=serie_raw,  # <- Dato del SAT
+                    folio=folio,
                     folio_interno=folio,
                     subtotal=subtotal,
+                    descuento=descuento,  # <- Dato del SAT
                     iva=iva,
                     retenciones=retenciones,
+                    desglose_impuestos=desglose_impuestos,  # <- JSON con desglose granular
                     monto_total=total,
                     saldo_pendiente=saldo_pendiente,
                     moneda=moneda,
+                    tipo_cambio=tipo_cambio,  # <- Dato del SAT
                     fecha_emision=fecha_obj.date(),
                     fecha_vencimiento=(
                         fecha_obj
@@ -710,6 +802,8 @@ def process_sat_master_report(
                     metodo_pago=metodo_pago,
                     forma_pago=forma_pago,
                     tipo_comprobante="I",
+                    uso_cfdi=uso_cfdi_raw,  # <- Dato del SAT
+                    validacion_efos=False,  # Defecto seguro
                 )
                 db.add(invoice)
                 resultados["cxp_creadas"] += 1
@@ -775,7 +869,20 @@ def process_sat_master_report(
                     complemento_uuid=uuid_fiscal,
                     referencia="Carga SAT",
                 )
+
+                # Si es un InvoicePayment (CXP), inyectamos los campos de parcialidad del REP
+                if hasattr(nuevo_pago, "parcialidad"):
+                    nuevo_pago.parcialidad = int(item.get("Parcialidad", 1) or 1)
+                    nuevo_pago.saldo_anterior = float(
+                        item.get("ImpSaldoAnt") or orig_inv.saldo_pendiente
+                    )
+                    nuevo_pago.saldo_insoluto = float(
+                        item.get("SaldoInsoluto")
+                        or max(0, orig_inv.saldo_pendiente - total)
+                    )
+
                 db.add(nuevo_pago)
+
                 orig_inv.saldo_pendiente = max(0.0, orig_inv.saldo_pendiente - total)
                 orig_inv.estatus = (
                     models.InvoiceStatus.PAGADO
@@ -783,7 +890,7 @@ def process_sat_master_report(
                     else models.InvoiceStatus.PAGO_PARCIAL
                 )
 
-                # --- 🚀 NUEVO: AFECTAR BANCOS EN CARGA MASIVA ---
+                # ---   NUEVO: AFECTAR BANCOS EN CARGA MASIVA ---
                 # Busca una cuenta comodín para ingresos/egresos del SAT
                 cuenta_comodin = (
                     db.query(models.BankAccount)

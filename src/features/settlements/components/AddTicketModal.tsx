@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 
 import { FUEL_CONFIG } from "../types";
 import { useTrips } from "@/features/trips/hooks/useTrips";
+import { useUnits } from "@/features/units/hooks/useUnits"; // 🚀 PASO 2.1: Importamos el hook
 
 /** =========================
  * Types & Interfaces
@@ -93,7 +94,6 @@ function StationCombobox({
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  // Determinar si lo que el usuario escribió ya existe exactamente en el catálogo
   const isExactMatch = ESTACIONES_CATALOGO.some(
     (est) => est.toLowerCase() === inputValue.toLowerCase(),
   );
@@ -150,7 +150,6 @@ function StationCombobox({
                 </CommandItem>
               ))}
 
-              {/* Opción dinámica para agregar texto libre */}
               {inputValue.trim() !== "" && !isExactMatch && (
                 <CommandItem
                   value={inputValue}
@@ -293,6 +292,7 @@ export function AddTicketModal({
   initialData,
 }: AddTicketModalProps) {
   const { trips = [] } = useTrips();
+  const { fetchLastOdometer } = useUnits(); // 🚀 PASO 2.2: Extracción de función
 
   // Estados de vinculación
   const [parentData, setParentData] = useState({
@@ -302,11 +302,13 @@ export function AddTicketModal({
     odometro: "" as string | number,
   });
 
+  const [lastOdoCache, setLastOdoCache] = useState<number>(0); // 🚀 PASO 2.3: Estado para caché
+
   const [tickets, setTickets] = useState<SubTicket[]>([
     {
       id: crypto.randomUUID(),
       fecha_hora: toDatetimeLocalValue(new Date()),
-      estacion: "Estación de Servicio Rápidos 3T", // <-- PREDETERMINADO A RÁPIDOS 3T
+      estacion: "Estación de Servicio Rápidos 3T",
       litros_diesel: 0,
       precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
       evidencia: null,
@@ -320,7 +322,6 @@ export function AddTicketModal({
       {
         id: crypto.randomUUID(),
         fecha_hora: lastTicket?.fecha_hora || toDatetimeLocalValue(new Date()),
-        // Hereda del anterior, o por defecto Rápidos 3T
         estacion: lastTicket?.estacion || "Estación de Servicio Rápidos 3T",
         litros_diesel: 0,
         precio_diesel:
@@ -346,7 +347,6 @@ export function AddTicketModal({
     () =>
       (trips as any[]).filter((t) => {
         const status = String(t.status ?? "").toLowerCase();
-        // Dejamos pasar ÚNICAMENTE los que están como "entregado"
         return ["entregado"].includes(status);
       }),
     [trips],
@@ -354,7 +354,6 @@ export function AddTicketModal({
 
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
-      // 🚀 En los tramos (legs), también aplicamos la misma lista blanca
       const validLegs = (t.legs || []).filter((leg: any) => {
         const legStatus = String(leg.status ?? "").toLowerCase();
         return ["entregado", "cerrado"].includes(legStatus);
@@ -392,6 +391,19 @@ export function AddTicketModal({
       };
     });
   };
+
+  // 🚀 PASO 2.4: EFECTO MAGICO DE PERSISTENCIA
+  useEffect(() => {
+    if (parentData.unit_id && parentData.unit_id !== "undefined") {
+      fetchLastOdometer(parentData.unit_id).then((km) => {
+        setLastOdoCache(km);
+        // Autocompleta el input (pero si el usuario ya escribió, no se lo borramos)
+        setParentData((prev) => ({ ...prev, odometro: km }));
+      });
+    } else {
+      setLastOdoCache(0);
+    }
+  }, [parentData.unit_id, fetchLastOdometer]);
 
   const totalGeneral = useMemo(
     () =>
@@ -467,14 +479,25 @@ export function AddTicketModal({
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Odómetro Actual (Opcional)
                   </Label>
-                  <Input
-                    type="number"
-                    className="h-11 font-mono"
-                    value={parentData.odometro}
-                    onChange={(e) =>
-                      setParentData((p) => ({ ...p, odometro: e.target.value }))
-                    }
-                  />
+                  {/* 🚀 PASO 2.5: INDICADOR VISUAL DEL ODÓMETRO */}
+                  <div className="relative">
+                    <Input
+                      type="number"
+                      className="h-11 font-mono"
+                      value={parentData.odometro}
+                      onChange={(e) =>
+                        setParentData((p) => ({
+                          ...p,
+                          odometro: e.target.value,
+                        }))
+                      }
+                    />
+                    {lastOdoCache > 0 && (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded shadow-sm border border-emerald-200 dark:border-emerald-900/50">
+                        ANT: {lastOdoCache.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </section>
@@ -517,7 +540,7 @@ export function AddTicketModal({
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end">
-                      {/* SELECTOR DE ESTACIÓN MEJORADO (CON TEXTO LIBRE) */}
+                      {/* SELECTOR DE ESTACIÓN MEJORADO */}
                       <div className="space-y-1.5 lg:col-span-2">
                         <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Estación / Gasolinera
@@ -622,6 +645,7 @@ export function AddTicketModal({
             </section>
           </div>
 
+          {/* CAPA 5: FOOTER */}
           <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-t border-slate-200 dark:border-white/10 bg-muted/50 backdrop-blur-xl p-6 sm:p-8 z-10 gap-4">
             <div className="flex flex-col">
               <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">

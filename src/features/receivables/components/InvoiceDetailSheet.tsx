@@ -94,7 +94,7 @@ export function InvoiceDetailSheet({
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
 
-  // 🚀 EXTRACCIÓN DE DESGLOSE
+  //   EXTRACCIÓN DE DESGLOSE
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const subtotal = toNumber(inv.subtotal);
   const iva = toNumber(inv.iva);

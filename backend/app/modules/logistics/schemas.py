@@ -423,7 +423,7 @@ class TripCreate(TripBase):
 
     initial_leg: Optional[TripLegCreate] = None
 
-    # 🚀 NUEVOS CAMPOS DEL MOTOR DUAL
+    #   NUEVOS CAMPOS DEL MOTOR DUAL
     final_leg: Optional[TripLegCreate] = None
     conoce_ruta_completa: Optional[bool] = False
     ocultar_montos_pdf: Optional[bool] = False
@@ -595,7 +595,7 @@ class ReceivableInvoiceCreate(BaseModel):
         description="Si es True, genera factura por $1 Peso para Bypass Aduanal",
     )
 
-    # 🚀 NUEVOS CAMPOS DEL MOTOR DUAL
+    #   NUEVOS CAMPOS DEL MOTOR DUAL
     use_dummy: Optional[bool] = False
     ocultar_montos: Optional[bool] = False
 

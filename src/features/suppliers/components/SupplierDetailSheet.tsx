@@ -27,7 +27,8 @@ export function SupplierDetailSheet({
       <SheetContent className="w-full sm:max-w-[450px] overflow-y-auto">
         <SheetHeader className="pb-4 border-b">
           <SheetTitle className="flex items-center gap-2 text-brand-dark">
-            <Building2 className="h-5 w-5" /> Detalle de Proveedor
+            <Building2 className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+            Detalle de Proveedor
           </SheetTitle>
         </SheetHeader>
 

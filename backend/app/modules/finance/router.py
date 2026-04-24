@@ -38,7 +38,7 @@ class BulkUploadPayload(BaseModel):
 
 
 # =====================================================================
-# PAYABLES (Cuentas por Pagar) & PROVIDERS
+# PROVIDERS, CATEGORIES & COST CENTERS
 # =====================================================================
 
 
@@ -65,6 +65,16 @@ def delete_provider(provider_id: str, db: Session = Depends(get_db)):
 def read_indirect_categories(db: Session = Depends(get_db)):
     """Obtiene las categorías de gastos indirectos (Fijos/Variables)"""
     return crud.get_indirect_categories(db)
+
+
+#   NUEVO ENDPOINT: CENTROS DE COSTO (CECOS)
+@router.get("/cost-centers", response_model=List[schemas.CostCenterResponse])
+def read_cost_centers(db: Session = Depends(get_db)):
+    """
+    Obtiene los Centros de Costos creados por la importación masiva del SAT
+    o creados manualmente, para mostrarlos en el frontend.
+    """
+    return db.query(models.CostCenter).filter(models.CostCenter.activo == True).all()
 
 
 # =====================================================================
@@ -188,7 +198,7 @@ async def bulk_upload_invoices(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # B. PROCESAR DATOS
+        # B. PROCESAR DATOS (AQUÍ ES DONDE SUCEDE LA MAGIA DEL NUEVO CRUD)
         data = json.loads(json_data)
         resultado = crud.process_sat_master_report(
             db=db, payload_data=data, original_file_name=file.filename
@@ -385,7 +395,7 @@ def register_receivable_payment(
         monto=monto_pago,
         concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]}",
         referencia=payment.get("referencia", ""),
-        origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI de Tesorería
+        origen_modulo="CxC",  #   FIX FASE 1: Aseguramos el origen para la UI de Tesorería
     )
     crud.create_bank_movement(db, movimiento_schema, current_user.id)
 
@@ -497,7 +507,7 @@ async def upload_payment_xml(
                     monto=monto_pagado,
                     concepto=f"Cobro XML Fra. {factura.folio_interno}",
                     referencia="Carga XML REP",
-                    origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI
+                    origen_modulo="CxC",  #   FIX FASE 1: Aseguramos el origen para la UI
                 )
                 crud.create_bank_movement(db, mov_schema, current_user.id)
 
@@ -561,7 +571,7 @@ def fix_orphan_payments(
                 referencia=(
                     pago.referencia if pago.referencia else "Sincronización Histórica"
                 ),
-                origen_modulo="CxC",  # 🚀 FIX FASE 1: Aseguramos el origen para la UI
+                origen_modulo="CxC",  #   FIX FASE 1: Aseguramos el origen para la UI
             )
 
             crud.create_bank_movement(db, mov_schema, current_user.id)
@@ -575,7 +585,6 @@ def fix_orphan_payments(
         }
 
     except Exception as e:
-        # ATRAMPAMOS EL ERROR Y LO DEVOLVEMOS AL NAVEGADOR
         db.rollback()
         import traceback
 
@@ -641,8 +650,8 @@ def reopen_receivable_invoice(
     current_user: models.User = Depends(get_current_active_user),
 ):
     """
-    BOTÓN DE RESCATE: Restaura una cuenta por cobrar a su estado original (Pendiente).
-    Elimina los pagos atascados y resetea el saldo al monto total para reintentar el REP.
+    Restaura una cuenta por cobrar a su estado financiero original (Pendiente).
+    Respeta la verdad absoluta del SAT sin hacer "trampas" en los estatus.
     """
     invoice = (
         db.query(models.ReceivableInvoice)
@@ -652,22 +661,32 @@ def reopen_receivable_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    # 1. Borrar cualquier intento de pago atascado
+    # 1. Respetar la verdad del SAT (Cero engaños)
+    if invoice.status_sat == "CANCELADO":
+        raise HTTPException(
+            status_code=400,
+            detail="Operación denegada: Esta factura está oficialmente CANCELADA ante el SAT. No puedes reabrirla para cobro, debes emitir una nueva.",
+        )
+
+    # 2. Borrar cualquier intento de pago atascado financieramente
     db.query(models.ReceivableInvoicePayment).filter(
         models.ReceivableInvoicePayment.invoice_id == invoice.id
     ).delete()
 
-    # 2. Restaurar saldo y estatus general
+    # 3. Restaurar saldo y estatus general (Lógica de tu empresa)
     invoice.saldo_pendiente = invoice.monto_total
     invoice.estatus = "pendiente"
 
-    # 3. 🚀 Si el SAT la había marcado como Cancelada/Error, la engañamos regresándola a TIMBRADA
-    if invoice.status_sat in ["CANCELADO", "EN_PROCESO_CANCELACION", "ERROR"]:
-        invoice.status_sat = "TIMBRADA"
+    # 4. Manejo honesto de Errores
+    # Si la factura se quedó en ERROR por falla del PAC/Internet,
+    # la pasamos a PROVISIONAL para que el sistema sepa que debe reintentar la conexión,
+    # pero NUNCA fingimos que ya está "TIMBRADA".
+    if invoice.status_sat == "ERROR":
+        invoice.status_sat = "PROVISIONAL"
 
     db.commit()
     db.refresh(invoice)
 
     return {
-        "message": "Factura restaurada con éxito. Ya puedes intentar el REP nuevamente."
+        "message": "Factura reabierta financieramente. Saldo restaurado y lista para procesarse."
     }

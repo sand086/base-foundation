@@ -56,7 +56,7 @@ export default function Treasury() {
   const [isMovementsLoading, setIsMovementsLoading] = useState(true);
   const [showBalances, setShowBalances] = useState(true);
 
-  // States Tab Movimientos (🚀 FIX: Tipos corregidos a egreso/ingreso)
+  // States Tab Movimientos (  FIX: Tipos corregidos a egreso/ingreso)
   const [searchTerm, setSearchTerm] = useState("");
   const [movementFilter, setMovementFilter] = useState<
     "all" | "egreso" | "ingreso"
@@ -156,7 +156,7 @@ export default function Treasury() {
     }
   };
 
-  // 🚀 FIX: Filtramos por TIPO de movimiento, no por cuenta.
+  //   FIX: Filtramos por TIPO de movimiento, no por cuenta.
   const filteredMovimientos = useMemo(() => {
     let filtered = movimientos;
 

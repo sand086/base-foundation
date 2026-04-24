@@ -95,7 +95,7 @@ export function OperatorSettlementDetailModal({
   const leg = selectedLegsData[0];
 
   // ==========================================
-  // 🚀 LA MAGIA SUCEDE AQUÍ: CONSTRUCTOR DE CONCILIACIÓN
+  //   LA MAGIA SUCEDE AQUÍ: CONSTRUCTOR DE CONCILIACIÓN
   // ==========================================
   const finalAuditDetails = React.useMemo(() => {
     if (auditDetails && auditDetails.hasData) {
@@ -162,7 +162,7 @@ export function OperatorSettlementDetailModal({
     if (!pdfRef.current) return;
     setIsGeneratingPDF(true);
 
-    // 🚀 TRUCO MAESTRO: Forzamos el modo claro temporalmente para la "foto"
+    //   TRUCO MAESTRO: Forzamos el modo claro temporalmente para la "foto"
     const htmlElement = document.documentElement;
     const wasDark = htmlElement.classList.contains("dark");
 
@@ -467,7 +467,7 @@ export function OperatorSettlementDetailModal({
                       </div>
                     </div>
                   ) : (
-                    // 🚀 ALERTA DE QUE ESTE TRAMO NO TIENE DIÉSEL REGISTRADO
+                    //   ALERTA DE QUE ESTE TRAMO NO TIENE DIÉSEL REGISTRADO
                     <div className="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col items-center text-center mt-4">
                       <Fuel className="h-8 w-8 text-slate-300 dark:text-slate-700 mb-2" />
                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">

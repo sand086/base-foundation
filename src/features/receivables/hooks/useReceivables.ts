@@ -5,7 +5,7 @@ import { receivableService } from "@/features/receivables/services/receivableSer
 import { ReceivableInvoice } from "@/features/receivables/types";
 import axiosClient from "@/api/axiosClient";
 
-// 🚀 HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee
+//   HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee
 const getErrorMessage = (error: any, fallback: string) => {
   const detail = error.response?.data?.detail;
   if (Array.isArray(detail)) return detail[0]?.msg || fallback;
@@ -60,7 +60,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 6. 🚀 MUTACIÓN: Reabrir / Restaurar factura
+  // 6.   MUTACIÓN: Reabrir / Restaurar factura
   const reopenMut = useMutation({
     mutationFn: (id: number) =>
       axiosClient.post(`/api/finance/receivables/${id}/reopen`),
@@ -125,7 +125,7 @@ export const useReceivables = () => {
       }
     },
 
-    // 🚀 ACCIÓN: Restaurar la factura
+    //   ACCIÓN: Restaurar la factura
     reopenReceivable: async (id: number) => {
       try {
         await reopenMut.mutateAsync(id);

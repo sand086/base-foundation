@@ -2,7 +2,7 @@ import React from "react";
 import { Landmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// 🚨 NOTA EL "?react" AL FINAL DE CADA LÍNEA
+//   NOTA EL "?react" AL FINAL DE CADA LÍNEA
 import BanamexLogo from "@/assets/img/icons/banks/banamex.svg?react";
 import BanorteLogo from "@/assets/img/icons/banks/banorte.svg?react";
 import BbvaLogo from "@/assets/img/icons/banks/bbva.svg?react";

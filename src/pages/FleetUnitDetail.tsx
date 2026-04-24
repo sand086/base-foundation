@@ -568,7 +568,8 @@ export default function FlotaUnitDetail() {
             <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl lg:col-span-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Wrench className="h-5 w-5" /> Información Técnica
+                  <Wrench className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                  Información Técnica
                 </CardTitle>
               </CardHeader>
 
@@ -709,7 +710,8 @@ export default function FlotaUnitDetail() {
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" /> Estatus de Documentos
+                  <FileText className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                  Estatus de Documentos
                 </CardTitle>
               </CardHeader>
 
@@ -1146,8 +1148,8 @@ export default function FlotaUnitDetail() {
           <Card className="backdrop-blur-xl bg-white/10 dark:bg-black/40 border-white/20 shadow-2xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" /> Esquema de Llantas (mapa
-                de ejes)
+                <AlertTriangle className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                Esquema de Llantas (mapa de ejes)
               </CardTitle>
             </CardHeader>
             <CardContent className="py-8">

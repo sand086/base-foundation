@@ -614,7 +614,7 @@ def registrar_pago_multiple(
         return resultado
 
     except Exception as e:
-        # 🚀 2. BYPASS DE EMERGENCIA: Si el SAT lo rebota,
+        #   2. BYPASS DE EMERGENCIA: Si el SAT lo rebota,
         # descontamos CxC, registramos el pago y metemos el dinero al Banco localmente (1 a 1).
 
         print(f"Bypass activado por error de SAT: {str(e)}")

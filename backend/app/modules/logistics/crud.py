@@ -72,7 +72,7 @@ def create_trip(db: Session, trip: schemas.TripCreate):
     3. Si el Motor Dual está activo y trae un Tramo Final, lo crea como segundo Leg.
     """
     try:
-        # 🚀 BLINDAJE: Excluimos todos los campos lógicos de Pydantic que NO están en la base de datos
+        #   BLINDAJE: Excluimos todos los campos lógicos de Pydantic que NO están en la base de datos
         trip_data = trip.model_dump(
             exclude={
                 "initial_leg",
@@ -471,7 +471,7 @@ def add_timeline_event(
                 if hasattr(unidad, "nivel_combustible_litros"):
                     unidad.nivel_combustible_litros = payload.combustible_litros
 
-        # 🚀 LÓGICA INCORPORADA: ATRAPAMOS EL MONTO DE PENALIZACIÓN DICTAMINADO POR LA AUDITORÍA
+        #   LÓGICA INCORPORADA: ATRAPAMOS EL MONTO DE PENALIZACIÓN DICTAMINADO POR LA AUDITORÍA
         if getattr(payload, "penalizacion_monto", None) is not None:
             active_leg.monto_penalizaciones = payload.penalizacion_monto
 
@@ -741,7 +741,7 @@ def close_trip_settlement(
     leg.saldo_operador = payload.neto_a_pagar
     leg.actual_arrival = datetime.utcnow()
 
-    # 🚀 NUEVO: Guardar el odómetro en el tramo y en el camión
+    #   NUEVO: Guardar el odómetro en el tramo y en el camión
     if payload.odometro_final:
         leg.odometro_final = payload.odometro_final
         if leg.unit:
@@ -991,28 +991,29 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
             carretera_liquidada = any(
                 (
                     l.leg_type == "ruta_carretera"
-                    or l.leg_type == models.TripLegType.RUTA
+                    or l.leg_type == getattr(models, "TripLegType", None)
+                    and l.leg_type == models.TripLegType.RUTA
                 )
                 and l.status in ["liquidado", "cerrado"]
                 for l in trip.legs
             )
 
             if carretera_liquidada:
-                # CREACIÓN DE CXC
+                # 1. BUSCAMOS SI YA EXISTE LA FACTURA FINAL
                 existing_cxc = (
                     db.query(models.ReceivableInvoice)
                     .filter(
                         models.ReceivableInvoice.viaje_id == trip.id,
                         models.ReceivableInvoice.record_status
                         != RecordStatus.ELIMINADO,
-                        models.ReceivableInvoice.is_nominal
-                        == False,  # 🚀 FIX: Ignorar las nominales de $1 peso
+                        models.ReceivableInvoice.is_nominal == False,
                     )
                     .first()
                 )
 
-                # Si la fase de carretera ya está liquidada y NO existe la CxC, la creamos
+                # Si la fase de carretera ya está liquidada y NO existe la CxC final, la creamos
                 if not existing_cxc:
+                    # Cálculos financieros reales
                     base = trip.tarifa_base or 0.0
                     subtotal = base
                     iva = subtotal * 0.16
@@ -1023,6 +1024,38 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                     if trip.client and trip.client.dias_credito:
                         dias_credito = trip.client.dias_credito
 
+                    # =========================================================
+                    # 🚀 MAGIA FISCAL: PREPARACIÓN PARA SUSTITUCIÓN SAT (04)
+                    # =========================================================
+                    cp_nominal = (
+                        db.query(models.ReceivableInvoice)
+                        .filter(
+                            models.ReceivableInvoice.viaje_id == trip.id,
+                            models.ReceivableInvoice.is_nominal == True,
+                            models.ReceivableInvoice.status_sat == "TIMBRADA",
+                        )
+                        .first()
+                    )
+
+                    uuid_relacionado = None
+                    if cp_nominal and cp_nominal.uuid:
+                        # Extraemos el UUID de la Carta Porte que viajó en carretera
+                        uuid_relacionado = cp_nominal.uuid
+
+                        # ⚠️ TRIGGER DE CANCELACIÓN:
+                        # Lo mandamos a la cola de tu función 'procesar_cancelaciones_pendientes'
+                        # en el billing_service.py para que se cancele en background.
+                        cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
+
+                        # Motivo de Cancelación SAT:
+                        # 01 - Comprobantes emitidos con errores con relación (Pide el UUID nuevo)
+                        # 04 - Relación directa de sustitución (Depende de tu PAC).
+                        # Usaremos "01" que es el estándar actual del SAT para sustituir.
+                        cp_nominal.motivo_cancelacion = "01"
+                        db.add(cp_nominal)
+                    # =========================================================
+
+                    # CREAMOS LA CXC FINAL (LA CHIDA)
                     nueva_cxc = models.ReceivableInvoice(
                         client_id=trip.client_id,
                         sub_client_id=trip.sub_client_id,
@@ -1036,9 +1069,13 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         saldo_pendiente=monto_total,
                         fecha_emision=date.today(),
                         fecha_vencimiento=date.today() + timedelta(days=dias_credito),
-                        estatus=models.InvoiceStatus.PENDIENTE,
+                        estatus=models.InvoiceStatus.PENDIENTE,  # Estatus Financiero
                         metodo_pago="PPD",
                         tipo_comprobante="I",
+                        is_nominal=False,
+                        # 🔗 EL ENLACE VITAL PARA QUE TU BILLING_SERVICE INYECTE EL NODO 04:
+                        uuid_relacionado=uuid_relacionado,
+                        status_sat="PROVISIONAL",  # Nace sin timbrar para proteger el flujo
                     )
                     db.add(nueva_cxc)
                     cxc_creadas += 1
@@ -1094,7 +1131,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         ):
             distancia = float(leg.odometro_final - leg.odometro_inicial)
         else:
-            # 🚀 BLINDAJE CONTRA NULLS EN DISTANCIA
+            #   BLINDAJE CONTRA NULLS EN DISTANCIA
             dist_tarifa = (
                 leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
             )
@@ -1123,7 +1160,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 legs_sin_ticket.append(leg.id)
 
             for f in fuel_logs_activos:
-                # 🚀 BLINDAJE CONTRA NULLS EN COMBUSTIBLE
+                #   BLINDAJE CONTRA NULLS EN COMBUSTIBLE
                 lts = float(f.litros or 0.0)
                 precio = float(f.precio_por_litro or 24.50)
                 total_real_liters += lts
@@ -1138,7 +1175,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     deduccion_combustible = 0.0
 
     for leg in legs:
-        # 🚀 BLINDAJE CONTRA NULLS EN AUDITORÍA
+        #   BLINDAJE CONTRA NULLS EN AUDITORÍA
         penalizacion = getattr(leg, "monto_penalizaciones", 0.0)
         if penalizacion and float(penalizacion) > 0:
             deduccion_combustible += float(penalizacion)
@@ -1155,7 +1192,7 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             if is_conciliated and diferencia and float(diferencia) > 0:
                 diferencia_litros_total += float(diferencia)
 
-    # 🚀 BLINDAJE CONTRA NULLS EN SUELDO
+    #   BLINDAJE CONTRA NULLS EN SUELDO
     sueldo_operador_pactado = 0.0
     if legs and legs[0].trip:
         trip_padre = legs[0].trip

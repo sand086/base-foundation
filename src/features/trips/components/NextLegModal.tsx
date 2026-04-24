@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,6 @@ import {
   ChevronDown,
   Check,
   ChevronsUpDown,
-  Lock,
 } from "lucide-react";
 import {
   Command,
@@ -212,12 +211,14 @@ export function NextLegModal({
   onSubmit,
   onSuccessRefresh,
 }: NextLegModalProps) {
-  const { unidades, updateLoadStatus } = useUnits();
+  // 🚀 INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
+  const { unidades, updateLoadStatus, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { products: satProducts } = useSatCatalogs();
 
   const [loading, setLoading] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
+  const [odoInicial, setOdoInicial] = useState(0); // 🚀 ESTADO DEL ODÓMETRO
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
@@ -232,6 +233,15 @@ export function NextLegModal({
     otros_anticipos: 0,
     destino_vacio: "",
   });
+
+  // 🚀 EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
+  useEffect(() => {
+    if (formData.unit_id) {
+      fetchLastOdometer(formData.unit_id).then(setOdoInicial);
+    } else {
+      setOdoInicial(0);
+    }
+  }, [formData.unit_id, fetchLastOdometer]);
 
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
@@ -256,26 +266,24 @@ export function NextLegModal({
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
-      //  FIX LEAD: Casteo estricto a Number para asegurar que los comparadores === funcionen en los filtros.
-      const inheritedR1 = tripPadre.remolque_1_id
-        ? Number(tripPadre.remolque_1_id)
+      const inheritedR1 = (tripPadre as any).remolque_1_id
+        ? Number((tripPadre as any).remolque_1_id)
         : (lastLeg as any)?.remolque_1_id
           ? Number((lastLeg as any).remolque_1_id)
           : null;
-      const inheritedDolly = tripPadre.dolly_id
-        ? Number(tripPadre.dolly_id)
+      const inheritedDolly = (tripPadre as any).dolly_id
+        ? Number((tripPadre as any).dolly_id)
         : (lastLeg as any)?.dolly_id
           ? Number((lastLeg as any).dolly_id)
           : null;
-      const inheritedR2 = tripPadre.remolque_2_id
-        ? Number(tripPadre.remolque_2_id)
+      const inheritedR2 = (tripPadre as any).remolque_2_id
+        ? Number((tripPadre as any).remolque_2_id)
         : (lastLeg as any)?.remolque_2_id
           ? Number((lastLeg as any).remolque_2_id)
           : null;
 
       setFormData({
         leg_type: nextLegType,
-        // El tracto y operador los dejamos null (o heredados) para que despachen al nuevo relevo.
         unit_id: lastLeg?.unit_id ? Number(lastLeg.unit_id) : null,
         operator_id: lastLeg?.operator_id ? Number(lastLeg.operator_id) : null,
 
@@ -283,24 +291,22 @@ export function NextLegModal({
         dolly_id: inheritedDolly,
         remolque_2_id: inheritedR2,
 
-        anticipo_casetas: tripPadre.costo_casetas ?? 0,
+        anticipo_casetas: (tripPadre as any).costo_casetas ?? 0,
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
         otros_anticipos: 0,
         destino_vacio: "",
       });
 
-      // --- 🛡️ INICIO PARCHE DEFENSIVO SAT ---
-      const rawDescription = tripPadre.descripcion_mercancia || "Carga General";
-      // Buscamos si la descripción empieza exactamente con 8 dígitos (ej. "12161800 - ...")
+      // --- 🛡️ INICIO PARCHE DEFENSIVO SAT (SEGURO CONTRA TYPESCRIPT) ---
+      const rawDescription =
+        (tripPadre as any).descripcion_mercancia || "Carga General";
       const matchSatCode = rawDescription.match(/^(\d{8})\b/);
 
-      // Si encontramos la clave en la descripción, la usamos. Si no, fallback a lo que manda el backend o genérico.
       const realSatCode = matchSatCode
         ? matchSatCode[1]
-        : tripPadre.sat_clave_producto || "01010101";
+        : (tripPadre as any).sat_clave_producto || "01010101";
 
-      // Limpiamos la descripción para que no se duplique visualmente (quita la clave y el guion)
       const cleanDescription = matchSatCode
         ? rawDescription
             .substring(matchSatCode[0].length)
@@ -312,26 +318,18 @@ export function NextLegModal({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
         referencia: (tripPadre as any).referencia || "",
-        peso_toneladas: tripPadre.peso_toneladas || 0,
-        descripcion_mercancia: cleanDescription, // Descripción limpia
-        sat_clave_producto: realSatCode, // Clave real extraída (ej. "12161800")
-        sat_clave_unidad: tripPadre.sat_clave_unidad || "E48",
-        es_material_peligroso: tripPadre.es_material_peligroso || false,
-        clase_imo: tripPadre.clase_imo || "",
+        peso_toneladas: (tripPadre as any).peso_toneladas || 0,
+        descripcion_mercancia: cleanDescription,
+        sat_clave_producto: realSatCode,
+        sat_clave_unidad: (tripPadre as any).sat_clave_unidad || "E48",
+        es_material_peligroso:
+          (tripPadre as any).es_material_peligroso || false,
+        clase_imo: (tripPadre as any).clase_imo || "",
       });
 
       setShowFiscalData(false);
     }
   }, [open, tripPadre]);
-
-  useEffect(() => {
-    console.log("=== 🚦 DEBUG FISCAL PARSEADO ===");
-    console.log(
-      "Clave SAT a inyectar en el Select:",
-      tripFiscalData.sat_clave_producto,
-    );
-    console.log("Descripción limpia:", tripFiscalData.descripcion_mercancia);
-  }, [tripFiscalData]);
 
   const isFullTrip = useMemo(() => {
     return checkIsFullTrip(tripPadre);
@@ -366,8 +364,9 @@ export function NextLegModal({
         retencion: 0,
         total: 0,
       };
-    const base = tripPadre.tarifa_base ?? 0;
-    const casetas = tripPadre.costo_casetas ?? 0;
+    // Casteo seguro de TypeScript para evitar bloqueos
+    const base = (tripPadre as any).tarifa_base ?? 0;
+    const casetas = (tripPadre as any).costo_casetas ?? 0;
     const subtotal = base + casetas;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
@@ -469,83 +468,11 @@ export function NextLegModal({
       (o) =>
         o.status === "activo" ||
         o.status === "disponible" ||
-        // 👇 AQUÍ AGREGAMOS LOS ESTATUS "en_ruta" y "en ruta"
         o.status === "en_ruta" ||
         o.status === "en ruta" ||
         Number(o.id) === Number(formData.operator_id),
     );
   }, [operadores, formData.operator_id]);
-
-  useEffect(() => {
-    if (!open || !tripPadre) return;
-
-    const lastLeg =
-      tripPadre.legs && tripPadre.legs.length > 0
-        ? tripPadre.legs[tripPadre.legs.length - 1]
-        : null;
-
-    console.log("=== 🛑 INICIO DEBUGGER: REMOLQUES Y DOLLY ===");
-    console.log("1. TripPadre:", tripPadre);
-    console.log("2. Último Tramo (lastLeg):", lastLeg);
-
-    console.log("--- VALORES OBTENIDOS DEL JSON ---");
-    console.log("lastLeg.remolque_1_id:", (lastLeg as any)?.remolque_1_id);
-    console.log("lastLeg.dolly_id:", (lastLeg as any)?.dolly_id);
-    console.log("lastLeg.remolque_2_id:", (lastLeg as any)?.remolque_2_id);
-
-    console.log("tripPadre.remolque_1_id:", tripPadre.remolque_1_id);
-    console.log("tripPadre.dolly_id:", tripPadre.dolly_id);
-    console.log("tripPadre.remolque_2_id:", tripPadre.remolque_2_id);
-
-    console.log(
-      "tripPadre.remolque_1 (Objeto):",
-      (tripPadre as any).remolque_1,
-    );
-    console.log("tripPadre.dolly (Objeto):", (tripPadre as any).dolly);
-    console.log(
-      "tripPadre.remolque_2 (Objeto):",
-      (tripPadre as any).remolque_2,
-    );
-
-    console.log("--- RESULTADO EN FORMDATA ---");
-    console.log("formData.remolque_1_id:", formData.remolque_1_id);
-    console.log("formData.dolly_id:", formData.dolly_id);
-    console.log("formData.remolque_2_id:", formData.remolque_2_id);
-
-    console.log("--- VERIFICACIÓN DE SELECTS (AVAILABLES) ---");
-    console.log("¿Están los IDs en las listas de opciones?");
-
-    const r1Exists = availableRemolques.some(
-      (r) => r.id === formData.remolque_1_id,
-    );
-    const dollyExists = availableDollies.some(
-      (d) => d.id === formData.dolly_id,
-    );
-    const r2Exists = availableRemolques.some(
-      (r) => r.id === formData.remolque_2_id,
-    );
-
-    console.log(
-      `Remolque 1 (ID ${formData.remolque_1_id}) existe en options:`,
-      r1Exists,
-    );
-    console.log(
-      `Dolly (ID ${formData.dolly_id}) existe en options:`,
-      dollyExists,
-    );
-    console.log(
-      `Remolque 2 (ID ${formData.remolque_2_id}) existe en options:`,
-      r2Exists,
-    );
-
-    if (!r1Exists && formData.remolque_1_id) {
-      console.warn(
-        `⚠️ ALERTA: El Remolque 1 (ID ${formData.remolque_1_id}) NO ESTÁ en availableRemolques. Motivo probable: status diferente a 'disponible' o no lo manda el backend general.`,
-      );
-    }
-
-    console.log("=== 🛑 FIN DEBUGGER ===");
-  }, [open, tripPadre, formData, availableRemolques, availableDollies]);
 
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
@@ -602,9 +529,15 @@ export function NextLegModal({
         remolque_2_id: formData.remolque_2_id,
       });
 
+      // 🚀 QUIRÚRGICO: Enviamos el odómetro inyectado en el payload al backend
+      const payloadConOdometro = {
+        ...formData,
+        odometro_inicial: odoInicial,
+      };
+
       const success = await onSubmit(
         String(tripPadre.id),
-        formData as TripLegCreatePayload,
+        payloadConOdometro as TripLegCreatePayload,
       );
 
       if (success) {
@@ -633,6 +566,7 @@ export function NextLegModal({
   }, [
     tripPadre,
     formData,
+    odoInicial, // 🚀 Dependencia para asegurar la sincronía de React
     validateForm,
     onSubmit,
     updateLoadStatus,
@@ -1108,9 +1042,17 @@ export function NextLegModal({
             )}
 
             <div className="space-y-3">
-              <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
-                Unidad (Tractocamión)
-              </Label>
+              <div className="flex justify-between items-end">
+                <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
+                  Unidad (Tractocamión)
+                </Label>
+                {/* 🚀 INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
+                {odoInicial > 0 && (
+                  <span className="text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded shadow-sm border border-emerald-200 dark:border-emerald-800/50">
+                    ODÓMETRO ACTUAL: {odoInicial.toLocaleString()} KM
+                  </span>
+                )}
+              </div>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
                 onValueChange={(v) =>

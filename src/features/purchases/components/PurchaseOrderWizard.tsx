@@ -289,7 +289,7 @@ export function PurchaseOrderWizard({
                 )}
               >
                 {currentStep > step.id ? (
-                  <Check className="h-5 w-5" />
+                  <Check className="h-5 w-5 text-slate-500 dark:text-white/70" />
                 ) : (
                   step.id
                 )}
@@ -706,7 +706,7 @@ export function PurchaseOrderWizard({
                             className="h-10 w-10 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                             onClick={() => handleRemoveItem(item.id)}
                           >
-                            <Trash2 className="h-5 w-5" />
+                            <Trash2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
                           </Button>
                         </div>
                       ))}
@@ -782,7 +782,7 @@ export function PurchaseOrderWizard({
 
                 <h3 className="font-black text-center mb-8 flex items-center justify-center gap-3 uppercase tracking-widest text-brand-navy dark:text-blue-100">
                   <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600">
-                    <DollarSign className="h-5 w-5" />
+                    <DollarSign className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </div>
                   Resumen Financiero
                 </h3>

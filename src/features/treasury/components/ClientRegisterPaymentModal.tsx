@@ -83,7 +83,7 @@ export function ClientRegisterPaymentModal({
       });
       setAbonos(initialAbonos);
 
-      // 🚀 FIX: Extraemos la Referencia Operativa (Booking/Pedimento) del viaje en lugar del folio
+      //   FIX: Extraemos la Referencia Operativa (Booking/Pedimento) del viaje en lugar del folio
       const defaultReferencia = invoices
         .map((inv: any) => inv.referencia || inv.referencia_cliente || "")
         .filter(Boolean)
@@ -122,7 +122,7 @@ export function ClientRegisterPaymentModal({
       return;
     }
 
-    // 🚀 VALIDACIÓN SAT: Si escriben cuenta, debe ser mayor a 10 dígitos (Regla del SAT)
+    //   VALIDACIÓN SAT: Si escriben cuenta, debe ser mayor a 10 dígitos (Regla del SAT)
     if (formData.cuenta_ordenante && formData.cuenta_ordenante.length < 10) {
       setError(
         "La cuenta ordenante del cliente debe tener al menos 10 dígitos.",
@@ -211,7 +211,7 @@ export function ClientRegisterPaymentModal({
 
         <ScrollArea className="flex-1 px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar mt-4">
           <div className="space-y-6">
-            {/* 🚀 SECCIÓN 1: DATOS GENERALES DEL PAGO */}
+            {/*   SECCIÓN 1: DATOS GENERALES DEL PAGO */}
             <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-1.5">
                 <Building2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />{" "}
@@ -301,7 +301,7 @@ export function ClientRegisterPaymentModal({
               </div>
             </div>
 
-            {/* 🚀 SECCIÓN 2: DATOS DEL CLIENTE (OPCIONAL) */}
+            {/*   SECCIÓN 2: DATOS DEL CLIENTE (OPCIONAL) */}
             <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-1.5">
                 <Wallet className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />{" "}
@@ -346,7 +346,7 @@ export function ClientRegisterPaymentModal({
               </div>
             </div>
 
-            {/* 🚀 SECCIÓN 3: DESGLOSE DE FACTURAS */}
+            {/*   SECCIÓN 3: DESGLOSE DE FACTURAS */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">

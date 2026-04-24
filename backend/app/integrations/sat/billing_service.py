@@ -497,7 +497,7 @@ class BillingService:
                 detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido de 13 caracteres. Detectado: '{rfc_op_final}'.",
             )
 
-        # 🚀 LIMPIEZA ESTRICTA DE DIRECCIONES (SAT exige máximo 100 caracteres y sin símbolo pipe "|")
+        #   LIMPIEZA ESTRICTA DE DIRECCIONES (SAT exige máximo 100 caracteres y sin símbolo pipe "|")
         origen_real = (
             str(viaje.origin or "DOMICILIO CONOCIDO").replace("|", "").strip()[:100]
         )

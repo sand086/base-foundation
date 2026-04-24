@@ -670,7 +670,7 @@ async def create_fuel_log(
         )
         evidencia_url, filename = storage["url"], storage["filename"]
 
-    # 🚀 IDEA 1: LA MEMORIA DEL CAMIÓN
+    #   IDEA 1: LA MEMORIA DEL CAMIÓN
     # Buscamos el último ticket registrado para ESTA unidad, ordenado por odómetro
     last_log = (
         db.query(models.FuelLog)
@@ -698,7 +698,7 @@ async def create_fuel_log(
             precio_por_litro=precio,
             total=litros * precio,
             odometro=odometro,
-            km_sm=km_recorridos,  # 🚀 AQUÍ SE GUARDAN LOS KM AUTOMÁTICAMENTE
+            km_sm=km_recorridos,  #   AQUÍ SE GUARDAN LOS KM AUTOMÁTICAMENTE
             evidencia_url=evidencia_url,
             created_by_id=current_user.id,
         )

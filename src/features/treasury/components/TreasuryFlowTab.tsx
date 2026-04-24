@@ -35,7 +35,7 @@ import {
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
 
-// 🚀 Utilizamos nuestra utilidad global
+//   Utilizamos nuestra utilidad global
 import { getBankLogo } from "../utils/bankUtils";
 
 interface TreasuryFlowTabProps {
@@ -245,7 +245,7 @@ export function TreasuryFlowTab({
                   // 1. Obtenemos el logo SVG
                   const logoSvg = getBankLogo(mov.banco);
 
-                  // 🚀 2. Filtro destructor de emojis para el texto:
+                  //   2. Filtro destructor de emojis para el texto:
                   // Esto elimina cualquier caracter Unicode alto (donde viven los emojis) y deja solo texto limpio.
                   const bankNameClean = mov.banco
                     ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
@@ -295,7 +295,7 @@ export function TreasuryFlowTab({
                             )}
                           </span>
 
-                          {/* 🚀 3. Aquí renderizamos el nombre LIMPIO (bankNameClean) */}
+                          {/*   3. Aquí renderizamos el nombre LIMPIO (bankNameClean) */}
                           <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
                             {bankNameClean}
                           </span>

@@ -270,14 +270,18 @@ export function PatrimonialView() {
   const getTipoIcon = (tipo: string) => {
     const tipoLower = tipo.toLowerCase();
     if (tipoLower.includes("full") || tipoLower.includes("sencillo"))
-      return <Truck className="h-5 w-5" />;
+      return <Truck className="h-5 w-5 text-slate-500 dark:text-white/70" />;
     if (tipoLower.includes("caja") || tipoLower.includes("refrigerado"))
-      return <Package className="h-5 w-5" />;
+      return <Package className="h-5 w-5 text-slate-500 dark:text-white/70" />;
     if (tipoLower.includes("montacargas"))
-      return <Warehouse className="h-5 w-5" />;
-    if (tipoLower.includes("utilitario")) return <Car className="h-5 w-5" />;
-    if (tipoLower.includes("tractocamion")) return <Car className="h-5 w-5" />;
-    return <Truck className="h-5 w-5" />;
+      return (
+        <Warehouse className="h-5 w-5 text-slate-500 dark:text-white/70" />
+      );
+    if (tipoLower.includes("utilitario"))
+      return <Car className="h-5 w-5 text-slate-500 dark:text-white/70" />;
+    if (tipoLower.includes("tractocamion"))
+      return <Car className="h-5 w-5 text-slate-500 dark:text-white/70" />;
+    return <Truck className="h-5 w-5 text-slate-500 dark:text-white/70" />;
   };
 
   const handleOpenBaja = (activo: ActivoPatrimonial) => {

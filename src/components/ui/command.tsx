@@ -53,7 +53,7 @@ const CommandDialog = ({
             "bg-transparent",
             "[&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:py-3 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-black [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.2em] [&_[cmdk-group-heading]]:text-brand-red",
             "[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2",
-            "[&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input-wrapper]_svg]:text-slate-400 dark:text-white/20",
+            "[&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input-wrapper]_svg]:text-slate-400 dark:[&_[cmdk-input-wrapper]_svg]:text-white/50",
             "[&_[cmdk-input]]:h-16 [&_[cmdk-input]]:text-[15px] [&_[cmdk-input]]:font-medium [&_[cmdk-input]]:placeholder:text-slate-400 dark:[&_[cmdk-input]]:placeholder:text-white/20",
             "[&_[cmdk-item]]:px-4 [&_[cmdk-item]]:py-3.5 [&_[cmdk-item]]:rounded-xl [&_[cmdk-item]]:transition-all [&_[cmdk-item]]:duration-200",
             "[&_[cmdk-item][data-selected=true]]:bg-brand-red [&_[cmdk-item][data-selected=true]]:text-white [&_[cmdk-item][data-selected=true]]:shadow-lg [&_[cmdk-item][data-selected=true]]:scale-[1.01]",

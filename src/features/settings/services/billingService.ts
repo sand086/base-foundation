@@ -20,7 +20,7 @@ export const billingService = {
         } as any);
       return response as BillingResponse;
     } catch (error: any) {
-      // 🚀 MAGIA: Los clientes generados por OpenAPI guardan el JSON del backend en "error.body"
+      //   MAGIA: Los clientes generados por OpenAPI guardan el JSON del backend en "error.body"
       if (error.body) {
         // Lo empaquetamos simulando la estructura de Axios para que tu useBilling.ts lo atrape perfecto
         throw { response: { data: error.body } };
@@ -43,7 +43,7 @@ export const billingService = {
         } as any);
       return response as BillingResponse;
     } catch (error: any) {
-      // 🚀 MAGIA: Mismo blindaje para la factura final
+      //   MAGIA: Mismo blindaje para la factura final
       if (error.body) {
         throw { response: { data: error.body } };
       }

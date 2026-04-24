@@ -203,7 +203,7 @@ export const WorkOrdersTable = () => {
           0,
         ) || 0;
 
-      // 3. 🚀 CREAMOS LA CUENTA POR PAGAR (CxP)
+      // 3.   CREAMOS LA CUENTA POR PAGAR (CxP)
       // OJO: Los nombres de estas propiedades deben coincidir exactamente
       // con tu esquema PayableInvoiceCreate en FastAPI.
       const payloadCxP = {

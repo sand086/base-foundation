@@ -58,7 +58,7 @@ import {
   calculateDaysOverdue,
 } from "@/features/receivables/types";
 import axiosClient from "@/api/axiosClient";
-
+import { cn } from "@/lib/utils";
 // HOOKS
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useReceivables } from "@/features/receivables/hooks/useReceivables";
@@ -362,6 +362,7 @@ export default function Receivables() {
     }).format(amount || 0);
   };
 
+  // 🚀 MAGIA UX APLICADA EN COLUMNS
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -455,7 +456,6 @@ export default function Receivables() {
             );
           }
 
-          // 🚀 MATEMÁTICA EN VIVO A PRUEBA DE BALAS PARA LA DEMO
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
@@ -482,7 +482,6 @@ export default function Receivables() {
               </div>
             );
           } else {
-            // 🚀 SIEMPRE MOSTRAR LOS DÍAS FALTANTES
             const diasFaltantes = Math.abs(daysOverdue);
             const colorCls =
               diasFaltantes <= 3
@@ -527,69 +526,91 @@ export default function Receivables() {
         key: "id",
         header: "Acciones",
         sortable: false,
-        render: (_, row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
-              >
-                <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
-            >
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedInvoice(row);
-                  setIsDetailSheetOpen(true);
-                }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-              >
-                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
-                Ver Detalle
-              </DropdownMenuItem>
+        render: (_, row) => {
+          // 🚀 MAGIA UX 1: Identificar si hay checkboxes activos globalmente
+          const isSelectionActive = selectedRows.length > 0;
 
-              {(row.saldo_pendiente || 0) > 0 && (
-                <>
-                  <DropdownMenuSeparator className="dark:bg-white/10" />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setInvoicesToPay([row]);
-                      setIsPaymentModalOpen(true);
-                    }}
-                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-amber-600 dark:text-amber-400 dark:focus:bg-amber-900/30"
-                  >
-                    <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
-                    REP
-                  </DropdownMenuItem>
-                </>
-              )}
+          // 🚀 MAGIA UX 2: Identificar si la factura ya tiene abonos/pagos
+          const hasPayments =
+            (row.monto_total || 0) > (row.saldo_pendiente || 0);
 
-              <DropdownMenuSeparator className="dark:bg-white/10" />
-              <DropdownMenuItem
-                onClick={async () => {
-                  if (
-                    window.confirm(
-                      "¿Estás seguro de restaurar esta factura? El saldo volverá a estar pendiente para que puedas intentar el REP de nuevo.",
-                    )
-                  ) {
-                    await reopenReceivable(Number(row.id));
-                  }
-                }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-blue-600 dark:text-blue-500 cursor-pointer dark:focus:bg-blue-950/30"
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={isSelectionActive} // SE DESHABILITA SI HAY CHECKBOXES ACTIVOS
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10",
+                    isSelectionActive
+                      ? "opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800"
+                      : "hover:bg-slate-100 dark:hover:bg-slate-800 bg-white/50 dark:bg-slate-900/50",
+                  )}
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
               >
-                <Clock className="h-4 w-4 mr-2" /> Restaurar / Reintentar Pago
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedInvoice(row);
+                    setIsDetailSheetOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
+                  Ver Detalle
+                </DropdownMenuItem>
+
+                {/* Si todavía tiene saldo pendiente, permitimos cobrar */}
+                {(row.saldo_pendiente || 0) > 0 && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setInvoicesToPay([row]);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-900/30"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
+                      REP
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/* 🚀 MAGIA UX 3: Si ya tiene pagos, mostramos ANULAR REP */}
+                {hasPayments && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        if (
+                          window.confirm(
+                            "¿Estás seguro de ANULAR EL REP y revertir los cobros de esta factura?\n\nAl confirmar, el saldo de la factura volverá a estar pendiente y el Complemento de Pago será mandado a cancelar en el SAT.",
+                          )
+                        ) {
+                          await reopenReceivable(Number(row.id));
+                        }
+                      }}
+                      className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                    >
+                      <Ban className="h-4 w-4 mr-2" /> Anular REP y Restaurar
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
-    [],
+    // 🚀 IMPORTANTE: Agregar selectedRows.length como dependencia para que re-renderice
+    [selectedRows.length, reopenReceivable],
   );
 
   if (isLoadingReceivables) {
@@ -603,7 +624,7 @@ export default function Receivables() {
   return (
     <div className="space-y-6 pb-20 animate-page-enter relative">
       <PageHeader
-        title="Cuentas por Cobrar (Tesorería)"
+        title="Cuentas por Cobrar"
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
@@ -695,6 +716,7 @@ export default function Receivables() {
             onSelectedRowsChange={setSelectedRows}
             rowKey="id"
             onCustomExport={handleExportToExcel}
+            isRowSelectable={(row) => (row.saldo_pendiente || 0) > 0}
           />
         </CardContent>
       </Card>

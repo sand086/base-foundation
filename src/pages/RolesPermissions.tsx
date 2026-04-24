@@ -753,7 +753,7 @@ const RolesPermissions: React.FC = () => {
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="space-y-3">
             <SheetTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
+              <Shield className="h-5 w-5 text-slate-500 dark:text-white/70" />
               {isCreatingRole
                 ? "Crear Nuevo Rol"
                 : `Editar Rol: ${currentRole?.nombre ?? ""}`}
@@ -973,7 +973,8 @@ const RolesPermissions: React.FC = () => {
         <AlertDialogContent className="border-destructive/50">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" /> Eliminar Rol Crítico
+              <AlertTriangle className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+              Eliminar Rol Crítico
             </AlertDialogTitle>
 
             <AlertDialogDescription className="text-base text-foreground mt-4">

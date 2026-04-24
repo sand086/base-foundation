@@ -142,7 +142,7 @@ export default function FuelConciliation() {
     if (!activeTrip || !activeTrip.legs) return [];
     return activeTrip.legs.filter((leg) => {
       const legStatus = String(leg.status ?? "").toLowerCase();
-      // 🚀 EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
+      //   EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
       return (
         ["entregado", "cerrado", "finalizado", "liquidado"].includes(
           legStatus,
@@ -244,7 +244,7 @@ export default function FuelConciliation() {
     await fetchValesCombustible(legId);
   };
 
-  // 🚀 LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
+  //   LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
   const handleAutoCalculateOdometer = () => {
     const kms = Number(formData.kilometrosECM);
     if (kms > 0 && activeLeg) {
@@ -263,7 +263,7 @@ export default function FuelConciliation() {
     }
   };
 
-  // 🚀 REPARACIÓN DEL EDITAR
+  //   REPARACIÓN DEL EDITAR
   const handleEditAudit = async (leg: any) => {
     // Al setear estos IDs, los Selects los agarran gracias a la lista blanca modificada
     setSelectedTripId(String(leg.trip_id));
@@ -393,7 +393,7 @@ export default function FuelConciliation() {
   };
 
   // =========================================================================
-  // 🚀 GUARDAR Y APLICAR SANCIÓN AL BACKEND (CORREGIDO STATUS "EN CURSO")
+  //   GUARDAR Y APLICAR SANCIÓN AL BACKEND (CORREGIDO STATUS "EN CURSO")
   // =========================================================================
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
@@ -418,10 +418,11 @@ export default function FuelConciliation() {
       const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
 
       const payload = {
-        status: "entregado", // 🚀 ESTO ARREGLA EL BUG QUE LO REGRESABA A "EN CURSO"
+        status: "entregado", //   ESTO ARREGLA EL BUG QUE LO REGRESABA A "EN CURSO"
         location: "Conciliación de Combustible",
         comments: comentarioBitacora.trim(),
         odometro: Number(formData.odometroFinal),
+        odometro_final: Number(formData.odometroFinal), // 🚀 FIX QUIRÚRGICO: Este es el que el backend debe guardar en trip_legs
         combustible_litros: Number(vales),
         trip_leg_id: Number(selectedLegId),
         penalizacion_monto: cobrarOperador ? auditResult.descuentoPesos : 0,
@@ -686,7 +687,7 @@ export default function FuelConciliation() {
 
                       if (estatusValidos.includes(tripStatus)) return true;
 
-                      // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos listos, ¡muéstralo!
+                      //   EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos listos, ¡muéstralo!
                       const tieneTramosListos = t.legs?.some((leg) =>
                         estatusValidos.includes(
                           String(leg.status ?? "").toLowerCase(),
@@ -1257,7 +1258,10 @@ export default function FuelConciliation() {
               <AlertDialogAction
                 variant="destructive"
                 size="lg"
-                onClick={handleResetAudit}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleResetAudit();
+                }}
                 className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
               >
                 <RotateCcw className="h-4 w-4 mr-2" /> Revertir Fase
