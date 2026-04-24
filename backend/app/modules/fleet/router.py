@@ -27,7 +27,7 @@ from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 
 from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
-from .crud import get_last_unit_odometer
+from app.modules.logistics.crud import get_last_unit_odometer
 
 #  importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud

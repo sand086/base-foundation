@@ -292,6 +292,7 @@ class TripTimelineEventCreatePayload(BaseModel):
     lng: Optional[str] = None
     notifyClient: Optional[bool] = False
     odometro: Optional[int] = None
+    odometro_final: Optional[float] = None
     combustible_porcentaje: Optional[float] = None
     combustible_litros: Optional[float] = None
     terminal_entrega_vacio: Optional[str] = None

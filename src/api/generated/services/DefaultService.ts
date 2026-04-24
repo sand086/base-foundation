@@ -644,6 +644,29 @@ export class DefaultService {
         });
     }
     /**
+     * Get Unit Last Odometer
+     * Devuelve el último odómetro registrado para una unidad específica.
+     * Busca primero en la liquidación del último viaje (TripLeg) y
+     * luego en el último vale de combustible (FuelLog).
+     * @param unitId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getUnitLastOdometerApiFleetUnitsUnitIdLastOdometerGet(
+        unitId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/fleet/units/{unit_id}/last-odometer',
+            path: {
+                'unit_id': unitId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Test Invoice Pro
      * @returns any Successful Response
      * @throws ApiError
@@ -891,7 +914,7 @@ export class DefaultService {
     /**
      * Generar Complemento de Pago
      * Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-     * el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA)
+     * el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA BLINDADO PARA BANCOS 1 A 1)
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError

@@ -43,6 +43,7 @@ export type { ClientUpdate } from './models/ClientUpdate';
 export type { CloseSettlementPayload } from './models/CloseSettlementPayload';
 export type { ConceptoPago } from './models/ConceptoPago';
 export type { ConfigBulkUpdate } from './models/ConfigBulkUpdate';
+export type { CostCenterResponse } from './models/CostCenterResponse';
 export { Currency } from './models/Currency';
 export type { DailyRevenue } from './models/DailyRevenue';
 export type { DashboardData } from './models/DashboardData';

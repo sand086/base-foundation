@@ -9,6 +9,7 @@ import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
+import type { CostCenterResponse } from '../models/CostCenterResponse';
 import type { ProviderCreate } from '../models/ProviderCreate';
 import type { ProviderResponse } from '../models/ProviderResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -87,6 +88,19 @@ export class FinanceService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/finance/indirect-categories',
+        });
+    }
+    /**
+     * Read Cost Centers
+     * Obtiene los Centros de Costos creados por la importación masiva del SAT
+     * o creados manualmente, para mostrarlos en el frontend.
+     * @returns CostCenterResponse Successful Response
+     * @throws ApiError
+     */
+    public static readCostCentersApiFinanceCostCentersGet(): CancelablePromise<Array<CostCenterResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/cost-centers',
         });
     }
     /**
@@ -437,8 +451,8 @@ export class FinanceService {
     }
     /**
      * Reopen Receivable Invoice
-     * BOTÓN DE RESCATE: Restaura una cuenta por cobrar a su estado original (Pendiente).
-     * Elimina los pagos atascados y resetea el saldo al monto total para reintentar el REP.
+     * Restaura una cuenta por cobrar a su estado financiero original (Pendiente).
+     * Respeta la verdad absoluta del SAT sin hacer "trampas" en los estatus.
      * @param invoiceId
      * @returns any Successful Response
      * @throws ApiError
