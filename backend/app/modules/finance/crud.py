@@ -125,7 +125,7 @@ def delete_bank_account(db: Session, account_id: int):
     if not account:
         return False
 
-    #  MAGIA: SOFT DELETE
+    # MAGIA: SOFT DELETE
     account.estatus = "inactivo"
     account.record_status = RecordStatus.ELIMINADO
 
@@ -187,7 +187,10 @@ def create_bank_movement(
         monto=movement_data.monto,
         concepto=movement_data.concepto,
         referencia=movement_data.referencia,
-        fecha=fecha_mov,  # <--- ¡AQUÍ ESTÁ EL FIX! Ahora sí mandamos la fecha a la BD
+        origen_modulo=getattr(
+            movement_data, "origen_modulo", None
+        ),  # 🚀 FIX: Aseguramos el módulo (CxC o CxP)
+        fecha=fecha_mov,
         created_by_id=current_user_id,
     )
 
@@ -271,7 +274,6 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         # 3. GESTIÓN DE FECHAS
         fecha_str = str(item.get("fecha_emision") or "")
         try:
-            # El SAT a veces manda '2023-08-01 06:00:00' o '2023-08-01'
             fecha_obj = datetime.fromisoformat(fecha_str.replace("Z", "").split(" ")[0])
         except ValueError:
             fecha_obj = datetime.utcnow()
@@ -298,7 +300,6 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
             saldo_pendiente=total,  # Al importarse, se debe todo
             fecha_emision=fecha_obj.date(),
             fecha_vencimiento=vencimiento.date(),
-            # NOTA: quitamos dias_credito porque PayableInvoice no lo tiene en tu modelo Base
             moneda=str(item.get("moneda") or "MXN").strip()[:3],
             estatus="pendiente",
             clasificacion="gasto_indirecto_variable",  # Clasificación por defecto al subir
@@ -359,7 +360,6 @@ def register_payable_payment(
                 .first()
             )
             if not caja_general:
-                # El AuditMixin manejará el created_at y record_status
                 caja_general = models.BankAccount(
                     banco="Efectivo / Virtual",
                     numero_cuenta="0000000000",
@@ -373,14 +373,13 @@ def register_payable_payment(
             bank_account_id = caja_general.id
 
         # ======================================================
-        #   1. Crear el registro del abono (CON NUEVOS CAMPOS)
+        #   1. Crear el registro del abono
         # ======================================================
         nuevo_pago = models.InvoicePayment(
             invoice_id=invoice.id,
             bank_account_id=bank_account_id,
             fecha_pago=payment_data.get("fecha_pago", date.today()),
             monto=monto_pago,
-            # CAMPOS DEL SAT/REP AÑADIDOS AQUI:
             parcialidad=int(payment_data.get("parcialidad", 1)),
             saldo_anterior=float(
                 payment_data.get("saldo_anterior") or invoice.saldo_pendiente
@@ -406,23 +405,24 @@ def register_payable_payment(
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
         # 3. Crear el Egreso en Tesorería (Flujo de Caja)
+        # 🚀 FIX: AÑADIMOS origen_modulo="CxP" PARA TESORERÍA
         mov_schema = schemas.BankMovementCreate(
             bank_account_id=bank_account_id,
             tipo="egreso",
             monto=monto_pago,
             concepto=f"Pago CxP - Fra. {invoice.folio_interno or invoice.uuid[:8]}",
             referencia=payment_data.get("referencia", ""),
+            origen_modulo="CxP",
         )
-        # Delegamos a la función que ya ajusta los saldos bancarios de forma segura
         create_bank_movement(db, mov_schema, user_id)
 
-        # Confirmamos la transacción (Se aplican todos los db.add y db.flush)
+        # Confirmamos la transacción
         db.commit()
         db.refresh(invoice)
         return invoice
 
     except Exception as e:
-        # ATOMICIDAD: Si algo falla (ej. error en create_bank_movement), echamos todo para atrás
+        # ATOMICIDAD: Si algo falla, echamos todo para atrás
         db.rollback()
         raise e
 
@@ -430,7 +430,6 @@ def register_payable_payment(
 def register_petty_cash_expense(db: Session, expense_data: dict, user_id: int):
     """
     Registra un gasto directo (Caja Chica) sin factura de por medio.
-    Extrae el dinero directamente de la cuenta bancaria.
     """
     bank_account_id = expense_data.get("bank_account_id")
     if not bank_account_id:
@@ -455,7 +454,6 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
     # Generamos un folio provisional en lo que el sistema la timbra con el SAT
     folio = f"MNL-{int(time.time())}"
 
-    # El frontend manda 'conceptos' como un array. Tomamos la primera descripción
     conceptos = data.get("conceptos", [])
     concepto_general = (
         conceptos[0].get("descripcion", "Factura Manual")
@@ -463,7 +461,6 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
         else "Servicio de Transporte"
     )
 
-    # Procesar fechas de texto ("YYYY-MM-DD") a objetos Date
     fecha_emision_str = data.get("fecha_emision")
     fecha_vencimiento_str = data.get("fecha_vencimiento")
 
@@ -494,7 +491,6 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
         moneda=data.get("moneda", "MXN"),
         fecha_emision=emision_obj,
         fecha_vencimiento=vencimiento_obj,
-        # NO usamos dias_credito directamente aqui si tu modelo no lo tiene declarado
         metodo_pago=data.get("metodo_pago", "PPD"),
         forma_pago=data.get("forma_pago", "99"),
         tipo_comprobante="I",
@@ -517,7 +513,6 @@ def process_sat_master_report(
     """
     Motor de Conciliación Universal (CxP y CxC).
     Lee el Excel del SAT convertido a dicts y cruza la operación con lo fiscal.
-    Valida duplicados, ignora cancelados y entiende ambas pestañas del SAT.
     """
     resultados = {
         "cxp_creadas": 0,
@@ -527,11 +522,10 @@ def process_sat_master_report(
         "notas_credito_aplicadas": 0,
         "ignorados_duplicados": 0,
         "ignorados_cancelados": 0,
-        "cecos_creados_al_vuelo": 0,  # <-- NUEVA METRICA
+        "cecos_creados_al_vuelo": 0,
     }
 
     for item in payload_data:
-        # 1. IGNORAR FACTURAS CANCELADAS (Para no generar deudas fantasma)
         estado_sat = str(item.get("Estado", "")).strip().upper()
         if estado_sat == "CANCELADO":
             resultados["ignorados_cancelados"] += 1
@@ -546,7 +540,6 @@ def process_sat_master_report(
         if not uuid_fiscal:
             continue
 
-        # 2. UNIFICACIÓN DE COLUMNAS (Facturas vs Complementos de Pago)
         tipo_raw = str(item.get("Tipo", "")).strip().lower()
         if "nota de crédito" in tipo_raw:
             tipo_comprobante = "egreso"
@@ -555,7 +548,6 @@ def process_sat_master_report(
         else:
             tipo_comprobante = "ingreso"
 
-        #   FIX APLICADO: Truncamiento de métodos y formas de pago para evitar error en BD
         metodo_pago_raw = (
             str(item.get("Método de Pago") or item.get("MetodoDePagoDR") or "")
             .strip()
@@ -607,9 +599,6 @@ def process_sat_master_report(
         except (ValueError, TypeError):
             subtotal, total, iva, retenciones = 0.0, 0.0, 0.0, 0.0
 
-        # ==========================================
-        #   EXTRACCIÓN DE NUEVOS CAMPOS DEL SAT
-        # ==========================================
         descuento_raw = item.get("Descuento", 0)
         tc_raw = item.get("Tipo de Cambio", 1.0)
         uso_cfdi_raw = str(item.get("Uso CFDI", "")).split("-")[0].strip()[:5]
@@ -627,7 +616,6 @@ def process_sat_master_report(
         except:
             descuento, tipo_cambio = 0.0, 1.0
 
-        # Desglose de impuestos en JSON
         ish_raw = item.get("ISH:0.03%") or item.get("ISH:0.30%") or 0
         try:
             val_isr = (
@@ -656,7 +644,6 @@ def process_sat_master_report(
 
         is_cxc = rfc_emisor.upper() == my_rfc.upper()
 
-        # --- REGLA ANTI-DUPLICADOS ---
         if tipo_comprobante == "ingreso":
             if is_cxc:
                 existing = (
@@ -684,7 +671,7 @@ def process_sat_master_report(
                 continue
 
         # ==========================================
-        # FLUJO A: COMPROBANTES TIPO "INGRESO" (FACTURAS NORMALES)
+        # FLUJO A: COMPROBANTES TIPO "INGRESO"
         # ==========================================
         if tipo_comprobante == "ingreso":
             saldo_pendiente = 0.0 if metodo_pago == "PUE" else total
@@ -730,9 +717,9 @@ def process_sat_master_report(
                     tipo_comprobante="I",
                 )
                 db.add(invoice)
+                db.flush()  # CRÍTICO: Necesario para obtener invoice.id
                 resultados["cxc_creadas"] += 1
             else:
-                #   FIX APLICADO: Uso de models.Supplier en lugar de models.Provider
                 provider = (
                     db.query(models.Supplier)
                     .filter(
@@ -748,9 +735,6 @@ def process_sat_master_report(
                     db.add(provider)
                     db.flush()
 
-                # ==============================================================
-                #   LÓGICA DE CENTROS DE COSTOS AUTOMÁTICA (SOLO APLICA A CXP)
-                # ==============================================================
                 cost_center_id = None
                 ceco_name = str(
                     item.get("Centro de Costos ") or item.get("Centro de Costos") or ""
@@ -762,7 +746,6 @@ def process_sat_master_report(
                         .first()
                     )
                     if not ceco:
-                        # Si no existe, lo creamos al vuelo para que no se pierda la agrupación en reportes
                         nuevo_ceco_codigo = ceco_name[:15].upper().replace(" ", "-")
                         ceco = models.CostCenter(
                             codigo=nuevo_ceco_codigo, nombre=ceco_name
@@ -772,25 +755,22 @@ def process_sat_master_report(
                         resultados["cecos_creados_al_vuelo"] += 1
                     cost_center_id = ceco.id
 
-                # ==============================================================
-                # INYECCIÓN DE NUEVOS CAMPOS EN PAYABLE INVOICE
-                # ==============================================================
                 invoice = models.PayableInvoice(
                     supplier_id=provider.id,
-                    cost_center_id=cost_center_id,  # <- Asignación del CECO
+                    cost_center_id=cost_center_id,
                     uuid=uuid_fiscal,
-                    serie=serie_raw,  # <- Dato del SAT
+                    serie=serie_raw,
                     folio=folio,
                     folio_interno=folio,
                     subtotal=subtotal,
-                    descuento=descuento,  # <- Dato del SAT
+                    descuento=descuento,
                     iva=iva,
                     retenciones=retenciones,
-                    desglose_impuestos=desglose_impuestos,  # <- JSON con desglose granular
+                    desglose_impuestos=desglose_impuestos,
                     monto_total=total,
                     saldo_pendiente=saldo_pendiente,
                     moneda=moneda,
-                    tipo_cambio=tipo_cambio,  # <- Dato del SAT
+                    tipo_cambio=tipo_cambio,
                     fecha_emision=fecha_obj.date(),
                     fecha_vencimiento=(
                         fecha_obj
@@ -802,13 +782,41 @@ def process_sat_master_report(
                     metodo_pago=metodo_pago,
                     forma_pago=forma_pago,
                     tipo_comprobante="I",
-                    uso_cfdi=uso_cfdi_raw,  # <- Dato del SAT
-                    validacion_efos=False,  # Defecto seguro
+                    uso_cfdi=uso_cfdi_raw,
+                    validacion_efos=False,
                 )
                 db.add(invoice)
+                db.flush()  # CRÍTICO: Necesario para obtener invoice.id
                 resultados["cxp_creadas"] += 1
 
+            # 🚀 FIX CRÍTICO: SI ES PUE, AFECTAR TESORERÍA EN LA CUENTA COMODÍN
             if metodo_pago == "PUE":
+                cuenta_comodin = (
+                    db.query(models.BankAccount)
+                    .filter_by(alias="Por Conciliar (SAT)")
+                    .first()
+                )
+                if not cuenta_comodin:
+                    cuenta_comodin = models.BankAccount(
+                        banco="SAT Virtual",
+                        numero_cuenta="000",
+                        alias="Por Conciliar (SAT)",
+                        tipo_cuenta="virtual",
+                        created_by_id=1,
+                    )
+                    db.add(cuenta_comodin)
+                    db.flush()
+
+                tipo_mov = "ingreso" if is_cxc else "egreso"
+                mov_schema = schemas.BankMovementCreate(
+                    bank_account_id=cuenta_comodin.id,
+                    tipo=tipo_mov,
+                    monto=total,
+                    concepto=f"Factura PUE SAT - {folio or uuid_fiscal[:8]}",
+                    referencia="Carga SAT PUE",
+                    origen_modulo="CxC" if is_cxc else "CxP",
+                )
+                create_bank_movement(db, mov_schema, current_user_id=1)
                 resultados["pagos_pue_procesados"] += 1
 
         # ==========================================
@@ -870,7 +878,6 @@ def process_sat_master_report(
                     referencia="Carga SAT",
                 )
 
-                # Si es un InvoicePayment (CXP), inyectamos los campos de parcialidad del REP
                 if hasattr(nuevo_pago, "parcialidad"):
                     nuevo_pago.parcialidad = int(item.get("Parcialidad", 1) or 1)
                     nuevo_pago.saldo_anterior = float(
@@ -890,8 +897,6 @@ def process_sat_master_report(
                     else models.InvoiceStatus.PAGO_PARCIAL
                 )
 
-                # ---   NUEVO: AFECTAR BANCOS EN CARGA MASIVA ---
-                # Busca una cuenta comodín para ingresos/egresos del SAT
                 cuenta_comodin = (
                     db.query(models.BankAccount)
                     .filter_by(alias="Por Conciliar (SAT)")
@@ -903,6 +908,7 @@ def process_sat_master_report(
                         numero_cuenta="000",
                         alias="Por Conciliar (SAT)",
                         tipo_cuenta="virtual",
+                        created_by_id=1,
                     )
                     db.add(cuenta_comodin)
                     db.flush()
@@ -914,11 +920,10 @@ def process_sat_master_report(
                     monto=total,
                     concepto=f"Carga SAT REP - {uuid_fiscal[:8]}",
                     referencia="Carga SAT",
+                    origen_modulo="CxC" if is_cxc else "CxP",
                 )
 
-                # Usamos el motor atómico para afectar el saldo bancario de forma segura
                 create_bank_movement(db, mov_schema, current_user_id=1)
-
             resultados["complementos_procesados"] += 1
 
     db.commit()
@@ -926,7 +931,6 @@ def process_sat_master_report(
 
 
 def conciliate_bank_movement(db: Session, movement_id: int):
-    """Marca un movimiento como conciliado con la fecha de hoy"""
     movement = (
         db.query(models.BankMovement)
         .filter(
@@ -935,14 +939,10 @@ def conciliate_bank_movement(db: Session, movement_id: int):
         )
         .first()
     )
-
     if not movement:
         return None
-
-    # Cambiamos el estatus a conciliado y le ponemos la fecha actual
     movement.conciliado = True
     movement.fecha_conciliacion = date.today()
-
     db.commit()
     db.refresh(movement)
     return movement
@@ -950,9 +950,8 @@ def conciliate_bank_movement(db: Session, movement_id: int):
 
 def delete_bank_movement(db: Session, movement_id: int):
     """
-    Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
-    NUEVO: Si el movimiento proviene de CxC o CxP, también revierte el pago en la factura correspondiente,
-    regresándola a estado 'pendiente' para permitir un nuevo complemento.
+    🚀 FIX: Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
+    Si proviene de CxC o CxP, también revierte el pago en la factura y restaura su saldo.
     """
     movement = (
         db.query(models.BankMovement)
@@ -966,7 +965,6 @@ def delete_bank_movement(db: Session, movement_id: int):
     if not movement:
         return False
 
-    # 1. Revertir saldo en la cuenta bancaria para evitar descuadres
     account = (
         db.query(models.BankAccount)
         .filter(models.BankAccount.id == movement.bank_account_id)
@@ -980,11 +978,8 @@ def delete_bank_movement(db: Session, movement_id: int):
         elif movement.tipo == "egreso":
             account.saldo += movement.monto
 
-    # ==============================================================
-    # 2. ROLLBACK CXC (CUENTAS POR COBRAR) - "La Escalerita"
-    # ==============================================================
+    # 1. ROLLBACK CxC
     if movement.origen_modulo == "CxC":
-        # Buscamos el pago exacto asociado a este monto y cuenta
         pago_cxc = (
             db.query(models.ReceivableInvoicePayment)
             .filter(
@@ -996,7 +991,6 @@ def delete_bank_movement(db: Session, movement_id: int):
             .first()
         )
         if pago_cxc:
-            # Recuperamos la factura y le regresamos la deuda
             invoice = (
                 db.query(models.ReceivableInvoice)
                 .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
@@ -1008,12 +1002,9 @@ def delete_bank_movement(db: Session, movement_id: int):
                     invoice.estatus = "pendiente"
                 else:
                     invoice.estatus = "pago_parcial"
-            # Eliminamos físicamente el registro de pago para liberar el REP
             db.delete(pago_cxc)
 
-    # ==============================================================
-    # 3. ROLLBACK CXP (CUENTAS POR PAGAR)
-    # ==============================================================
+    # 2. ROLLBACK CxP
     elif movement.origen_modulo == "CxP":
         pago_cxp = (
             db.query(models.InvoicePayment)
@@ -1038,8 +1029,6 @@ def delete_bank_movement(db: Session, movement_id: int):
                     invoice.estatus = "pago_parcial"
             db.delete(pago_cxp)
 
-    # 4. Hacemos Soft Delete del movimiento en tesorería
     movement.record_status = RecordStatus.ELIMINADO
-
     db.commit()
     return True

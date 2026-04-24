@@ -31,7 +31,7 @@ try:
 except ImportError:
     HAS_NUM2WORDS = False
 
-#   IMPORTAMOS MODELOS DE FINANZAS
+# 🚀 IMPORTAMOS MODELOS DE FINANZAS
 from app.models.models import (
     ReceivableInvoice,
     Client as ClientModel,
@@ -43,7 +43,7 @@ from app.models.models import (
     RecordStatus,
 )
 
-#   IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
+# 🚀 IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
 from app.modules.finance.crud import create_bank_movement
 from app.modules.finance import schemas as finance_schemas
 
@@ -494,7 +494,7 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        #   FIX TESORERÍA BLINDADO: GUARDAR PAGOS Y MOVIMIENTO BANCARIO (1 a 1)
+        # 🚀 FIX TESORERÍA BLINDADO: GUARDAR PAGOS Y MOVIMIENTO BANCARIO (1 a 1)
         # =========================================================================
         try:
             # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
