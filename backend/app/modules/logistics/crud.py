@@ -1078,6 +1078,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         status_sat="PROVISIONAL",  # Nace sin timbrar para proteger el flujo
                     )
                     db.add(nueva_cxc)
+                    db.flush()
                     cxc_creadas += 1
 
         db.commit()
@@ -1269,7 +1270,8 @@ def undo_last_leg(db: Session, trip_id: str):
         if o:
             o.status = models.OperatorStatus.ACTIVO
 
-    db.delete(current_leg)
+    current_leg.record_status = RecordStatus.ELIMINADO
+    db.add(current_leg)
 
     if len(trip.legs) > 1:
         previous_leg = trip.legs[-2]
