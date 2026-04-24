@@ -951,6 +951,8 @@ def conciliate_bank_movement(db: Session, movement_id: int):
 def delete_bank_movement(db: Session, movement_id: int):
     """
     Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
+    NUEVO: Si el movimiento proviene de CxC o CxP, también revierte el pago en la factura correspondiente,
+    regresándola a estado 'pendiente' para permitir un nuevo complemento.
     """
     movement = (
         db.query(models.BankMovement)
@@ -964,7 +966,7 @@ def delete_bank_movement(db: Session, movement_id: int):
     if not movement:
         return False
 
-    # Buscamos la cuenta y la bloqueamos (for update) para evitar errores de concurrencia
+    # 1. Revertir saldo en la cuenta bancaria para evitar descuadres
     account = (
         db.query(models.BankAccount)
         .filter(models.BankAccount.id == movement.bank_account_id)
@@ -973,14 +975,70 @@ def delete_bank_movement(db: Session, movement_id: int):
     )
 
     if account:
-        # Si era un ingreso que sumó dinero, se lo restamos.
         if movement.tipo == "ingreso":
             account.saldo -= movement.monto
-        # Si era un egreso que restó dinero, se lo devolvemos.
         elif movement.tipo == "egreso":
             account.saldo += movement.monto
 
-    # Hacemos Soft Delete del movimiento
+    # ==============================================================
+    # 2. ROLLBACK CXC (CUENTAS POR COBRAR) - "La Escalerita"
+    # ==============================================================
+    if movement.origen_modulo == "CxC":
+        # Buscamos el pago exacto asociado a este monto y cuenta
+        pago_cxc = (
+            db.query(models.ReceivableInvoicePayment)
+            .filter(
+                models.ReceivableInvoicePayment.monto == movement.monto,
+                models.ReceivableInvoicePayment.cuenta_deposito
+                == str(movement.bank_account_id),
+            )
+            .order_by(models.ReceivableInvoicePayment.id.desc())
+            .first()
+        )
+        if pago_cxc:
+            # Recuperamos la factura y le regresamos la deuda
+            invoice = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
+                .first()
+            )
+            if invoice:
+                invoice.saldo_pendiente += pago_cxc.monto
+                if invoice.saldo_pendiente >= invoice.monto_total:
+                    invoice.estatus = "pendiente"
+                else:
+                    invoice.estatus = "pago_parcial"
+            # Eliminamos físicamente el registro de pago para liberar el REP
+            db.delete(pago_cxc)
+
+    # ==============================================================
+    # 3. ROLLBACK CXP (CUENTAS POR PAGAR)
+    # ==============================================================
+    elif movement.origen_modulo == "CxP":
+        pago_cxp = (
+            db.query(models.InvoicePayment)
+            .filter(
+                models.InvoicePayment.monto == movement.monto,
+                models.InvoicePayment.bank_account_id == movement.bank_account_id,
+            )
+            .order_by(models.InvoicePayment.id.desc())
+            .first()
+        )
+        if pago_cxp:
+            invoice = (
+                db.query(models.PayableInvoice)
+                .filter(models.PayableInvoice.id == pago_cxp.invoice_id)
+                .first()
+            )
+            if invoice:
+                invoice.saldo_pendiente += pago_cxp.monto
+                if invoice.saldo_pendiente >= invoice.monto_total:
+                    invoice.estatus = "pendiente"
+                else:
+                    invoice.estatus = "pago_parcial"
+            db.delete(pago_cxp)
+
+    # 4. Hacemos Soft Delete del movimiento en tesorería
     movement.record_status = RecordStatus.ELIMINADO
 
     db.commit()

@@ -52,17 +52,18 @@ export default function Treasury() {
     deleteAccount,
   } = useBankAccounts();
 
+  // 🚀 NUEVO: CONTROL ESTRICTO DE PESTAÑAS (TABS)
+  const [activeTab, setActiveTab] = useState<string>("tesoreria");
+
   const [movimientos, setMovimientos] = useState<BankMovement[]>([]);
   const [isMovementsLoading, setIsMovementsLoading] = useState(true);
   const [showBalances, setShowBalances] = useState(true);
 
-  // States Tab Movimientos (  FIX: Tipos corregidos a egreso/ingreso)
   const [searchTerm, setSearchTerm] = useState("");
   const [movementFilter, setMovementFilter] = useState<
     "all" | "egreso" | "ingreso"
   >("all");
 
-  // States Modales Movimientos
   const [selectedMovement, setSelectedMovement] = useState<BankMovement | null>(
     null,
   );
@@ -75,7 +76,6 @@ export default function Treasury() {
   const [isManualMovementOpen, setIsManualMovementOpen] = useState(false);
   const [isPettyCashOpen, setIsPettyCashOpen] = useState(false);
 
-  // States Modales Cuentas
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(
     null,
   );
@@ -101,7 +101,17 @@ export default function Treasury() {
     fetchMovements();
   }, []);
 
-  // Helpers de Cuentas
+  // 🚀 NUEVO: FUNCIÓN PARA LIMPIAR PANTALLA Y FORZAR RECARGA DESDE BD AL CAMBIAR TAB
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === "tesoreria") {
+      setMovimientos([]); // Limpiamos la tabla visualmente
+      fetchMovements(); // Traemos la verdad de la base de datos
+    } else if (value === "cuentas") {
+      refreshAccounts(); // Refrescamos las tarjetas de banco
+    }
+  };
+
   const handleCreateAccountClick = () => {
     setSelectedAccount(null);
     setIsAccountModalOpen(true);
@@ -156,16 +166,13 @@ export default function Treasury() {
     }
   };
 
-  //   FIX: Filtramos por TIPO de movimiento, no por cuenta.
   const filteredMovimientos = useMemo(() => {
     let filtered = movimientos;
 
-    // 1. Filtro por Ingreso / Egreso
     if (movementFilter !== "all") {
       filtered = filtered.filter((m) => m.tipo === movementFilter);
     }
 
-    // 2. Filtro por Búsqueda
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -198,7 +205,12 @@ export default function Treasury() {
         icon={<Landmark className="h-8 w-8" />}
       />
 
-      <Tabs defaultValue="tesoreria" className="w-full">
+      {/* APLICAMOS EL TAB ACTIVO Y EL EVENTO ONCHANGE */}
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="w-full"
+      >
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 w-full">
           <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex overflow-x-auto">
             <TabsTrigger
@@ -276,7 +288,6 @@ export default function Treasury() {
         </TabsContent>
       </Tabs>
 
-      {/* MODALES ORQUESTADOS */}
       <BankAccountModal
         open={isAccountModalOpen}
         onOpenChange={setIsAccountModalOpen}
@@ -309,7 +320,6 @@ export default function Treasury() {
         }}
       />
 
-      {/* ALERT DIALOG ELIMINAR CUENTA */}
       <AlertDialog
         open={isDeleteAccountOpen}
         onOpenChange={setIsDeleteAccountOpen}
@@ -354,24 +364,6 @@ export default function Treasury() {
                 les asigne una nueva cuenta operativa.
               </p>
             </div>
-
-            <div className="p-4 sm:p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="bg-emerald-500 rounded-full p-1 mt-0.5 shadow-lg shadow-emerald-500/20 shrink-0">
-                  <CheckCircle2 className="h-3 w-3 text-white" />
-                </div>
-                <div>
-                  <h4 className="text-[11px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-1">
-                    Protección Histórica
-                  </h4>
-                  <p className="text-[11px] font-medium text-emerald-700/80 dark:text-emerald-400/80 leading-relaxed">
-                    Los reportes financieros, despachos, y cobros ya cerrados{" "}
-                    <b>no se verán afectados</b>. La cuenta simplemente se
-                    ocultará para futuras operaciones.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
 
           <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
@@ -388,7 +380,7 @@ export default function Treasury() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ALERT DIALOG ELIMINAR MOVIMIENTO */}
+      {/* ALERT DIALOG ELIMINAR MOVIMIENTO CON LAS ADVERTENCIAS DE CXC / CXP */}
       <AlertDialog
         open={isDeleteMovementOpen}
         onOpenChange={(open) => {
@@ -429,11 +421,29 @@ export default function Treasury() {
               ) : (
                 <>
                   Se eliminará permanentemente la transacción y se devolverá el
-                  dinero a la cuenta bancaria para mantener el saldo cuadrado:
-                  <br />
+                  dinero a la cuenta bancaria para mantener el saldo cuadrado.
                   <strong className="text-slate-900 mt-2 block p-3 bg-muted rounded-lg border">
                     {movementToDelete?.concepto}
                   </strong>
+                  {/* 🚀 ADVERTENCIA ESPECÍFICA PARA CUENTAS POR COBRAR (CxC) */}
+                  {movementToDelete?.origen_modulo === "CxC" && (
+                    <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-950/30 border-l-4 border-rose-500 rounded-r-lg text-rose-800 dark:text-rose-300 font-bold text-[11px] leading-relaxed shadow-sm">
+                      <AlertTriangle className="inline h-4 w-4 mr-1.5 mb-0.5 text-rose-600" />
+                      ALERTA FISCAL: Al eliminar este cobro, la Cuenta por
+                      Cobrar volverá a abrirse para poder generar un nuevo
+                      Complemento de Pago (REP), y el REP actual pasará a
+                      proceso de cancelación en el SAT.
+                    </div>
+                  )}
+                  {/* 🚀 ADVERTENCIA ESPECÍFICA PARA CUENTAS POR PAGAR (CxP) */}
+                  {movementToDelete?.origen_modulo === "CxP" && (
+                    <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 border-l-4 border-amber-500 rounded-r-lg text-amber-800 dark:text-amber-300 font-bold text-[11px] leading-relaxed shadow-sm">
+                      <AlertTriangle className="inline h-4 w-4 mr-1.5 mb-0.5 text-amber-600" />
+                      ALERTA: Al eliminar este pago, la Cuenta por Pagar
+                      vinculada volverá a abrirse (regresando su saldo
+                      pendiente) y el dinero regresará a tu banco.
+                    </div>
+                  )}
                 </>
               )}
             </AlertDialogDescription>
@@ -452,12 +462,13 @@ export default function Treasury() {
                   await axiosClient.delete(
                     `/api/finance/movements/${movementToDelete?.id}`,
                   );
+                  // Actualizamos el front limpiando el movimiento
                   setMovimientos(
                     movimientos.filter((m) => m.id !== movementToDelete?.id),
                   );
                   refreshAccounts();
                   toast.success(
-                    "Movimiento eliminado y saldo restaurado correctamente",
+                    "Movimiento eliminado y saldo de factura restaurado exitosamente",
                   );
                 } catch (error) {
                   toast.error("Error al eliminar el movimiento");
