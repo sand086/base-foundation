@@ -86,9 +86,7 @@ class BankMovementCreate(BaseModel):
     tipo: str = Field(
         ..., pattern="^(ingreso|egreso)$", description="Debe ser 'ingreso' o 'egreso'"
     )
-    monto: float = Field(
-        ..., gt=0, description="El monto debe ser estrictamente mayor a 0"
-    )
+    monto: float = Field(..., ge=0, description="El monto debe ser mayor o igual a 0")
     concepto: str = Field(..., min_length=3, max_length=255)
     referencia: Optional[str] = None
 
