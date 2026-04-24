@@ -1,114 +1,1152 @@
-from datetime import datetime
-import uuid
-import traceback
-
-from sqlalchemy.orm import Session, joinedload, selectinload, contains_eager
-from sqlalchemy import func, and_, or_
+import os
+import time  # <-- NUEVO: Para el sleep de la sincronización masiva
+import datetime
 from datetime import date, timedelta
+from pathlib import Path
+from typing import List, Optional
+import requests  # <-- NUEVO: Para la API de mapas OSRM
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
+from fastapi.responses import Response
+from sqlalchemy.orm import Session, contains_eager, joinedload
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, or_  # <-- NUEVO: Agregado or_ para la consulta masiva
+from jinja2 import Environment, FileSystemLoader
+
+from app.db.database import get_db
 from app.models import models
-from app.models.models import RecordStatus, TripStatus, TripLegType
-from . import schemas
-import logging
+from app.models.models import SystemConfig, RecordStatus
 
-logger = logging.getLogger("logistics.crud")
+# importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+from . import schemas, crud
+
+# Autenticación
+from app.modules.auth.router import get_current_user
+
+try:
+    from weasyprint import HTML
+except Exception as e:
+    print(f" Advertencia: WeasyPrint no se cargó correctamente ({e})")
+    HTML = None
+
+# ÚNICA INSTANCIA DEL ROUTER
+router = APIRouter(tags=["Logistics"])
+
+# Configuración de Plantillas para PDFs
+TEMPLATE_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "../../templates"
+)
+jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
 
 
-def get_trips(db: Session, skip: int = 0, limit: int = 100):
+# =====================================================================
+# FUNCIONES HELPER (NUEVO)
+# =====================================================================
+
+
+def get_osrm_distance(origen: str, destino: str) -> float:
     """
-    FIX: selectinload evita el producto cartesiano y arregla la paginación.
-    Soluciona la duplicidad de casetas en el historial.
-    Añadido: selectinload para traer los vales de combustible (fuel_logs) de cada tramo.
+    Calcula la distancia real en carretera usando la API gratuita de OpenStreetMap / OSRM.
     """
-    return (
-        db.query(models.Trip)
-        .options(
-            joinedload(models.Trip.client),
-            joinedload(models.Trip.tariff),
-            joinedload(models.Trip.remolque_1),
-            joinedload(models.Trip.dolly),
-            joinedload(models.Trip.remolque_2),
-            selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
-            selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
-            selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
+    try:
+        # Se agrega un correo ficticio al User-Agent para cumplir las políticas de Nominatim y evitar bloqueos
+        headers = {"User-Agent": "TMS-Rapidos3T/1.0 (contacto@tuempresa.com)"}
+
+        # 1. Convertimos Origen a Coordenadas
+        res_orig = requests.get(
+            f"https://nominatim.openstreetmap.org/search?q={origen}, Mexico&format=json&limit=1",
+            headers=headers,
+            timeout=5,
+        ).json()
+        # 2. Convertimos Destino a Coordenadas
+        res_dest = requests.get(
+            f"https://nominatim.openstreetmap.org/search?q={destino}, Mexico&format=json&limit=1",
+            headers=headers,
+            timeout=5,
+        ).json()
+
+        if res_orig and res_dest:
+            lon1, lat1 = res_orig[0]["lon"], res_orig[0]["lat"]
+            lon2, lat2 = res_dest[0]["lon"], res_dest[0]["lat"]
+
+            # 3. Pedimos la ruta en carretera a OSRM
+            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+            route_res = requests.get(osrm_url, timeout=5).json()
+
+            if route_res.get("code") == "Ok":
+                distancia_metros = route_res["routes"][0]["distance"]
+                return round(distancia_metros / 1000.0, 2)
+    except Exception as e:
+        print(f"⚠️ Advertencia silenciosa calculando distancia OSRM: {e}")
+    return 0.0
+
+
+# =====================================================================
+# CASETAS (TOLL BOOTHS)
+# =====================================================================
+
+
+@router.get("/tolls", response_model=List[schemas.TollBoothResponse])
+def list_tolls(search: str = "", db: Session = Depends(get_db)):
+    query = db.query(models.TollBooth).filter(models.TollBooth.record_status == "A")
+    if search:
+        query = query.filter(
+            models.TollBooth.nombre.ilike(f"%{search}%")
+            | models.TollBooth.tramo.ilike(f"%{search}%")
         )
-        .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
-        .order_by(models.Trip.id.desc())  # Mejor ordenar por los más recientes
-        .offset(skip)
-        .limit(limit)
+    return query.all()
+
+
+@router.post("/tolls", response_model=schemas.TollBoothResponse)
+def create_toll(
+    toll: schemas.TollBoothCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    db_toll = models.TollBooth(**toll.model_dump(), created_by_id=user.id)
+    db.add(db_toll)
+
+    try:
+        db.commit()
+        db.refresh(db_toll)
+        return db_toll
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe una caseta registrada con ese mismo Nombre y Tramo.",
+        )
+
+
+@router.put("/tolls/{toll_id}", response_model=schemas.TollBoothResponse)
+def update_toll(
+    toll_id: int,
+    toll: schemas.TollBoothUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    db_toll = db.query(models.TollBooth).get(toll_id)
+    if not db_toll:
+        raise HTTPException(status_code=404, detail="Caseta no encontrada")
+
+    for k, v in toll.model_dump(exclude_unset=True).items():
+        setattr(db_toll, k, v)
+    db_toll.updated_by_id = user.id
+    db.flush()
+
+    segments = (
+        db.query(models.RateSegment)
+        .filter(
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",
+        )
         .all()
     )
 
+    templates_to_update = set()
+    for seg in segments:
+        seg.costo_momento_sencillo = db_toll.costo_5_ejes_sencillo
+        seg.costo_momento_full = db_toll.costo_9_ejes_full
+        if seg.template:
+            templates_to_update.add(seg.template)
 
-def get_trip(db: Session, trip_id: str):
-    try:
-        tid = int(trip_id)
-    except (TypeError, ValueError):
-        return None
+    db.flush()
 
-    return (
-        db.query(models.Trip)
-        .options(
-            joinedload(models.Trip.client),
-            joinedload(models.Trip.tariff),
-            joinedload(models.Trip.remolque_1),
-            selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
-            selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
-            selectinload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
-            selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
+    for template in templates_to_update:
+        active_segments = (
+            db.query(models.RateSegment)
+            .filter(
+                models.RateSegment.rate_template_id == template.id,
+                models.RateSegment.record_status == "A",
+            )
+            .all()
         )
+
+        template.costo_total_sencillo = sum(
+            (s.costo_momento_sencillo or 0.0) for s in active_segments
+        )
+        template.costo_total_full = sum(
+            (s.costo_momento_full or 0.0) for s in active_segments
+        )
+
+        client_tariffs = (
+            db.query(models.Tariff)
+            .filter(
+                models.Tariff.rate_template_id == template.id,
+                models.Tariff.record_status == "A",
+            )
+            .all()
+        )
+
+        for ct in client_tariffs:
+            es_full = (
+                "full" in (ct.tipo_unidad or "").lower()
+                or "9" in (ct.tipo_unidad or "").lower()
+            )
+            ct.costo_casetas = (
+                template.costo_total_full if es_full else template.costo_total_sencillo
+            )
+
+    try:
+        db.commit()
+        db.refresh(db_toll)
+        return db_toll
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe otra caseta registrada con ese mismo Nombre y Tramo.",
+        )
+
+
+@router.get("/tolls/{toll_id}/dependencies")
+def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
+    rutas_count = (
+        db.query(models.RateSegment)
         .filter(
-            models.Trip.id == tid,
-            models.Trip.record_status != RecordStatus.ELIMINADO,
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",
+        )
+        .count()
+    )
+    return {"in_use": rutas_count > 0, "rutas_count": rutas_count}
+
+
+@router.delete("/tolls/{toll_id}")
+def delete_toll(
+    toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
+):
+    db_toll = db.query(models.TollBooth).get(toll_id)
+    if not db_toll:
+        raise HTTPException(status_code=404, detail="Caseta no encontrada")
+
+    segments = (
+        db.query(models.RateSegment)
+        .filter(
+            models.RateSegment.toll_booth_id == toll_id,
+            models.RateSegment.record_status == "A",
+        )
+        .all()
+    )
+
+    if segments:
+        if remove_from_routes:
+            templates_to_update = set()
+
+            for seg in segments:
+                if seg.template:
+                    templates_to_update.add(seg.template)
+                seg.record_status = "E"
+                db.add(seg)
+
+            db.flush()
+
+            for template in templates_to_update:
+                active_segments = (
+                    db.query(models.RateSegment)
+                    .filter(
+                        models.RateSegment.rate_template_id == template.id,
+                        models.RateSegment.record_status == "A",
+                    )
+                    .all()
+                )
+
+                total_s = sum(
+                    (s.costo_momento_sencillo or 0.0) for s in active_segments
+                )
+                total_f = sum((s.costo_momento_full or 0.0) for s in active_segments)
+                total_km = sum((s.distancia_km or 0.0) for s in active_segments)
+                total_min = sum((s.tiempo_minutos or 0) for s in active_segments)
+
+                template.costo_total_sencillo = total_s
+                template.costo_total_full = total_f
+                template.distancia_total_km = total_km
+                template.tiempo_total_minutos = total_min
+
+        db_toll.record_status = "I"
+        msg = "Caseta inactivada y sus tramos marcados como eliminados en las rutas (Borrado lógico)."
+    else:
+        db_toll.record_status = "E"
+        msg = "Caseta eliminada permanentemente del sistema."
+
+    db.commit()
+    return {"status": "success", "message": msg}
+
+
+# =====================================================================
+# RUTAS ARMADAS (RATE TEMPLATES)
+# =====================================================================
+
+
+@router.get("/rate-templates", response_model=List[schemas.RateTemplateResponse])
+def list_templates(
+    search: str = "",
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(models.RateTemplate)
+        .options(
+            joinedload(models.RateTemplate.segments),
+            joinedload(models.RateTemplate.client),
+        )
+        .filter(models.RateTemplate.record_status == "A")
+    )
+
+    if search:
+        query = query.filter(
+            models.RateTemplate.origen.ilike(f"%{search}%")
+            | models.RateTemplate.destino.ilike(f"%{search}%")
+        )
+
+    if client_id:
+        query = query.filter(models.RateTemplate.client_id == client_id)
+
+    templates = query.order_by(models.RateTemplate.id.desc()).limit(50).all()
+
+    for template in templates:
+        template.segments = [
+            seg
+            for seg in template.segments
+            if getattr(seg, "record_status", "A") == "A"
+        ]
+
+    return templates
+
+
+@router.post("/rate-templates", response_model=schemas.RateTemplateResponse)
+def create_template(
+    data: schemas.RateTemplateCreate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    existing_route = (
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.origen == data.origen,
+            models.RateTemplate.destino == data.destino,
+            models.RateTemplate.client_id == data.client_id,
+            models.RateTemplate.tipo_unidad == data.tipo_unidad,
+            models.RateTemplate.record_status == "A",
         )
         .first()
     )
 
-
-def create_trip(db: Session, trip: schemas.TripCreate):
-    """
-    1. Crea el Viaje Padre desempaquetando el esquema (omitiendo campos lógicos Pydantic).
-    2. Si trae un Tramo Inicial, crea el TripLeg y bloquea recursos.
-    3. Si el Motor Dual está activo y trae un Tramo Final, lo crea como segundo Leg.
-    """
-    try:
-        #   BLINDAJE: Excluimos todos los campos lógicos de Pydantic que NO están en la base de datos
-        trip_data = trip.model_dump(
-            exclude={
-                "initial_leg",
-                "final_leg",
-                "conoce_ruta_completa",
-                "ocultar_montos_pdf",
-                "is_dummy_stamping",
-            }
+    if existing_route:
+        config_name = (
+            "FULL (9 Ejes)" if data.tipo_unidad == "9ejes" else "SENCILLO (5 Ejes)"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ya existe una ruta ACTIVA con este mismo origen y destino para la configuración {config_name}.",
         )
 
-        db_trip = models.Trip(**trip_data)
-        db.add(db_trip)
+    new_template = models.RateTemplate(
+        client_id=data.client_id,
+        origen=data.origen,
+        destino=data.destino,
+        tipo_unidad=data.tipo_unidad,
+        created_by_id=user.id,
+    )
+    db.add(new_template)
+    db.flush()
+
+    total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
+
+    for seg_data in data.segments:
+        cost_s, cost_f = 0.0, 0.0
+
+        if seg_data.toll_booth_id:
+            toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
+            if toll:
+                cost_s = toll.costo_5_ejes_sencillo
+                cost_f = toll.costo_9_ejes_full
+
+        segment = models.RateSegment(
+            rate_template_id=new_template.id,
+            **seg_data.model_dump(
+                exclude={
+                    "toll_booth_id",
+                    "rate_template_id",
+                    "costo_momento_sencillo",
+                    "costo_momento_full",
+                }
+            ),
+            toll_booth_id=seg_data.toll_booth_id,
+            costo_momento_sencillo=cost_s,
+            costo_momento_full=cost_f,
+            record_status="A",
+        )
+        db.add(segment)
+
+        total_s += cost_s
+        total_f += cost_f
+        total_km += seg_data.distancia_km
+        total_min += seg_data.tiempo_minutos
+
+    new_template.costo_total_sencillo = total_s
+    new_template.costo_total_full = total_f
+    new_template.distancia_total_km = total_km
+    new_template.tiempo_total_minutos = total_min
+
+    db.commit()
+    db.refresh(new_template)
+    return new_template
+
+
+@router.put(
+    "/rate-templates/{template_id}", response_model=schemas.RateTemplateResponse
+)
+def update_template(
+    template_id: int,
+    data: schemas.RateTemplateUpdate,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    db_template = (
+        db.query(models.RateTemplate)
+        .filter(models.RateTemplate.id == template_id)
+        .first()
+    )
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Ruta no encontrada")
+
+    update_data = data.model_dump(exclude={"segments"}, exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_template, key, value)
+    db_template.updated_by_id = user.id
+
+    if data.segments is not None:
+        db_template.segments = []
+        db.query(models.RateSegment).filter(
+            models.RateSegment.rate_template_id == template_id
+        ).delete(synchronize_session="fetch")
+
         db.flush()
 
-        unit_ids_to_block = []
-        operator_ids_to_block = []
+        total_s, total_f, total_km, total_min = 0.0, 0.0, 0.0, 0
 
-        # ==========================================
-        # CREACIÓN DEL TRAMO 1 (PIERNA INICIAL)
-        # ==========================================
-        if trip.initial_leg:
-            leg_data = trip.initial_leg
+        for seg_data in data.segments:
+            cost_s, cost_f = 0.0, 0.0
+            if seg_data.toll_booth_id:
+                toll = db.query(models.TollBooth).get(seg_data.toll_booth_id)
+                if toll:
+                    cost_s = toll.costo_5_ejes_sencillo
+                    cost_f = toll.costo_9_ejes_full
 
-            if not leg_data.odometro_inicial or leg_data.odometro_inicial == 0:
-                leg_data.odometro_inicial = get_last_unit_odometer(db, leg_data.unit_id)
+            new_seg = models.RateSegment(
+                rate_template_id=template_id,
+                **seg_data.model_dump(
+                    exclude={
+                        "rate_template_id",
+                        "costo_momento_sencillo",
+                        "costo_momento_full",
+                        "id",
+                    }
+                ),
+                costo_momento_sencillo=cost_s,
+                costo_momento_full=cost_f,
+                record_status="A",
+            )
+            db.add(new_seg)
 
-            monto_pagar = (trip.tarifa_base or 0) - (
-                (leg_data.anticipo_casetas or 0)
-                + (leg_data.anticipo_viaticos or 0)
-                + (leg_data.anticipo_combustible or 0)
+            total_s += cost_s
+            total_f += cost_f
+            total_km += seg_data.distancia_km
+            total_min += seg_data.tiempo_minutos
+
+        db_template.costo_total_sencillo = total_s
+        db_template.costo_total_full = total_f
+        db_template.distancia_total_km = total_km
+        db_template.tiempo_total_minutos = total_min
+
+        db.flush()
+
+        client_tariffs = (
+            db.query(models.Tariff)
+            .filter(
+                models.Tariff.rate_template_id == template_id,
+                models.Tariff.record_status == "A",
+            )
+            .all()
+        )
+
+        for ct in client_tariffs:
+            es_full = (
+                "full" in (ct.tipo_unidad or "").lower()
+                or "9" in (ct.tipo_unidad or "").lower()
+            )
+            ct.costo_casetas = (
+                db_template.costo_total_full
+                if es_full
+                else db_template.costo_total_sencillo
             )
 
-            db_leg_1 = models.TripLeg(
-                trip_id=db_trip.id,
+    db.commit()
+    db.expire_all()
+    db.refresh(db_template)
+    return db_template
+
+
+@router.delete("/rate-templates/{template_id}")
+def delete_template(
+    template_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)
+):
+    db_template = (
+        db.query(models.RateTemplate)
+        .filter(models.RateTemplate.id == template_id)
+        .first()
+    )
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Ruta no encontrada")
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M")
+    db_template.origen = f"{db_template.origen} [ELIMINADA-{timestamp}]"
+
+    db_template.record_status = "E"
+    db_template.updated_by_id = user.id
+    db.commit()
+
+    return {
+        "status": "deleted",
+        "message": "Ruta eliminada correctamente. El nombre ha sido liberado.",
+    }
+
+
+# =========================================================
+# VIAJES (TRIPS) Y BITÁCORA
+# =========================================================
+
+
+@router.get("/trips", response_model=List[schemas.TripResponse])
+def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_trips(db, skip, limit)
+
+
+@router.get("/trips/{trip_id}", response_model=schemas.TripResponse)
+def read_trip(trip_id: int, db: Session = Depends(get_db)):
+    trip = crud.get_trip(db, str(trip_id))
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip
+
+
+@router.post("/trips", response_model=schemas.TripResponse)
+def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
+    # 🚀 LIBERADO: Ya no bloqueamos la unidad en el router, permite multiasignación en patio
+
+    # Generamos el viaje de la forma tradicional
+    db_trip = crud.create_trip(db, trip)
+
+    # CALCULAMOS LA DISTANCIA AUTOMÁTICA EN SEGUNDO PLANO Y SILENCIOSAMENTE
+    if db_trip.origin and db_trip.destination:
+        distancia_calculada = get_osrm_distance(db_trip.origin, db_trip.destination)
+        if distancia_calculada > 0:
+            try:
+                if hasattr(db_trip, "distancia_km"):
+                    db_trip.distancia_km = distancia_calculada
+                elif hasattr(db_trip, "distancia_total"):
+                    db_trip.distancia_total = distancia_calculada
+                elif hasattr(db_trip, "distancia"):
+                    db_trip.distancia = distancia_calculada
+
+                db.commit()
+                db.refresh(db_trip)
+            except Exception as e:
+                db.rollback()
+                print(f"⚠️ Error inofensivo actualizando la distancia en BD: {e}")
+
+    return db_trip
+
+
+@router.patch("/trips/{trip_id}/status", response_model=schemas.TripResponse)
+def update_status(
+    trip_id: int, status: str, location: str = None, db: Session = Depends(get_db)
+):
+    trip = crud.update_trip_status(db, str(trip_id), status, location)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip
+
+
+@router.delete("/trips/{trip_id}", response_model=dict)
+def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
+    success = crud.delete_trip(db, trip_id)
+    if not success:
+        raise HTTPException(
+            status_code=404, detail="Viaje no encontrado o ya eliminado"
+        )
+    return {"message": "Viaje eliminado correctamente"}
+
+
+@router.put("/trips/{trip_id}", response_model=schemas.TripResponse)
+def update_trip_endpoint(
+    trip_id: int, payload: schemas.TripUpdate, db: Session = Depends(get_db)
+):
+    update_data = payload.dict(exclude_unset=True)
+    updated_trip = crud.update_trip(
+        db=db, trip_id=trip_id, trip_update_data=update_data
+    )
+    if not updated_trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return updated_trip
+
+
+@router.post("/trips/{trip_id}/timeline", response_model=schemas.TripResponse)
+def create_timeline_event(
+    trip_id: int,
+    payload: schemas.TripTimelineEventCreatePayload,
+    db: Session = Depends(get_db),
+):
+    trip = crud.add_timeline_event(db, trip_id, payload)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip
+
+
+# =========================================================
+# LIQUIDACIÓN DE TRAMOS
+# =========================================================
+
+
+@router.get(
+    "/trips/leg/{trip_leg_id}/settlement", response_model=schemas.TripSettlementResponse
+)
+def get_trip_settlement(trip_leg_id: int, db: Session = Depends(get_db)):
+    try:
+        settlement = crud.get_trip_settlement(db, trip_leg_id)
+        if not settlement:
+            raise HTTPException(
+                status_code=404, detail="Tramo no encontrado para liquidar"
+            )
+        return settlement
+    except ValueError as e:
+        if str(e) == "BLOCKED_NO_FUEL":
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede liquidar: El operador no ha comprobado el combustible (Diésel) de este tramo.",
+            )
+        raise e
+
+
+@router.post(
+    "/trips/leg/{trip_leg_id}/close-settlement", response_model=schemas.TripResponse
+)
+def close_trip_settlement(
+    trip_leg_id: int,
+    payload: schemas.CloseSettlementPayload,
+    db: Session = Depends(get_db),
+):
+    trip = crud.close_trip_settlement(db, trip_leg_id, payload)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Tramo no encontrado")
+    return trip
+
+
+@router.post("/trips/{trip_id}/next-leg", response_model=schemas.TripResponse)
+def create_next_leg_endpoint(
+    trip_id: int, payload: schemas.TripLegCreate, db: Session = Depends(get_db)
+):
+    trip = crud.create_next_leg(db, str(trip_id), payload)
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+    return trip
+
+
+@router.post("/trips/legs/{leg_id}/settle")
+def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
+    if not leg:
+        raise HTTPException(status_code=404, detail="Tramo no encontrado")
+
+    # 1. ACTUALIZAMOS EL TRAMO ACTUAL
+    leg.status = "cerrado"
+    leg.saldo_operador = data.get("neto_a_pagar", 0.0)
+    db.commit()
+    db.refresh(leg)
+
+    trip = db.query(models.Trip).filter(models.Trip.id == leg.trip_id).first()
+
+    # 2. EVALUACIÓN DE CIERRE DEL VIAJE
+    all_completed = all(
+        l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
+    )
+    cxc_creada = False
+
+    if all_completed and trip.status != "cerrado":
+        trip.status = "cerrado"
+        trip.closed_at = func.now()
+
+    # 3. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
+    carretera_liquidada = any(
+        (
+            l.leg_type == "ruta_carretera"
+            or l.leg_type == getattr(models, "TripLegType", None)
+            and l.leg_type == models.TripLegType.RUTA
+        )
+        and l.status in ["liquidado", "cerrado"]
+        for l in trip.legs
+    )
+
+    if carretera_liquidada:
+        # 🚀 FIX CRÍTICO: with_for_update() para evitar dobles facturas en clics rápidos
+        existing_cxc = (
+            db.query(models.ReceivableInvoice)
+            .filter(
+                models.ReceivableInvoice.viaje_id == trip.id,
+                models.ReceivableInvoice.is_nominal == False,
+                models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+            )
+            .with_for_update()
+            .first()
+        )
+
+        # Si ya liquidamos la carretera y NO hay CxC, la generamos con magia SAT
+        if not existing_cxc:
+            base = trip.tarifa_base or 0.0
+            subtotal = base
+            iva = subtotal * 0.16
+            retencion = subtotal * 0.04
+            monto_total = subtotal + iva - retencion
+
+            dias_credito = 15
+            if trip.client and trip.client.dias_credito:
+                dias_credito = trip.client.dias_credito
+
+            fecha_vencimiento = date.today() + timedelta(days=dias_credito)
+
+            # =========================================================
+            # 🚀 MAGIA FISCAL: PREPARACIÓN PARA SUSTITUCIÓN SAT (04)
+            # =========================================================
+            cp_nominal = (
+                db.query(models.ReceivableInvoice)
+                .filter(
+                    models.ReceivableInvoice.viaje_id == trip.id,
+                    models.ReceivableInvoice.is_nominal == True,
+                    models.ReceivableInvoice.status_sat == "TIMBRADA",
+                )
+                .first()
+            )
+
+            uuid_relacionado = None
+            if cp_nominal and cp_nominal.uuid:
+                uuid_relacionado = cp_nominal.uuid
+                cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
+                cp_nominal.motivo_cancelacion = "01"
+                db.add(cp_nominal)
+            # =========================================================
+
+            nueva_cxc = models.ReceivableInvoice(
+                client_id=trip.client_id,
+                sub_client_id=trip.sub_client_id,
+                viaje_id=trip.id,
+                folio_interno=f"CXC-TRP-{trip.public_id or trip.id}",
+                concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
+                subtotal=subtotal,
+                iva=iva,
+                retenciones=retencion,
+                monto_total=monto_total,
+                saldo_pendiente=monto_total,
+                fecha_emision=date.today(),
+                fecha_vencimiento=fecha_vencimiento,
+                estatus=models.InvoiceStatus.PENDIENTE,
+                metodo_pago="PPD",
+                tipo_comprobante="I",
+                is_nominal=False,
+                uuid_relacionado=uuid_relacionado,
+                status_sat="PROVISIONAL",
+            )
+            db.add(nueva_cxc)
+            db.flush()
+            cxc_creada = True
+
+    # 4. GUARDAMOS TODOS LOS CAMBIOS DE GOLPE
+    db.commit()
+
+    return {
+        "message": "Liquidación guardada correctamente",
+        "neto_pagado": leg.saldo_operador,
+        "viaje_cerrado_globalmente": all_completed,
+        "cxc_generada_automaticamente": cxc_creada,
+    }
+
+
+# =========================================================
+# IMPRESIÓN DE DOCUMENTOS
+# =========================================================
+
+
+@router.get("/trips/{trip_id}/carta-porte-ciega")
+def generate_carta_porte(trip_id: int, db: Session = Depends(get_db)):
+    if HTML is None:
+        raise HTTPException(status_code=500, detail="WeasyPrint no está instalado.")
+
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    active_leg = None
+    if trip.legs:
+        active_leg = next(
+            (
+                leg
+                for leg in trip.legs
+                if leg.status
+                not in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]
+            ),
+            trip.legs[-1],
+        )
+
+    unidad = active_leg.unit if active_leg else None
+    operador = active_leg.operator if active_leg else None
+    cliente = trip.client
+
+    context = {
+        "rfc_emisor": "EN TRÁNSITO",
+        "nombre_emisor": "DOCUMENTO OPERATIVO (CIEGA)",
+        "cp_emisor": "N/A",
+        "regimen_emisor": "N/A",
+        "uuid": "NO APLICA - DOCUMENTO DE TRASLADO INTERNO",
+        "folio_interno": f"CIEGA-{trip.public_id or trip.id}",
+        "fecha_emision": datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+        "logo_src": "",
+        "qr_src": "",
+        "nombre_cliente": getattr(cliente, "razon_social", "N/A") if cliente else "N/A",
+        "rfc_cliente": getattr(cliente, "rfc", "N/A") if cliente else "N/A",
+        "cp_cliente": (
+            getattr(cliente, "codigo_postal_fiscal", "N/A") if cliente else "N/A"
+        ),
+        "regimen_cliente": (
+            getattr(cliente, "regimen_fiscal", "N/A") if cliente else "N/A"
+        ),
+        "direccion_cliente": (
+            getattr(cliente, "direccion_fiscal", "N/A") if cliente else "N/A"
+        ),
+        "uso_cfdi": "S01",
+        "metodo_pago": "N/A",
+        "tipo_comprobante": "T (Traslado)",
+        "moneda": "XXX",
+        "tc": "1",
+        "forma_pago": "N/A",
+        "condiciones_pago": "N/A",
+        "cert_sat": "N/A",
+        "cert_emisor": "N/A",
+        "sello_sat": "DOCUMENTO SIN VALIDEZ FISCAL",
+        "sello_emisor": "DOCUMENTO SIN VALIDEZ FISCAL",
+        "cadena_original": "DOCUMENTO SIN VALIDEZ FISCAL",
+        "importe_letra": "(*** DOCUMENTO SIN VALOR COMERCIAL ***)",
+        "subtotal": "0.00",
+        "iva": "0.00",
+        "retenciones": "0.00",
+        "total": "0.00",
+        "conceptos": [
+            {
+                "clave": "01010101",
+                "cantidad": "1.00",
+                "unidad": "E48 - SRV",
+                "descripcion": trip.descripcion_mercancia or "FLETE",
+                "detalles_extra": "Carta Porte Operativa Ciega",
+                "precio": "0.00",
+                "importe": "0.00",
+            }
+        ],
+        "id_ccp": "PENDIENTE TIMBRADO",
+        "distancia_total": "0",
+        "remitente_nombre": "OPERADOR LOGÍSTICO",
+        "remitente_rfc": "N/A",
+        "fecha_salida": (
+            trip.start_date.strftime("%Y-%m-%dT%H:%M:%S") if trip.start_date else ""
+        ),
+        "domicilio_origen": trip.origin or "N/A",
+        "destinatario_nombre": (
+            getattr(cliente, "razon_social", "N/A") if cliente else "N/A"
+        ),
+        "destinatario_rfc": getattr(cliente, "rfc", "N/A") if cliente else "N/A",
+        "fecha_llegada": "PENDIENTE",
+        "domicilio_destino": trip.destination or "N/A",
+        "permiso_sct": (
+            getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "N/A"
+        ),
+        "num_permiso_sct": (
+            getattr(unidad, "permiso_sct_folio", "N/A") if unidad else "N/A"
+        ),
+        "config_vehicular": (
+            getattr(unidad, "config_vehicular_sat", "T3S2") if unidad else "N/A"
+        ),
+        "placas": getattr(unidad, "placas", "S/P") if unidad else "N/A",
+        "anio_modelo": str(getattr(unidad, "year", "N/A")) if unidad else "N/A",
+        "aseguradora": (
+            getattr(unidad, "aseguradora_resp_civil", "N/A") if unidad else "N/A"
+        ),
+        "poliza": getattr(unidad, "poliza_resp_civil", "N/A") if unidad else "N/A",
+        "peso_bruto": str(float(trip.peso_toneladas or 0) * 1000),
+        "bienes_transp": getattr(trip, "sat_clave_producto", "01010101"),
+        "descripcion_mercancia": trip.descripcion_mercancia or "N/A",
+        "subtipo_remolque": "N/A",
+        "placa_remolque": "N/A",
+        "operador_rfc": getattr(operador, "rfc", "N/A") if operador else "N/A",
+        "operador_nombre": getattr(operador, "name", "N/A") if operador else "N/A",
+        "operador_licencia": (
+            getattr(operador, "license_number", "N/A") if operador else "N/A"
+        ),
+        "leyenda_legal": "DOCUMENTO DE CARÁCTER INFORMATIVO Y OPERATIVO (CARTA PORTE CIEGA).",
+    }
+
+    try:
+        template = jinja_env.get_template("carta_porte.html")
+        html_content = template.render(**context)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error en el template HTML: {str(e)}"
+        )
+
+    try:
+        pdf_file = HTML(string=html_content, base_url=str(TEMPLATE_DIR)).write_pdf()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error al generar el PDF: {str(e)}"
+        )
+
+    return Response(
+        content=pdf_file,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=Ciega_Folio_{trip.public_id or trip.id}.pdf"
+        },
+    )
+
+
+@router.get("/trips/{trip_id}/nom-087")
+def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
+    if HTML is None:
+        raise HTTPException(status_code=500, detail="WeasyPrint no está instalado.")
+
+    trip = crud.get_trip(db, str(trip_id))
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    active_leg = trip.legs[0] if trip.legs else None
+    operador = active_leg.operator if active_leg else None
+    unidad = active_leg.unit if active_leg else None
+
+    logo_path = (
+        Path(__file__).resolve().parents[2] / "templates" / "assets" / "logo-black.png"
+    )
+    logo_src = ""
+    if logo_path.exists():
+        import base64
+
+        with open(logo_path, "rb") as img_f:
+            logo_src = f"data:image/png;base64,{base64.b64encode(img_f.read()).decode('utf-8')}"
+
+    nombre_conf = db.query(SystemConfig).filter_by(key="empresa_nombre").first()
+    rfc_conf = db.query(SystemConfig).filter_by(key="empresa_rfc").first()
+
+    context = {
+        "logo_src": logo_src,
+        "emisor_nombre": nombre_conf.value if nombre_conf else "OPERADOR LOGÍSTICO",
+        "emisor_rfc": rfc_conf.value if rfc_conf else "RFC NO CONFIGURADO",
+        "operador_nombre": getattr(operador, "name", "") if operador else "",
+        "operador_licencia": (
+            getattr(operador, "license_number", "") if operador else ""
+        ),
+        "placas": getattr(unidad, "placas", "") if unidad else "",
+        "placas_remolque": trip.remolque_1.placas if trip.remolque_1 else "",
+        "origen": trip.origin or "",
+        "destino": trip.destination or "",
+    }
+
+    try:
+        template = jinja_env.get_template("nom_087.html")
+        html_content = template.render(**context)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error template HTML: {str(e)}")
+
+    pdf_file = HTML(string=html_content, base_url=str(TEMPLATE_DIR)).write_pdf()
+
+    return Response(
+        content=pdf_file,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=NOM087_Folio_{trip.public_id or trip.id}.pdf"
+        },
+    )
+
+
+# =========================================================
+# LOTE (BATCH) Y TIMELINE (EVENTOS)
+# =========================================================
+
+
+@router.post("/trips/legs/settle-batch")
+def settle_trip_legs_batch(
+    payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
+):
+    result = crud.settle_trip_legs_batch(db, payload)
+    if not result:
+        raise HTTPException(status_code=404, detail="No se encontraron los tramos")
+    return result
+
+
+@router.post(
+    "/trips/legs/settlement-preview",
+    response_model=schemas.BatchSettlementPreviewResponse,
+)
+def preview_batch_settlement_endpoint(
+    payload: schemas.BatchSettlementPreviewRequest, db: Session = Depends(get_db)
+):
+    result = crud.preview_batch_settlement(db, payload.leg_ids)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Error al generar pre-liquidación")
+    return result
+
+
+@router.post("/trips/{trip_id}/undo-leg", response_model=schemas.TripResponse)
+def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
+    trip = crud.undo_last_leg(db, str(trip_id))
+    if not trip:
+        raise HTTPException(
+            status_code=400, detail="No se puede deshacer la fase inicial."
+        )
+    return trip
+
+
+@router.delete("/trips/timeline/{event_id}")
+def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
+    event = (
+        db.query(models.TripTimelineEvent)
+        .filter(models.TripTimelineEvent.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+    db.delete(event)
+    db.commit()
+    return {"message": "Evento eliminado correctamente"}
+
+
+@router.put("/trips/timeline/{event_id}")
+def update_timeline_event(
+    event_id: int, payload: dict = Body(...), db: Session = Depends(get_db)
+):
+    event = (
+        db.query(models.TripTimelineEvent)
+        .filter(models.TripTimelineEvent.id == event_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+
+    if "location" in payload:
+        event.location = payload["location"]
+    if "lat" in payload:
+        event.lat = payload["lat"]
+    if "lng" in payload:
+        event.lng = payload["lng"]
+    if "comments" in payload:
+        event.comments = payload["comments"]
+    if "status" in payload:
+        event.event_type = payload["status"]
+
+    status_label = payload.get("status", "Reporte").replace("_", " ").title()
+    event.event = f"{status_label} en {payload.get('location')}"
+
+    db.commit()
+    return {"message": "Evento actualizado correctamente"}
+
+
+# =========================================================
+# Dispatch Y TIMBRADO
+# =========================================================
+
+
+@router.post("/trips/{trip_id}/stamp-real", response_model=schemas.TripResponse)
+def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+    # 1. IMPORTAMOS EL SERVICIO DE FINANZAS
+    from app.integrations.sat.billing_service import BillingService
+    from app.integrations.sat.payment_service import PaymentComplementService
+
+    # 2. BUSCAMOS LA CXC PROVISIONAL CREADA EN LA LIQUIDACIÓN
+    cxc_provisional = (
+        db.query(models.ReceivableInvoice)
+        .filter(
+            models.ReceivableInvoice.viaje_id == trip_id,
+            models.ReceivableInvoice.is_nominal == False,
+            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    # Extraemos el UUID relacionado de la Carta Porte nominal (si existe)
+    uuid_relacionado = cxc_provisional.uuid_relacionado if cxc_provisional else None
+
+    # 3. USAMOS BILLING SERVICE (¡AHORA SÍ LE PASAMOS EL UUID_RELACIONADO!)
+    billing = BillingService(db)
+    invoice_data = schemas.ReceivableInvoiceCreate(
+        viaje_id=trip_id, is_nominal=False, uuid_relacionado=uuid_relacionado
+    )
+
+    # 4. GENERAMOS LA FACTURA REAL (El SAT recibe la orden 04 Sustitución)
+    factura = billing.generar_factura_final_relacionada(invoice_data)
+
+    if not factura:
+        raise HTTPException(
+            status_code=500, detail="No se pudo procesar el timbrado real."
+        )
+
+    # 5. LIMPIEZA DE DUPLICADOS:
+    if cxc_provisional and cxc_provisional.id != factura.id:
+        cxc_provisional.record_status = RecordStatus.ELIMINADO
+        db.commit()
+
+    trip = crud.get_trip(db, str(trip_id))
+    return trip
+
+
+@router.put("/trips/{trip_id}/dispatch", response_model=schemas.TripResponse)
+def dispatch_trip(
+    trip_id: int, payload: schemas.TripCreate, db: Session = Depends(get_db)
+):
+    trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(status_code=404, detail="Viaje no encontrado")
+
+    trip_data = payload.model_dump(
+        exclude={
+            "initial_leg",
+            "final_leg",
+            "conoce_ruta_completa",
+            "ocultar_montos_pdf",
+            "is_dummy_stamping",
+        },
+        exclude_unset=True,
+    )
+    for key, value in trip_data.items():
+        setattr(trip, key, value)
+
+    if payload.initial_leg:
+        leg_data = payload.initial_leg
+        monto_pagar = (trip.tarifa_base or 0) - (
+            (leg_data.anticipo_casetas or 0)
+            + (leg_data.anticipo_viaticos or 0)
+            + (leg_data.anticipo_combustible or 0)
+        )
+
+        existing_leg = trip.legs[0] if trip.legs else None
+        if existing_leg:
+            existing_leg.unit_id = leg_data.unit_id
+            existing_leg.operator_id = leg_data.operator_id
+            existing_leg.leg_type = leg_data.leg_type
+            existing_leg.anticipo_casetas = leg_data.anticipo_casetas
+            existing_leg.anticipo_viaticos = leg_data.anticipo_viaticos
+            existing_leg.anticipo_combustible = leg_data.anticipo_combustible
+            existing_leg.monto_neto_pagado = monto_pagar
+            existing_leg.status = trip.status
+        else:
+            new_leg = models.TripLeg(
+                trip_id=trip.id,
                 leg_type=leg_data.leg_type,
-                status=db_trip.status,  # Hereda status del viaje padre (ej. en_transito o creado)
+                status=trip.status,
                 unit_id=leg_data.unit_id,
                 operator_id=leg_data.operator_id,
                 anticipo_casetas=leg_data.anticipo_casetas,
@@ -117,1294 +1155,88 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 monto_neto_pagado=monto_pagar,
                 odometro_inicial=leg_data.odometro_inicial,
                 nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
-                start_date=db_trip.start_date,
+                start_date=trip.start_date,
             )
-            db.add(db_leg_1)
+            db.add(new_leg)
 
-            # Acumulamos recursos para bloquear solo si el viaje ya arrancó ("en_transito")
-            if db_trip.status == "en_transito":
-                unit_ids_to_block.extend(
-                    [
-                        leg_data.unit_id,
-                        db_trip.remolque_1_id,
-                        db_trip.dolly_id,
-                        db_trip.remolque_2_id,
-                    ]
+        if payload.conoce_ruta_completa and payload.final_leg:
+            leg_final = payload.final_leg
+            if len(trip.legs) > 1:
+                trip.legs[1].unit_id = leg_final.unit_id
+                trip.legs[1].operator_id = leg_final.operator_id
+            else:
+                new_leg_2 = models.TripLeg(
+                    trip_id=trip.id,
+                    leg_type="ruta_carretera",
+                    status="creado",
+                    unit_id=leg_final.unit_id,
+                    operator_id=leg_final.operator_id,
+                    start_date=trip.start_date,
                 )
-                operator_ids_to_block.append(leg_data.operator_id)
+                db.add(new_leg_2)
 
-        # ==========================================
-        # CREACIÓN DEL TRAMO 2 (MOTOR DUAL - OPCIONAL)
-        # ==========================================
-        # Verificamos que conozca la ruta completa y que el payload traiga final_leg
-        if getattr(trip, "conoce_ruta_completa", False) and getattr(
-            trip, "final_leg", None
-        ):
-            leg_final = trip.final_leg
+        db.flush()
+        # 🚀 LIBERADO: Removimos el bloque que forzaba status EN_RUTA.
 
-            # El tramo 2 SIEMPRE nace en status 'creado' porque el chofer 2 está esperando en patio
-            db_leg_2 = models.TripLeg(
-                trip_id=db_trip.id,
-                leg_type=leg_final.leg_type or "ruta_carretera",
-                status="creado",
-                unit_id=leg_final.unit_id,
-                operator_id=leg_final.operator_id,
-                # Inicializamos anticipos en 0 para la pierna 2 (se le asignarán después cuando despache)
-                anticipo_casetas=0.0,
-                anticipo_viaticos=0.0,
-                anticipo_combustible=0.0,
-                monto_neto_pagado=0.0,
-                start_date=db_trip.start_date,
-            )
-            db.add(db_leg_2)
-
-            # Nota: Los recursos del Tramo 2 (Tracto 2 y Chofer 2) NO se bloquean como "EN_RUTA"
-            # todavía, porque ellos físicamente aún no están operando.
-
-        # ==========================================
-        # BLOQUEO FÍSICO DE RECURSOS
-        # ==========================================
-        valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
-        if valid_unit_ids:
-            units = (
-                db.query(models.Unit)
-                .filter(
-                    models.Unit.id.in_(valid_unit_ids),
-                    models.Unit.record_status != RecordStatus.ELIMINADO,
-                )
-                .all()
-            )
-            for u in units:
-                u.status = models.UnitStatus.EN_RUTA
-                db.add(u)
-
-        valid_operator_ids = [oid for oid in operator_ids_to_block if oid is not None]
-        if valid_operator_ids:
-            operators = (
-                db.query(models.Operator)
-                .filter(models.Operator.id.in_(valid_operator_ids))
-                .all()
-            )
-            for o in operators:
-                o.status = models.OperatorStatus.EN_RUTA
-                db.add(o)
-
-        db.commit()
-        db.refresh(db_trip)
-        return db_trip
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error Crítico en create_trip: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise e
+    db.commit()
+    db.refresh(trip)
+    return trip
 
 
-def update_trip_status(
-    db: Session, trip_id: str, status: str, location: str | None = None
-):
-    trip = get_trip(db, trip_id)
-    if not trip:
-        return None
-    # Si el viaje ya está cerrado o liquidado, NO permitimos que cambie a "en_transito" o "detenido"
-    estados_finales = [
-        models.TripStatus.ENTREGADO,
-        models.TripStatus.CERRADO,
-        "liquidado",
-    ]
-    if trip.status in estados_finales and status not in estados_finales:
-        # Se aborta silenciosamente el cambio de estatus, protegiendo el viaje
+@router.post("/trips/{trip_id}/unhook", response_model=schemas.TripResponse)
+def unhook_trip_in_yard(trip_id: int, db: Session = Depends(get_db)):
+    try:
+        trip = crud.unhook_in_yard(db, str(trip_id))
+        if not trip:
+            raise HTTPException(status_code=404, detail="Viaje no encontrado.")
         return trip
-
-    active_leg = None
-    if trip.legs:
-        active_leg = trip.legs[-1]
-
-    # 🛡️ PROTECCIÓN DE FASE 2: Misma lógica, mantener vivo el viaje padre
-    if status == models.TripStatus.ENTREGADO:
-        is_last_leg = False
-        if trip.legs:
-            is_last_leg = active_leg.id == trip.legs[-1].id
-
-        # Si es entrega de vacío O es la última fase del viaje, cerramos el viaje padre.
-        if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
-            trip.status = status
-        else:
-            trip.status = models.TripStatus.EN_TRANSITO
-    else:
-        trip.status = status
-
-    trip.last_update = datetime.utcnow()
-
-    if active_leg:
-        if active_leg.status in estados_finales and status not in estados_finales:
-            pass  # No regresamos el estatus del tramo
-        else:
-            active_leg.status = status
-        active_leg.last_update = datetime.utcnow()
-        if location:
-            active_leg.last_location = location
-
-    if status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
-        if active_leg:
-            active_leg.actual_arrival = datetime.utcnow()
-
-        # Solo registrar llegada total si el viaje padre realmente se entregó o cerró
-        if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
-            trip.actual_arrival = datetime.utcnow()
-
-        # 💡 LIBERACIÓN DE UNIDADES INTELIGENTE
-        # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
-        if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
-            unit_ids_to_free = [
-                active_leg.unit_id if active_leg else None,
-                trip.remolque_1_id,
-                trip.dolly_id,
-                trip.remolque_2_id,
-            ]
-        else:
-            # Si el viaje maestro sigue en tránsito (ej. solo terminó la fase carretera),
-            # SOLO liberamos el tractocamión. ¡Los remolques siguen amarrados al viaje!
-            unit_ids_to_free = [active_leg.unit_id if active_leg else None]
-
-        valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
-
-        if valid_unit_ids:
-            units = (
-                db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).all()
-            )
-            for u in units:
-                u.status = models.UnitStatus.DISPONIBLE
-                db.add(u)
-
-        if active_leg and active_leg.operator:
-            active_leg.operator.status = models.OperatorStatus.ACTIVO
-            db.add(active_leg.operator)
-
-    if active_leg:
-        event = models.TripTimelineEvent(
-            trip_leg_id=active_leg.id,
-            time=datetime.utcnow(),
-            event=f"Status actualizado a {status}",
-            event_type="status_change",
-        )
-        db.add(event)
-
-    db.add(trip)
-    db.commit()
-    db.refresh(trip)
-    return trip
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
-def update_trip(db: Session, trip_id: int, trip_update_data: dict):
-    db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
-    if not db_trip:
-        return None
-
-    # 1. Asignamos los datos (Remolques, Booking, Pesos, etc.) al Viaje Maestro
-    for key, value in trip_update_data.items():
-        if hasattr(db_trip, key):
-            setattr(db_trip, key, value)
-
-    # 2. 🧩 LA PIEZA FALTANTE: Bloquear los remolques que se acaban de asignar
-    unit_ids_to_block = []
-    if "remolque_1_id" in trip_update_data and trip_update_data["remolque_1_id"]:
-        unit_ids_to_block.append(trip_update_data["remolque_1_id"])
-    if "dolly_id" in trip_update_data and trip_update_data["dolly_id"]:
-        unit_ids_to_block.append(trip_update_data["dolly_id"])
-    if "remolque_2_id" in trip_update_data and trip_update_data["remolque_2_id"]:
-        unit_ids_to_block.append(trip_update_data["remolque_2_id"])
-
-    # Si vienen IDs en el payload, los pasamos a EN_RUTA
-    if unit_ids_to_block:
-        db.query(models.Unit).filter(
-            models.Unit.id.in_(unit_ids_to_block),
-            models.Unit.record_status != RecordStatus.ELIMINADO,
-        ).update({"status": models.UnitStatus.EN_RUTA}, synchronize_session=False)
-
-    db.commit()
-    db.refresh(db_trip)
-    return db_trip
-
-
-def delete_trip(db: Session, trip_id: str):
-    try:
-        tid = int(trip_id)
-    except (TypeError, ValueError):
-        return False
-
-    trip = (
-        db.query(models.Trip)
-        .options(joinedload(models.Trip.legs))
+@router.post("/rate-templates/sync-distances")
+def sync_distances(db: Session = Depends(get_db)):
+    """
+    Sincroniza masivamente las distancias en carretera de los RateTemplates
+    utilizando la función helper existente (Nominatim + OSRM).
+    """
+    templates_to_sync = (
+        db.query(models.RateTemplate)
         .filter(
-            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
-        )
-        .first()
-    )
-    if not trip:
-        return False
-
-    unit_ids_to_free = [trip.remolque_1_id, trip.dolly_id, trip.remolque_2_id]
-    operator_ids_to_free = []
-
-    for leg in trip.legs:
-        if leg.unit_id:
-            unit_ids_to_free.append(leg.unit_id)
-        if leg.operator_id:
-            operator_ids_to_free.append(leg.operator_id)
-
-    unit_ids_to_free = list(set([uid for uid in unit_ids_to_free if uid is not None]))
-    operator_ids_to_free = list(
-        set([oid for oid in operator_ids_to_free if oid is not None])
-    )
-
-    if unit_ids_to_free:
-        db.query(models.Unit).filter(models.Unit.id.in_(unit_ids_to_free)).update(
-            {"status": models.UnitStatus.DISPONIBLE}, synchronize_session=False
-        )
-
-    if operator_ids_to_free:
-        db.query(models.Operator).filter(
-            models.Operator.id.in_(operator_ids_to_free)
-        ).update({"status": models.OperatorStatus.ACTIVO}, synchronize_session=False)
-
-    trip.record_status = RecordStatus.ELIMINADO
-    for leg in trip.legs:
-        leg.record_status = RecordStatus.ELIMINADO
-
-    db.add(trip)
-    db.commit()
-    return True
-
-
-def add_timeline_event(
-    db: Session, trip_id: int, payload: schemas.TripTimelineEventCreatePayload
-):
-    trip = get_trip(db, str(trip_id))
-    if not trip:
-        return None
-
-    active_leg = None
-
-    # 1. NUEVA LÓGICA: Si React mandó el ID exacto del tramo (Ej. el de Juan), lo buscamos y usamos ese.
-    if getattr(payload, "trip_leg_id", None):
-        active_leg = next(
-            (leg for leg in trip.legs if leg.id == payload.trip_leg_id), None
-        )
-
-    # 2. LÓGICA ANTERIOR (Respaldo): Si React no mandó nada, buscamos el último tramo activo.
-    if not active_leg:
-        active_leg = next(
-            (
-                leg
-                for leg in reversed(trip.legs)
-                if leg.status not in ["entregado", "cerrado", "liquidado"]
+            models.RateTemplate.record_status == "A",
+            or_(
+                models.RateTemplate.distancia_total_km == 0,
+                models.RateTemplate.distancia_total_km.is_(None),
             ),
-            trip.legs[-1] if trip.legs else None,
-        )
-
-    # 🛡️ MAPEO SEGURO DE ESTADOS (Frontend -> ENUM PostgreSQL)
-    status_db_validos = ["detenido", "retraso", "accidente", "bloqueado", "entregado"]
-    mapped_status = (
-        payload.status if payload.status in status_db_validos else "en_transito"
-    )
-
-    if payload.status == "entregado":
-        is_last_leg = True
-        if trip.legs:
-            is_last_leg = active_leg.id == trip.legs[-1].id
-
-        # Si es entrega_vacio o es la última fase del viaje, cerramos el viaje.
-        if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
-            trip.status = "entregado"
-
-            # 💡 LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
-            unit_ids_to_free = [
-                active_leg.unit_id if active_leg else None,
-                trip.remolque_1_id,
-                trip.dolly_id,
-                trip.remolque_2_id,
-            ]
-            valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
-            if valid_unit_ids:
-                db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).update(
-                    {"status": "disponible"}, synchronize_session=False
-                )
-
-            if active_leg and active_leg.operator_id:
-                db.query(models.Operator).filter(
-                    models.Operator.id == active_leg.operator_id
-                ).update({"status": "activo"}, synchronize_session=False)
-        else:
-            trip.status = "en_transito"
-    else:
-        trip.status = mapped_status
-
-    trip.last_update = datetime.utcnow()
-
-    if hasattr(payload, "terminal_entrega_vacio") and payload.terminal_entrega_vacio:
-        trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
-
-    if active_leg:
-        if payload.status == "entregado":
-            active_leg.status = "entregado"
-        else:
-            active_leg.status = mapped_status
-
-        active_leg.last_update = datetime.utcnow()
-        active_leg.last_location = payload.location
-
-        # Guardar la hora real de llegada a esta fase
-        if payload.status == "entregado":
-            active_leg.actual_arrival = datetime.utcnow()
-
-        if active_leg.unit:
-            unidad = active_leg.unit
-            if payload.odometro:
-                active_leg.odometro_final = payload.odometro
-                if hasattr(unidad, "odometro"):
-                    unidad.odometro = payload.odometro
-            if payload.combustible_porcentaje is not None:
-                if hasattr(unidad, "nivel_combustible_porcentaje"):
-                    unidad.nivel_combustible_porcentaje = payload.combustible_porcentaje
-            if payload.combustible_litros is not None:
-                if hasattr(unidad, "nivel_combustible_litros"):
-                    unidad.nivel_combustible_litros = payload.combustible_litros
-
-        #   LÓGICA INCORPORADA: ATRAPAMOS EL MONTO DE PENALIZACIÓN DICTAMINADO POR LA AUDITORÍA
-        if getattr(payload, "penalizacion_monto", None) is not None:
-            active_leg.monto_penalizaciones = payload.penalizacion_monto
-
-        # ---------------------------------------------------------
-        # NUEVO BLOQUE SEGURO: MARCAR VALES COMO CONCILIADOS
-        # Solo se ejecuta si el evento viene de la conciliación
-        # ---------------------------------------------------------
-        if payload.location == "Conciliación de Combustible":
-            db.query(models.FuelLog).filter(
-                models.FuelLog.trip_leg_id == active_leg.id,
-                models.FuelLog.record_status == "A",
-                models.FuelLog.is_conciliated == False,
-            ).update({"is_conciliated": True}, synchronize_session=False)
-        # ---------------------------------------------------------
-
-        # 📝 LA BITÁCORA SÍ GUARDA EL TEXTO ORIGINAL DEL EVENTO PARA EL HISTORIAL
-        db_event = models.TripTimelineEvent(
-            trip_leg_id=active_leg.id,
-            time=datetime.utcnow(),
-            event=f"{payload.status.replace('_', ' ').title()} en {payload.location}",
-            event_type=payload.status,
-            location=payload.location,
-            lat=payload.lat,
-            lng=payload.lng,
-            comments=payload.comments,
-        )
-        db.add(db_event)
-
-    db.add(trip)
-    if hasattr(payload, "notifyClient") and payload.notifyClient:
-        from app.integrations.email.email_service import EmailService
-
-        fecha_str = datetime.utcnow().strftime("%d/%m/%Y %H:%M")
-
-        email_svc = EmailService(db)
-        email_svc.send_status_update(
-            trip=trip,
-            status=payload.status,
-            location=payload.location,
-            event_time=fecha_str,
-            comentario=(
-                payload.comments if payload.comments else "Sin comentarios adicionales"
-            ),  # 🔥 AQUÍ ESTÁ LA SOLUCIÓN
-        )
-
-    db.commit()
-    db.refresh(trip)
-    return trip
-
-
-def get_trip_settlement(db: Session, trip_leg_id: int):
-    """
-    FASE 4: Liquidación adaptada para Movimientos de Patio y Vacío
-    (Modificado: Cálculo dinámico de combustible con 5% de Tolerancia)
-    """
-    import uuid
-    from . import schemas
-
-    leg = (
-        db.query(models.TripLeg)
-        .options(joinedload(models.TripLeg.trip))
-        .filter(
-            models.TripLeg.id == trip_leg_id,
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .first()
-    )
-    if not leg or not leg.trip:
-        return None
-
-    trip = leg.trip
-    fecha_viaje = leg.start_date.strftime("%Y-%m-%d") if leg.start_date else "N/A"
-
-    # Banderas operativas
-    is_ruta = leg.leg_type == models.TripLegType.RUTA
-    is_full = (trip.dolly_id is not None) or (trip.remolque_2_id is not None)
-
-    # 1. CÁLCULO DE DISTANCIA REAL VS ESTIMADA
-    if (
-        leg.odometro_final
-        and leg.odometro_inicial
-        and leg.odometro_final > leg.odometro_inicial
-    ):
-        kms_recorridos = float(leg.odometro_final - leg.odometro_inicial)
-    else:
-        kms_recorridos = float(
-            trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
-        )
-
-    # Filtramos solo los vales activos asignados a este tramo específico
-    fuel_logs = (
-        db.query(models.FuelLog)
-        .filter(
-            models.FuelLog.trip_leg_id == trip_leg_id,
-            models.FuelLog.record_status == "A",
         )
         .all()
     )
 
-    # Solo exige combustible si es un viaje de Carretera
-    if is_ruta and not fuel_logs:
-        raise ValueError("BLOCKED_NO_FUEL")
+    actualizados = 0
+    errores = 0
 
-    consumo_real_litros = 0.0
-    precio_promedio_litro = 24.50
-    consumo_esperado = 0.0
-    diferencia_litros = 0.0
-    deduccion_combustible = 0.0
+    for template in templates_to_sync:
+        try:
+            time.sleep(1)
 
-    conceptos = []
+            distancia_calculada = get_osrm_distance(template.origen, template.destino)
 
-    # 2. JALAR SUELDO FIJO PACTADO COMO INGRESO
-    sueldo_fijo = 0.0
-    if trip.sueldo_operador and float(trip.sueldo_operador) > 0:
-        sueldo_fijo = float(trip.sueldo_operador)
-    elif (
-        trip.tariff
-        and trip.tariff.sueldo_operador
-        and float(trip.tariff.sueldo_operador) > 0
-    ):
-        sueldo_fijo = float(trip.tariff.sueldo_operador)
+            if distancia_calculada > 0:
+                template.distancia_total_km = distancia_calculada
+                db.commit()
+                actualizados += 1
+            else:
+                errores += 1
 
-    if sueldo_fijo > 0:
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="ingreso",
-                categoria="tarifa",
-                descripcion="Sueldo Base Pactado",
-                monto=sueldo_fijo,
-                esAutomatico=True,
+        except Exception as e:
+            print(
+                f"Error sincronizando plantilla ID {getattr(template, 'id', 'Desconocido')}: {str(e)}"
             )
-        )
-
-    # 3. LÓGICA DE COMBUSTIBLE (CARRETERA) CON TOLERANCIA DEL 5%
-    if is_ruta:
-        vales_diesel = [f for f in fuel_logs if f.tipo_combustible == "diesel"]
-        consumo_real_litros = sum(f.litros for f in vales_diesel)
-
-        # Calculamos consumo esperado usando el rendimiento esperado del motor (ECM)
-        rendimiento_esperado = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
-        consumo_esperado = (
-            (kms_recorridos / rendimiento_esperado) if kms_recorridos > 0 else 0.0
-        )
-
-        if vales_diesel:
-            precio_promedio_litro = sum(f.precio_por_litro for f in vales_diesel) / len(
-                vales_diesel
-            )
-
-        # Diferencia de litros = Lo que cargó (real) - Lo que debió gastar (esperado)
-        diferencia_cruda = consumo_real_litros - consumo_esperado
-        diferencia_litros = diferencia_cruda if diferencia_cruda > 0 else 0.0
-
-        deduccion_combustible = float(getattr(leg, "monto_penalizaciones", 0.0) or 0.0)
-
-        if deduccion_combustible > 0:
-            conceptos.append(
-                schemas.ConceptoPago(
-                    id=str(uuid.uuid4())[:8],
-                    tipo="deduccion",
-                    categoria="combustible",
-                    descripcion=f"Cargo Exceso Diésel (Según Auditoría)",
-                    monto=deduccion_combustible,
-                    esAutomatico=True,
-                )
-            )
-
-    # 4. LÓGICA DE MOVIMIENTO LOCAL (Patio o Vacío)
-    else:
-        # Si NO hay sueldo fijo en catálogo, aplicamos la regla genérica
-        if sueldo_fijo == 0:
-            bono_movimiento = 300.0 if is_full else 200.0
-            tipo_mov_str = (
-                "Mov. Patio"
-                if leg.leg_type == models.TripLegType.CARGA
-                else "Retorno Vacío"
-            )
-            config_str = "FULL" if is_full else "SENCILLO"
-
-            conceptos.append(
-                schemas.ConceptoPago(
-                    id=str(uuid.uuid4())[:8],
-                    tipo="ingreso",
-                    categoria="bono",
-                    descripcion=f"Bono {tipo_mov_str} ({config_str})",
-                    monto=bono_movimiento,
-                    esAutomatico=True,
-                )
-            )
-
-    # 5. DEDUCCIONES FIJAS (ANTICIPOS DEL TRAMO)
-    if leg.anticipo_viaticos > 0:
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="deduccion",
-                categoria="anticipo",
-                descripcion="Anticipo Viáticos",
-                monto=leg.anticipo_viaticos,
-                esAutomatico=True,
-            )
-        )
-    if leg.anticipo_combustible > 0:
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="deduccion",
-                categoria="anticipo",
-                descripcion="Anticipo Diésel",
-                monto=leg.anticipo_combustible,
-                esAutomatico=True,
-            )
-        )
-    if leg.otros_anticipos > 0:
-        conceptos.append(
-            schemas.ConceptoPago(
-                id=str(uuid.uuid4())[:8],
-                tipo="deduccion",
-                categoria="anticipo",
-                descripcion="Otros Anticipos",
-                monto=leg.otros_anticipos,
-                esAutomatico=True,
-            )
-        )
-
-    total_ingresos = sum(c.monto for c in conceptos if c.tipo == "ingreso")
-    total_deducciones = sum(c.monto for c in conceptos if c.tipo == "deduccion")
-    neto_pagar = total_ingresos - total_deducciones
-
-    return schemas.TripSettlementResponse(
-        viajeId=trip.public_id or f"VIAJE-{trip.id}",
-        legId=leg.id,
-        operadorNombre=leg.operator.name if leg.operator else "N/A",
-        unidadNumero=leg.unit.numero_economico if leg.unit else "N/A",
-        ruta=trip.route_name or f"{trip.origin} -> {trip.destination}",
-        fechaViaje=fecha_viaje,
-        kmsRecorridos=kms_recorridos,
-        estatus=leg.status,
-        conceptos=conceptos,
-        total_ingresos=total_ingresos,
-        total_deducciones=total_deducciones,
-        neto_a_pagar=neto_pagar,
-        consumoEsperadoLitros=round(consumo_esperado, 2),
-        consumoRealLitros=round(consumo_real_litros, 2),
-        diferenciaLitros=round(diferencia_litros, 2),
-        precioPorLitro=round(precio_promedio_litro, 2),
-        deduccionCombustible=round(deduccion_combustible, 2),
-    )
-
-
-def close_trip_settlement(
-    db: Session, trip_leg_id: int, payload: schemas.CloseSettlementPayload
-):
-    leg = (
-        db.query(models.TripLeg)
-        .filter(
-            models.TripLeg.id == trip_leg_id,
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .first()
-    )
-    if not leg:
-        return None
-
-    leg.status = models.TripStatus.CERRADO
-    leg.saldo_operador = payload.neto_a_pagar
-    leg.actual_arrival = datetime.utcnow()
-
-    #   NUEVO: Guardar el odómetro en el tramo y en el camión
-    if payload.odometro_final:
-        leg.odometro_final = payload.odometro_final
-        if leg.unit:
-            leg.unit.odometro = payload.odometro_final
-
-    event = models.TripTimelineEvent(
-        trip_leg_id=leg.id,
-        time=datetime.utcnow(),
-        event=f"Tramo Liquidado y Cerrado. Saldo pagado: ${payload.neto_a_pagar:,.2f}",
-        event_type="success",
-    )
-    db.add(event)
-
-    if leg.trip:
-        leg.trip.status = models.TripStatus.CERRADO
-        leg.trip.closed_at = datetime.utcnow()
-        db.add(leg.trip)
-
-    db.add(leg)
-    db.commit()
-    db.refresh(leg)
-    return leg.trip
-
-
-def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
-    tid = int(trip_id)
-    trip = (
-        db.query(models.Trip)
-        .filter(
-            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
-        )
-        .first()
-    )
-
-    if not trip:
-        return None
-
-    if trip.legs:
-        last_leg = trip.legs[-1]
-
-        if last_leg.status not in [
-            models.TripStatus.ENTREGADO,
-            models.TripStatus.CERRADO,
-        ]:
-            last_leg.status = models.TripStatus.ENTREGADO
-            last_leg.actual_arrival = datetime.utcnow()
-            last_leg.last_update = datetime.utcnow()
-
-            if last_leg.unit_id:
-                old_unit = (
-                    db.query(models.Unit)
-                    .filter(models.Unit.id == last_leg.unit_id)
-                    .first()
-                )
-                if old_unit:
-                    old_unit.status = models.UnitStatus.DISPONIBLE
-                    db.add(old_unit)
-
-            if last_leg.operator_id:
-                old_op = (
-                    db.query(models.Operator)
-                    .filter(models.Operator.id == last_leg.operator_id)
-                    .first()
-                )
-                if old_op:
-                    old_op.status = models.OperatorStatus.ACTIVO
-                    db.add(old_op)
-
-            db_event = models.TripTimelineEvent(
-                trip_leg_id=last_leg.id,
-                time=datetime.utcnow(),
-                event="Tramo concluido por Desenganche / Cambio de operador.",
-                event_type="info",
-            )
-            db.add(db_event)
-            db.add(last_leg)
-
-        if not payload.odometro_inicial or payload.odometro_inicial == 0:
-            payload.odometro_inicial = get_last_unit_odometer(db, payload.unit_id)
-
-    new_leg = models.TripLeg(
-        trip_id=trip.id,
-        leg_type=payload.leg_type,
-        status=models.TripStatus.CREADO,
-        unit_id=payload.unit_id,
-        operator_id=payload.operator_id,
-        anticipo_casetas=payload.anticipo_casetas,
-        anticipo_viaticos=payload.anticipo_viaticos,
-        anticipo_combustible=payload.anticipo_combustible,
-        odometro_inicial=payload.odometro_inicial,
-        nivel_tanque_inicial=payload.nivel_tanque_inicial,
-        start_date=datetime.utcnow(),
-    )
-    db.add(new_leg)
-    db.flush()
-
-    if payload.unit_id:
-        new_unit = (
-            db.query(models.Unit).filter(models.Unit.id == payload.unit_id).first()
-        )
-        if new_unit:
-            new_unit.status = models.UnitStatus.EN_RUTA
-            db.add(new_unit)
-
-    if payload.operator_id:
-        new_op = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == payload.operator_id)
-            .first()
-        )
-        if new_op:
-            new_op.status = models.OperatorStatus.EN_RUTA
-            db.add(new_op)
-
-    trip.status = models.TripStatus.EN_TRANSITO
-    trip.last_update = datetime.utcnow()
-    db.add(trip)
-
-    db.commit()
-    db.refresh(trip)
-    return trip
-
-
-# =========================================================
-# ⚙️ LA VERDADERA MAGIA (LIQUIDACIÓN POR LOTE ACTUALIZADA)
-# =========================================================
-
-
-def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload):
-    legs = (
-        db.query(models.TripLeg)
-        .filter(
-            models.TripLeg.id.in_(payload.leg_ids),
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .all()
-    )
-    if not legs:
-        return None
-
-    # INICIO DEL BLINDAJE DE TRANSACCIÓN
-    try:
-        trips_to_check = set()
-        num_legs = len(legs)
-
-        # Juntamos los conceptos manuales enviados desde el borrador dinámico en React
-        conceptos_json = (
-            [c.model_dump() for c in payload.conceptos_extra]
-            if payload.conceptos_extra
-            else []
-        )
-
-        # Inyectamos el Sueldo Base como ingreso automático si es mayor a 0
-        if payload.monto_sueldo > 0:
-            conceptos_json.append(
-                {
-                    "id": str(uuid.uuid4())[:8],
-                    "tipo": "ingreso",
-                    "categoria": "tarifa",
-                    "descripcion": "Sueldo Base Pactado",
-                    "monto": payload.monto_sueldo / num_legs,
-                    "esAutomatico": True,
-                }
-            )
-
-        # Inyectamos la Penalización de Combustible desmenuzada si existe
-        if payload.monto_penalizaciones > 0:
-            conceptos_json.append(
-                {
-                    "id": str(uuid.uuid4())[:8],
-                    "tipo": "deduccion",
-                    "categoria": "combustible",
-                    "descripcion": "Cargo por Diésel (Monto excedente de tolerancia permitida)",
-                    "monto": payload.monto_penalizaciones / num_legs,
-                    "esAutomatico": True,
-                }
-            )
-
-        for leg in legs:
-            leg.status = "liquidado"
-
-            # Desglose financiero para los reportes (Dividido equitativamente)
-            leg.monto_sueldo = payload.monto_sueldo / num_legs
-            leg.monto_bonos = payload.monto_bonos / num_legs
-            leg.monto_maniobras = payload.monto_maniobras / num_legs
-            leg.monto_penalizaciones = payload.monto_penalizaciones / num_legs
-
-            leg.saldo_operador = payload.neto_a_pagar / num_legs
-            leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
-            leg.desglose_conceptos = conceptos_json
-            leg.actual_arrival = datetime.utcnow()
-
-            event = models.TripTimelineEvent(
-                trip_leg_id=leg.id,
-                time=datetime.utcnow(),
-                event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f} (Desc. Registro de detalles: ${(payload.monto_penalizaciones/num_legs):,.2f})",
-                event_type="success",
-            )
-            db.add(event)
-            trips_to_check.add(leg.trip)
-
-        cxc_creadas = 0
-
-        for trip in trips_to_check:
-            # 1. EVALUACIÓN DE CIERRE DE VIAJE (Liberación de recursos)
-            all_completed = all(
-                l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
-            )
-
-            if all_completed and trip.status not in ["cerrado", "liquidado"]:
-                trip.status = "cerrado"
-                trip.closed_at = func.now()
-
-                # LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
-                unit_ids_to_free = [
-                    trip.remolque_1_id,
-                    trip.dolly_id,
-                    trip.remolque_2_id,
-                ]
-                operator_ids_to_free = []
-
-                for l in trip.legs:
-                    if l.unit_id:
-                        unit_ids_to_free.append(l.unit_id)
-                    if l.operator_id:
-                        operator_ids_to_free.append(l.operator_id)
-
-                unit_ids_to_free = list(
-                    set([uid for uid in unit_ids_to_free if uid is not None])
-                )
-                operator_ids_to_free = list(
-                    set([oid for oid in operator_ids_to_free if oid is not None])
-                )
-
-                if unit_ids_to_free:
-                    db.query(models.Unit).filter(
-                        models.Unit.id.in_(unit_ids_to_free)
-                    ).update({"status": "disponible"}, synchronize_session=False)
-
-                if operator_ids_to_free:
-                    db.query(models.Operator).filter(
-                        models.Operator.id.in_(operator_ids_to_free)
-                    ).update({"status": "activo"}, synchronize_session=False)
-
-            # 2. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
-            # 🔧 AQUÍ ESTÁ EL FIX APLICADO:
-            carretera_liquidada = any(
-                (
-                    l.leg_type == "ruta_carretera"
-                    or l.leg_type == getattr(models, "TripLegType", None)
-                    and l.leg_type == models.TripLegType.RUTA
-                )
-                and l.status in ["liquidado", "cerrado"]
-                for l in trip.legs
-            )
-
-            if carretera_liquidada:
-                # 1. BUSCAMOS SI YA EXISTE LA FACTURA FINAL
-                existing_cxc = (
-                    db.query(models.ReceivableInvoice)
-                    .filter(
-                        models.ReceivableInvoice.viaje_id == trip.id,
-                        models.ReceivableInvoice.record_status
-                        != RecordStatus.ELIMINADO,
-                        models.ReceivableInvoice.is_nominal == False,
-                    )
-                    .first()
-                )
-
-                # Si la fase de carretera ya está liquidada y NO existe la CxC final, la creamos
-                if not existing_cxc:
-                    # Cálculos financieros reales
-                    base = trip.tarifa_base or 0.0
-                    subtotal = base
-                    iva = subtotal * 0.16
-                    retencion = subtotal * 0.04
-                    monto_total = subtotal + iva - retencion
-
-                    dias_credito = 15
-                    if trip.client and trip.client.dias_credito:
-                        dias_credito = trip.client.dias_credito
-
-                    # =========================================================
-                    # 🚀 MAGIA FISCAL: PREPARACIÓN PARA SUSTITUCIÓN SAT (04)
-                    # =========================================================
-                    cp_nominal = (
-                        db.query(models.ReceivableInvoice)
-                        .filter(
-                            models.ReceivableInvoice.viaje_id == trip.id,
-                            models.ReceivableInvoice.is_nominal == True,
-                            models.ReceivableInvoice.status_sat == "TIMBRADA",
-                        )
-                        .first()
-                    )
-
-                    uuid_relacionado = None
-                    if cp_nominal and cp_nominal.uuid:
-                        # Extraemos el UUID de la Carta Porte que viajó en carretera
-                        uuid_relacionado = cp_nominal.uuid
-
-                        # ⚠️ TRIGGER DE CANCELACIÓN:
-                        # Lo mandamos a la cola de tu función 'procesar_cancelaciones_pendientes'
-                        # en el billing_service.py para que se cancele en background.
-                        cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
-
-                        # Motivo de Cancelación SAT:
-                        # 01 - Comprobantes emitidos con errores con relación (Pide el UUID nuevo)
-                        # 04 - Relación directa de sustitución (Depende de tu PAC).
-                        # Usaremos "01" que es el estándar actual del SAT para sustituir.
-                        cp_nominal.motivo_cancelacion = "01"
-                        db.add(cp_nominal)
-                    # =========================================================
-
-                    # CREAMOS LA CXC FINAL (LA CHIDA)
-                    nueva_cxc = models.ReceivableInvoice(
-                        client_id=trip.client_id,
-                        sub_client_id=trip.sub_client_id,
-                        viaje_id=trip.id,
-                        folio_interno=f"CXC-TRP-{trip.public_id or trip.id}",
-                        concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
-                        subtotal=subtotal,
-                        iva=iva,
-                        retenciones=retencion,
-                        monto_total=monto_total,
-                        saldo_pendiente=monto_total,
-                        fecha_emision=date.today(),
-                        fecha_vencimiento=date.today() + timedelta(days=dias_credito),
-                        estatus=models.InvoiceStatus.PENDIENTE,  # Estatus Financiero
-                        metodo_pago="PPD",
-                        tipo_comprobante="I",
-                        is_nominal=False,
-                        # 🔗 EL ENLACE VITAL PARA QUE TU BILLING_SERVICE INYECTE EL NODO 04:
-                        uuid_relacionado=uuid_relacionado,
-                        status_sat="PROVISIONAL",  # Nace sin timbrar para proteger el flujo
-                    )
-                    db.add(nueva_cxc)
-                    cxc_creadas += 1
-
-        db.commit()
-        return {
-            "message": "Liquidación completada y Recursos Liberados",
-            "legs_procesados": len(legs),
-            "cxc_generadas": cxc_creadas,
-        }
-
-    except Exception as e:
-        # SI ALGO FALLA: Deshacemos todo lo que intentó guardar en la memoria
-        db.rollback()
-        logger.error(f"Falla crítica al liquidar lote: {str(e)}")
-        # Levantamos el error para que el Frontend reciba un 500 y no un falso "éxito"
-        raise e
-
-
-def preview_batch_settlement(db: Session, leg_ids: list[int]):
-    legs = (
-        db.query(models.TripLeg)
-        .options(
-            joinedload(models.TripLeg.trip).joinedload(models.Trip.tariff),
-            joinedload(models.TripLeg.unit),
-            joinedload(models.TripLeg.fuel_logs),
-        )
-        .filter(
-            models.TripLeg.id.in_(leg_ids),
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .all()
-    )
-
-    if not legs:
-        return None
-
-    total_kms_reales = 0.0
-    total_real_liters = 0.0
-    total_fuel_cost = 0.0
-    total_consumo_esperado = 0.0
-    alertas = []
-    legs_sin_ticket = []
-
-    for leg in legs:
-        distancia = 0.0
-        is_ruta = "ruta" in str(leg.leg_type).lower()
-
-        if (
-            leg.odometro_final
-            and leg.odometro_inicial
-            and leg.odometro_final >= leg.odometro_inicial
-        ):
-            distancia = float(leg.odometro_final - leg.odometro_inicial)
-        else:
-            #   BLINDAJE CONTRA NULLS EN DISTANCIA
-            dist_tarifa = (
-                leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
-            )
-            distancia = float(dist_tarifa or 0.0)
-            if is_ruta:
-                alertas.append(
-                    f"Tramo #{leg.id}: Usando distancia teórica (Faltan odómetros en auditoría)."
-                )
-
-        if is_ruta:
-            total_kms_reales += distancia
-            rend_ecm = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2)
-            rendimiento = float(rend_ecm or 3.2)
-            total_consumo_esperado += (
-                (distancia / rendimiento) if distancia > 0 else 0.0
-            )
-
-            fuel_logs_activos = [
-                f
-                for f in leg.fuel_logs
-                if f.record_status == "A"
-                and str(f.tipo_combustible).lower() == "diesel"
-            ]
-
-            if not fuel_logs_activos:
-                legs_sin_ticket.append(leg.id)
-
-            for f in fuel_logs_activos:
-                #   BLINDAJE CONTRA NULLS EN COMBUSTIBLE
-                lts = float(f.litros or 0.0)
-                precio = float(f.precio_por_litro or 24.50)
-                total_real_liters += lts
-                total_fuel_cost += lts * precio
-
-    # Calculamos el precio promedio
-    precio_promedio = (
-        (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
-    )
-
-    diferencia_litros_total = 0.0
-    deduccion_combustible = 0.0
-
-    for leg in legs:
-        #   BLINDAJE CONTRA NULLS EN AUDITORÍA
-        penalizacion = getattr(leg, "monto_penalizaciones", 0.0)
-        if penalizacion and float(penalizacion) > 0:
-            deduccion_combustible += float(penalizacion)
-
-        vales = [
-            f
-            for f in leg.fuel_logs
-            if f.record_status == "A" and str(f.tipo_combustible).lower() == "diesel"
-        ]
-        for vale in vales:
-            is_conciliated = getattr(vale, "is_conciliated", False)
-            diferencia = getattr(vale, "diferencia_litros", 0.0)
-
-            if is_conciliated and diferencia and float(diferencia) > 0:
-                diferencia_litros_total += float(diferencia)
-
-    #   BLINDAJE CONTRA NULLS EN SUELDO
-    sueldo_operador_pactado = 0.0
-    if legs and legs[0].trip:
-        trip_padre = legs[0].trip
-        sueldo_viaje = trip_padre.sueldo_operador
-        sueldo_tarifa = trip_padre.tariff.sueldo_operador if trip_padre.tariff else 0.0
-        sueldo_operador_pactado = float(sueldo_viaje or sueldo_tarifa or 0.0)
+            errores += 1
+            db.rollback()
 
     return {
-        "total_kms": round(total_kms_reales, 2),
-        "consumo_esperado": round(total_consumo_esperado, 2),
-        "consumo_real": round(total_real_liters, 2),
-        "diferencia_litros": round(diferencia_litros_total, 2),
-        "precio_promedio": round(precio_promedio, 2),
-        "deduccion_combustible": round(deduccion_combustible, 2),
-        "sueldo_operador_pactado": sueldo_operador_pactado,
-        "alertas": alertas,
-        "legs_sin_ticket": legs_sin_ticket,
+        "actualizados": actualizados,
+        "errores": errores,
+        "mensaje": "Sincronización completada",
     }
-
-
-def get_last_unit_odometer(db: Session, unit_id: int) -> int:
-    last_leg = (
-        db.query(models.TripLeg)
-        .filter(
-            models.TripLeg.unit_id == unit_id,
-            models.TripLeg.odometro_final != None,
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .order_by(models.TripLeg.id.desc())
-        .first()
-    )
-
-    if last_leg:
-        return last_leg.odometro_final
-
-    last_fuel = (
-        db.query(models.FuelLog)
-        .filter(
-            models.FuelLog.unit_id == unit_id,
-            models.FuelLog.record_status != RecordStatus.ELIMINADO,
-        )
-        .order_by(models.FuelLog.odometro.desc())
-        .first()
-    )
-
-    return last_fuel.odometro if last_fuel else 0
-
-
-def undo_last_leg(db: Session, trip_id: str):
-    tid = int(trip_id)
-    trip = (
-        db.query(models.Trip)
-        .filter(
-            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
-        )
-        .first()
-    )
-
-    if not trip or not trip.legs:
-        return False
-
-    current_leg = trip.legs[-1]
-
-    if current_leg.unit_id:
-        u = db.query(models.Unit).filter(models.Unit.id == current_leg.unit_id).first()
-        if u:
-            u.status = models.UnitStatus.DISPONIBLE
-    if current_leg.operator_id:
-        o = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == current_leg.operator_id)
-            .first()
-        )
-        if o:
-            o.status = models.OperatorStatus.ACTIVO
-
-    db.delete(current_leg)
-
-    if len(trip.legs) > 1:
-        previous_leg = trip.legs[-2]
-        previous_leg.status = models.TripStatus.EN_TRANSITO
-        previous_leg.actual_arrival = None
-
-        if previous_leg.unit_id:
-            pu = (
-                db.query(models.Unit)
-                .filter(models.Unit.id == previous_leg.unit_id)
-                .first()
-            )
-            if pu:
-                pu.status = models.UnitStatus.EN_RUTA
-        if previous_leg.operator_id:
-            po = (
-                db.query(models.Operator)
-                .filter(models.Operator.id == previous_leg.operator_id)
-                .first()
-            )
-            if po:
-                po.status = models.OperatorStatus.EN_RUTA
-
-        trip.status = models.TripStatus.EN_TRANSITO
-    else:
-        trip.status = models.TripStatus.CREADO
-
-    trip.closed_at = None
-    db.commit()
-
-    db.refresh(trip)
-    return trip
-
-
-def reset_leg_audit(db: Session, leg_id: int):
-    leg = (
-        db.query(models.TripLeg)
-        .filter(
-            models.TripLeg.id == leg_id,
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .first()
-    )
-    if not leg:
-        return None
-
-    # Limpiamos el odómetro final y los montos de penalización
-    leg.odometro_final = None
-    leg.monto_penalizaciones = 0.0
-
-    # ---------------------------------------------------------
-    # NUEVO: Liberamos los vales de combustible para que puedan
-    # volver a ser auditados si se equivocaron.
-    # ---------------------------------------------------------
-    db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == leg.id).update(
-        {"is_conciliated": False}, synchronize_session=False
-    )
-
-    # Registramos en la bitácora que la auditoría fue anulada
-    event = models.TripTimelineEvent(
-        trip_leg_id=leg.id,
-        time=datetime.utcnow(),
-        event="Registro de detalles de combustible revertida por el usuario. Fase pendiente de conciliación.",
-        event_type="info",
-    )
-    db.add(event)
-
-    db.commit()
-    db.refresh(leg)
-    return leg
-
-
-def unhook_in_yard(db: Session, trip_id: str):
-    tid = int(trip_id)
-    trip = (
-        db.query(models.Trip)
-        .filter(
-            models.Trip.id == tid, models.Trip.record_status != RecordStatus.ELIMINADO
-        )
-        .first()
-    )
-
-    if not trip or not trip.legs:
-        return None
-
-    # Obtenemos la fase activa
-    active_leg = trip.legs[-1]
-
-    if active_leg.status in ["entregado", "cerrado", "liquidado"]:
-        raise ValueError("Este tramo ya está cerrado o entregado.")
-
-    # REGLA DE GUSTAVO: Solo se puede desenganchar en la Fase 1 (Carga Patio/Muelle)
-    if active_leg.leg_type != "carga_muelle":
-        raise ValueError(
-            "Solo se permite desenganchar viajes que están en fase de Carga en Patio/Muelle."
-        )
-
-    # 1. Liberamos SOLO Tractocamión y Operador.
-    # (El Remolque 1, Dolly y Remolque 2 siguen atados al `Trip` maestro)
-    if active_leg.unit_id:
-        tracto = (
-            db.query(models.Unit).filter(models.Unit.id == active_leg.unit_id).first()
-        )
-        if tracto:
-            tracto.status = models.UnitStatus.DISPONIBLE
-
-    if active_leg.operator_id:
-        op = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == active_leg.operator_id)
-            .first()
-        )
-        if op:
-            op.status = models.OperatorStatus.ACTIVO
-
-    # 2. Marcamos el tramo local como completado
-    active_leg.status = models.TripStatus.ENTREGADO
-    active_leg.actual_arrival = datetime.utcnow()
-    active_leg.last_update = datetime.utcnow()
-
-    # 3. Ponemos el Viaje en estado DETENIDO (o un estado custom) para que el despachador
-    # sepa que está en patio esperando asignación de carretera
-    trip.status = models.TripStatus.DETENIDO
-    trip.last_update = datetime.utcnow()
-
-    # 4. Dejamos el registro en la Bitácora
-    db_event = models.TripTimelineEvent(
-        trip_leg_id=active_leg.id,
-        time=datetime.utcnow(),
-        event="Desenganche en patio. Operador y Tractocamión liberados. Carga en espera de asignación de carretera.",
-        event_type="info",
-        location="Patio de Operaciones",
-    )
-    db.add(db_event)
-
-    db.commit()
-    db.refresh(trip)
-    return trip

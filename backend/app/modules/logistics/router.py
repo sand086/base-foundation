@@ -15,7 +15,9 @@ from jinja2 import Environment, FileSystemLoader
 
 from app.db.database import get_db
 from app.models import models
-from app.models.models import SystemConfig
+
+# 🚀 FIX: Importamos RecordStatus para los Soft Deletes
+from app.models.models import SystemConfig, RecordStatus
 
 # importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
 from . import schemas, crud
@@ -533,31 +535,15 @@ def read_trip(trip_id: int, db: Session = Depends(get_db)):
 
 @router.post("/trips", response_model=schemas.TripResponse)
 def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
-    if trip.initial_leg and trip.initial_leg.unit_id:
-        unit = (
-            db.query(models.Unit)
-            .filter(models.Unit.id == trip.initial_leg.unit_id)
-            .first()
-        )
-        if not unit:
-            raise HTTPException(status_code=404, detail="La unidad principal no existe")
+    # 🚀 LIBERADO: Ya no bloqueamos la unidad en el router, permite multiasignación en patio
 
-        estatus_permitidos = ["disponible", "bloqueado", "en_ruta"]
-
-        if unit.status.lower() not in estatus_permitidos:
-            raise HTTPException(
-                status_code=400,
-                detail=f"La unidad {unit.numero_economico} no puede ser despachada. Estatus actual: {unit.status}",
-            )
-
-    # Generamos el viaje de la forma tradicional (No alteramos el CRUD base)
+    # Generamos el viaje de la forma tradicional
     db_trip = crud.create_trip(db, trip)
 
-    #   IDEA 4: CALCULAMOS LA DISTANCIA AUTOMÁTICA EN SEGUNDO PLANO Y SILENCIOSAMENTE
+    # CALCULAMOS LA DISTANCIA AUTOMÁTICA EN SEGUNDO PLANO Y SILENCIOSAMENTE
     if db_trip.origin and db_trip.destination:
         distancia_calculada = get_osrm_distance(db_trip.origin, db_trip.destination)
         if distancia_calculada > 0:
-            # Asignamos la distancia al campo si existe en tu modelo Trip
             try:
                 if hasattr(db_trip, "distancia_km"):
                     db_trip.distancia_km = distancia_calculada
@@ -706,6 +692,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     )
 
     if carretera_liquidada:
+        # 🚀 FIX CRÍTICO: with_for_update() para evitar dobles facturas en clics rápidos
         existing_cxc = (
             db.query(models.ReceivableInvoice)
             .filter(
@@ -713,6 +700,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 models.ReceivableInvoice.is_nominal == False,
                 models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
             )
+            .with_for_update()
             .first()
         )
 
@@ -772,6 +760,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 status_sat="PROVISIONAL",
             )
             db.add(nueva_cxc)
+            db.flush()  # 🚀 FIX: OBLIGAMOS QUE SE GRABE ANTES DE SOLTAR EL CANDADO
             cxc_creada = True
 
     # 4. GUARDAMOS TODOS LOS CAMBIOS DE GOLPE
@@ -1034,7 +1023,9 @@ def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
     )
     if not event:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
-    db.delete(event)
+
+    # 🚀 FIX: SOFT DELETE PARA NO ROMPER INTEGRIDAD REFERENCIAL
+    event.record_status = RecordStatus.ELIMINADO
     db.commit()
     return {"message": "Evento eliminado correctamente"}
 
@@ -1109,9 +1100,9 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
         )
 
     # 5. LIMPIEZA DE DUPLICADOS:
-    # Como el billing_service genera una fila nueva en BD, eliminamos la provisional
+    # 🚀 FIX: Usar Soft Delete para no causar un Error 500 al borrar la provisional
     if cxc_provisional and cxc_provisional.id != factura.id:
-        db.delete(cxc_provisional)
+        cxc_provisional.record_status = RecordStatus.ELIMINADO
         db.commit()
 
     trip = crud.get_trip(db, str(trip_id))
@@ -1195,38 +1186,7 @@ def dispatch_trip(
 
         db.flush()
 
-        # Si el viaje ya salió (en_transito), bloqueamos recursos para que nadie más los use
-        if trip.status == "en_transito":
-            unit_ids_to_block = [
-                leg_data.unit_id,
-                trip.remolque_1_id,
-                trip.dolly_id,
-                trip.remolque_2_id,
-            ]
-            valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
-
-            if valid_unit_ids:
-                units = (
-                    db.query(models.Unit)
-                    .filter(
-                        models.Unit.id.in_(valid_unit_ids),
-                        models.Unit.record_status != models.RecordStatus.ELIMINADO,
-                    )
-                    .all()
-                )
-                for u in units:
-                    u.status = models.UnitStatus.EN_RUTA
-                    db.add(u)
-
-            if leg_data.operator_id:
-                operator = (
-                    db.query(models.Operator)
-                    .filter(models.Operator.id == leg_data.operator_id)
-                    .first()
-                )
-                if operator:
-                    operator.status = models.OperatorStatus.EN_RUTA
-                    db.add(operator)
+        # 🚀 LIBERADO: Removimos el bloque que forzaba status EN_RUTA a las unidades para permitir la multiprogramación
 
     db.commit()
     db.refresh(trip)
