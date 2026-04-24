@@ -674,12 +674,9 @@ def process_sat_master_report(
         # FLUJO A: COMPROBANTES TIPO "INGRESO"
         # ==========================================
         if tipo_comprobante == "ingreso":
-            saldo_pendiente = 0.0 if metodo_pago == "PUE" else total
-            estatus_factura = (
-                models.InvoiceStatus.PAGADO
-                if metodo_pago == "PUE"
-                else models.InvoiceStatus.PENDIENTE
-            )
+            # 🚀 FIX: Forzamos a que TODAS entren con deuda completa y como PENDIENTES
+            saldo_pendiente = total
+            estatus_factura = models.InvoiceStatus.PENDIENTE
 
             if is_cxc:
                 client = (
@@ -790,7 +787,7 @@ def process_sat_master_report(
                 resultados["cxp_creadas"] += 1
 
             # 🚀 FIX CRÍTICO: SI ES PUE, AFECTAR TESORERÍA EN LA CUENTA COMODÍN
-            if metodo_pago == "PUE":
+            """             if metodo_pago == "PUE":
                 cuenta_comodin = (
                     db.query(models.BankAccount)
                     .filter_by(alias="Por Conciliar (SAT)")
@@ -817,7 +814,7 @@ def process_sat_master_report(
                     origen_modulo="CxC" if is_cxc else "CxP",
                 )
                 create_bank_movement(db, mov_schema, current_user_id=1)
-                resultados["pagos_pue_procesados"] += 1
+                resultados["pagos_pue_procesados"] += 1 """
 
         # ==========================================
         # FLUJO B: COMPROBANTES TIPO "EGRESO" (NOTAS DE CRÉDITO)
