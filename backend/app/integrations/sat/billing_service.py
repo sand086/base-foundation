@@ -75,13 +75,13 @@ SAT_ESTADOS_MAP = {
     "08": "CHH",
     "8": "CHH",
     "09": "CMX",
-    "9": "CMX",  # <--- Culpable
+    "9": "CMX",
     "10": "DUR",
     "11": "GUA",
     "12": "GRO",
     "13": "HID",
     "14": "JAL",
-    "15": "MEX",  # Estado de México
+    "15": "MEX",
     "16": "MIC",
     "17": "MOR",
     "18": "NAY",
@@ -105,9 +105,6 @@ SAT_ESTADOS_MAP = {
 
 
 def normalizar_estado_sat(estado: str) -> str:
-    """
-    Recibe un estado numérico (ej. '09') y devuelve la clave de 3 letras válida para el SAT ('CMX').
-    """
     if not estado:
         return ""
     estado_str = str(estado).strip().upper()
@@ -117,15 +114,10 @@ def normalizar_estado_sat(estado: str) -> str:
     else:
         resultado = SAT_ESTADOS_MAP.get(estado_str, estado_str)
 
-    # 🚀 SI ESTE PRINT NO SALE EN TU CONSOLA, TU SERVIDOR NO SE HA REINICIADO
-    print(
+    logger.info(
         f"🚀 [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
     )
-
     return resultado
-
-
-# =========================================================
 
 
 def _clean_float(val) -> float:
@@ -375,7 +367,6 @@ class BillingService:
             .first()
         )
         if loc_emisor:
-            # 🚀 FIX QUIRÚRGICO: Normalizamos el estado de la empresa
             self.emisor_estado = normalizar_estado_sat(loc_emisor.estado_clave)
             self.emisor_municipio = str(loc_emisor.municipio_clave).zfill(3)
         else:
@@ -478,22 +469,16 @@ class BillingService:
         ocultar_montos=False,
     ) -> dict:
         tarifa = viaje.tariff
+
+        # 🚀 FIX: FACTURA SIEMPRE SIN CASETAS. Solo toma la tarifa base pura.
         if tarifa and not is_nominal:
-            subtotal = float(tarifa.tarifa_base or 0.0) + float(
-                tarifa.costo_casetas or 0.0
-            )
+            subtotal = float(tarifa.tarifa_base or 0.0)
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
             ret_pct = float(tarifa.retencion_porcentaje or 4.0) / 100.0
             dist_km = int(tarifa.distancia_km or 0)
             distancia_real = str(dist_km) if dist_km > 0 else "1"
         else:
-            subtotal = (
-                1.00
-                if is_nominal
-                else (
-                    float(viaje.tarifa_base or 0.0) + float(viaje.costo_casetas or 0.0)
-                )
-            )
+            subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
             iva_pct = 0.16
             ret_pct = 0.04
             distancia_real = "100" if is_nominal else "450"
@@ -539,7 +524,6 @@ class BillingService:
             .first()
         )
         if loc_destino:
-            # 🚀 FIX QUIRÚRGICO: Normalizamos el estado de destino
             estado_dest = normalizar_estado_sat(loc_destino.estado_clave)
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
@@ -572,7 +556,6 @@ class BillingService:
                 detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido de 13 caracteres. Detectado: '{rfc_op_final}'.",
             )
 
-        #   LIMPIEZA ESTRICTA DE DIRECCIONES (SAT exige máximo 100 caracteres y sin símbolo pipe "|")
         origen_real = (
             str(viaje.origin or "DOMICILIO CONOCIDO").replace("|", "").strip()[:100]
         )
@@ -680,7 +663,6 @@ class BillingService:
             ),
             "estado_destino": estado_dest,
             "municipio_destino": municipio_dest,
-            # Asignamos las rutas ya cortadas a 100 caracteres max
             "domicilio_origen": origen_real,
             "domicilio_destino": calle_destino_real,
             "leyenda_legal": DEFAULT_LEYENDA,
@@ -985,29 +967,63 @@ class BillingService:
         )
 
         monto_total = Decimal(str(_clean_float(data["total"])))
-        nueva_factura = ReceivableInvoice(
-            client_id=viaje.client_id,
-            viaje_id=viaje.id,
-            uuid=getattr(resultado_pac, "uuid", None),
-            uuid_relacionado=invoice_data.uuid_relacionado,
-            is_nominal=False,
-            status_sat="TIMBRADA",
-            estatus="pendiente",
-            concepto=data["descripcion_concepto"],
-            monto_total=monto_total,
-            saldo_pendiente=monto_total,
-            subtotal=Decimal(str(_clean_float(data["subtotal"]))),
-            iva=Decimal(str(_clean_float(data["iva"]))),
-            retenciones=Decimal(str(_clean_float(data["retenciones"]))),
-            moneda="MXN",
-            fecha_emision=date.today(),
-            fecha_vencimiento=date.today(),
-        )
+
         try:
-            self.db.add(nueva_factura)
+            # 🚀 FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.viaje_id == viaje.id,
+                    ReceivableInvoice.is_nominal == False,
+                    ReceivableInvoice.record_status != "E",
+                )
+                .first()
+            )
+
+            if factura:
+                # Si existe, la reciclamos
+                factura.uuid = getattr(resultado_pac, "uuid", None)
+                factura.uuid_relacionado = invoice_data.uuid_relacionado
+                factura.status_sat = "TIMBRADA"
+                factura.concepto = data["descripcion_concepto"]
+                factura.monto_total = monto_total
+                factura.saldo_pendiente = monto_total
+                factura.subtotal = Decimal(str(_clean_float(data["subtotal"])))
+                factura.iva = Decimal(str(_clean_float(data["iva"])))
+                factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
+                factura.fecha_emision = date.today()
+            else:
+                # Fallback por si algo falló y no existe provisional
+                factura = ReceivableInvoice(
+                    client_id=viaje.client_id,
+                    viaje_id=viaje.id,
+                    uuid=getattr(resultado_pac, "uuid", None),
+                    uuid_relacionado=invoice_data.uuid_relacionado,
+                    is_nominal=False,
+                    status_sat="TIMBRADA",
+                    estatus="pendiente",
+                    concepto=data["descripcion_concepto"],
+                    monto_total=monto_total,
+                    saldo_pendiente=monto_total,
+                    subtotal=Decimal(str(_clean_float(data["subtotal"]))),
+                    iva=Decimal(str(_clean_float(data["iva"]))),
+                    retenciones=Decimal(str(_clean_float(data["retenciones"]))),
+                    moneda="MXN",
+                    fecha_emision=date.today(),
+                    fecha_vencimiento=date.today(),
+                )
+
+            self.db.add(factura)
+
+            if factura.uuid:
+                viaje.uuid_fiscal = factura.uuid
+                viaje.estatus = "facturado"
+                self.db.add(viaje)
+
             self.db.commit()
-            self.db.refresh(nueva_factura)
-            return nueva_factura
+            self.db.refresh(factura)
+            return factura
+
         except Exception:
             self.db.rollback()
             raise HTTPException(
@@ -1087,3 +1103,81 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
+
+    def generar_carta_porte_one_shot(
+        self, invoice_data: ReceivableInvoiceCreate
+    ) -> ReceivableInvoice:
+        viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
+            invoice_data.viaje_id, usar_tramo_final=True
+        )
+        data = self._build_dict_from_models(
+            viaje,
+            cliente,
+            unidad,
+            operador,
+            r1,
+            r2,
+            is_nominal=False,
+            ocultar_montos=False,
+        )
+        resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
+
+        monto_total = Decimal(str(_clean_float(data["total"])))
+
+        try:
+            # 🚀 FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.viaje_id == viaje.id,
+                    ReceivableInvoice.is_nominal == False,
+                    ReceivableInvoice.record_status != "E",
+                )
+                .first()
+            )
+
+            if factura:
+                factura.uuid = getattr(resultado_pac, "uuid", None)
+                factura.status_sat = "TIMBRADA"
+                factura.concepto = data["descripcion_concepto"]
+                factura.monto_total = monto_total
+                factura.saldo_pendiente = monto_total
+                factura.subtotal = Decimal(str(_clean_float(data["subtotal"])))
+                factura.iva = Decimal(str(_clean_float(data["iva"])))
+                factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
+                factura.fecha_emision = date.today()
+            else:
+                factura = ReceivableInvoice(
+                    client_id=viaje.client_id,
+                    viaje_id=viaje.id,
+                    uuid=getattr(resultado_pac, "uuid", None),
+                    is_nominal=False,
+                    status_sat="TIMBRADA",
+                    estatus="pendiente",
+                    concepto=data["descripcion_concepto"],
+                    monto_total=monto_total,
+                    saldo_pendiente=monto_total,
+                    subtotal=Decimal(str(_clean_float(data["subtotal"]))),
+                    iva=Decimal(str(_clean_float(data["iva"]))),
+                    retenciones=Decimal(str(_clean_float(data["retenciones"]))),
+                    moneda="MXN",
+                    fecha_emision=date.today(),
+                    fecha_vencimiento=date.today(),
+                )
+
+            self.db.add(factura)
+
+            if factura.uuid:
+                viaje.uuid_fiscal = factura.uuid
+                viaje.estatus = "facturado"
+                self.db.add(viaje)
+
+            self.db.commit()
+            self.db.refresh(factura)
+            return factura
+
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=500, detail="Error al guardar factura One-Shot en BD."
+            )

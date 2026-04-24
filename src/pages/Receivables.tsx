@@ -16,6 +16,7 @@ import {
   Loader2,
   BadgeDollarSign,
   ReceiptText,
+  FileSignature, // 🚀 NUEVO ÍCONO
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ export default function Receivables() {
     registerMultiplePaymentRep,
     registerPayment,
     reopenReceivable,
-    stampInvoice, // <-- NUEVO EXTRACTO
+    stampInvoice,
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -96,7 +97,7 @@ export default function Receivables() {
     useState<ReceivableInvoice | null>(null);
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // FORMATEO DE DATOS DE LA API (CÁLCULO EXACTO EN DÍAS HÁBILES)
+  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -360,16 +361,24 @@ export default function Receivables() {
     () => [
       {
         key: "folio",
-        header: "Folio",
+        header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
+          // 🚀 BLINDAJE VISUAL: Detectar si es Provisional
+          const isProvisional = row.status_sat === "PROVISIONAL";
+
           return (
-            <div className="flex flex-col">
+            <div className="flex flex-col items-start">
               <span
                 className={`font-mono text-sm font-bold uppercase ${statusInfo.status === "danger" ? "text-red-700 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
               >
                 {value}
               </span>
+              {isProvisional && (
+                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[9px] uppercase tracking-widest border-none mt-1">
+                  PROVISIONAL (SIN TIMBRAR)
+                </Badge>
+              )}
             </div>
           );
         },
@@ -524,6 +533,9 @@ export default function Receivables() {
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
 
+          // 🚀 VERIFICACIONES DE SEGURIDAD (CANDADOS)
+          const isProvisional = row.status_sat === "PROVISIONAL";
+
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -556,29 +568,40 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {/* 🚀 NUEVO: ACCIÓN DE TIMBRADO PARA FACTURAS PROVISIONALES */}
-                {(!row.uuid || row.status_sat === "PROVISIONAL") && (
+                {/* 🚀 ACCIÓN 1: TIMBRAR FACTURA PROVISIONAL */}
+                {isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
                       onClick={async () => {
                         if (
                           window.confirm(
-                            "¿Certificar esta factura ante el SAT?",
+                            "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
                           )
                         ) {
-                          await stampInvoice(Number(row.id));
+                          // 🚀 FIX: Mandamos el VIAJE_ID, no el Invoice ID, porque así lo pide el backend
+                          const viajeId =
+                            (row as any).viaje_id || (row as any).trip_id;
+                          if (!viajeId) {
+                            toast.error("Error", {
+                              description:
+                                "Esta factura no tiene un viaje asociado válido.",
+                            });
+                            return;
+                          }
+                          await stampInvoice(Number(viajeId));
                         }
                       }}
-                      className="gap-2 font-black text-xs uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50 dark:focus:bg-indigo-900/30"
+                      className="gap-2 font-black text-[11px] uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50 dark:focus:bg-indigo-900/30"
                     >
-                      <CheckCircle2 className="h-4 w-4 mr-2" /> Timbrar en SAT
+                      <FileSignature className="h-4 w-4 mr-2" /> Timbrar Factura
+                      SAT
                     </DropdownMenuItem>
                   </>
                 )}
 
-                {/* 🚀 SOLO PERMITIMOS COBRAR SI YA ESTÁ TIMBRADA (TIENE UUID) */}
-                {(row.saldo_pendiente || 0) > 0 && !!row.uuid && (
+                {/* 🚀 ACCIÓN 2: REGISTRAR COBRO (BLOQUEADO SI ES PROVISIONAL) */}
+                {(row.saldo_pendiente || 0) > 0 && !isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
@@ -594,6 +617,7 @@ export default function Receivables() {
                   </>
                 )}
 
+                {/* 🚀 ACCIÓN 3: ANULAR REP (DESBLOQUEO DE ESCALERA) */}
                 {hasPayments && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -601,15 +625,15 @@ export default function Receivables() {
                       onClick={async () => {
                         if (
                           window.confirm(
-                            "¿Estás seguro de ANULAR EL REP y revertir los cobros de esta factura?\n\nAl confirmar, el saldo de la factura volverá a estar pendiente y el Complemento de Pago será mandado a cancelar en el SAT.",
+                            "¿Estás seguro de ANULAR EL PAGO de esta factura?\n\nAl confirmar, la factura volverá a estar Por Cobrar y se liberará el candado de la Liquidación.",
                           )
                         ) {
                           await reopenReceivable(Number(row.id));
                         }
                       }}
-                      className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                      className="gap-2 font-bold text-[11px] uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
                     >
-                      <Ban className="h-4 w-4 mr-2" /> Anular REP y Restaurar
+                      <Ban className="h-4 w-4 mr-2" /> Anular Pago y Desbloquear
                     </DropdownMenuItem>
                   </>
                 )}
@@ -720,7 +744,9 @@ export default function Receivables() {
             onSelectedRowsChange={setSelectedRows}
             rowKey="id"
             onCustomExport={handleExportToExcel}
-            isRowSelectable={(row) => (row.saldo_pendiente || 0) > 0}
+            isRowSelectable={(row) =>
+              (row.saldo_pendiente || 0) > 0 && row.status_sat !== "PROVISIONAL"
+            }
           />
         </CardContent>
       </Card>

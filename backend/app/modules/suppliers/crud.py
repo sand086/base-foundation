@@ -270,7 +270,7 @@ def delete_invoice(db: Session, invoice_id: int):
 
 
 def register_payment(
-    db: Session, invoice_id: int, payment_in: schemas.InvoicePaymentCreate
+    db: Session, invoice_id: int, payment_in: dict  # 🚀 FIX 1: Cambiamos a dict
 ):
     invoice = (
         db.query(models.PayableInvoice)
@@ -284,13 +284,12 @@ def register_payment(
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
     try:
-        db_payment = models.InvoicePayment(
-            invoice_id=invoice_id, **payment_in.model_dump()
-        )
+        # 🚀 FIX 2: Ya es un diccionario, se lo pasamos directo
+        db_payment = models.InvoicePayment(invoice_id=invoice_id, **payment_in)
         db.add(db_payment)
 
-        # Actualizar saldo
-        monto_pago = payment_in.monto or 0.0
+        # 🚀 FIX 3: Leemos el monto usando .get()
+        monto_pago = float(payment_in.get("monto", 0.0))
         invoice.saldo_pendiente = max((invoice.saldo_pendiente or 0.0) - monto_pago, 0)
 
         # Actualizar estatus
@@ -315,6 +314,8 @@ def register_payment(
     except Exception as e:
         db.rollback()
         print(f"  Error inesperado al registrar pago en factura {invoice_id}:")
+        import traceback
+
         traceback.print_exc()
         raise HTTPException(
             status_code=500, detail="Error interno al registrar el pago"

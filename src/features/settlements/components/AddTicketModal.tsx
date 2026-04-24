@@ -397,8 +397,16 @@ export function AddTicketModal({
     if (parentData.unit_id && parentData.unit_id !== "undefined") {
       fetchLastOdometer(parentData.unit_id).then((km) => {
         setLastOdoCache(km);
-        // Autocompleta el input (pero si el usuario ya escribió, no se lo borramos)
-        setParentData((prev) => ({ ...prev, odometro: km }));
+
+        // 🛑 FIX: Rompemos el bucle infinito
+        setParentData((prev) => {
+          // Si el odómetro que llegó es igual al que ya tenemos,
+          // regresamos el mismo objeto 'prev'. React detendrá el re-render.
+          if (prev.odometro === km) return prev;
+
+          // Solo si es distinto, creamos un objeto nuevo.
+          return { ...prev, odometro: km };
+        });
       });
     } else {
       setLastOdoCache(0);

@@ -1,10 +1,12 @@
 import os
 import time  # <-- NUEVO: Para el sleep de la sincronización masiva
+import uuid
 import datetime
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime as dt_utcnow
 from pathlib import Path
 from typing import List, Optional
 import requests  # <-- NUEVO: Para la API de mapas OSRM
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
@@ -694,17 +696,17 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
             db.query(models.ReceivableInvoice)
             .filter(
                 models.ReceivableInvoice.viaje_id == trip.id,
-                models.ReceivableInvoice.is_nominal == False,
                 models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                models.ReceivableInvoice.is_nominal == False,
             )
-            .with_for_update()
             .first()
         )
 
         # Si ya liquidamos la carretera y NO hay CxC, la generamos con magia SAT
         if not existing_cxc:
-            base = trip.tarifa_base or 0.0
+            base = float(trip.tarifa_base or 0.0)
             subtotal = base
+
             iva = subtotal * 0.16
             retencion = subtotal * 0.04
             monto_total = subtotal + iva - retencion
@@ -982,10 +984,26 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
 def settle_trip_legs_batch(
     payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
 ):
-    result = crud.settle_trip_legs_batch(db, payload)
-    if not result:
-        raise HTTPException(status_code=404, detail="No se encontraron los tramos")
-    return result
+    try:
+        # 1. Imprimimos qué está llegando exactamente desde React
+        print("📦 [ROUTER] Payload recibido desde React:")
+        print(payload.model_dump())
+
+        # 2. Intentamos ejecutar la magia
+        result = crud.settle_trip_legs_batch(db, payload)
+
+        if not result:
+            raise HTTPException(status_code=404, detail="No se encontraron los tramos")
+
+        return result
+
+    except Exception as e:
+        # 3. SI ALGO EXPLOTA, ESTO LO ATRAPA Y LO ESCUPE EN LA CONSOLA
+        print("💥 [ROUTER ERROR 500] El servidor colapsó. Aquí está la razón exacta:")
+        traceback.print_exc()
+
+        # Le mandamos el error a React para que lo veas en el Toast (opcional)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.post(

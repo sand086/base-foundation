@@ -126,7 +126,7 @@ export function PettyCashModal({
 
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-              Monto a Reembolsar *
+              Monto *
             </label>
             <Input
               type="number"

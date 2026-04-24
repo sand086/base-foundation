@@ -20,7 +20,9 @@ export const useReceivables = () => {
   const receivablesQuery = useQuery({
     queryKey: ["receivables"],
     queryFn: () => receivableService.getInvoices(),
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchOnMount: true, // Obliga a recargar al abrir la vista
+    refetchOnWindowFocus: true, // Recarga si cambias de ventana y regresas a tu app
   });
 
   // 2. MUTACIÓN: Eliminar factura
@@ -60,15 +62,12 @@ export const useReceivables = () => {
     },
   });
 
-  // NUEVO 5.1: MUTACIÓN: Timbrar Factura CXC (Provisional -> Timbrada)
+  // 🚀 NUEVO 5.1 FIX: Timbrar Factura CXC (Provisional -> Timbrada) apuntando al endpoint de Logística
   const stampInvoiceMut = useMutation({
-    mutationFn: (id: number) => receivableService.stampInvoice(id),
+    mutationFn: (viajeId: number) =>
+      axiosClient.post(`/api/logistics/trips/${viajeId}/stamp-real`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receivables"] });
-      toast.success("FACTURA TIMBRADA", {
-        description:
-          "El documento ha sido certificado por el SAT exitosamente.",
-      });
     },
   });
 
@@ -137,15 +136,27 @@ export const useReceivables = () => {
       }
     },
 
-    // NUEVA ACCIÓN EXPORTADA: Timbrar
-    stampInvoice: async (id: number) => {
+    // 🚀 ACCIÓN REFACTORIZADA: Con estado de carga (toast.loading)
+    stampInvoice: async (viajeId: number) => {
+      const toastId = toast.loading(
+        "Conectando con el SAT y emidiendo factura definitiva...",
+      );
       try {
-        await stampInvoiceMut.mutateAsync(id);
+        await stampInvoiceMut.mutateAsync(viajeId);
+        toast.success("FACTURA TIMBRADA", {
+          id: toastId,
+          description:
+            "El documento ha sido certificado por el SAT exitosamente.",
+        });
         return true;
       } catch (error: any) {
-        toast.error(
-          getErrorMessage(error, "Error al timbrar la factura en el SAT"),
-        );
+        toast.error("Error de Timbrado", {
+          id: toastId,
+          description: getErrorMessage(
+            error,
+            "Error al timbrar la factura en el SAT",
+          ),
+        });
         return false;
       }
     },

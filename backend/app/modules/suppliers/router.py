@@ -9,6 +9,8 @@ from app.models import models
 from app.modules.auth.router import get_current_active_user
 from . import schemas, crud
 
+import traceback  # <-- ¡No olvides poner esto hasta arriba de tus imports!
+
 router = APIRouter(tags=["Suppliers"])
 
 # =========================================================
@@ -81,17 +83,29 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
 )
 def register_payment(
     invoice_id: int,
-    payment: dict = Body(...),  # Ahora FastAPI sí sabe qué es Body
+    payment: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
     try:
-        invoice = crud.register_payment(db, invoice_id, payment, current_user.id)
+        # Imprimimos lo que llegó para estar seguros
+        print(
+            f"💰 [CXP] Registrando pago para factura {invoice_id}. Payload: {payment}"
+        )
+
+        invoice = crud.register_payment(db, invoice_id, payment)
+
         if not invoice:
             raise HTTPException(status_code=404, detail="Factura no encontrada")
         return invoice
+
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        # 💥 ESTA ES LA TRAMPA: Atrapa cualquier otro error y lo imprime en consola
+        print("💥 [ROUTER ERROR 500 CXP] El servidor colapsó al registrar el pago:")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.delete("/invoices/payments/{payment_id}")

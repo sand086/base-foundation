@@ -161,7 +161,7 @@ export function TripDetailsModal({
 }: TripDetailsModalProps) {
   const { editTrip, fetchTrips, addTimelineEvent } = useTrips();
   const { updateLoadStatus } = useUnits();
-  const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
+  const { isStamping, handleStampNominal } = useBilling();
 
   const [localTrip, setLocalTrip] = useState<Trip | null>(null);
   const [activeTab, setActiveTab] = useState("fases");
@@ -175,6 +175,9 @@ export function TripDetailsModal({
   const [isUndoing, setIsUndoing] = useState(false);
   const [isGeneratingNom, setIsGeneratingNom] = useState(false);
   const [isUnhooking, setIsUnhooking] = useState(false);
+
+  // 🚀 ESTADO NUEVO PARA EL TIMBRADO FINAL
+  const [isStampingFinal, setIsStampingFinal] = useState(false);
 
   const [localUuid, setLocalUuid] = useState<string | null>(null);
   const [finalUuid, setFinalUuid] = useState<string | null>(null);
@@ -1213,6 +1216,7 @@ export function TripDetailsModal({
                                   </span>
                                 </div>
                               </div>
+
                               <div className="bg-card p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
                                   <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
@@ -1232,6 +1236,7 @@ export function TripDetailsModal({
                                   </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
+                                  {/* 🚀 EL BOTÓN MÁGICO DE TIMBRADO REFACTORIZADO */}
                                   <Button
                                     variant="default"
                                     className={cn(
@@ -1240,36 +1245,36 @@ export function TripDetailsModal({
                                         ? "bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
                                         : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
                                     )}
-                                    // Bloqueamos si está timbrando, o si no hay localUuid (Carta Porte)
                                     disabled={
-                                      isStamping ||
+                                      isStampingFinal ||
                                       (!localUuid &&
                                         !finalUuid &&
                                         !localTrip.uuid_fiscal)
                                     }
-                                    onClick={() => {
+                                    onClick={async () => {
                                       if (finalUuid) {
                                         handleDownloadBothFiles(
                                           finalUuid,
                                           true,
                                         );
                                       } else {
-                                        const uuidToRelate =
-                                          localUuid || localTrip.uuid_fiscal;
-                                        if (!uuidToRelate) {
-                                          toast.error(
-                                            "Error: No se encontró el UUID de la Carta Porte original.",
+                                        if (
+                                          window.confirm(
+                                            "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
+                                          )
+                                        ) {
+                                          setIsStampingFinal(true);
+                                          const toastId = toast.loading(
+                                            "Conectando con el SAT y emitiendo factura definitiva...",
                                           );
-                                          return;
-                                        }
-                                        handleStampFinal(
-                                          localTrip.id,
-                                          uuidToRelate,
-                                          async (responseData: any) => {
-                                            //   TRUCO DE MEMORIA: Guardamos el UUID en localStorage para que no se borre
+                                          try {
+                                            const response =
+                                              await axiosClient.post(
+                                                `/api/logistics/trips/${localTrip.id}/stamp-real`,
+                                              );
                                             const generatedFinalUuid =
-                                              responseData?.data?.uuid ||
-                                              responseData?.uuid;
+                                              response.data?.data?.uuid ||
+                                              response.data?.uuid;
 
                                             if (generatedFinalUuid) {
                                               setFinalUuid(generatedFinalUuid);
@@ -1277,19 +1282,36 @@ export function TripDetailsModal({
                                                 `final_uuid_${localTrip.id}`,
                                                 generatedFinalUuid,
                                               );
-
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
                                               );
                                             }
+
+                                            toast.success("FACTURA TIMBRADA", {
+                                              id: toastId,
+                                              description:
+                                                "El documento ha sido certificado por el SAT exitosamente.",
+                                            });
                                             await refreshLocalTrip();
-                                          },
-                                        );
+                                          } catch (error: any) {
+                                            const detail =
+                                              error.response?.data?.detail ||
+                                              "Error al timbrar la factura en el SAT";
+                                            toast.error("Error de Timbrado", {
+                                              id: toastId,
+                                              description: Array.isArray(detail)
+                                                ? detail[0]?.msg
+                                                : detail,
+                                            });
+                                          } finally {
+                                            setIsStampingFinal(false);
+                                          }
+                                        }
                                       }
                                     }}
                                   >
-                                    {isStamping ? (
+                                    {isStampingFinal ? (
                                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                     ) : finalUuid ? (
                                       <FileText className="h-4 w-4 mr-2" />

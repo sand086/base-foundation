@@ -697,7 +697,7 @@ def registrar_pago_multiple(
                             bank_account_id=int(bank_account_id),
                             tipo="ingreso",
                             monto=pago.monto_pagado,
-                            concepto=f"Cobro BYPASS Fra. {factura.folio_interno or factura.id} (REP Fallido SAT)",
+                            concepto=f"Cobro BYPASS Fra. {factura.folio_interno or factura.id}",
                             referencia=(payload.referencia or f"BYP {fake_uuid[:8]}")[
                                 :100
                             ],
