@@ -156,11 +156,11 @@ const menuItems: MenuItem[] = [
         moduleCode: "roles",
       },
       { title: "Configuración", path: "/settings", moduleCode: "settings" },
-      {
+      /*  {
         title: "Cargas Masivas",
         path: "/bulk-uploads",
         moduleCode: "settings",
-      },
+      }, */
       { title: "Mi Perfil", path: "/profile" }, // Público
       { title: "Notificaciones", path: "/notifications" }, // Público
     ],

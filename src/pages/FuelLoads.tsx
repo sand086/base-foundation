@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
 
-// 👇 NUEVOS COMPONENTES PARA EL BUSCADOR AVANZADO
 import {
   Command,
   CommandEmpty,
@@ -37,8 +36,9 @@ import {
   BarChart3,
   Activity,
   FilterX,
-  Check, // 👇 NUEVOS ÍCONOS
-  ChevronsUpDown, // 👇 NUEVOS ÍCONOS
+  Check,
+  ChevronsUpDown,
+  Lock,
 } from "lucide-react";
 
 // Tipos y Servicios
@@ -82,13 +82,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// 🚀 IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
+import { useTrips } from "@/features/trips/hooks/useTrips";
+
 interface FuelLoadDisplay extends FuelLoad {
   unidad_numero: string;
   operador_nombre: string;
   excede_tanque: boolean;
+  is_conciliated?: boolean;
 }
 
 const FuelLoads = () => {
+  // 🚀 INYECTAMOS USTRIPS PARA EL BLINDAJE
+  const { trips } = useTrips();
+
   const [units, setUnits] = useState<Unit[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [cargas, setCargas] = useState<FuelLoadDisplay[]>([]);
@@ -96,12 +103,10 @@ const FuelLoads = () => {
   const [idParaEliminar, setIdParaEliminar] = useState<number | null>(null);
 
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
-  // 👇 ESTADO PARA EL BUSCADOR
   const [openUnitSearch, setOpenUnitSearch] = useState(false);
 
   const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
 
-  // NUEVOS ESTADOS PARA FILTROS EN "HISTÓRICO"
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [selectedStation, setSelectedStation] = useState<string>("all");
 
@@ -138,6 +143,7 @@ const FuelLoads = () => {
           operador_nombre:
             item.operator?.name || item.operator?.nombre || "N/A",
           excede_tanque: Number(item.litros) > Number(capacity),
+          is_conciliated: Boolean(item.is_conciliated),
         };
       });
       setCargas(normalizedFuel);
@@ -209,17 +215,14 @@ const FuelLoads = () => {
     }
   };
 
-  // Extraer estaciones únicas para el dropdown de filtro
   const estacionesUnicas = useMemo(() => {
     const ests = cargas.map((c) => c.estacion || "No especificada");
     return Array.from(new Set(ests)).sort();
   }, [cargas]);
 
-  // LOGICA MAESTRA DE FILTROS: Unidad + Fecha (Hoy/Historico) + Rango Fechas + Estación
   const filteredCargas = useMemo(() => {
     let filtered = cargas;
 
-    // 1. Filtro por Unidad (Aplica a ambas pestañas)
     if (selectedUnitId !== "all") {
       filtered = filtered.filter((c) => String(c.unit_id) === selectedUnitId);
     }
@@ -227,17 +230,14 @@ const FuelLoads = () => {
     const hoyStr = new Date().toLocaleDateString("es-MX");
 
     if (dateFilter === "hoy") {
-      // 2. Filtro Pestaña: Solo los de hoy
       filtered = filtered.filter(
         (c) => new Date(c.fecha_hora).toLocaleDateString("es-MX") === hoyStr,
       );
     } else {
-      // 3. Filtro Pestaña: Todo lo que NO sea hoy
       filtered = filtered.filter(
         (c) => new Date(c.fecha_hora).toLocaleDateString("es-MX") !== hoyStr,
       );
 
-      // 4. Filtros adicionales SOLO para histórico
       if (dateRange?.from) {
         const fromDate = new Date(dateRange.from);
         fromDate.setHours(0, 0, 0, 0);
@@ -307,12 +307,33 @@ const FuelLoads = () => {
     }
   };
 
+  const ticketToDelete = useMemo(
+    () => cargas.find((c) => c.id === idParaEliminar),
+    [cargas, idParaEliminar],
+  );
+
+  // 🚀 LÓGICA DE BLINDAJE
+  const getTicketTripStatus = useCallback(
+    (tripId: number | string | null | undefined) => {
+      if (!tripId) return { isLiquidado: false };
+      const trip = trips.find((t) => String(t.id) === String(tripId));
+      if (!trip) return { isLiquidado: false };
+
+      const isLiquidado =
+        trip.status === "liquidado" ||
+        trip.legs?.some((l) => l.status === "liquidado");
+
+      return { isLiquidado: !!isLiquidado };
+    },
+    [trips],
+  );
+
   const columns: ColumnDef<FuelLoadDisplay>[] = useMemo(
     () => [
       {
         key: "fecha_hora",
         header: "Fecha",
-        type: "date", // 👇 AHORA ES TIPO FECHA
+        type: "date",
         render: (v) => (
           <div className="flex flex-col font-mono">
             <span className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-[11px]">
@@ -376,11 +397,16 @@ const FuelLoads = () => {
       {
         key: "trip_id",
         header: "Viaje / Conciliación",
-        render: (v) =>
+        render: (v, row) =>
           v ? (
-            <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 shadow-none text-[10px] font-mono">
-              TRP-{v}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 shadow-none text-[10px] font-mono">
+                TRP-{v}
+              </Badge>
+              {row.is_conciliated && (
+                <Lock className="h-3 w-3 text-emerald-500" />
+              )}
+            </div>
           ) : (
             <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
               Patio / Sin Viaje
@@ -466,7 +492,25 @@ const FuelLoads = () => {
                 Detalles
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => setCargaToEdit(row)}
+                onClick={() => {
+                  const { isLiquidado } = getTicketTripStatus(row.trip_id);
+                  if (isLiquidado) {
+                    toast.error("Bloqueo de Seguridad", {
+                      description:
+                        "No se puede editar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación.",
+                      duration: 6000,
+                    });
+                    return;
+                  }
+                  if (row.is_conciliated) {
+                    toast.warning("⚠️ Vale Previamente Conciliado", {
+                      description:
+                        "Al editar este vale, los cálculos de dinero y odómetro quedarán desfasados. Deberás ir a la pestaña de Auditoría y hacer el recalculo.",
+                      duration: 8000,
+                    });
+                  }
+                  setCargaToEdit(row);
+                }}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
                 <Pencil className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
@@ -475,7 +519,18 @@ const FuelLoads = () => {
               <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
                 className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-                onClick={() => setIdParaEliminar(row.id)}
+                onClick={() => {
+                  const { isLiquidado } = getTicketTripStatus(row.trip_id);
+                  if (isLiquidado) {
+                    toast.error("Bloqueo de Seguridad", {
+                      description:
+                        "No se puede eliminar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación para poder eliminarlo.",
+                      duration: 6000,
+                    });
+                    return;
+                  }
+                  setIdParaEliminar(row.id);
+                }}
               >
                 <Trash2 className="h-4 w-4" /> Eliminar
               </DropdownMenuItem>
@@ -484,7 +539,7 @@ const FuelLoads = () => {
         ),
       },
     ],
-    [],
+    [getTicketTripStatus],
   );
 
   if (isLoading)
@@ -509,7 +564,6 @@ const FuelLoads = () => {
         />
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* 👇 AQUÍ EMPIEZA EL NUEVO BUSCADOR AVANZADO */}
           <Popover open={openUnitSearch} onOpenChange={setOpenUnitSearch}>
             <PopoverTrigger asChild>
               <Button
@@ -596,7 +650,6 @@ const FuelLoads = () => {
               </Command>
             </PopoverContent>
           </Popover>
-          {/* 👆 AQUÍ TERMINA EL NUEVO BUSCADOR */}
 
           <Button
             onClick={() => setIsModalOpen(true)}
@@ -743,7 +796,6 @@ const FuelLoads = () => {
                 customFilters={
                   dateFilter === "historico" && (
                     <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
-                      {/* Filtro de Columna: Estación */}
                       <Select
                         value={selectedStation}
                         onValueChange={setSelectedStation}
@@ -767,7 +819,6 @@ const FuelLoads = () => {
                         </SelectContent>
                       </Select>
 
-                      {/* Filtro de Fechas (Usando DateRangePicker Tahoe) */}
                       <DateRangePicker
                         dateRange={dateRange}
                         onDateRangeChange={setDateRange}
@@ -775,7 +826,6 @@ const FuelLoads = () => {
                         className="w-[280px]"
                       />
 
-                      {/* Botón limpiar filtros */}
                       {(dateRange?.from ||
                         dateRange?.to ||
                         selectedStation !== "all") && (
@@ -850,19 +900,42 @@ const FuelLoads = () => {
 
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Esta acción es irreversible y afectará el historial de
-                rendimiento de la unidad ECO-
-                <span className="text-slate-900 dark:text-white font-black ml-1">
-                  {cargas.find((c) => c.id === idParaEliminar)?.unidad_numero}
-                </span>
-                .
-              </p>
+              {/* 🚀 ALERTA DE REVERSIÓN DE CONCILIACIÓN */}
+              {ticketToDelete?.is_conciliated ? (
+                <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                      Atención: Vale Auditado
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                    Este vale ya fue procesado en la mesa de control{" "}
+                    <b>(Conciliación)</b>. Al eliminarlo, los cálculos
+                    financieros y de odómetro del viaje quedarán desfasados.
+                    <br />
+                    <br />
+                    Deberás ir a la pestaña de Auditoría, <b>Revertir</b> la
+                    fase del viaje afectado y hacer el recálculo completo de
+                    nuevo.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Esta acción es irreversible y afectará el historial de
+                  rendimiento de la unidad ECO-
+                  <span className="text-slate-900 dark:text-white font-black ml-1">
+                    {ticketToDelete?.unidad_numero}
+                  </span>
+                  .
+                </p>
+              )}
+
               <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                   <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Confirmación
+                    Confirmación de Eliminación
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">

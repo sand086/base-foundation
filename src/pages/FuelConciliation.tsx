@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 import {
   Select,
   SelectContent,
@@ -65,6 +68,7 @@ import {
   Truck,
   Calendar,
   User,
+  FilterX,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -120,7 +124,11 @@ export default function FuelConciliation() {
   const [isEditing, setIsEditing] = useState(false);
   const [cobrarOperador, setCobrarOperador] = useState(true);
 
-  // 1. FILTRADO DE HISTÓRICOS
+  // 🚀 NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
+  const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  // 1. FILTRADO BASE DE HISTÓRICOS
   const auditedLegs = useMemo(() => {
     return trips
       .flatMap((t) => t.legs?.map((l) => ({ ...l, trip: t })) || [])
@@ -132,12 +140,46 @@ export default function FuelConciliation() {
       );
   }, [trips]);
 
+  // 🚀 2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
+  const filteredAuditedLegs = useMemo(() => {
+    let filtered = auditedLegs;
+    const hoyStr = new Date().toLocaleDateString("es-MX");
+
+    if (dateFilter === "hoy") {
+      filtered = filtered.filter(
+        (l) =>
+          new Date(l.last_update || 0).toLocaleDateString("es-MX") === hoyStr,
+      );
+    } else {
+      filtered = filtered.filter(
+        (l) =>
+          new Date(l.last_update || 0).toLocaleDateString("es-MX") !== hoyStr,
+      );
+
+      if (dateRange?.from) {
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(
+          (l) => new Date(l.last_update || 0) >= fromDate,
+        );
+      }
+      if (dateRange?.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(
+          (l) => new Date(l.last_update || 0) <= toDate,
+        );
+      }
+    }
+    return filtered;
+  }, [auditedLegs, dateFilter, dateRange]);
+
   // Selección Activa
   const activeTrip = useMemo(() => {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
-  // 2. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
+  // 3. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
   const tripLegs = useMemo(() => {
     if (!activeTrip || !activeTrip.legs) return [];
     return activeTrip.legs.filter((leg) => {
@@ -265,7 +307,6 @@ export default function FuelConciliation() {
 
   //   REPARACIÓN DEL EDITAR
   const handleEditAudit = async (leg: any) => {
-    // Al setear estos IDs, los Selects los agarran gracias a la lista blanca modificada
     setSelectedTripId(String(leg.trip_id));
     setSelectedLegId(String(leg.id));
     setIsEditing(true);
@@ -338,7 +379,6 @@ export default function FuelConciliation() {
     const rendimientoECM = litrosECM > 0 ? kmECM / litrosECM : 0;
     const rendimientoReal = litrosVales > 0 ? kmECM / litrosVales : 0;
 
-    // 👇 SOLUCIÓN GUSTAVO: Vales (Físico) - ECM (Computadora)
     const diferenciaLitros = litrosVales - litrosECM;
     const toleranciaPermitida = litrosECM * TOLERANCIA_FIJA;
 
@@ -347,7 +387,6 @@ export default function FuelConciliation() {
     let descuentoPesos = 0;
     let mensajeDeduccion = "";
 
-    // Si la diferencia es positiva y excede la tolerancia del 3%
     if (diferenciaLitros > 0 && diferenciaLitros > toleranciaPermitida) {
       estatus = "COBRO_OPERADOR";
       esRoboSospechado = true;
@@ -393,7 +432,7 @@ export default function FuelConciliation() {
   };
 
   // =========================================================================
-  //   GUARDAR Y APLICAR SANCIÓN AL BACKEND (CORREGIDO STATUS "EN CURSO")
+  //   GUARDAR Y APLICAR SANCIÓN AL BACKEND
   // =========================================================================
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
@@ -418,11 +457,11 @@ export default function FuelConciliation() {
       const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
 
       const payload = {
-        status: "entregado", //   ESTO ARREGLA EL BUG QUE LO REGRESABA A "EN CURSO"
+        status: "entregado",
         location: "Conciliación de Combustible",
         comments: comentarioBitacora.trim(),
         odometro: Number(formData.odometroFinal),
-        odometro_final: Number(formData.odometroFinal), // 🚀 FIX QUIRÚRGICO: Este es el que el backend debe guardar en trip_legs
+        odometro_final: Number(formData.odometroFinal),
         combustible_litros: Number(vales),
         trip_leg_id: Number(selectedLegId),
         penalizacion_monto: cobrarOperador ? auditResult.descuentoPesos : 0,
@@ -562,6 +601,7 @@ export default function FuelConciliation() {
         header: "",
         sortable: false,
         render: (_, row) => {
+          // 🚀 BLINDAJE: Detectar si el viaje ya fue pagado
           const isLiquidado = row.status === "liquidado";
 
           return (
@@ -590,24 +630,43 @@ export default function FuelConciliation() {
                   Detalles
                 </DropdownMenuItem>
 
-                {!isLiquidado && (
-                  <>
-                    <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
-                    <DropdownMenuItem
-                      onClick={() => handleEditAudit(row)}
-                      className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                    >
-                      <Pencil className="h-3.5 w-3.5 mr-2" /> Editar /
-                      Recalcular
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
-                      onClick={() => setLegToReset(String(row.id))}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Registro
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
+
+                {/* 🚀 EDITAR (Protegido) */}
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (isLiquidado) {
+                      toast.error("Bloqueo de Seguridad", {
+                        description:
+                          "No se puede editar la conciliación de un viaje liquidado. Primero cancela la liquidación en Tesorería.",
+                        duration: 6000,
+                      });
+                      return;
+                    }
+                    handleEditAudit(row);
+                  }}
+                  className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> Editar / Recalcular
+                </DropdownMenuItem>
+
+                {/* 🚀 ELIMINAR (Protegido) */}
+                <DropdownMenuItem
+                  className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
+                  onClick={() => {
+                    if (isLiquidado) {
+                      toast.error("Bloqueo de Seguridad", {
+                        description:
+                          "No se puede revertir la conciliación de un viaje liquidado. Primero cancela la liquidación en Tesorería.",
+                        duration: 6000,
+                      });
+                      return;
+                    }
+                    setLegToReset(String(row.id));
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Registro
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -687,7 +746,6 @@ export default function FuelConciliation() {
 
                       if (estatusValidos.includes(tripStatus)) return true;
 
-                      //   EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos listos, ¡muéstralo!
                       const tieneTramosListos = t.legs?.some((leg) =>
                         estatusValidos.includes(
                           String(leg.status ?? "").toLowerCase(),
@@ -796,13 +854,61 @@ export default function FuelConciliation() {
                 Historial de Auditorías
               </h3>
             </div>
+
+            {/* 🚀 NUEVO: Pestañas de Hoy / Histórico */}
+            <div className="flex items-center pb-2">
+              <Tabs
+                value={dateFilter}
+                onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
+                className="w-[300px]"
+              >
+                <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
+                  <TabsTrigger
+                    value="hoy"
+                    className="rounded-lg font-bold text-xs"
+                  >
+                    Hoy
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="historico"
+                    className="rounded-lg font-bold text-xs"
+                  >
+                    Histórico
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
             <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
               <CardContent className="p-0">
                 <EnhancedDataTable
-                  data={auditedLegs}
+                  data={filteredAuditedLegs} // 🚀 Usamos la tabla filtrada
                   columns={auditedColumns as any}
                   className="border-none"
                   searchPlaceholder="Buscar por folio o operador..."
+                  customFilters={
+                    dateFilter === "historico" && (
+                      <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <DateRangePicker
+                          dateRange={dateRange}
+                          onDateRangeChange={setDateRange}
+                          placeholder="Rango de fechas"
+                          className="w-[280px]"
+                        />
+                        {dateRange?.from && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDateRange(undefined)}
+                            className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
+                            title="Limpiar fechas"
+                          >
+                            <FilterX size={18} />
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  }
                 />
               </CardContent>
             </Card>
