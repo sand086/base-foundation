@@ -54,6 +54,79 @@ logger = logging.getLogger("billing.audit")
 
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
 
+# =========================================================
+# 🚀 FIX: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
+# =========================================================
+SAT_ESTADOS_MAP = {
+    "01": "AGU",
+    "1": "AGU",
+    "02": "BCN",
+    "2": "BCN",
+    "03": "BCS",
+    "3": "BCS",
+    "04": "CAM",
+    "4": "CAM",
+    "05": "COA",
+    "5": "COA",
+    "06": "COL",
+    "6": "COL",
+    "07": "CHP",
+    "7": "CHP",
+    "08": "CHH",
+    "8": "CHH",
+    "09": "CMX",
+    "9": "CMX",  # <--- Culpable
+    "10": "DUR",
+    "11": "GUA",
+    "12": "GRO",
+    "13": "HID",
+    "14": "JAL",
+    "15": "MEX",  # Estado de México
+    "16": "MIC",
+    "17": "MOR",
+    "18": "NAY",
+    "19": "NLE",
+    "20": "OAX",
+    "21": "PUE",
+    "22": "QUE",
+    "23": "ROO",
+    "24": "SLP",
+    "25": "SIN",
+    "26": "SON",
+    "27": "TAB",
+    "28": "TAM",
+    "29": "TLA",
+    "30": "VER",
+    "31": "YUC",
+    "32": "ZAC",
+    "DIF": "CMX",
+    "CDMX": "CMX",
+}
+
+
+def normalizar_estado_sat(estado: str) -> str:
+    """
+    Recibe un estado numérico (ej. '09') y devuelve la clave de 3 letras válida para el SAT ('CMX').
+    """
+    if not estado:
+        return ""
+    estado_str = str(estado).strip().upper()
+
+    if len(estado_str) == 3 and estado_str in SAT_ESTADOS_MAP.values():
+        resultado = estado_str
+    else:
+        resultado = SAT_ESTADOS_MAP.get(estado_str, estado_str)
+
+    # 🚀 SI ESTE PRINT NO SALE EN TU CONSOLA, TU SERVIDOR NO SE HA REINICIADO
+    print(
+        f"🚀 [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
+    )
+
+    return resultado
+
+
+# =========================================================
+
 
 def _clean_float(val) -> float:
     if val is None:
@@ -302,7 +375,8 @@ class BillingService:
             .first()
         )
         if loc_emisor:
-            self.emisor_estado = loc_emisor.estado_clave
+            # 🚀 FIX QUIRÚRGICO: Normalizamos el estado de la empresa
+            self.emisor_estado = normalizar_estado_sat(loc_emisor.estado_clave)
             self.emisor_municipio = str(loc_emisor.municipio_clave).zfill(3)
         else:
             raise HTTPException(
@@ -465,7 +539,8 @@ class BillingService:
             .first()
         )
         if loc_destino:
-            estado_dest = loc_destino.estado_clave
+            # 🚀 FIX QUIRÚRGICO: Normalizamos el estado de destino
+            estado_dest = normalizar_estado_sat(loc_destino.estado_clave)
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
             nombre_lugar = (

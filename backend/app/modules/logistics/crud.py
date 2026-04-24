@@ -87,9 +87,6 @@ def create_trip(db: Session, trip: schemas.TripCreate):
         db.add(db_trip)
         db.flush()
 
-        unit_ids_to_block = []
-        operator_ids_to_block = []
-
         # ==========================================
         # CREACIÓN DEL TRAMO 1 (PIERNA INICIAL)
         # ==========================================
@@ -121,18 +118,6 @@ def create_trip(db: Session, trip: schemas.TripCreate):
             )
             db.add(db_leg_1)
 
-            # Acumulamos recursos para bloquear solo si el viaje ya arrancó ("en_transito")
-            if db_trip.status == "en_transito":
-                unit_ids_to_block.extend(
-                    [
-                        leg_data.unit_id,
-                        db_trip.remolque_1_id,
-                        db_trip.dolly_id,
-                        db_trip.remolque_2_id,
-                    ]
-                )
-                operator_ids_to_block.append(leg_data.operator_id)
-
         # ==========================================
         # CREACIÓN DEL TRAMO 2 (MOTOR DUAL - OPCIONAL)
         # ==========================================
@@ -158,36 +143,7 @@ def create_trip(db: Session, trip: schemas.TripCreate):
             )
             db.add(db_leg_2)
 
-            # Nota: Los recursos del Tramo 2 (Tracto 2 y Chofer 2) NO se bloquean como "EN_RUTA"
-            # todavía, porque ellos físicamente aún no están operando.
-
-        # ==========================================
-        # BLOQUEO FÍSICO DE RECURSOS
-        # ==========================================
-        valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
-        if valid_unit_ids:
-            units = (
-                db.query(models.Unit)
-                .filter(
-                    models.Unit.id.in_(valid_unit_ids),
-                    models.Unit.record_status != RecordStatus.ELIMINADO,
-                )
-                .all()
-            )
-            for u in units:
-                u.status = models.UnitStatus.EN_RUTA
-                db.add(u)
-
-        valid_operator_ids = [oid for oid in operator_ids_to_block if oid is not None]
-        if valid_operator_ids:
-            operators = (
-                db.query(models.Operator)
-                .filter(models.Operator.id.in_(valid_operator_ids))
-                .all()
-            )
-            for o in operators:
-                o.status = models.OperatorStatus.EN_RUTA
-                db.add(o)
+        # 🚀 LIBERADO: Ya no bloqueamos recursos para permitir múltiple asignación
 
         db.commit()
         db.refresh(db_trip)
@@ -253,33 +209,7 @@ def update_trip_status(
         if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
             trip.actual_arrival = datetime.utcnow()
 
-        # 💡 LIBERACIÓN DE UNIDADES INTELIGENTE
-        # Solo liberamos chasis y dolly si el viaje se terminó (fase vacía completada)
-        if trip.status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
-            unit_ids_to_free = [
-                active_leg.unit_id if active_leg else None,
-                trip.remolque_1_id,
-                trip.dolly_id,
-                trip.remolque_2_id,
-            ]
-        else:
-            # Si el viaje maestro sigue en tránsito (ej. solo terminó la fase carretera),
-            # SOLO liberamos el tractocamión. ¡Los remolques siguen amarrados al viaje!
-            unit_ids_to_free = [active_leg.unit_id if active_leg else None]
-
-        valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
-
-        if valid_unit_ids:
-            units = (
-                db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).all()
-            )
-            for u in units:
-                u.status = models.UnitStatus.DISPONIBLE
-                db.add(u)
-
-        if active_leg and active_leg.operator:
-            active_leg.operator.status = models.OperatorStatus.ACTIVO
-            db.add(active_leg.operator)
+        # 🚀 LIBERADO: Eliminamos la lógica que forzaba a unidades y operadores a pasar a DISPONIBLE o ACTIVO
 
     if active_leg:
         event = models.TripTimelineEvent(
@@ -306,21 +236,7 @@ def update_trip(db: Session, trip_id: int, trip_update_data: dict):
         if hasattr(db_trip, key):
             setattr(db_trip, key, value)
 
-    # 2. 🧩 LA PIEZA FALTANTE: Bloquear los remolques que se acaban de asignar
-    unit_ids_to_block = []
-    if "remolque_1_id" in trip_update_data and trip_update_data["remolque_1_id"]:
-        unit_ids_to_block.append(trip_update_data["remolque_1_id"])
-    if "dolly_id" in trip_update_data and trip_update_data["dolly_id"]:
-        unit_ids_to_block.append(trip_update_data["dolly_id"])
-    if "remolque_2_id" in trip_update_data and trip_update_data["remolque_2_id"]:
-        unit_ids_to_block.append(trip_update_data["remolque_2_id"])
-
-    # Si vienen IDs en el payload, los pasamos a EN_RUTA
-    if unit_ids_to_block:
-        db.query(models.Unit).filter(
-            models.Unit.id.in_(unit_ids_to_block),
-            models.Unit.record_status != RecordStatus.ELIMINADO,
-        ).update({"status": models.UnitStatus.EN_RUTA}, synchronize_session=False)
+    # 🚀 LIBERADO: Se eliminó el bloqueo forzoso de remolques que ocurría aquí.
 
     db.commit()
     db.refresh(db_trip)
@@ -344,29 +260,7 @@ def delete_trip(db: Session, trip_id: str):
     if not trip:
         return False
 
-    unit_ids_to_free = [trip.remolque_1_id, trip.dolly_id, trip.remolque_2_id]
-    operator_ids_to_free = []
-
-    for leg in trip.legs:
-        if leg.unit_id:
-            unit_ids_to_free.append(leg.unit_id)
-        if leg.operator_id:
-            operator_ids_to_free.append(leg.operator_id)
-
-    unit_ids_to_free = list(set([uid for uid in unit_ids_to_free if uid is not None]))
-    operator_ids_to_free = list(
-        set([oid for oid in operator_ids_to_free if oid is not None])
-    )
-
-    if unit_ids_to_free:
-        db.query(models.Unit).filter(models.Unit.id.in_(unit_ids_to_free)).update(
-            {"status": models.UnitStatus.DISPONIBLE}, synchronize_session=False
-        )
-
-    if operator_ids_to_free:
-        db.query(models.Operator).filter(
-            models.Operator.id.in_(operator_ids_to_free)
-        ).update({"status": models.OperatorStatus.ACTIVO}, synchronize_session=False)
+    # 🚀 LIBERADO: Eliminada la lógica de desvincular estatus de unidades y operadores
 
     trip.record_status = RecordStatus.ELIMINADO
     for leg in trip.legs:
@@ -417,24 +311,7 @@ def add_timeline_event(
         # Si es entrega_vacio o es la última fase del viaje, cerramos el viaje.
         if (active_leg and active_leg.leg_type == "entrega_vacio") or is_last_leg:
             trip.status = "entregado"
-
-            # 💡 LIBERAR UNIDADES AUTOMÁTICAMENTE PARA QUE NO QUEDEN "EN TRÁNSITO"
-            unit_ids_to_free = [
-                active_leg.unit_id if active_leg else None,
-                trip.remolque_1_id,
-                trip.dolly_id,
-                trip.remolque_2_id,
-            ]
-            valid_unit_ids = [uid for uid in unit_ids_to_free if uid is not None]
-            if valid_unit_ids:
-                db.query(models.Unit).filter(models.Unit.id.in_(valid_unit_ids)).update(
-                    {"status": "disponible"}, synchronize_session=False
-                )
-
-            if active_leg and active_leg.operator_id:
-                db.query(models.Operator).filter(
-                    models.Operator.id == active_leg.operator_id
-                ).update({"status": "activo"}, synchronize_session=False)
+            # 🚀 LIBERADO: Eliminada la lógica que forzaba DISPONIBLE y ACTIVO aquí
         else:
             trip.status = "en_transito"
     else:
@@ -514,7 +391,7 @@ def add_timeline_event(
             event_time=fecha_str,
             comentario=(
                 payload.comments if payload.comments else "Sin comentarios adicionales"
-            ),  # 🔥 AQUÍ ESTÁ LA SOLUCIÓN
+            ),
         )
 
     db.commit()
@@ -790,25 +667,7 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
             last_leg.actual_arrival = datetime.utcnow()
             last_leg.last_update = datetime.utcnow()
 
-            if last_leg.unit_id:
-                old_unit = (
-                    db.query(models.Unit)
-                    .filter(models.Unit.id == last_leg.unit_id)
-                    .first()
-                )
-                if old_unit:
-                    old_unit.status = models.UnitStatus.DISPONIBLE
-                    db.add(old_unit)
-
-            if last_leg.operator_id:
-                old_op = (
-                    db.query(models.Operator)
-                    .filter(models.Operator.id == last_leg.operator_id)
-                    .first()
-                )
-                if old_op:
-                    old_op.status = models.OperatorStatus.ACTIVO
-                    db.add(old_op)
+            # 🚀 LIBERADO: Removido el force a DISPONIBLE/ACTIVO del tramo anterior
 
             db_event = models.TripTimelineEvent(
                 trip_leg_id=last_leg.id,
@@ -838,23 +697,7 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
     db.add(new_leg)
     db.flush()
 
-    if payload.unit_id:
-        new_unit = (
-            db.query(models.Unit).filter(models.Unit.id == payload.unit_id).first()
-        )
-        if new_unit:
-            new_unit.status = models.UnitStatus.EN_RUTA
-            db.add(new_unit)
-
-    if payload.operator_id:
-        new_op = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == payload.operator_id)
-            .first()
-        )
-        if new_op:
-            new_op.status = models.OperatorStatus.EN_RUTA
-            db.add(new_op)
+    # 🚀 LIBERADO: Removido el force a EN_RUTA de la nueva unidad
 
     trip.status = models.TripStatus.EN_TRANSITO
     trip.last_update = datetime.utcnow()
@@ -946,7 +789,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
         cxc_creadas = 0
 
         for trip in trips_to_check:
-            # 1. EVALUACIÓN DE CIERRE DE VIAJE (Liberación de recursos)
+            # 1. EVALUACIÓN DE CIERRE DE VIAJE
             all_completed = all(
                 l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
             )
@@ -954,40 +797,9 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
             if all_completed and trip.status not in ["cerrado", "liquidado"]:
                 trip.status = "cerrado"
                 trip.closed_at = func.now()
-
-                # LIBERAR RECURSOS (UNIDADES Y OPERADORES) AL TERMINAR EL VIAJE
-                unit_ids_to_free = [
-                    trip.remolque_1_id,
-                    trip.dolly_id,
-                    trip.remolque_2_id,
-                ]
-                operator_ids_to_free = []
-
-                for l in trip.legs:
-                    if l.unit_id:
-                        unit_ids_to_free.append(l.unit_id)
-                    if l.operator_id:
-                        operator_ids_to_free.append(l.operator_id)
-
-                unit_ids_to_free = list(
-                    set([uid for uid in unit_ids_to_free if uid is not None])
-                )
-                operator_ids_to_free = list(
-                    set([oid for oid in operator_ids_to_free if oid is not None])
-                )
-
-                if unit_ids_to_free:
-                    db.query(models.Unit).filter(
-                        models.Unit.id.in_(unit_ids_to_free)
-                    ).update({"status": "disponible"}, synchronize_session=False)
-
-                if operator_ids_to_free:
-                    db.query(models.Operator).filter(
-                        models.Operator.id.in_(operator_ids_to_free)
-                    ).update({"status": "activo"}, synchronize_session=False)
+                # 🚀 LIBERADO: Eliminamos la liberación forzada de unidades aquí.
 
             # 2. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
-            # 🔧 AQUÍ ESTÁ EL FIX APLICADO:
             carretera_liquidada = any(
                 (
                     l.leg_type == "ruta_carretera"
@@ -999,7 +811,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
             )
 
             if carretera_liquidada:
-                # 1. BUSCAMOS SI YA EXISTE LA FACTURA FINAL
+                # 🚀 FIX CRÍTICO ANTI-DUPLICADOS (RACE CONDITION)
                 existing_cxc = (
                     db.query(models.ReceivableInvoice)
                     .filter(
@@ -1008,6 +820,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         != RecordStatus.ELIMINADO,
                         models.ReceivableInvoice.is_nominal == False,
                     )
+                    .with_for_update()
                     .first()
                 )
 
@@ -1039,23 +852,12 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
                     uuid_relacionado = None
                     if cp_nominal and cp_nominal.uuid:
-                        # Extraemos el UUID de la Carta Porte que viajó en carretera
                         uuid_relacionado = cp_nominal.uuid
-
-                        # ⚠️ TRIGGER DE CANCELACIÓN:
-                        # Lo mandamos a la cola de tu función 'procesar_cancelaciones_pendientes'
-                        # en el billing_service.py para que se cancele en background.
                         cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
-
-                        # Motivo de Cancelación SAT:
-                        # 01 - Comprobantes emitidos con errores con relación (Pide el UUID nuevo)
-                        # 04 - Relación directa de sustitución (Depende de tu PAC).
-                        # Usaremos "01" que es el estándar actual del SAT para sustituir.
                         cp_nominal.motivo_cancelacion = "01"
                         db.add(cp_nominal)
                     # =========================================================
 
-                    # CREAMOS LA CXC FINAL (LA CHIDA)
                     nueva_cxc = models.ReceivableInvoice(
                         client_id=trip.client_id,
                         sub_client_id=trip.sub_client_id,
@@ -1069,16 +871,15 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         saldo_pendiente=monto_total,
                         fecha_emision=date.today(),
                         fecha_vencimiento=date.today() + timedelta(days=dias_credito),
-                        estatus=models.InvoiceStatus.PENDIENTE,  # Estatus Financiero
+                        estatus=models.InvoiceStatus.PENDIENTE,
                         metodo_pago="PPD",
                         tipo_comprobante="I",
                         is_nominal=False,
-                        # 🔗 EL ENLACE VITAL PARA QUE TU BILLING_SERVICE INYECTE EL NODO 04:
                         uuid_relacionado=uuid_relacionado,
-                        status_sat="PROVISIONAL",  # Nace sin timbrar para proteger el flujo
+                        status_sat="PROVISIONAL",
                     )
                     db.add(nueva_cxc)
-                    db.flush()
+                    db.flush()  # 🚀 FIX: Escribe inmediatamente antes de soltar el candado de la BD
                     cxc_creadas += 1
 
         db.commit()
@@ -1089,10 +890,8 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
         }
 
     except Exception as e:
-        # SI ALGO FALLA: Deshacemos todo lo que intentó guardar en la memoria
         db.rollback()
         logger.error(f"Falla crítica al liquidar lote: {str(e)}")
-        # Levantamos el error para que el Frontend reciba un 500 y no un falso "éxito"
         raise e
 
 
@@ -1132,7 +931,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         ):
             distancia = float(leg.odometro_final - leg.odometro_inicial)
         else:
-            #   BLINDAJE CONTRA NULLS EN DISTANCIA
             dist_tarifa = (
                 leg.trip.tariff.distancia_km if leg.trip and leg.trip.tariff else 0.0
             )
@@ -1161,13 +959,11 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
                 legs_sin_ticket.append(leg.id)
 
             for f in fuel_logs_activos:
-                #   BLINDAJE CONTRA NULLS EN COMBUSTIBLE
                 lts = float(f.litros or 0.0)
                 precio = float(f.precio_por_litro or 24.50)
                 total_real_liters += lts
                 total_fuel_cost += lts * precio
 
-    # Calculamos el precio promedio
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
     )
@@ -1176,7 +972,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
     deduccion_combustible = 0.0
 
     for leg in legs:
-        #   BLINDAJE CONTRA NULLS EN AUDITORÍA
         penalizacion = getattr(leg, "monto_penalizaciones", 0.0)
         if penalizacion and float(penalizacion) > 0:
             deduccion_combustible += float(penalizacion)
@@ -1193,7 +988,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             if is_conciliated and diferencia and float(diferencia) > 0:
                 diferencia_litros_total += float(diferencia)
 
-    #   BLINDAJE CONTRA NULLS EN SUELDO
     sueldo_operador_pactado = 0.0
     if legs and legs[0].trip:
         trip_padre = legs[0].trip
@@ -1257,19 +1051,7 @@ def undo_last_leg(db: Session, trip_id: str):
 
     current_leg = trip.legs[-1]
 
-    if current_leg.unit_id:
-        u = db.query(models.Unit).filter(models.Unit.id == current_leg.unit_id).first()
-        if u:
-            u.status = models.UnitStatus.DISPONIBLE
-    if current_leg.operator_id:
-        o = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == current_leg.operator_id)
-            .first()
-        )
-        if o:
-            o.status = models.OperatorStatus.ACTIVO
-
+    # 🚀 FIX: Soft Delete en lugar de borrado físico para evitar errores de integridad (Crashes 500)
     current_leg.record_status = RecordStatus.ELIMINADO
     db.add(current_leg)
 
@@ -1277,24 +1059,6 @@ def undo_last_leg(db: Session, trip_id: str):
         previous_leg = trip.legs[-2]
         previous_leg.status = models.TripStatus.EN_TRANSITO
         previous_leg.actual_arrival = None
-
-        if previous_leg.unit_id:
-            pu = (
-                db.query(models.Unit)
-                .filter(models.Unit.id == previous_leg.unit_id)
-                .first()
-            )
-            if pu:
-                pu.status = models.UnitStatus.EN_RUTA
-        if previous_leg.operator_id:
-            po = (
-                db.query(models.Operator)
-                .filter(models.Operator.id == previous_leg.operator_id)
-                .first()
-            )
-            if po:
-                po.status = models.OperatorStatus.EN_RUTA
-
         trip.status = models.TripStatus.EN_TRANSITO
     else:
         trip.status = models.TripStatus.CREADO
@@ -1322,15 +1086,10 @@ def reset_leg_audit(db: Session, leg_id: int):
     leg.odometro_final = None
     leg.monto_penalizaciones = 0.0
 
-    # ---------------------------------------------------------
-    # NUEVO: Liberamos los vales de combustible para que puedan
-    # volver a ser auditados si se equivocaron.
-    # ---------------------------------------------------------
     db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == leg.id).update(
         {"is_conciliated": False}, synchronize_session=False
     )
 
-    # Registramos en la bitácora que la auditoría fue anulada
     event = models.TripTimelineEvent(
         trip_leg_id=leg.id,
         time=datetime.utcnow(),
@@ -1363,45 +1122,25 @@ def unhook_in_yard(db: Session, trip_id: str):
     if active_leg.status in ["entregado", "cerrado", "liquidado"]:
         raise ValueError("Este tramo ya está cerrado o entregado.")
 
-    # REGLA DE GUSTAVO: Solo se puede desenganchar en la Fase 1 (Carga Patio/Muelle)
     if active_leg.leg_type != "carga_muelle":
         raise ValueError(
             "Solo se permite desenganchar viajes que están en fase de Carga en Patio/Muelle."
         )
 
-    # 1. Liberamos SOLO Tractocamión y Operador.
-    # (El Remolque 1, Dolly y Remolque 2 siguen atados al `Trip` maestro)
-    if active_leg.unit_id:
-        tracto = (
-            db.query(models.Unit).filter(models.Unit.id == active_leg.unit_id).first()
-        )
-        if tracto:
-            tracto.status = models.UnitStatus.DISPONIBLE
+    # 🚀 LIBERADO: Eliminamos la liberación forzada de recursos (tractor y chofer)
 
-    if active_leg.operator_id:
-        op = (
-            db.query(models.Operator)
-            .filter(models.Operator.id == active_leg.operator_id)
-            .first()
-        )
-        if op:
-            op.status = models.OperatorStatus.ACTIVO
-
-    # 2. Marcamos el tramo local como completado
+    # Marcamos el tramo local como completado
     active_leg.status = models.TripStatus.ENTREGADO
     active_leg.actual_arrival = datetime.utcnow()
     active_leg.last_update = datetime.utcnow()
 
-    # 3. Ponemos el Viaje en estado DETENIDO (o un estado custom) para que el despachador
-    # sepa que está en patio esperando asignación de carretera
     trip.status = models.TripStatus.DETENIDO
     trip.last_update = datetime.utcnow()
 
-    # 4. Dejamos el registro en la Bitácora
     db_event = models.TripTimelineEvent(
         trip_leg_id=active_leg.id,
         time=datetime.utcnow(),
-        event="Desenganche en patio. Operador y Tractocamión liberados. Carga en espera de asignación de carretera.",
+        event="Desenganche en patio. Carga en espera de asignación de carretera.",
         event_type="info",
         location="Patio de Operaciones",
     )

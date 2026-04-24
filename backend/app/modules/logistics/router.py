@@ -757,7 +757,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 status_sat="PROVISIONAL",
             )
             db.add(nueva_cxc)
-            db.flush()
+            db.flush()  # 🚀 FIX: OBLIGAMOS QUE SE GRABE ANTES DE SOLTAR EL CANDADO
             cxc_creada = True
 
     # 4. GUARDAMOS TODOS LOS CAMBIOS DE GOLPE
@@ -1020,7 +1020,9 @@ def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
     )
     if not event:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
-    db.delete(event)
+
+    # 🚀 FIX: SOFT DELETE EN LUGAR DE DB.DELETE PARA NO ROMPER INTEGRIDAD REFERENCIAL
+    event.record_status = RecordStatus.ELIMINADO
     db.commit()
     return {"message": "Evento eliminado correctamente"}
 
@@ -1095,6 +1097,7 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
         )
 
     # 5. LIMPIEZA DE DUPLICADOS:
+    # 🚀 FIX: Usar Soft Delete para no causar un Error 500 al borrar la provisional
     if cxc_provisional and cxc_provisional.id != factura.id:
         cxc_provisional.record_status = RecordStatus.ELIMINADO
         db.commit()
@@ -1111,6 +1114,7 @@ def dispatch_trip(
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
+    #   Ignoramos los campos lógicos del Pydantic para que SQLAlchemy no explote
     trip_data = payload.model_dump(
         exclude={
             "initial_leg",
@@ -1124,6 +1128,7 @@ def dispatch_trip(
     for key, value in trip_data.items():
         setattr(trip, key, value)
 
+    #   MOTOR DUAL: GUARDAR LAS PIERNAS DEL VIAJE
     if payload.initial_leg:
         leg_data = payload.initial_leg
         monto_pagar = (trip.tarifa_base or 0) - (
@@ -1159,6 +1164,7 @@ def dispatch_trip(
             )
             db.add(new_leg)
 
+        # Si eligió 1 TIMBRE (conoce_ruta_completa), creamos de una vez la pierna 2
         if payload.conoce_ruta_completa and payload.final_leg:
             leg_final = payload.final_leg
             if len(trip.legs) > 1:
@@ -1168,7 +1174,7 @@ def dispatch_trip(
                 new_leg_2 = models.TripLeg(
                     trip_id=trip.id,
                     leg_type="ruta_carretera",
-                    status="creado",
+                    status="creado",  # Nace en espera en el patio
                     unit_id=leg_final.unit_id,
                     operator_id=leg_final.operator_id,
                     start_date=trip.start_date,
@@ -1176,7 +1182,7 @@ def dispatch_trip(
                 db.add(new_leg_2)
 
         db.flush()
-        # 🚀 LIBERADO: Removimos el bloque que forzaba status EN_RUTA.
+        # 🚀 LIBERADO: Removimos el bloque que forzaba status EN_RUTA a unidades y operadores.
 
     db.commit()
     db.refresh(trip)
@@ -1200,6 +1206,7 @@ def sync_distances(db: Session = Depends(get_db)):
     Sincroniza masivamente las distancias en carretera de los RateTemplates
     utilizando la función helper existente (Nominatim + OSRM).
     """
+    # 1. Filtrar registros: Estatus 'A' y distancia_total_km igual a 0 o NULL
     templates_to_sync = (
         db.query(models.RateTemplate)
         .filter(
@@ -1217,8 +1224,10 @@ def sync_distances(db: Session = Depends(get_db)):
 
     for template in templates_to_sync:
         try:
+            # Pausa de 1 segundo requerida por las políticas de la API gratuita de Nominatim
             time.sleep(1)
 
+            # Reutilizamos tu helper existente para obtener la distancia
             distancia_calculada = get_osrm_distance(template.origen, template.destino)
 
             if distancia_calculada > 0:
@@ -1226,15 +1235,18 @@ def sync_distances(db: Session = Depends(get_db)):
                 db.commit()
                 actualizados += 1
             else:
+                # Si el helper devolvió 0.0, asumimos que no se pudo geolocalizar/enrutar
                 errores += 1
 
         except Exception as e:
+            # Capturamos cualquier error de base de datos o ejecución inesperada
             print(
                 f"Error sincronizando plantilla ID {getattr(template, 'id', 'Desconocido')}: {str(e)}"
             )
             errores += 1
-            db.rollback()
+            db.rollback()  # Limpiamos la transacción para no afectar el siguiente ciclo
 
+    # 2. Retornar el resumen solicitado
     return {
         "actualizados": actualizados,
         "errores": errores,
