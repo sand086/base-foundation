@@ -494,7 +494,7 @@ class PaymentComplementService:
             )
 
         # =========================================================================
-        # 🚀 FIX TESORERÍA BLINDADO: GUARDAR PAGOS Y MOVIMIENTO BANCARIO (1 a 1)
+        #   FIX TESORERÍA BLINDADO: GUARDAR PAGOS Y MOVIMIENTO BANCARIO (1 a 1)
         # =========================================================================
         try:
             # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
@@ -564,6 +564,7 @@ class PaymentComplementService:
                         monto=monto_abono_float,
                         concepto=f"Cobro Fra. {factura.folio_interno or factura.id} (REP)",
                         referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
+                        origen_modulo="CxC",  # 🚀 FIX CRÍTICO: ORIGEN MODULO AÑADIDO
                     )
                     create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 
