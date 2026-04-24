@@ -27,6 +27,7 @@ from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 
 from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
+from .crud import get_last_unit_odometer
 
 #  importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud
@@ -405,6 +406,29 @@ def update_unit_load_status(
     db.commit()
     db.refresh(db_unit)
     return db_unit
+
+
+# =====================================================================
+# ENDPOINT PARA PERSISTENCIA DE ODÓMETRO (ESCALERITA)
+# =====================================================================
+@router.get("/units/{unit_id}/last-odometer")
+def get_unit_last_odometer(unit_id: int, db: Session = Depends(get_db)):
+    """
+    Devuelve el último odómetro registrado para una unidad específica.
+    Busca primero en la liquidación del último viaje (TripLeg) y
+    luego en el último vale de combustible (FuelLog).
+    """
+    try:
+        # Llamamos a la función que Elena ya había construido en el CRUD
+        last_odo = get_last_unit_odometer(db, unit_id)
+
+        # Devolvemos el JSON exacto que espera tu React
+        return {"last_odometer": last_odo}
+
+    except Exception as e:
+        print(f"Error obteniendo odómetro para unidad {unit_id}: {e}")
+        # Si algo falla, devolvemos 0 para que el Frontend no se bloquee
+        return {"last_odometer": 0}
 
 
 # =========================================================
