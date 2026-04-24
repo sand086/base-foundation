@@ -556,7 +556,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     key={col.key as string}
                     className={cn(
                       "h-14 px-6 py-4 text-left align-middle transition-colors",
-                      "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white group/head",
+                      "text-[14px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white group/head",
                       col.sortable !== false && "cursor-pointer select-none",
                       col.width,
                     )}

@@ -7,6 +7,22 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { DateRange } from "react-day-picker";
+
+// 👇 NUEVOS COMPONENTES PARA EL BUSCADOR AVANZADO
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
 import {
   Fuel,
   Plus,
@@ -21,6 +37,8 @@ import {
   BarChart3,
   Activity,
   FilterX,
+  Check, // 👇 NUEVOS ÍCONOS
+  ChevronsUpDown, // 👇 NUEVOS ÍCONOS
 } from "lucide-react";
 
 // Tipos y Servicios
@@ -78,6 +96,9 @@ const FuelLoads = () => {
   const [idParaEliminar, setIdParaEliminar] = useState<number | null>(null);
 
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
+  // 👇 ESTADO PARA EL BUSCADOR
+  const [openUnitSearch, setOpenUnitSearch] = useState(false);
+
   const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
 
   // NUEVOS ESTADOS PARA FILTROS EN "HISTÓRICO"
@@ -291,6 +312,7 @@ const FuelLoads = () => {
       {
         key: "fecha_hora",
         header: "Fecha",
+        type: "date", // 👇 AHORA ES TIPO FECHA
         render: (v) => (
           <div className="flex flex-col font-mono">
             <span className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-[11px]">
@@ -313,9 +335,6 @@ const FuelLoads = () => {
       {
         key: "tipo_combustible",
         header: "Tipo",
-        // ------------------------------------------------------------------
-        // 👇 SOLUCIÓN: Agregamos el type y las options para el Popover Interno
-        // ------------------------------------------------------------------
         type: "status",
         statusOptions: ["diesel", "urea"],
         render: (v) => (
@@ -490,28 +509,94 @@ const FuelLoads = () => {
         />
 
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
-            <SelectTrigger className="w-[200px] h-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-white shadow-inner rounded-xl haptic-press">
-              <SelectValue placeholder="FILTRO DE FLOTA" />
-            </SelectTrigger>
-            <SelectContent className="rounded-2xl border-none shadow-3xl bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl">
-              <SelectItem
-                value="all"
-                className="font-black text-[10px] uppercase"
+          {/* 👇 AQUÍ EMPIEZA EL NUEVO BUSCADOR AVANZADO */}
+          <Popover open={openUnitSearch} onOpenChange={setOpenUnitSearch}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openUnitSearch}
+                className="w-[280px] h-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-white shadow-inner rounded-xl justify-between haptic-press"
               >
-                Flota Completa
-              </SelectItem>
-              {units.map((u) => (
-                <SelectItem
-                  key={u.id}
-                  value={String(u.id)}
-                  className="font-mono text-[10px] font-bold"
-                >
-                  ECO-{u.numero_economico}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {selectedUnitId === "all"
+                  ? "FLOTA COMPLETA"
+                  : units.find((u) => String(u.id) === selectedUnitId)
+                    ? `ECO-${units.find((u) => String(u.id) === selectedUnitId)?.numero_economico}`
+                    : "SELECCIONAR UNIDAD..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0 rounded-2xl border-none shadow-2xl bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl">
+              <Command>
+                <CommandInput
+                  placeholder="Buscar por ECO u Operador..."
+                  className="h-11 text-xs font-bold"
+                />
+                <CommandList className="custom-scrollbar max-h-[300px]">
+                  <CommandEmpty className="py-6 text-center text-xs font-bold text-slate-500">
+                    No se encontraron coincidencias.
+                  </CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="flota completa todos"
+                      onSelect={() => {
+                        setSelectedUnitId("all");
+                        setOpenUnitSearch(false);
+                      }}
+                      className="font-black text-[10px] uppercase cursor-pointer"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 text-brand-red",
+                          selectedUnitId === "all"
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      FLOTA COMPLETA
+                    </CommandItem>
+
+                    {units.map((u) => {
+                      const cargaAsociada = cargas.find(
+                        (c) => String(c.unit_id) === String(u.id),
+                      );
+                      const operador = cargaAsociada
+                        ? cargaAsociada.operador_nombre
+                        : "Sin Operador";
+
+                      return (
+                        <CommandItem
+                          key={u.id}
+                          value={`eco-${u.numero_economico} ${operador}`}
+                          onSelect={() => {
+                            setSelectedUnitId(String(u.id));
+                            setOpenUnitSearch(false);
+                          }}
+                          className="font-mono text-[10px] font-bold cursor-pointer flex items-center"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 text-brand-red",
+                              selectedUnitId === String(u.id)
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <div className="flex flex-col">
+                            <span>ECO-{u.numero_economico}</span>
+                            <span className="text-[8px] text-slate-500 tracking-widest uppercase font-sans mt-0.5">
+                              {operador}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {/* 👆 AQUÍ TERMINA EL NUEVO BUSCADOR */}
 
           <Button
             onClick={() => setIsModalOpen(true)}

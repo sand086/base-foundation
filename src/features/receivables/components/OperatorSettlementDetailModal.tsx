@@ -98,12 +98,10 @@ export function OperatorSettlementDetailModal({
   // 🚀 LA MAGIA SUCEDE AQUÍ: CONSTRUCTOR DE CONCILIACIÓN
   // ==========================================
   const finalAuditDetails = React.useMemo(() => {
-    // 1. PRIORIDAD AL HISTÓRICO: Si el padre nos mandó los datos directos de la BD, es la verdad absoluta.
     if (auditDetails && auditDetails.hasData) {
       return auditDetails;
     }
 
-    // 2. SI ES NUEVO (Por Pagar): Sacamos los datos de previewData para que el auditor vea cómo va a quedar.
     if (
       activeTab === "pendientes" &&
       previewData &&
@@ -126,7 +124,6 @@ export function OperatorSettlementDetailModal({
       };
     }
 
-    // 3. Si el viaje de plano no tiene combustible (ej. un patio), mandamos null para pintar el recuadro de "Sin Diésel"
     return null;
   }, [auditDetails, previewData, activeTab]);
 
@@ -165,6 +162,16 @@ export function OperatorSettlementDetailModal({
     if (!pdfRef.current) return;
     setIsGeneratingPDF(true);
 
+    // 🚀 TRUCO MAESTRO: Forzamos el modo claro temporalmente para la "foto"
+    const htmlElement = document.documentElement;
+    const wasDark = htmlElement.classList.contains("dark");
+
+    if (wasDark) {
+      htmlElement.classList.remove("dark");
+      // Pausa para que el navegador repinte la pantalla (efecto flash de cámara)
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
     try {
       const canvas = await html2canvas(pdfRef.current, {
         scale: 2,
@@ -193,6 +200,10 @@ export function OperatorSettlementDetailModal({
       console.error("Error generando PDF:", error);
       toast?.error?.("Error al generar el documento PDF");
     } finally {
+      // Restauramos el modo oscuro inmediatamente después de la captura
+      if (wasDark) {
+        htmlElement.classList.add("dark");
+      }
       setIsGeneratingPDF(false);
     }
   };
@@ -204,8 +215,13 @@ export function OperatorSettlementDetailModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
           id="print-modal"
-          className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-card/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:static print:transform-none print:max-h-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0 print:overflow-visible print:block"
+          className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card/90 dark:bg-brand-navy/95 backdrop-blur-xl border-none shadow-2xl rounded-2xl overflow-hidden animate-modal-show print:static print:transform-none print:max-h-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0 print:overflow-visible print:block"
         >
+          {/* SR Only Title para accesibilidad y evitar warnings de Radix */}
+          <DialogTitle className="sr-only">
+            Detalle de Recibo de Liquidación
+          </DialogTitle>
+
           <style media="print">{`
           @page { size: letter; margin: 15mm; }
           html, body {
@@ -230,15 +246,16 @@ export function OperatorSettlementDetailModal({
           }
         `}</style>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-900 print:bg-white">
+          <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-100/80 dark:bg-slate-950/80 print:bg-white flex justify-center sm:p-6">
+            {/* EL "PAPEL" DEL RECIBO */}
             <div
               ref={pdfRef}
-              className="bg-white text-slate-900 w-full min-h-max p-6 sm:p-8"
+              className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 w-full max-w-3xl min-h-max p-6 sm:p-10 shadow-2xl dark:shadow-black/50 ring-1 ring-slate-200/60 dark:ring-white/10 sm:rounded-2xl shrink-0 print:shadow-none print:ring-0 print:rounded-none print:p-0 print:max-w-none transition-colors duration-300"
             >
               {/* HEADER */}
-              <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
+              <div className="flex justify-between items-start border-b border-slate-200 dark:border-white/10 pb-6 mb-6">
                 <div className="flex items-center gap-4 sm:gap-5">
-                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner shrink-0 border border-slate-200 overflow-hidden">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-inner shrink-0 border border-slate-200 dark:border-white/10 overflow-hidden">
                     {empresaLogo ? (
                       <img
                         src={empresaLogo}
@@ -247,27 +264,27 @@ export function OperatorSettlementDetailModal({
                         className="w-full h-full object-contain p-1"
                       />
                     ) : (
-                      <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-slate-900" />
+                      <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-slate-900 dark:text-white" />
                     )}
                   </div>
                   <div className="flex flex-col text-left">
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 uppercase tracking-tighter leading-none">
+                    <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">
                       {empresaNombre || "OPERADOR LOGÍSTICO"}
                     </h2>
-                    <p className="text-slate-500 text-[10px] sm:text-xs font-mono font-bold mt-1">
+                    <p className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs font-mono font-bold mt-1">
                       RFC: {empresaRFC || "XAXX010101000"}
                     </p>
-                    <p className="text-slate-600 text-[9px] sm:text-[10px] max-w-sm mt-0.5 leading-tight">
+                    <p className="text-slate-600 dark:text-slate-400 text-[9px] sm:text-[10px] max-w-sm mt-0.5 leading-tight">
                       {empresaDireccion} • Tel: {empresaTelefono}
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right flex flex-col items-end gap-1.5">
-                  <span className="bg-slate-100 text-slate-700 px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg font-mono font-black text-xs sm:text-sm tracking-wider border border-slate-200 shadow-sm">
+                  <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-1 sm:px-4 sm:py-1.5 rounded-lg font-mono font-black text-xs sm:text-sm tracking-wider border border-slate-200 dark:border-white/10 shadow-sm">
                     LIQ-{leg.id}-{String(Date.now()).slice(-4)}
                   </span>
-                  <p className="text-slate-500 text-[10px] sm:text-xs font-mono">
+                  <p className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs font-mono">
                     {format(new Date(), "dd/MMM/yyyy HH:mm", { locale: es })}
                   </p>
                 </div>
@@ -277,8 +294,8 @@ export function OperatorSettlementDetailModal({
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 <div className="md:col-span-7 space-y-4">
                   {/* Detalles Operación */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
-                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 mb-3 block border-b pb-2 border-slate-200">
+                  <div className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                    <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400 mb-3 block border-b pb-2 border-slate-200 dark:border-white/10">
                       Detalles de la Operación
                     </span>
                     <div className="grid grid-cols-2 gap-4">
@@ -286,7 +303,7 @@ export function OperatorSettlementDetailModal({
                         <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
                           Operador
                         </span>
-                        <span className="font-black text-slate-900 text-sm truncate">
+                        <span className="font-black text-slate-900 dark:text-white text-sm truncate">
                           {leg.operator?.name || "N/A"}
                         </span>
                       </div>
@@ -294,7 +311,7 @@ export function OperatorSettlementDetailModal({
                         <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
                           Tracto / Eco
                         </span>
-                        <span className="font-bold text-slate-700 text-xs">
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
                           {leg.unit
                             ? `${leg.unit.marca || ""} ${leg.unit.modelo || ""} • Eco: ${leg.unit.numero_economico} (${leg.unit.placas})`
                             : "N/A"}
@@ -304,10 +321,12 @@ export function OperatorSettlementDetailModal({
                         <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
                           Trayecto
                         </span>
-                        <span className="font-bold text-slate-700 text-xs flex items-center gap-2">
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2">
                           <MapPin className="h-3 w-3 text-emerald-500" />{" "}
                           {leg.trip?.origin || "S/D"}
-                          <span className="text-slate-300 mx-1">➔</span>
+                          <span className="text-slate-300 dark:text-slate-600 mx-1">
+                            ➔
+                          </span>
                           <MapPin className="h-3 w-3 text-rose-500" />{" "}
                           {leg.trip?.destination || "S/D"}
                         </span>
@@ -317,30 +336,30 @@ export function OperatorSettlementDetailModal({
 
                   {/* Estadísticas */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100 flex flex-col items-center justify-center text-center">
-                      <Route className="h-5 w-5 text-blue-500 mb-1" />
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                    <div className="bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 flex flex-col items-center justify-center text-center">
+                      <Route className="h-5 w-5 text-blue-500 dark:text-blue-400 mb-1" />
+                      <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
                         Recorrido
                       </span>
-                      <span className="font-black text-slate-800 text-sm">
+                      <span className="font-black text-slate-800 dark:text-slate-200 text-sm">
                         {calcOperativos.distancia}
                       </span>
                     </div>
-                    <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-100 flex flex-col items-center justify-center text-center">
-                      <Clock className="h-5 w-5 text-amber-500 mb-1" />
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                    <div className="bg-amber-50/50 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-100 dark:border-amber-500/20 flex flex-col items-center justify-center text-center">
+                      <Clock className="h-5 w-5 text-amber-500 dark:text-amber-400 mb-1" />
+                      <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
                         Duración
                       </span>
-                      <span className="font-black text-slate-800 text-sm">
+                      <span className="font-black text-slate-800 dark:text-slate-200 text-sm">
                         {calcOperativos.tiempo}
                       </span>
                     </div>
-                    <div className="bg-purple-50/50 p-3 rounded-xl border border-purple-100 flex flex-col items-center justify-center text-center">
-                      <Activity className="h-5 w-5 text-purple-500 mb-1" />
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                    <div className="bg-purple-50/50 dark:bg-purple-500/10 p-3 rounded-xl border border-purple-100 dark:border-purple-500/20 flex flex-col items-center justify-center text-center">
+                      <Activity className="h-5 w-5 text-purple-500 dark:text-purple-400 mb-1" />
+                      <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
                         Paradas / Evt
                       </span>
-                      <span className="font-black text-slate-800 text-sm">
+                      <span className="font-black text-slate-800 dark:text-slate-200 text-sm">
                         {calcOperativos.paradas} reg.
                       </span>
                     </div>
@@ -350,10 +369,10 @@ export function OperatorSettlementDetailModal({
                   {/* 4. BLOQUE UI DE AUDITORÍA DINÁMICO */}
                   {/* ========================================== */}
                   {finalAuditDetails ? (
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm break-inside-avoid mt-4">
-                      <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-2">
-                        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 flex items-center gap-2">
-                          <ShieldCheck className="h-3 w-3 text-blue-500" />
+                    <div className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm break-inside-avoid mt-4">
+                      <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-white/10 pb-2">
+                        <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <ShieldCheck className="h-3 w-3 text-blue-500 dark:text-blue-400" />
                           Auditoría y Conciliación de Diésel
                         </span>
                         <span className="text-[9px] uppercase font-bold text-slate-400">
@@ -362,38 +381,38 @@ export function OperatorSettlementDetailModal({
                       </div>
 
                       <div className="grid grid-cols-3 gap-3 mb-4">
-                        <div className="bg-white p-3 rounded-lg border border-slate-100 text-center shadow-sm">
+                        <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 text-center shadow-sm">
                           <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
                             KMs ECM
                           </p>
-                          <p className="font-mono font-black text-slate-800 text-sm">
+                          <p className="font-mono font-black text-slate-800 dark:text-slate-200 text-sm">
                             {Number(finalAuditDetails.km || 0).toLocaleString()}
                           </p>
                         </div>
-                        <div className="bg-white p-3 rounded-lg border border-slate-100 text-center shadow-sm">
+                        <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 text-center shadow-sm">
                           <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
                             Litros ECM
                           </p>
-                          <p className="font-mono font-black text-slate-800 text-sm">
+                          <p className="font-mono font-black text-slate-800 dark:text-slate-200 text-sm">
                             {Number(finalAuditDetails.ltEcm || 0).toFixed(1)}
                           </p>
                         </div>
-                        <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 text-center shadow-sm">
-                          <p className="text-[9px] uppercase font-bold text-amber-600 mb-1 tracking-tighter">
+                        <div className="bg-amber-50 dark:bg-amber-500/10 p-3 rounded-lg border border-amber-100 dark:border-amber-500/20 text-center shadow-sm">
+                          <p className="text-[9px] uppercase font-bold text-amber-600 dark:text-amber-400 mb-1 tracking-tighter">
                             Litros Vales
                           </p>
-                          <p className="font-mono font-black text-amber-700 text-sm">
+                          <p className="font-mono font-black text-amber-700 dark:text-amber-300 text-sm">
                             {Number(finalAuditDetails.vales || 0).toFixed(1)}
                           </p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex flex-col justify-center items-center text-center shadow-sm">
-                          <p className="text-[9px] uppercase font-black text-blue-600 mb-1 tracking-widest">
+                        <div className="bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg border border-blue-100 dark:border-blue-500/20 flex flex-col justify-center items-center text-center shadow-sm">
+                          <p className="text-[9px] uppercase font-black text-blue-600 dark:text-blue-400 mb-1 tracking-widest">
                             Rendimiento Real
                           </p>
-                          <p className="font-mono font-black text-blue-700 text-xl flex items-baseline gap-1">
+                          <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-xl flex items-baseline gap-1">
                             {finalAuditDetails.rend || "0.00"}
                             <span className="text-[10px] font-bold uppercase opacity-60">
                               km/L
@@ -404,14 +423,14 @@ export function OperatorSettlementDetailModal({
                           className={cn(
                             "p-3 rounded-lg border flex flex-col justify-center items-center text-center shadow-sm",
                             finalAuditDetails.veredicto === "COBRO_OPERADOR"
-                              ? "bg-rose-50 border-rose-200 text-rose-700"
-                              : "bg-emerald-50 border-emerald-200 text-emerald-700",
+                              ? "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400"
+                              : "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400",
                           )}
                         >
                           {finalAuditDetails.veredicto === "COBRO_OPERADOR" ? (
-                            <ShieldAlert className="h-4 w-4 mb-1 text-rose-500" />
+                            <ShieldAlert className="h-4 w-4 mb-1 text-rose-500 dark:text-rose-400" />
                           ) : (
-                            <CheckCircle className="h-4 w-4 mb-1 text-emerald-500" />
+                            <CheckCircle className="h-4 w-4 mb-1 text-emerald-500 dark:text-emerald-400" />
                           )}
                           <p className="text-[9px] uppercase font-black tracking-widest mb-0.5 opacity-80">
                             Estatus Final
@@ -423,24 +442,24 @@ export function OperatorSettlementDetailModal({
                         </div>
                       </div>
 
-                      <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
+                      <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 shadow-sm">
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1.5">
                           <FileText className="h-3 w-3 text-blue-400" />{" "}
                           Detalles / Deducción de ruta
                         </p>
-                        <p className="text-[10px] font-mono font-medium leading-relaxed italic text-slate-600">
+                        <p className="text-[10px] font-mono font-medium leading-relaxed italic text-slate-600 dark:text-slate-400">
                           {finalAuditDetails.textOriginal ||
                             "Sin observaciones adicionales registradas en la auditoría."}
                         </p>
                       </div>
 
                       <div className="mt-3 flex justify-end">
-                        <div className="inline-flex items-center gap-2 py-1.5 px-3 rounded-full bg-slate-100 border border-slate-200">
-                          <Gauge className="h-3 w-3 text-slate-500" />
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                        <div className="inline-flex items-center gap-2 py-1.5 px-3 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10">
+                          <Gauge className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                             Odómetro Cerrado:
                           </span>
-                          <span className="font-mono text-xs font-black text-slate-800">
+                          <span className="font-mono text-xs font-black text-slate-800 dark:text-slate-200">
                             {Number(leg?.odometro_final || 0).toLocaleString()}{" "}
                             km
                           </span>
@@ -449,12 +468,12 @@ export function OperatorSettlementDetailModal({
                     </div>
                   ) : (
                     // 🚀 ALERTA DE QUE ESTE TRAMO NO TIENE DIÉSEL REGISTRADO
-                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center mt-4">
-                      <Fuel className="h-8 w-8 text-slate-300 mb-2" />
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="bg-slate-50 dark:bg-slate-950/50 p-6 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm flex flex-col items-center text-center mt-4">
+                      <Fuel className="h-8 w-8 text-slate-300 dark:text-slate-700 mb-2" />
+                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                         Sin datos de Combustible
                       </p>
-                      <p className="text-[10px] text-slate-400 mt-1 max-w-xs">
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
                         Este movimiento no cuenta con un dictamen de auditoría
                         de diésel o es un movimiento que no requiere combustible
                         (Ej. Patio).
@@ -465,13 +484,13 @@ export function OperatorSettlementDetailModal({
                 </div>
 
                 <div className="md:col-span-5 flex flex-col justify-between">
-                  <div className="bg-slate-50 border border-slate-200 p-5 rounded-xl shadow-sm space-y-4 flex-1 mb-4">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-200 pb-2">
+                  <div className="bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/10 p-5 rounded-xl shadow-sm space-y-4 flex-1 mb-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-white/10 pb-2">
                       Desglose Financiero
                     </h4>
 
                     <div className="space-y-3 text-xs font-medium">
-                      <div className="flex justify-between items-center text-slate-700">
+                      <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
                         <span>Sueldo Base Operativo</span>
                         <span className="font-mono font-semibold">
                           {formatCurrencyLocal(liquidacion?.pagoBaseBruto || 0)}
@@ -483,7 +502,7 @@ export function OperatorSettlementDetailModal({
                         .map((c: ConceptoExtra) => (
                           <div
                             key={c.id}
-                            className="flex justify-between items-center text-emerald-600"
+                            className="flex justify-between items-center text-emerald-600 dark:text-emerald-400"
                           >
                             <span>{c.descripcion}</span>
                             <span className="font-mono font-semibold">
@@ -492,10 +511,10 @@ export function OperatorSettlementDetailModal({
                           </div>
                         ))}
 
-                      <div className="my-2 border-b border-dashed border-slate-200"></div>
+                      <div className="my-2 border-b border-dashed border-slate-200 dark:border-slate-700"></div>
 
                       {(leg?.anticipo_viaticos || 0) > 0 && (
-                        <div className="flex justify-between items-center text-rose-600">
+                        <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
                           <span>Anticipo de Viáticos</span>
                           <span className="font-mono font-semibold">
                             -{formatCurrencyLocal(leg.anticipo_viaticos)}
@@ -504,7 +523,7 @@ export function OperatorSettlementDetailModal({
                       )}
 
                       {(leg?.anticipo_combustible || 0) > 0 && (
-                        <div className="flex justify-between items-center text-rose-600">
+                        <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
                           <span>Vales de Combustible (Anticipos)</span>
                           <span className="font-mono font-semibold">
                             -{formatCurrencyLocal(leg.anticipo_combustible)}
@@ -513,7 +532,7 @@ export function OperatorSettlementDetailModal({
                       )}
 
                       {(leg?.otros_anticipos || 0) > 0 && (
-                        <div className="flex justify-between items-center text-rose-600">
+                        <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
                           <span>Otros Anticipos Operativos</span>
                           <span className="font-mono font-semibold">
                             -{formatCurrencyLocal(leg.otros_anticipos)}
@@ -522,7 +541,7 @@ export function OperatorSettlementDetailModal({
                       )}
 
                       {(liquidacion?.combustibleFaltante || 0) > 0 && (
-                        <div className="flex justify-between items-start text-rose-600 font-bold">
+                        <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold">
                           <div className="flex flex-col">
                             <span>Faltante Diésel (Penalización)</span>
                           </div>
@@ -540,7 +559,7 @@ export function OperatorSettlementDetailModal({
                         .map((c: ConceptoExtra) => (
                           <div
                             key={c.id}
-                            className="flex justify-between items-center text-rose-600"
+                            className="flex justify-between items-center text-rose-600 dark:text-rose-400"
                           >
                             <span>{c.descripcion}</span>
                             <span className="font-mono font-semibold">
@@ -552,7 +571,7 @@ export function OperatorSettlementDetailModal({
                   </div>
 
                   {/* GRAN TOTAL */}
-                  <div className="relative bg-slate-900 p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0">
+                  <div className="relative bg-slate-900 dark:bg-black p-5 rounded-xl shadow-lg flex justify-between items-center overflow-hidden shrink-0 border dark:border-white/10">
                     <div className="relative z-10">
                       <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">
                         Total Depositado
@@ -571,15 +590,15 @@ export function OperatorSettlementDetailModal({
               {/* FIRMAS */}
               <div className="mt-12 pt-8 break-inside-avoid">
                 <div className="relative flex items-center pb-8 mb-8">
-                  <div className="w-full border-t-2 border-dashed border-slate-300"></div>
+                  <div className="w-full border-t-2 border-dashed border-slate-300 dark:border-slate-700"></div>
                 </div>
                 <div className="flex justify-between gap-12 sm:gap-24 px-8 md:px-16 mb-8">
                   <div className="flex-1 text-center">
-                    <div className="border-t border-slate-800 pt-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-800">
+                    <div className="border-t border-slate-800 dark:border-slate-500 pt-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-300">
                         Conformidad
                       </p>
-                      <p className="text-xs font-bold text-slate-600 mt-1 truncate">
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-1 truncate">
                         {leg.operator?.name || "Firma del Operador"}
                       </p>
                       <p className="text-[8px] text-slate-500 font-medium mt-0.5">
@@ -588,11 +607,11 @@ export function OperatorSettlementDetailModal({
                     </div>
                   </div>
                   <div className="flex-1 text-center">
-                    <div className="border-t border-slate-800 pt-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-800">
+                    <div className="border-t border-slate-800 dark:border-slate-500 pt-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-300">
                         Autorización
                       </p>
-                      <p className="text-xs font-bold text-slate-600 mt-1 truncate">
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-400 mt-1 truncate">
                         Depto. Finanzas / Dispatch
                       </p>
                       <p className="text-[8px] text-slate-500 font-medium mt-0.5">
@@ -612,9 +631,9 @@ export function OperatorSettlementDetailModal({
           </div>
 
           {/* FOOTER - BOTONES */}
-          <DialogFooter className="p-4 sm:p-6 bg-card/80 dark:bg-card/80 backdrop-blur-md border-t border-border flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden shrink-0 z-10">
+          <DialogFooter className="p-4 sm:p-6 bg-white/90 dark:bg-brand-navy/90 backdrop-blur-md border-t border-slate-200 dark:border-white/10 flex flex-col-reverse sm:flex-row justify-end gap-3 print:hidden shrink-0 z-10">
             <Button
-              className="w-full sm:w-auto min-w-[120px] font-black uppercase tracking-widest text-[10px]"
+              className="w-full sm:w-auto min-w-[120px] font-black uppercase tracking-widest text-[10px] dark:border-white/10 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
               variant="outline"
               size="lg"
               onClick={() => onOpenChange(false)}
@@ -624,7 +643,7 @@ export function OperatorSettlementDetailModal({
             </Button>
 
             <Button
-              className="w-full sm:w-auto min-w-[220px] gap-2 font-black uppercase tracking-widest text-[10px] border-none text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 shadow-lg transition-transform active:scale-95"
+              className="w-full sm:w-auto min-w-[220px] gap-2 font-black uppercase tracking-widest text-[10px] border-none text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white shadow-lg transition-transform active:scale-95"
               size="lg"
               onClick={handleDownloadPDF}
               disabled={isGeneratingPDF}

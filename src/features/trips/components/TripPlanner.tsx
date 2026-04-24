@@ -416,7 +416,7 @@ export const TripPlanner = () => {
               </TabsTrigger>
               <TabsTrigger
                 value="standby"
-                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
+                className=" font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
               >
                 <CalendarDays className="h-3.5 w-3.5 mr-2" /> Planeador{" "}
                 {standbyTrips.length > 0 && (
@@ -441,22 +441,22 @@ export const TripPlanner = () => {
               <DataTable key={tableKey} className="min-w-[800px]">
                 <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
                   <DataTableRow className="hover:bg-transparent border-none">
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12">
                       Folio / Cliente
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12">
                       Fase del Servicio
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden lg:table-cell">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12 hidden lg:table-cell">
                       Ruta Registrada
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden md:table-cell">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12 hidden md:table-cell">
                       Asignación Física
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em]  h-12">
                       Estatus Operativo
                     </DataTableHead>
-                    <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em]  h-12">
                       Acciones
                     </DataTableHead>
                   </DataTableRow>
@@ -498,47 +498,46 @@ export const TripPlanner = () => {
                         >
                           <DataTableCell className="py-4 pl-4">
                             <div className="flex flex-col gap-1">
-                              <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight text-sm">
+                              <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight ">
                                 {tripPadre.client?.razon_social ||
                                   "CLIENTE GENERAL"}
                               </span>
-                              <Badge
-                                variant="outline"
-                                className="w-fit font-mono font-bold text-[9px] bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400"
-                              >
-                                #{tripPadre.public_id || tripPadre.id}
-                              </Badge>
+                              <span className="text-[13px] font-black text-muted-foreground uppercase tracking-widest">
+                                TRP-{tripPadre.public_id || tripPadre.id}
+                              </span>
                             </div>
                           </DataTableCell>
 
                           <DataTableCell className="py-4">
-                            <Badge
-                              variant="outline"
-                              className="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-black uppercase tracking-widest text-[9px] shadow-sm border-slate-200 dark:border-white/10 px-2 py-0.5"
-                            >
+                            <Badge variant="info" className="text-[11px]">
                               {legTypeShort[leg.leg_type] || leg.leg_type}
                             </Badge>
                           </DataTableCell>
 
                           <DataTableCell className="py-4 hidden lg:table-cell">
                             <span
-                              className="text-[10px] font-black text-foreground uppercase tracking-tighter"
+                              className="text-[14px] font-black text-foreground uppercase tracking-tighter"
                               title={formattedRouteName}
                             >
-                              <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-blue-500" />
                               {formattedRouteName}
                             </span>
                           </DataTableCell>
 
                           <DataTableCell className="py-4 hidden md:table-cell">
                             <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
-                                <Truck className="h-3 w-3 text-slate-400 shrink-0" />{" "}
+                              <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
+                                <Truck className="h-5 w-5 shrink-0 text-red-500" />{" "}
                                 ECO-{leg.unit?.numero_economico || "N/A"}
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
-                                <User className="h-3 w-3 shrink-0" />{" "}
-                                {leg.operator?.name?.split(" ")[0] || "S/A"}
+                              <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
+                                <User className="h-5 w-5 shrink-0 text-blue-500" />{" "}
+                                {(() => {
+                                  const parts =
+                                    leg.operator?.name?.split(" ") || [];
+                                  return parts.length
+                                    ? `${parts[0]} ${parts.slice(1).join(" ")}`
+                                    : "S/A";
+                                })()}
                               </div>
                             </div>
                           </DataTableCell>
@@ -564,7 +563,7 @@ export const TripPlanner = () => {
                               >
                                 <DropdownMenuItem
                                   onClick={() => setTripToView(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
+                                  className="rounded-lg cursor-pointer py-2.5 font-bold  uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
                                 >
                                   <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
                                   Abrir Centro de Mando
@@ -573,7 +572,7 @@ export const TripPlanner = () => {
                                 <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
                                 <DropdownMenuItem
                                   onClick={() => setTripToDelete(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                                  className="rounded-lg cursor-pointer py-2.5 font-bold  uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
                                 >
                                   <Trash2 className="h-4 w-4 mr-3" /> Eliminar
                                   Viaje

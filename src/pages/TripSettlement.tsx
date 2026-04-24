@@ -576,9 +576,9 @@ export default function TripSettlement() {
     <div className="space-y-6 max-w-[1400px] mx-auto pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-brand-navy flex items-center gap-2">
-            <FileCheck className="h-7 w-7 text-emerald-600" /> Liquidaciones
-            Operativas
+          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2">
+            <FileCheck className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />{" "}
+            Liquidaciones Operativas
           </h1>
           <p className="text-muted-foreground mt-1 font-medium">
             Módulo de Tesorería. Selecciona los movimientos y emite el recibo de
@@ -597,11 +597,11 @@ export default function TripSettlement() {
           )}
         >
           {activeTab === "pendientes" && (
-            <Card className="border-slate-200 shadow-sm mb-6">
-              <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
-                <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-                  <User className="h-4 w-4 text-blue-600" /> 1. Seleccionar
-                  Operador a Liquidar
+            <Card className="border-slate-200 dark:border-white/10 shadow-sm mb-6 bg-white dark:bg-slate-900">
+              <CardHeader className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-white/5 pb-4">
+                <CardTitle className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />{" "}
+                  1. Seleccionar Operador a Liquidar
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
@@ -615,21 +615,21 @@ export default function TripSettlement() {
                     setSueldoBasePactado(0);
                   }}
                 >
-                  <SelectTrigger className="h-12 text-base font-medium bg-white">
+                  <SelectTrigger className="h-12 text-base font-medium bg-white dark:bg-slate-950 dark:border-white/10 dark:text-white">
                     <SelectValue placeholder="Busca al operador con viajes pendientes..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="dark:bg-slate-950 dark:border-white/10">
                     {operatorsWithPending.map((op: any) => (
                       <SelectItem
                         key={op.id}
                         value={String(op.id)}
-                        className="font-medium py-3"
+                        className="font-medium py-3 dark:text-slate-200 dark:focus:bg-slate-800"
                       >
                         {op.name}
                       </SelectItem>
                     ))}
                     {operatorsWithPending.length === 0 && (
-                      <div className="p-4 text-center text-sm text-slate-500">
+                      <div className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">
                         No hay operadores con viajes pendientes de pago.
                       </div>
                     )}
@@ -647,30 +647,30 @@ export default function TripSettlement() {
             }}
             className="w-full"
           >
-            <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6">
+            <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6 dark:bg-slate-900">
               <TabsTrigger
                 value="pendientes"
-                className="font-bold flex items-center gap-2"
+                className="font-bold flex items-center gap-2 dark:data-[state=active]:bg-slate-800 dark:text-slate-400 dark:data-[state=active]:text-white"
               >
                 <Clock className="h-4 w-4" /> Por Liquidar
                 <Badge
                   variant="secondary"
-                  className="ml-1 bg-blue-100 text-blue-700"
+                  className="ml-1 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-none"
                 >
                   {pendingLegs.length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger
                 value="historico"
-                className="font-bold flex items-center gap-2"
+                className="font-bold flex items-center gap-2 dark:data-[state=active]:bg-slate-800 dark:text-slate-400 dark:data-[state=active]:text-white"
               >
                 <History className="h-4 w-4" /> Histórico
               </TabsTrigger>
             </TabsList>
 
-            <Card className="border-slate-200 shadow-sm overflow-hidden flex flex-col h-full max-h-[600px]">
-              <div className="bg-slate-50 border-b px-4 py-3 flex justify-between items-center shrink-0">
-                <h3 className="font-bold text-sm text-slate-600 flex items-center gap-2">
+            <Card className="border-slate-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col h-full max-h-[600px] bg-white dark:bg-slate-900">
+              <div className="bg-slate-50 dark:bg-slate-900/50 border-b dark:border-white/10 px-4 py-3 flex justify-between items-center shrink-0">
+                <h3 className="font-bold text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
                   {activeTab === "pendientes"
                     ? "2. Selecciona los tramos a pagar"
@@ -681,7 +681,7 @@ export default function TripSettlement() {
                     variant="outline"
                     size="sm"
                     onClick={toggleAllLegs}
-                    className="h-8 text-xs font-bold transition-all hover:bg-slate-100"
+                    className="h-8 text-xs font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
                   >
                     {selectedLegIds.length === legsForSelectedOperator.length
                       ? "Deseleccionar Todos"
@@ -691,7 +691,7 @@ export default function TripSettlement() {
               </div>
               <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                 <table className="w-full text-sm text-left">
-                  <thead className="text-[10px] text-slate-600 font-bold uppercase tracking-widest bg-slate-50/80 border-b sticky top-0 z-10 backdrop-blur-sm">
+                  <thead className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest bg-slate-50/80 dark:bg-slate-900/80 border-b dark:border-white/10 sticky top-0 z-10 backdrop-blur-sm">
                     <tr>
                       {activeTab === "pendientes" && (
                         <th
@@ -723,11 +723,11 @@ export default function TripSettlement() {
                       <tr>
                         <td
                           colSpan={activeTab === "historico" ? 6 : 5}
-                          className="px-6 py-16 text-center bg-white"
+                          className="px-6 py-16 text-center bg-white dark:bg-transparent"
                         >
-                          <div className="flex flex-col items-center justify-center text-slate-600">
+                          <div className="flex flex-col items-center justify-center text-slate-600 dark:text-slate-400">
                             <History className="h-10 w-10 mb-3 opacity-20" />
-                            <p className="text-base font-semibold text-slate-600 mb-1">
+                            <p className="text-base font-semibold text-slate-600 dark:text-slate-400 mb-1">
                               {activeTab === "pendientes"
                                 ? "Sin movimientos pendientes"
                                 : "Historial vacío"}
@@ -748,10 +748,10 @@ export default function TripSettlement() {
                           <tr
                             key={leg.id}
                             className={cn(
-                              "border-b last:border-0 transition-colors group cursor-pointer",
+                              "border-b dark:border-white/5 last:border-0 transition-colors group cursor-pointer",
                               isSelected
-                                ? "bg-blue-50/60 hover:bg-blue-50/80"
-                                : "bg-white hover:bg-slate-50/60",
+                                ? "bg-blue-50/60 hover:bg-blue-50/80 dark:bg-blue-500/10 dark:hover:bg-blue-500/20"
+                                : "bg-white hover:bg-slate-50/60 dark:bg-transparent dark:hover:bg-white/5",
                             )}
                             onClick={() => {
                               if (activeTab === "pendientes")
@@ -771,17 +771,17 @@ export default function TripSettlement() {
                                   className={cn(
                                     "transition-all",
                                     isSelected
-                                      ? "border-brand-navy bg-brand-navy"
-                                      : "border-slate-300",
+                                      ? "border-brand-navy bg-brand-navy dark:border-blue-500 dark:bg-blue-600 text-white"
+                                      : "border-slate-300 dark:border-slate-600",
                                   )}
                                 />
                               </td>
                             )}
                             <td className="px-6 py-3">
-                              <div className="font-bold text-brand-navy text-sm">
+                              <div className="font-bold text-brand-navy dark:text-slate-200 text-sm">
                                 {leg.trip?.public_id || `TRP-${leg.trip_id}`}
                               </div>
-                              <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
                                 {leg.trip?.clientName}
                               </div>
                             </td>
@@ -789,13 +789,13 @@ export default function TripSettlement() {
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></div>
-                                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
+                                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
                                     {leg.trip?.origin}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></div>
-                                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
+                                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
                                     {leg.trip?.destination}
                                   </span>
                                 </div>
@@ -804,22 +804,22 @@ export default function TripSettlement() {
                             <td className="px-6 py-3">
                               <Badge
                                 variant="outline"
-                                className="bg-slate-50 font-semibold text-slate-600 mb-1 border-slate-200"
+                                className="bg-slate-50 dark:bg-slate-800 font-semibold text-slate-600 dark:text-slate-300 mb-1 border-slate-200 dark:border-white/10"
                               >
                                 {legTypeLabels[leg.leg_type] || leg.leg_type}
                               </Badge>
-                              <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
-                                <Truck className="h-3 w-3 text-slate-600" />{" "}
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1">
+                                <Truck className="h-3 w-3 text-slate-600 dark:text-slate-400" />{" "}
                                 Eco: {leg.unit?.numero_economico}
                               </div>
                             </td>
                             <td className="px-6 py-3 text-right">
                               {activeTab === "pendientes" ? (
                                 <div className="flex flex-col items-end">
-                                  <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] uppercase tracking-wider mb-1">
+                                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-0 text-[10px] uppercase tracking-wider mb-1">
                                     Pendiente
                                   </Badge>
-                                  <div className="text-[10px] text-brand-navy font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                  <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-500/20">
                                     {leg.leg_type === "ruta_carretera"
                                       ? "Base Fija"
                                       : isFull
@@ -829,7 +829,7 @@ export default function TripSettlement() {
                                 </div>
                               ) : (
                                 <div className="flex flex-col items-end">
-                                  <span className="font-mono font-black text-emerald-600 text-sm">
+                                  <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
                                     $
                                     {(
                                       leg.monto_neto_pagado || 0
@@ -837,8 +837,8 @@ export default function TripSettlement() {
                                       minimumFractionDigits: 2,
                                     })}
                                   </span>
-                                  <div className="text-[9px] text-slate-600 uppercase tracking-widest flex items-center gap-1 mt-0.5">
-                                    <CheckCircle className="h-3 w-3 text-emerald-500" />{" "}
+                                  <div className="text-[9px] text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                                    <CheckCircle className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />{" "}
                                     Liquidado
                                   </div>
                                 </div>
@@ -853,7 +853,7 @@ export default function TripSettlement() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                                    className="h-8 w-8 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/20"
                                     onClick={() => handleViewReceipt(leg)}
                                     title="Ver Recibo"
                                   >
@@ -862,7 +862,7 @@ export default function TripSettlement() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-amber-600 hover:bg-amber-50"
+                                    className="h-8 w-8 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/20"
                                     onClick={() =>
                                       setActionModal({ type: "reopen", leg })
                                     }
@@ -873,7 +873,7 @@ export default function TripSettlement() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-rose-600 hover:bg-rose-50"
+                                    className="h-8 w-8 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/20"
                                     onClick={() =>
                                       setActionModal({ type: "hide", leg })
                                     }
@@ -902,10 +902,10 @@ export default function TripSettlement() {
               {liquidacion.hasRoadMove && isAuditPending && (
                 <Alert
                   variant="destructive"
-                  className="bg-rose-50 border-rose-300 text-rose-900 shadow-md"
+                  className="bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 shadow-md"
                 >
-                  <ShieldAlert className="h-5 w-5 !text-rose-600" />
-                  <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700">
+                  <ShieldAlert className="h-5 w-5 !text-rose-600 dark:!text-rose-400" />
+                  <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700 dark:text-rose-400">
                     Conciliacion Pendiente
                   </AlertTitle>
                   <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
@@ -923,14 +923,14 @@ export default function TripSettlement() {
 
               <Card
                 className={cn(
-                  "border-slate-200 shadow-xl overflow-hidden border-t-4",
+                  "border-slate-200 dark:border-white/10 shadow-xl overflow-hidden border-t-4 bg-white dark:bg-slate-900",
                   liquidacion.hasRoadMove
-                    ? "border-t-brand-navy"
-                    : "border-t-emerald-500",
+                    ? "border-t-brand-navy dark:border-t-blue-500"
+                    : "border-t-emerald-500 dark:border-t-emerald-400",
                 )}
               >
-                <CardHeader className="bg-slate-50 border-b pb-4">
-                  <CardTitle className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
+                <CardHeader className="bg-slate-50 dark:bg-slate-900/50 border-b dark:border-white/10 pb-4">
+                  <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase flex items-center gap-2">
                     <Receipt className="h-4 w-4" /> Configurar Recibo de Pago
                   </CardTitle>
                 </CardHeader>
@@ -938,12 +938,12 @@ export default function TripSettlement() {
                   <div className="p-6 space-y-6">
                     <div className="space-y-4">
                       {/* 🚀 NUEVO: Input Dinámico para Sueldo Base */}
-                      <div className="flex justify-between items-center text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100 mb-4">
-                        <span className="text-blue-800 font-bold text-[11px] uppercase tracking-widest">
+                      <div className="flex justify-between items-center text-sm bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 mb-4">
+                        <span className="text-blue-800 dark:text-blue-400 font-bold text-[11px] uppercase tracking-widest">
                           Sueldo Base (Ruta/Maniobras)
                         </span>
                         <div className="relative w-36">
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400 dark:text-blue-300" />
                           <Input
                             type="number"
                             value={
@@ -952,19 +952,19 @@ export default function TripSettlement() {
                             onChange={(e) =>
                               setSueldoBasePactado(Number(e.target.value))
                             }
-                            className="pl-8 font-bold text-right font-mono h-9 text-emerald-700 bg-white"
+                            className="pl-8 font-bold text-right font-mono h-9 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-950 dark:border-white/10"
                             placeholder="0.00"
                           />
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest border-b dark:border-white/10 pb-1">
                           <span>Ingresos / Abonos</span>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-emerald-600 font-black text-[9px]"
+                            className="h-5 text-emerald-600 dark:text-emerald-400 font-black text-[9px]"
                             onClick={() => {
                               setNewConceptoType("ingreso");
                               setShowAddConceptoDialog(true);
@@ -980,22 +980,22 @@ export default function TripSettlement() {
                           .map((c) => (
                             <div
                               key={c.id}
-                              className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded group transition-colors"
+                              className="flex justify-between items-center text-sm bg-emerald-50/50 dark:bg-emerald-500/10 px-2 py-1 rounded group transition-colors"
                             >
                               <div className="flex items-center gap-2">
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-200/50"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-200/50 dark:hover:bg-emerald-500/20"
                                   onClick={() => removeConcepto(c.id)}
                                 >
-                                  <Trash2 className="h-3 w-3 text-rose-500" />
+                                  <Trash2 className="h-3 w-3 text-rose-500 dark:text-rose-400" />
                                 </Button>
-                                <span className="text-emerald-700 text-xs font-medium">
+                                <span className="text-emerald-700 dark:text-emerald-400 text-xs font-medium">
                                   {c.descripcion}
                                 </span>
                               </div>
-                              <span className="font-mono font-bold text-emerald-600">
+                              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                                 +{formatCurrencyLocal(c.monto)}
                               </span>
                             </div>
@@ -1003,12 +1003,12 @@ export default function TripSettlement() {
                       </div>
 
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest border-b dark:border-white/10 pb-1">
                           <span>Cargos / Descuentos</span>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-rose-600 font-black text-[9px]"
+                            className="h-5 text-rose-600 dark:text-rose-400 font-black text-[9px]"
                             onClick={() => {
                               setNewConceptoType("deduccion");
                               setShowAddConceptoDialog(true);
@@ -1020,10 +1020,10 @@ export default function TripSettlement() {
                         {(liquidacion.deduccionViaticos > 0 ||
                           liquidacion.otrosAnticipos > 0) && (
                           <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">
+                            <span className="text-slate-600 dark:text-slate-400">
                               Anticipos Operativos
                             </span>
-                            <span className="font-mono font-bold text-rose-600">
+                            <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                               -
                               {formatCurrencyLocal(
                                 liquidacion.deduccionViaticos +
@@ -1035,23 +1035,23 @@ export default function TripSettlement() {
 
                         {/* Faltante Combustible con opción a eliminar */}
                         {liquidacion.combustibleFaltante > 0 && (
-                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded group transition-colors">
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1 rounded group transition-colors">
                             <div className="flex items-center gap-1.5">
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/30"
                                 onClick={removeCombustibleFaltante}
                                 title="Perdonar Cobro"
                               >
-                                <Trash2 className="h-3 w-3 text-rose-600" />
+                                <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                               </Button>
-                              <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-                                <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
+                              <span className="text-rose-800 dark:text-rose-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                <ShieldAlert className="h-3 w-3 text-rose-600 dark:text-rose-400" />{" "}
                                 Faltante Diésel
                               </span>
                             </div>
-                            <span className="font-mono font-black text-rose-600">
+                            <span className="font-mono font-black text-rose-600 dark:text-rose-400">
                               -
                               {formatCurrencyLocal(
                                 liquidacion.combustibleFaltante,
@@ -1066,22 +1066,22 @@ export default function TripSettlement() {
                           .map((c) => (
                             <div
                               key={c.id}
-                              className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded group transition-colors"
+                              className="flex justify-between items-center text-sm bg-rose-50/50 dark:bg-rose-500/10 px-2 py-1 rounded group transition-colors"
                             >
                               <div className="flex items-center gap-2">
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/20"
                                   onClick={() => removeConcepto(c.id)}
                                 >
-                                  <Trash2 className="h-3 w-3 text-rose-600" />
+                                  <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                                 </Button>
-                                <span className="text-rose-700 text-xs font-medium">
+                                <span className="text-rose-700 dark:text-rose-400 text-xs font-medium">
                                   {c.descripcion}
                                 </span>
                               </div>
-                              <span className="font-mono font-bold text-rose-600">
+                              <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                                 -{formatCurrencyLocal(c.monto)}
                               </span>
                             </div>
@@ -1090,7 +1090,7 @@ export default function TripSettlement() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 p-6">
+                  <div className="bg-slate-900 dark:bg-slate-950 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Neto a Depositar
@@ -1100,7 +1100,7 @@ export default function TripSettlement() {
                       </span>
                     </div>
                     <Button
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 shadow-lg gap-2 uppercase tracking-widest text-xs"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 shadow-lg gap-2 uppercase tracking-widest text-xs border-none"
                       disabled={
                         isAnimating || isLoadingPreview || isAuditPending
                       }
@@ -1217,7 +1217,7 @@ export default function TripSettlement() {
               <AlertDialogCancel
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+                className="w-full sm:w-auto flex-shrink-0 font-black uppercase tracking-widest text-[10px] dark:border-white/10 dark:bg-slate-900 dark:text-white"
                 onClick={() => setActionModal(null)}
               >
                 Cancelar
@@ -1229,7 +1229,7 @@ export default function TripSettlement() {
                   "w-full sm:w-auto shadow-lg flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
                   actionModal?.type === "reopen"
                     ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20"
-                    : "bg-slate-800 hover:bg-slate-900",
+                    : "bg-slate-800 hover:bg-slate-900 dark:bg-brand-navy dark:hover:bg-blue-900",
                 )}
               >
                 {actionModal?.type === "reopen"
@@ -1280,11 +1280,11 @@ export default function TripSettlement() {
 
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar space-y-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Concepto / Motivo
               </Label>
               <Input
-                className="h-11 font-bold bg-white dark:bg-slate-900"
+                className="h-11 font-bold bg-white dark:bg-slate-900 dark:border-white/10 dark:text-white"
                 placeholder={
                   newConceptoType === "ingreso"
                     ? "Ej: Bono puntualidad..."
@@ -1295,11 +1295,11 @@ export default function TripSettlement() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Monto (MXN) *
               </Label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 dark:text-slate-500">
                   $
                 </span>
                 <Input
@@ -1307,7 +1307,7 @@ export default function TripSettlement() {
                   placeholder="0.00"
                   value={newConceptoAmount}
                   onChange={(e) => setNewConceptoAmount(e.target.value)}
-                  className="h-12 pl-8 text-lg font-mono font-black bg-white dark:bg-slate-900"
+                  className="h-12 pl-8 text-lg font-mono font-black bg-white dark:bg-slate-900 dark:border-white/10 dark:text-emerald-400"
                 />
               </div>
             </div>
@@ -1318,7 +1318,7 @@ export default function TripSettlement() {
               <Button
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto font-black uppercase tracking-widest text-[10px]"
+                className="w-full sm:w-auto font-black uppercase tracking-widest text-[10px] dark:border-white/10 dark:bg-slate-900 dark:text-white"
                 onClick={() => setShowAddConceptoDialog(false)}
               >
                 Cancelar
@@ -1327,7 +1327,7 @@ export default function TripSettlement() {
                 size="lg"
                 onClick={handleAddConcepto}
                 className={cn(
-                  "w-full sm:w-auto text-white font-black uppercase tracking-widest text-[10px]",
+                  "w-full sm:w-auto text-white font-black uppercase tracking-widest text-[10px] border-none",
                   newConceptoType === "ingreso"
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-rose-600 hover:bg-rose-700",
