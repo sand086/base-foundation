@@ -72,6 +72,7 @@ export default function Receivables() {
     registerMultiplePaymentRep,
     registerPayment,
     reopenReceivable,
+    stampInvoice, // <-- NUEVO EXTRACTO
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -95,7 +96,6 @@ export default function Receivables() {
     useState<ReceivableInvoice | null>(null);
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // FORMATEO DE DATOS DE LA API (CON CÁLCULO DE DÍAS DE CRÉDITO BLINDADO)
   // FORMATEO DE DATOS DE LA API (CÁLCULO EXACTO EN DÍAS HÁBILES)
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
@@ -125,28 +125,25 @@ export default function Receivables() {
           inv.client_razon_social ||
           "Cliente Desconocido";
 
-        // 🚀 1. INTENTAMOS SACAR LOS DÍAS DEL BACKEND
         let diasCredito = Number(
           inv.client?.dias_credito ||
             inv.cliente?.dias_credito ||
             inv.dias_credito,
         );
 
-        // 🚀 2. SALVAVIDAS: Asignación forzada si el backend no los trae
         if (!diasCredito) {
           if (clienteNombre.toUpperCase().includes("HANSA")) {
             diasCredito = 15;
           } else if (clienteNombre.toUpperCase().includes("KARCHER")) {
             diasCredito = 8;
           } else {
-            diasCredito = 15; // Valor por defecto
+            diasCredito = 15;
           }
         }
 
         const fechaEmision = inv.fecha_emision || inv.created_at;
         let fechaVencimientoCalculada = inv.fecha_vencimiento;
 
-        // 🚀 3. CÁLCULO ESTRICTO EN DÍAS HÁBILES (Sin Sábados ni Domingos)
         if (fechaEmision) {
           const cleanDateStr = fechaEmision.includes("T")
             ? fechaEmision.split("T")[0]
@@ -154,10 +151,8 @@ export default function Receivables() {
           const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
 
           let addedDays = 0;
-          // Sumamos días 1 por 1. Si es fin de semana, no cuenta para el crédito.
           while (addedDays < diasCredito) {
             fechaObj.setDate(fechaObj.getDate() + 1);
-            // getDay() devuelve 0 para Domingo y 6 para Sábado
             if (fechaObj.getDay() !== 0 && fechaObj.getDay() !== 6) {
               addedDays++;
             }
@@ -185,7 +180,7 @@ export default function Receivables() {
               : Number(inv.monto_total) || 0,
           requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
           fecha_emision: fechaEmision,
-          fecha_vencimiento: fechaVencimientoCalculada, // USAMOS LA FECHA EN DÍAS HÁBILES
+          fecha_vencimiento: fechaVencimientoCalculada,
           dias_credito: diasCredito,
           estatus: inv.estatus || inv.status || "corriente",
           referencia: inv.referencia || "S/R",
@@ -194,7 +189,6 @@ export default function Receivables() {
       }) as ReceivableInvoice[];
   }, [receivables]);
 
-  // CÁLCULO DEL RESUMEN FINANCIERO
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
     let totalCobrado = 0;
@@ -269,7 +263,7 @@ export default function Receivables() {
       "Cliente",
       "Fecha Emisión",
       "Fecha Vencimiento",
-      "Días Crédito", // Nuevo campo en el excel
+      "Días Crédito",
       "Monto Total",
       "Saldo Pendiente",
       "Estatus",
@@ -362,7 +356,6 @@ export default function Receivables() {
     }).format(amount || 0);
   };
 
-  // 🚀 MAGIA UX APLICADA EN COLUMNS
   const columns: ColumnDef<ReceivableInvoice>[] = useMemo(
     () => [
       {
@@ -527,10 +520,7 @@ export default function Receivables() {
         header: "Acciones",
         sortable: false,
         render: (_, row) => {
-          // 🚀 MAGIA UX 1: Identificar si hay checkboxes activos globalmente
           const isSelectionActive = selectedRows.length > 0;
-
-          // 🚀 MAGIA UX 2: Identificar si la factura ya tiene abonos/pagos
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
 
@@ -538,7 +528,7 @@ export default function Receivables() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  disabled={isSelectionActive} // SE DESHABILITA SI HAY CHECKBOXES ACTIVOS
+                  disabled={isSelectionActive}
                   variant="ghost"
                   size="icon"
                   className={cn(
@@ -566,8 +556,29 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {/* Si todavía tiene saldo pendiente, permitimos cobrar */}
-                {(row.saldo_pendiente || 0) > 0 && (
+                {/* 🚀 NUEVO: ACCIÓN DE TIMBRADO PARA FACTURAS PROVISIONALES */}
+                {(!row.uuid || row.status_sat === "PROVISIONAL") && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        if (
+                          window.confirm(
+                            "¿Certificar esta factura ante el SAT?",
+                          )
+                        ) {
+                          await stampInvoice(Number(row.id));
+                        }
+                      }}
+                      className="gap-2 font-black text-xs uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50 dark:focus:bg-indigo-900/30"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" /> Timbrar en SAT
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/* 🚀 SOLO PERMITIMOS COBRAR SI YA ESTÁ TIMBRADA (TIENE UUID) */}
+                {(row.saldo_pendiente || 0) > 0 && !!row.uuid && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
@@ -583,7 +594,6 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* 🚀 MAGIA UX 3: Si ya tiene pagos, mostramos ANULAR REP */}
                 {hasPayments && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -609,8 +619,7 @@ export default function Receivables() {
         },
       },
     ],
-    // 🚀 IMPORTANTE: Agregar selectedRows.length como dependencia para que re-renderice
-    [selectedRows.length, reopenReceivable],
+    [selectedRows.length, reopenReceivable, stampInvoice],
   );
 
   if (isLoadingReceivables) {
@@ -641,9 +650,7 @@ export default function Receivables() {
         </div>
       </PageHeader>
 
-      {/* TARJETAS DE MÉTRICAS GLOBALES */}
       <div className="grid gap-4 md:grid-cols-4">
-        {/* TOTAL FACTURADO */}
         <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -658,7 +665,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
 
-        {/* TOTAL COBRADO */}
         <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow bg-emerald-50/30">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -674,7 +680,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
 
-        {/* POR COBRAR (VIGENTE) */}
         <Card className="border-l-4 border-l-amber-400 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -689,7 +694,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
 
-        {/* CARTERA VENCIDA */}
         <Card className="border-l-4 border-l-rose-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -721,7 +725,6 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
-      {/* PANEL FLOTANTE DE COBRO MULTIPLE */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
@@ -751,8 +754,6 @@ export default function Receivables() {
           </div>
         </div>
       )}
-
-      {/* MODALES */}
 
       <CreateInvoiceModal
         open={isCreateModalOpen}

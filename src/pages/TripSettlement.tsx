@@ -19,6 +19,7 @@ import {
   Trash2,
   Receipt,
   AlertTriangle,
+  Lock, // <-- NUEVO IMPORT PARA EL CANDADO
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -236,7 +237,6 @@ export default function TripSettlement() {
         (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0);
     });
 
-    // Usamos el estado manual del input como base
     const pagoBaseBruto = sueldoBasePactado;
 
     const bonosAdicionales = conceptosExtra
@@ -284,12 +284,11 @@ export default function TripSettlement() {
     }
 
     let penalizacionLocal = 0;
-    let sueldoLocalCalculado = 0; // Acumulador para dar un valor inicial a la UI
+    let sueldoLocalCalculado = 0;
 
     selectedLegsData.forEach((leg) => {
       penalizacionLocal += Number(leg.monto_penalizaciones) || 0;
 
-      // Cálculo Inteligente del Valor por Defecto de Base
       if (leg.leg_type === "ruta_carretera") {
         let sueldoTarifa = 0;
         const trip = leg.trip;
@@ -319,7 +318,6 @@ export default function TripSettlement() {
           trip?.pago_operador ||
           0;
       } else {
-        // Reglas locales / maniobras / patio
         const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
         sueldoLocalCalculado += isFull ? 300 : 200;
       }
@@ -358,7 +356,6 @@ export default function TripSettlement() {
       setCombustibleFaltante(penalizacionLocal);
       setSueldoBasePactado(sueldoLocalCalculado);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLegIds, activeTab]);
 
   const formatCurrencyLocal = (amount: number) =>
@@ -400,13 +397,11 @@ export default function TripSettlement() {
     setNewConceptoAmount("");
   };
 
-  // FUNCIÓN PARA ELIMINAR BONOS O DEDUCCIONES
   const removeConcepto = (id: string) => {
     setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
     toast.info("Concepto eliminado exitosamente.");
   };
 
-  // FUNCIÓN PARA PERDONAR COBRO DE COMBUSTIBLE
   const removeCombustibleFaltante = () => {
     setCombustibleFaltante(0);
     toast.success("Cargo por combustible anulado para esta liquidación.");
@@ -430,10 +425,8 @@ export default function TripSettlement() {
         })),
       };
 
-      //   ACTUALIZACIÓN OPTIMISTA: Ocultamos de inmediato
       setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
-      // Enviamos al backend
       await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
 
       toast.success("Liquidación Emitida Exitosamente", {
@@ -443,7 +436,6 @@ export default function TripSettlement() {
       if (refresh) refresh();
       setShowReceiptModal(true);
     } catch (error) {
-      //   REVERSIÓN DE EMERGENCIA: Si el PAC/SAT o la BD fallan, los regresamos a la pantalla
       setLocallyLiquidatedIds((prev) =>
         prev.filter((id) => !selectedLegIds.includes(id)),
       );
@@ -457,20 +449,15 @@ export default function TripSettlement() {
     }
   };
 
-  //   LÓGICA DE EXTRACCIÓN ASÍNCRONA PARA EL MODAL HISTÓRICO
   const handleViewReceipt = async (leg: any) => {
     try {
       setIsLoadingPreview(true);
-      // 1. Llamamos a la API de settlement para traer los datos financieros
       const response = await axiosClient.get(
         `/api/logistics/trips/leg/${leg.id}/settlement`,
       );
 
-      // Para que veas en tu consola qué te manda realmente el backend
       console.log(" API DE LIQUIDACIÓN DEVOLVIÓ:", response.data);
 
-      // 2.   RESCATE DE BITÁCORA:
-      // Buscamos si existe el texto de la auditoría en el historial del viaje
       const auditEvent = leg.timeline_events?.find(
         (e: any) =>
           e.location === "Conciliación de Combustible" ||
@@ -487,14 +474,12 @@ export default function TripSettlement() {
           : "CONCILIADO";
       let texto = "Datos recuperados de la liquidación oficial.";
 
-      // 3. SI EL BACKEND MANDÓ CEROS (Porque es viaje de patio), LEEMOS EL TEXTO DE LA AUDITORÍA
       if (vales === 0 && auditEvent && auditEvent.comments) {
         console.log(
           "⚠️ El backend omitió el diésel. Rescatando datos de la bitácora...",
         );
         const text = auditEvent.comments;
 
-        // Expresiones para sacar los números del texto exacto que guardaste
         const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
         const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
         const valesMatch = text.match(/Vales:\s*([\d.]+)/);
@@ -506,10 +491,9 @@ export default function TripSettlement() {
         vales = valesMatch ? Number(valesMatch[1]) : vales;
         rend = rendMatch ? rendMatch[1] : rend;
         veredicto = verMatch ? verMatch[1] : veredicto;
-        texto = text; // Mostramos el texto original de la bitácora
+        texto = text;
       }
 
-      // Seteamos la información para que el Modal hijo la pinte
       if (response.data || vales > 0) {
         setAuditDetails({
           km: String(km),
@@ -519,7 +503,7 @@ export default function TripSettlement() {
           veredicto: veredicto,
           textOriginal: texto,
           fechaAudit: response.data?.fechaViaje || "N/A",
-          hasData: true, // Esto activa la vista en el modal hijo
+          hasData: true,
         });
       }
 
@@ -548,7 +532,6 @@ export default function TripSettlement() {
           `/api/logistics/trips/legs/${actionModal.leg.id}/reopen`,
         );
 
-        // Lo quitamos de la lista optimista para que vuelva a aparecer
         setLocallyLiquidatedIds((prev) =>
           prev.filter((id) => id !== String(actionModal.leg.id)),
         );
@@ -859,17 +842,48 @@ export default function TripSettlement() {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/20"
-                                    onClick={() =>
-                                      setActionModal({ type: "reopen", leg })
-                                    }
-                                    title="Anular y Reabrir (Opción A)"
-                                  >
-                                    <Undo className="h-4 w-4" />
-                                  </Button>
+
+                                  {/* 🚀 NUEVO: LÓGICA DE BLOQUEO DE LA ESCALERITA */}
+                                  {(() => {
+                                    // Comprobamos si la CXC tiene pagos
+                                    const isPaidOrHasAbonos =
+                                      leg.trip?.cxc_pagada === true ||
+                                      leg.is_paid === true ||
+                                      leg.estatus_pago === "pagado";
+
+                                    return (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        disabled={isPaidOrHasAbonos}
+                                        className={cn(
+                                          "h-8 w-8 transition-all",
+                                          isPaidOrHasAbonos
+                                            ? "text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50"
+                                            : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/20",
+                                        )}
+                                        onClick={() =>
+                                          !isPaidOrHasAbonos &&
+                                          setActionModal({
+                                            type: "reopen",
+                                            leg,
+                                          })
+                                        }
+                                        title={
+                                          isPaidOrHasAbonos
+                                            ? "BLOQUEADO: La factura CXC tiene pagos registrados en Tesorería."
+                                            : "Anular y Reabrir (Opción A)"
+                                        }
+                                      >
+                                        {isPaidOrHasAbonos ? (
+                                          <Lock className="h-4 w-4" />
+                                        ) : (
+                                          <Undo className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    );
+                                  })()}
+
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -937,7 +951,6 @@ export default function TripSettlement() {
                 <CardContent className="p-0">
                   <div className="p-6 space-y-6">
                     <div className="space-y-4">
-                      {/*   NUEVO: Input Dinámico para Sueldo Base */}
                       <div className="flex justify-between items-center text-sm bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 mb-4">
                         <span className="text-blue-800 dark:text-blue-400 font-bold text-[11px] uppercase tracking-widest">
                           Sueldo Base (Ruta/Maniobras)
@@ -974,7 +987,6 @@ export default function TripSettlement() {
                           </Button>
                         </div>
 
-                        {/* MAPEO DE INGRESOS CON BOTÓN DE ELIMINAR */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "ingreso")
                           .map((c) => (
@@ -1033,7 +1045,6 @@ export default function TripSettlement() {
                           </div>
                         )}
 
-                        {/* Faltante Combustible con opción a eliminar */}
                         {liquidacion.combustibleFaltante > 0 && (
                           <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1 rounded group transition-colors">
                             <div className="flex items-center gap-1.5">
@@ -1060,7 +1071,6 @@ export default function TripSettlement() {
                           </div>
                         )}
 
-                        {/* MAPEO DE DEDUCCIONES CON BOTÓN DE ELIMINAR */}
                         {conceptosExtra
                           .filter((c) => c.tipo === "deduccion")
                           .map((c) => (
@@ -1120,7 +1130,6 @@ export default function TripSettlement() {
           )}
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN */}
       <AlertDialog
         open={!!actionModal}
         onOpenChange={(open) => !open && setActionModal(null)}
@@ -1241,7 +1250,6 @@ export default function TripSettlement() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DE CONCEPTOS MANUALES */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}
@@ -1340,7 +1348,6 @@ export default function TripSettlement() {
         </DialogContent>
       </Dialog>
 
-      {/* Renderizamos el nuevo componente aislado */}
       <OperatorSettlementDetailModal
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -1352,7 +1359,7 @@ export default function TripSettlement() {
             setCombustibleFaltante(0);
             setSueldoBasePactado(0);
             setPreviewData(null);
-            setAuditDetails(null); //   Limpiamos el histórico al cerrar
+            setAuditDetails(null);
           }
         }}
         selectedLegsData={selectedLegsData}
@@ -1365,7 +1372,7 @@ export default function TripSettlement() {
         empresaDireccion={empresaDireccion}
         empresaTelefono={empresaTelefono}
         empresaLogo={empresaLogo}
-        auditDetails={auditDetails} //   Pasamos el dato del historial al hijo
+        auditDetails={auditDetails}
       />
     </div>
   );

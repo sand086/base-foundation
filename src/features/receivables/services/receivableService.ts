@@ -1,5 +1,6 @@
 import { FinanceService } from "@/api/generated";
 import { ReceivableInvoice } from "@/features/receivables/types";
+import axiosClient from "@/api/axiosClient";
 
 export const receivableService = {
   getInvoices: async (skip = 0, limit = 100) => {
@@ -38,5 +39,11 @@ export const receivableService = {
     return await FinanceService.uploadPaymentXmlApiFinancePaymentsUploadXmlPost(
       { file },
     );
+  },
+
+  // NUEVO: Endpoint para Timbrar la Factura CXC Provisional
+  stampInvoice: async (id: number | string) => {
+    const { data } = await axiosClient.post(`/api/sat/stamp/invoice/${id}`);
+    return data;
   },
 };

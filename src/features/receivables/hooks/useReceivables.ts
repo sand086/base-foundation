@@ -60,6 +60,18 @@ export const useReceivables = () => {
     },
   });
 
+  // NUEVO 5.1: MUTACIÓN: Timbrar Factura CXC (Provisional -> Timbrada)
+  const stampInvoiceMut = useMutation({
+    mutationFn: (id: number) => receivableService.stampInvoice(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+      toast.success("FACTURA TIMBRADA", {
+        description:
+          "El documento ha sido certificado por el SAT exitosamente.",
+      });
+    },
+  });
+
   // 6.   MUTACIÓN: Reabrir / Restaurar factura
   const reopenMut = useMutation({
     mutationFn: (id: number) =>
@@ -121,6 +133,19 @@ export const useReceivables = () => {
           getErrorMessage(error, "Error al timbrar el REP en el SAT"),
         );
         console.error(error);
+        return false;
+      }
+    },
+
+    // NUEVA ACCIÓN EXPORTADA: Timbrar
+    stampInvoice: async (id: number) => {
+      try {
+        await stampInvoiceMut.mutateAsync(id);
+        return true;
+      } catch (error: any) {
+        toast.error(
+          getErrorMessage(error, "Error al timbrar la factura en el SAT"),
+        );
         return false;
       }
     },
