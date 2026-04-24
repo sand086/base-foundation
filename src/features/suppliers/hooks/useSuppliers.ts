@@ -8,6 +8,14 @@ import {
 } from "@/features/payables/types";
 import axiosClient from "@/api/axiosClient";
 
+// 🚀 HELPER DE BLINDAJE: Extrae el texto del error del backend
+const getErrorMessage = (error: any, fallback: string) => {
+  const detail = error.response?.data?.detail;
+  if (Array.isArray(detail)) return detail[0]?.msg || fallback;
+  if (typeof detail === "string") return detail;
+  return fallback;
+};
+
 export const useSuppliers = () => {
   const queryClient = useQueryClient();
 
@@ -106,7 +114,6 @@ export const useSuppliers = () => {
     },
   });
 
-  // Indirect categories CUD — not yet in generated API, use axiosClient
   const createCategoryMut = useMutation({
     mutationFn: (input: { nombre: string; tipo: "fijo" | "variable" }) =>
       axiosClient
@@ -158,7 +165,8 @@ export const useSuppliers = () => {
       try {
         await createInvoiceMut.mutateAsync(data as any);
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al crear la factura"));
         return false;
       }
     },
@@ -166,7 +174,8 @@ export const useSuppliers = () => {
       try {
         await updateInvoiceMut.mutateAsync({ id, data });
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al actualizar la factura"));
         return false;
       }
     },
@@ -174,7 +183,8 @@ export const useSuppliers = () => {
       try {
         await deleteInvoiceMut.mutateAsync(id);
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "No se pudo eliminar la factura"));
         return false;
       }
     },
@@ -186,7 +196,8 @@ export const useSuppliers = () => {
           data: paymentData,
         });
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al registrar el pago"));
         return false;
       }
     },
@@ -195,7 +206,8 @@ export const useSuppliers = () => {
       try {
         await createSupplierMut.mutateAsync(data as any);
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al crear proveedor"));
         return false;
       }
     },
@@ -203,7 +215,8 @@ export const useSuppliers = () => {
       try {
         await updateSupplierMut.mutateAsync({ id, data });
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al actualizar proveedor"));
         return false;
       }
     },
@@ -211,7 +224,8 @@ export const useSuppliers = () => {
       try {
         await deleteSupplierMut.mutateAsync(id);
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al eliminar proveedor"));
         return false;
       }
     },
@@ -222,7 +236,8 @@ export const useSuppliers = () => {
     }) => {
       try {
         return await createCategoryMut.mutateAsync(input);
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al crear categoría"));
         return null;
       }
     },
@@ -233,7 +248,8 @@ export const useSuppliers = () => {
       try {
         await updateCategoryMut.mutateAsync({ id, data });
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al actualizar categoría"));
         return false;
       }
     },
@@ -241,7 +257,8 @@ export const useSuppliers = () => {
       try {
         await deleteCategoryMut.mutateAsync(id);
         return true;
-      } catch {
+      } catch (error: any) {
+        toast.error(getErrorMessage(error, "Error al eliminar categoría"));
         return false;
       }
     },

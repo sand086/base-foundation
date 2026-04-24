@@ -61,7 +61,6 @@ import {
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
 
-//   FIX FASE 3: Importamos el Modal de Carga Masiva (Ya no necesitamos XMLParsedData)
 import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
@@ -111,8 +110,6 @@ export default function Payables() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
-
-  // Estado para el modal de Carga Masiva SAT
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
@@ -156,13 +153,11 @@ export default function Payables() {
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
 
-  //   FIX FASE 3: Al terminar la carga masiva, solo cerramos y recargamos la tabla.
   const handleBulkUploadSuccess = () => {
     setIsXmlModalOpen(false);
     refreshInvoices?.();
   };
 
-  // 1. FORMATEO DE DATOS DE FACTURAS
   const normalizedInvoices = useMemo(() => {
     const dataArray = Array.isArray(invoices)
       ? invoices
@@ -183,7 +178,6 @@ export default function Payables() {
     })) as PayableInvoice[];
   }, [invoices]);
 
-  // 2. FORMATEO DE DATOS DE PAGOS
   const allPayments = useMemo(() => {
     const rows = normalizedInvoices.flatMap((inv) => {
       const supplierName = inv.supplier_razon_social || "";
@@ -294,7 +288,6 @@ export default function Payables() {
     }).format(amount || 0);
   };
 
-  // 3. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (FACTURAS)
   const payablesColumns: ColumnDef<PayableInvoice>[] = useMemo(
     () => [
       {
@@ -479,7 +472,6 @@ export default function Payables() {
     [],
   );
 
-  // 4. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (PAGOS)
   const paymentsColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -578,7 +570,6 @@ export default function Payables() {
         }
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* BOTÓN PARA ABRIR MODAL DE CARGA MASIVA */}
           <Button
             variant="outline"
             className="border-indigo-500 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-black tracking-wide shadow-sm haptic-press transition-all"
@@ -623,12 +614,10 @@ export default function Payables() {
           </TabsList>
         </div>
 
-        {/* TAB 1: CUENTAS POR PAGAR */}
         <TabsContent
           value="cuentas"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
-          {/* KPI CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card
               className={cn(
@@ -703,7 +692,6 @@ export default function Payables() {
           </Card>
         </TabsContent>
 
-        {/* TAB 2: PAGOS Y COMPLEMENTOS */}
         <TabsContent
           value="pagos"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
@@ -720,9 +708,6 @@ export default function Payables() {
         </TabsContent>
       </Tabs>
 
-      {/* MODALES */}
-
-      {/*   MODAL DE IMPORTACIÓN MASIVA SAT */}
       <ImportXMLExpenseModal
         open={isXmlModalOpen}
         onOpenChange={setIsXmlModalOpen}
@@ -770,6 +755,7 @@ export default function Payables() {
         onDelete={deleteIndirectCategory}
       />
 
+      {/* 🚀 MODAL ALERTA ESCALERITA CxP */}
       <AlertDialog
         open={isDeleteInvoiceOpen}
         onOpenChange={setIsDeleteInvoiceOpen}
@@ -795,28 +781,52 @@ export default function Payables() {
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Se eliminará la factura con folio interno{" "}
+                Estás intentando eliminar la factura con folio interno{" "}
                 <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
                   {invoiceToDelete?.folio_interno || "—"}
                 </b>
                 .
               </p>
 
-              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Pérdida de Datos
-                  </h4>
+              {/* LÓGICA DE LA ESCALERITA: SI YA TIENE PAGOS, BLOQUEAMOS VISUALMENTE */}
+              {invoiceToDelete &&
+              (invoiceToDelete.saldo_pendiente || 0) <
+                (invoiceToDelete.monto_total || 0) ? (
+                <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                      BLOQUEO POR AUDITORÍA (TESORERÍA)
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 font-bold">
+                    Esta factura no se puede eliminar porque ya tiene abonos o
+                    pagos registrados en los bancos. <br />
+                    <br />
+                    Si necesitas corregirla,{" "}
+                    <span className="underline">
+                      primero debes ir al módulo de Tesorería y anular el pago
+                    </span>{" "}
+                    para que el dinero regrese a la cuenta.
+                  </p>
                 </div>
-                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Esta acción no se puede deshacer y{" "}
-                  <b className="font-black underline">
-                    borrará los pagos asociados
-                  </b>
-                  .
-                </p>
-              </div>
+              ) : (
+                <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                      Pérdida de Datos
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                    Esta acción no se puede deshacer y{" "}
+                    <b className="font-black underline">
+                      borrará permanentemente el registro
+                    </b>
+                    .
+                  </p>
+                </div>
+              )}
             </AlertDialogDescription>
           </div>
 
@@ -830,14 +840,20 @@ export default function Payables() {
               >
                 Cancelar
               </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                size="lg"
-                onClick={handleConfirmDeleteInvoice}
-                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
-              >
-                Sí, eliminar
-              </AlertDialogAction>
+
+              {/* SOLO MUESTRA EL BOTÓN DE ELIMINAR SI NO TIENE PAGOS */}
+              {(!invoiceToDelete ||
+                (invoiceToDelete.saldo_pendiente || 0) ===
+                  (invoiceToDelete.monto_total || 0)) && (
+                <AlertDialogAction
+                  variant="destructive"
+                  size="lg"
+                  onClick={handleConfirmDeleteInvoice}
+                  className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+                >
+                  Sí, eliminar
+                </AlertDialogAction>
+              )}
             </div>
           </AlertDialogFooter>
         </AlertDialogContent>
