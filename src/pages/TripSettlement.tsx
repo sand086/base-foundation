@@ -689,7 +689,7 @@ export default function TripSettlement() {
                         Ruta
                       </th>
                       <th scope="col" className="px-6 py-3">
-                        Unidad
+                        Fase Operativa
                       </th>
                       <th scope="col" className="px-6 py-3 text-right">
                         Estatus / Base
@@ -760,12 +760,27 @@ export default function TripSettlement() {
                                 />
                               </td>
                             )}
+                            {/* 1. COLUMNA: REFERENCIA (ID del viaje y Operador) */}
                             <td className="px-6 py-3">
-                              <div className="font-bold text-brand-navy dark:text-slate-200 text-sm">
-                                {leg.trip?.public_id || `TRP-${leg.trip_id}`}
+                              <div className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                                <span className="text-slate-400">TRP-</span>
+                                {leg.trip?.id || "N/A"}
                               </div>
-                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                                {leg.trip?.clientName}
+                              <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold flex items-center gap-1 mt-1">
+                                <User className="h-3 w-3 shrink-0" />
+                                <span className="truncate max-w-[140px]">
+                                  {leg.operator?.name || "Sin Operador"}
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* 2. COLUMNA: RUTA (Nombre de la ruta asignada al cliente) */}
+                            <td className="px-6 py-3">
+                              <div
+                                className="text-xs font-bold text-slate-700 dark:text-slate-300 max-w-[250px] line-clamp-2"
+                                title={leg.trip?.route_name}
+                              >
+                                {leg.trip?.route_name || "Sin ruta asignada"}
                               </div>
                             </td>
                             <td className="px-6 py-3">
