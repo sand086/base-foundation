@@ -692,3 +692,31 @@ def reopen_receivable_invoice(
     return {
         "message": "Factura reabierta financieramente. Saldo restaurado y lista para procesarse."
     }
+
+
+# =====================================================================
+# OPERATOR SETTLEMENTS (Liquidaciones Operativas)
+# =====================================================================
+
+
+@router.post("/settlements/operator")
+def process_settlement_for_operator(
+    payload: schemas.OperatorSettlementPayload = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Procesa la liquidación de un Operador específico dentro de un Lote (Batch).
+    Respeta la inmutabilidad de datos y dispara la creación de CxC automáticamente.
+    """
+    try:
+        resultado = crud.process_operator_settlement(db, payload, current_user.id)
+        return resultado
+    except ValueError as e:
+        # Error de regla de negocio (Ej. Falta de auditoría de diésel)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error interno al liquidar: {str(e)}"
+        )

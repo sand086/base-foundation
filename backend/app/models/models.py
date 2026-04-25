@@ -6,6 +6,7 @@ SQLAlchemy ORM Models for TMS
 - Enum names alineados a los tipos existentes en Postgres.
 """
 
+import uuid
 from datetime import date
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum
@@ -727,6 +728,7 @@ class TripLeg(AuditMixin, Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     last_location = Column(String(200))
+    diesel_audit_completed = Column(Boolean, default=False, server_default="false")
 
     trip = relationship("Trip", back_populates="legs")
     unit = relationship("Unit", foreign_keys=[unit_id], back_populates="trip_legs")
@@ -1661,6 +1663,94 @@ class SettlementConceptCatalog(AuditMixin, Base):
     )
     descripcion = Column(String(255), nullable=True)
     activo = Column(Boolean, default=True, server_default="true")
+
+
+class SettlementBatch(AuditMixin, Base):
+    """
+    El Registro Maestro del Lote de pago (Generado con UUID desde el Frontend).
+    Agrupa peticiones para no perder el tracking temporal.
+    """
+
+    __tablename__ = "settlement_batches"
+
+    # Usamos UUIDs para poder mandarlo generado desde el frontend y agrupar peticiones asíncronas
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Relaciones
+    settlements = relationship(
+        "OperatorSettlement", back_populates="batch", cascade="all, delete-orphan"
+    )
+
+
+class OperatorSettlement(AuditMixin, Base):
+    """
+    Foto inmutable del tramo operado. Protege la historia.
+    Si mañana cambian la tarifa_base, la liquidación histórica no se rompe.
+    """
+
+    __tablename__ = "operator_settlements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(
+        String(36),
+        ForeignKey("settlement_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    trip_leg_id = Column(
+        Integer, ForeignKey("trip_legs.id", ondelete="RESTRICT"), nullable=False
+    )
+    operator_id = Column(
+        Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
+    )
+
+    # Snapshots Financieros y Operativos Inmutables
+    snapshot_km = Column(Float, default=0.0)
+    snapshot_diesel_liters = Column(Float, default=0.0)
+    snapshot_base_salary = Column(Float, default=0.0)
+
+    # Relaciones
+    batch = relationship("SettlementBatch", back_populates="settlements")
+    leg = relationship("TripLeg")
+    operator = relationship("Operator")
+    concepts = relationship(
+        "OperatorSettlementConcept",
+        back_populates="settlement",
+        cascade="all, delete-orphan",
+    )
+
+
+class OperatorSettlementConcept(AuditMixin, Base):
+    """
+    Desglose por bolsa de operador.
+    Separa bonos/cargos ingresados a mano (Bolsa de Juan) vs los inyectados por el sistema (Sueldo base).
+    """
+
+    __tablename__ = "operator_settlement_concepts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operator_settlement_id = Column(
+        Integer,
+        ForeignKey("operator_settlements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    concept_id = Column(
+        Integer,
+        ForeignKey("settlement_concepts_catalog.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    descripcion = Column(String(255), nullable=False)
+    tipo = Column(
+        pg_enum(SettlementConceptType, "settlementconcepttype"), nullable=False
+    )
+    amount = Column(Float, nullable=False, default=0.0)
+
+    # EL FILTRO ANTI-DUPLICIDAD: True = Sistema (ej. Sueldo Base), False = Manual (ej. Bono extra)
+    is_automatic = Column(Boolean, default=False, server_default="false")
+
+    # Relaciones
+    settlement = relationship("OperatorSettlement", back_populates="concepts")
+    catalog_concept = relationship("SettlementConceptCatalog")
 
 
 class InsurerCatalog(AuditMixin, Base):

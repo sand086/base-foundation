@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 
 
@@ -208,3 +208,27 @@ class InvoicePaymentCreate(InvoicePaymentBase):
 class InvoicePaymentResponse(InvoicePaymentBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# MÓDULO DE LIQUIDACIONES (SETTLEMENTS)
+# ==========================================
+
+
+class SettlementConceptCreate(BaseModel):
+    descripcion: str = Field(..., description="Ej: Bono por viaje excelente")
+    tipo: str = Field(..., description="'ingreso' o 'deduccion'")
+    amount: float = Field(..., ge=0)
+    concept_id: Optional[int] = None
+    is_automatic: bool = False  # False = Manual (Muro anti-duplicidad)
+
+
+class OperatorSettlementPayload(BaseModel):
+    batch_id: str = Field(
+        ..., description="UUID generado en el Frontend para agrupar el lote"
+    )
+    operator_id: int
+    legs: List[int] = Field(
+        ..., description="Lista de IDs de TripLegs seleccionados para este operador"
+    )
+    manual_concepts: List[SettlementConceptCreate] = []

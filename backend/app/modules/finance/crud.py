@@ -1029,3 +1029,130 @@ def delete_bank_movement(db: Session, movement_id: int):
     movement.record_status = RecordStatus.ELIMINADO
     db.commit()
     return True
+
+
+def process_operator_settlement(
+    db: Session, payload: schemas.OperatorSettlementPayload, user_id: int
+):
+    # 1. UPSERT ATÓMICO del SettlementBatch (Evita error 500 por concurrencia del Frontend)
+    batch = (
+        db.query(models.SettlementBatch)
+        .filter(models.SettlementBatch.id == payload.batch_id)
+        .first()
+    )
+    if not batch:
+        batch = models.SettlementBatch(id=payload.batch_id, created_by_id=user_id)
+        db.add(batch)
+        try:
+            db.flush()
+        except Exception:
+            db.rollback()  # Si otra petición lo insertó justo antes, recuperamos ese batch
+            batch = (
+                db.query(models.SettlementBatch)
+                .filter(models.SettlementBatch.id == payload.batch_id)
+                .one()
+            )
+
+    timestamp = datetime.utcnow()
+    viajes_a_facturar = set()
+
+    # 2. Iterar fases con VALIDACIÓN DE ESTADO
+    for leg_id in payload.legs:
+        # Buscamos solo fases que NO estén liquidadas (Evita doble pago al operador)
+        leg = (
+            db.query(models.TripLeg)
+            .filter(
+                models.TripLeg.id == leg_id,
+                models.TripLeg.record_status != RecordStatus.ELIMINADO,
+            )
+            .first()
+        )
+
+        if not leg or leg.status == "liquidado":
+            continue  # Saltamos si ya se liquidó en otra petición del mismo lote
+
+        if not leg.diesel_audit_completed:
+            raise ValueError(
+                f"Fase {leg.id} bloqueada: Falta dictamen de auditoría de diésel."
+            )
+
+        # Snapshot inmutable
+        settlement_detail = models.OperatorSettlement(
+            batch_id=batch.id,
+            trip_leg_id=leg.id,
+            operator_id=payload.operator_id,
+            snapshot_km=float((leg.odometro_final or 0) - (leg.odometro_inicial or 0)),
+            snapshot_base_salary=leg.monto_sueldo,
+            created_at=timestamp,
+            created_by_id=user_id,
+        )
+        db.add(settlement_detail)
+        db.flush()
+
+        # Inyectar conceptos automáticos
+        if leg.monto_sueldo > 0:
+            db.add(
+                models.OperatorSettlementConcept(
+                    operator_settlement_id=settlement_detail.id,
+                    descripcion="Sueldo Base Operativo",
+                    tipo=SettlementConceptType.INGRESO,
+                    amount=leg.monto_sueldo,
+                    is_automatic=True,  # CRÍTICO para filtro de PDF
+                )
+            )
+
+        leg.status = TripStatus.LIQUIDADO
+        if leg.leg_type == TripLegType.RUTA:
+            viajes_a_facturar.add(leg.trip_id)
+
+    # 3. Conceptos Manuales (Bolsa del operador)
+    if payload.manual_concepts and "settlement_detail" in locals():
+        for concept in payload.manual_concepts:
+            db.add(
+                models.OperatorSettlementConcept(
+                    operator_settlement_id=settlement_detail.id,
+                    descripcion=concept.descripcion,
+                    tipo=concept.tipo,
+                    amount=concept.amount,
+                    is_automatic=False,  # Se mostrará en el PDF
+                )
+            )
+
+    # 4. DISPARADOR DE CxC con VALIDACIÓN CRUZADA (Mundo Cliente)
+    for trip_id in viajes_a_facturar:
+        # Buscamos si el viaje ya tiene facturas (manuales 'MNL' o auto 'CXC') que no estén eliminadas
+        exists = (
+            db.query(models.ReceivableInvoice)
+            .filter(
+                models.ReceivableInvoice.viaje_id == trip_id,
+                models.ReceivableInvoice.record_status
+                != RecordStatus.ACTIVO,  # Filtro estricto
+            )
+            .first()
+        )
+
+        if not exists:
+            trip = db.query(models.Trip).get(trip_id)
+            if trip and trip.tarifa_base > 0:
+                # Lógica financiera pura (Mundo Cliente)
+                subtotal = trip.tarifa_base
+                iva = subtotal * 0.16
+                ret = subtotal * 0.04
+                total = subtotal + iva - ret
+
+                db.add(
+                    models.ReceivableInvoice(
+                        client_id=trip.client_id,
+                        sub_client_id=trip.sub_client_id,
+                        viaje_id=trip.id,
+                        folio_interno=f"CXC-AUTO-{trip.id}",
+                        monto_total=total,
+                        saldo_pendiente=total,
+                        fecha_emision=date.today(),
+                        estatus=InvoiceStatus.PENDIENTE,
+                        created_by_id=user_id,
+                    )
+                )
+
+    db.commit()
+    return {"status": "success", "batch_id": batch.id}
