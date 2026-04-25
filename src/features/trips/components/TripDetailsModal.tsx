@@ -207,17 +207,15 @@ export function TripDetailsModal({
       const facturaFinal = facturas.find(
         (f: any) => f.is_nominal === false && f.uuid,
       );
-      const incomingFinalUuid =
-        (initialTrip as any).uuid_factura_final || facturaFinal?.uuid;
 
       // Buscamos en nuestra memoria caché del navegador por si el backend no lo mandó
       const cachedFinalUuid = localStorage.getItem(
         `final_uuid_${initialTrip.id}`,
       );
+      const incomingFinalUuid = (initialTrip as any).uuid_fiscal;
 
       // Seteamos lo que encontremos (priorizando lo que ya sabíamos que se timbró)
-      setFinalUuid(incomingFinalUuid || cachedFinalUuid || null);
-
+      setFinalUuid(cachedFinalUuid || incomingFinalUuid || null);
       setTarifaBase(initialTrip.tarifa_base || 0);
       setCostoCasetas(initialTrip.costo_casetas || 0);
       setIsEditing(false);
@@ -1235,29 +1233,50 @@ export function TripDetailsModal({
                                     </span>
                                   </div>
                                 </div>
-                                <div className="flex flex-col gap-2">
-                                  {/* 🚀 EL BOTÓN MÁGICO DE TIMBRADO REFACTORIZADO */}
-                                  <Button
-                                    variant="default"
-                                    className={cn(
-                                      "font-black px-8 h-12 shadow-xl disabled:opacity-50 uppercase tracking-widest text-[10px] text-white transition-all w-full sm:w-auto haptic-press border-none",
-                                      finalUuid
-                                        ? "bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
-                                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
-                                    )}
-                                    disabled={
-                                      isStampingFinal ||
-                                      (!localUuid &&
-                                        !finalUuid &&
-                                        !localTrip.uuid_fiscal)
-                                    }
-                                    onClick={async () => {
-                                      if (finalUuid) {
-                                        handleDownloadBothFiles(
-                                          finalUuid,
-                                          true,
-                                        );
-                                      } else {
+                                <div className="flex flex-col gap-3 mt-4">
+                                  {/* 🚀 RENDERIZADO CONDICIONAL DECLARATIVO (ESTADO GENERADO VS POR GENERAR) */}
+                                  {finalUuid ? (
+                                    // ESTADO: FACTURA YA GENERADA
+                                    <div className="flex flex-col items-start gap-4 w-full p-5 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/30">
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                                        <span className="text-xs font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">
+                                          Factura Final Generada Exitosamente
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                        <Button
+                                          variant="outline"
+                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
+                                          onClick={() =>
+                                            handleDownloadPDF(finalUuid)
+                                          }
+                                        >
+                                          <FileText className="h-4 w-4 mr-2 text-rose-500" />
+                                          Descargar PDF
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
+                                          onClick={() =>
+                                            handleDownloadXML(finalUuid)
+                                          }
+                                        >
+                                          <FileCode2 className="h-4 w-4 mr-2 text-blue-500" />
+                                          Descargar XML
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    // ESTADO: FACTURA POR GENERAR
+                                    <Button
+                                      variant="default"
+                                      className="bg-emerald-600 hover:bg-emerald-700 font-black px-8 h-12 shadow-xl shadow-emerald-500/20 uppercase tracking-widest text-[10px] text-white transition-all w-full sm:w-auto haptic-press border-none"
+                                      disabled={
+                                        isStampingFinal ||
+                                        (!localUuid && !localTrip.uuid_fiscal)
+                                      }
+                                      onClick={async () => {
                                         if (
                                           window.confirm(
                                             "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
@@ -1272,16 +1291,22 @@ export function TripDetailsModal({
                                               await axiosClient.post(
                                                 `/api/logistics/trips/${localTrip.id}/stamp-real`,
                                               );
+
+                                            // 🚀 FIX: Leer el UUID directamente desde la raíz del objeto Trip que devuelve Python
+                                            const tripData =
+                                              response.data?.data ||
+                                              response.data;
                                             const generatedFinalUuid =
-                                              response.data?.data?.uuid ||
-                                              response.data?.uuid;
+                                              tripData.uuid_fiscal; // <-- AQUÍ ESTÁ LA CLAVE
 
                                             if (generatedFinalUuid) {
-                                              setFinalUuid(generatedFinalUuid);
+                                              setFinalUuid(generatedFinalUuid); // Actualiza el estado para ocultar el botón
                                               localStorage.setItem(
                                                 `final_uuid_${localTrip.id}`,
                                                 generatedFinalUuid,
                                               );
+
+                                              // Esto llamará a tus endpoints GET de PDF y XML automáticamente
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
@@ -1293,6 +1318,7 @@ export function TripDetailsModal({
                                               description:
                                                 "El documento ha sido certificado por el SAT exitosamente.",
                                             });
+
                                             await refreshLocalTrip();
                                           } catch (error: any) {
                                             const detail =
@@ -1308,30 +1334,14 @@ export function TripDetailsModal({
                                             setIsStampingFinal(false);
                                           }
                                         }
-                                      }
-                                    }}
-                                  >
-                                    {isStampingFinal ? (
-                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    ) : finalUuid ? (
-                                      <FileText className="h-4 w-4 mr-2" />
-                                    ) : (
-                                      <Activity className="h-4 w-4 mr-2" />
-                                    )}
-                                    {finalUuid
-                                      ? "Descargar CFDI Final"
-                                      : "Timbrar Factura Final"}
-                                  </Button>
-                                  {finalUuid && (
-                                    <Button
-                                      variant="outline"
-                                      className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 haptic-press"
-                                      onClick={() =>
-                                        handleDownloadXML(finalUuid)
-                                      }
+                                      }}
                                     >
-                                      <FileCode2 className="h-3.5 w-3.5 mr-2" />{" "}
-                                      Descargar XML (4.0)
+                                      {isStampingFinal ? (
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      ) : (
+                                        <Activity className="h-4 w-4 mr-2" />
+                                      )}
+                                      Timbrar Factura Final
                                     </Button>
                                   )}
                                 </div>
