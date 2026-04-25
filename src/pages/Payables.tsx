@@ -103,7 +103,12 @@ export default function Payables() {
     indirectCategories,
   } = useSuppliers();
 
-  const { bankAccounts, isLoading: isLoadingBankAccounts } = useBankAccounts();
+  // 👇 Aquí está la corrección: Extraemos todo de una sola vez
+  const {
+    bankAccounts,
+    isLoading: isLoadingBankAccounts,
+    refresh: refreshBankAccounts,
+  } = useBankAccounts();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
@@ -276,7 +281,12 @@ export default function Payables() {
     if (ok) {
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
-      await refreshInvoices?.();
+
+      // Disparamos la actualización de ambos módulos
+      await Promise.all([
+        refreshInvoices?.(),
+        refreshBankAccounts?.(), // <--- Ya funciona correctamente
+      ]);
     }
   };
 
