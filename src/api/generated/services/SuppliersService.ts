@@ -59,7 +59,7 @@ export class SuppliersService {
     }
     /**
      * Read Suppliers
-     * Catálogo de proveedores activos. Incluye la relación con el Centro de Costos.
+     * Catálogo de proveedores activos.
      * @param skip
      * @param limit
      * @returns SupplierResponse Successful Response

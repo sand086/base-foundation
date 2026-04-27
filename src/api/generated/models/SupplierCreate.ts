@@ -14,7 +14,6 @@ export type SupplierCreate = {
     dias_credito?: number;
     limite_credito?: number;
     contacto_principal?: (string | null);
-    categoria?: (string | null);
     tipo_proveedor?: (string | null);
     zonas_cobertura?: (string | null);
     banco?: (string | null);

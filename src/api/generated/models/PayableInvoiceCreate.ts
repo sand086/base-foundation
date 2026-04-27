@@ -6,6 +6,7 @@ import type { Currency } from './Currency';
 import type { InvoicePaymentCreate } from './InvoicePaymentCreate';
 export type PayableInvoiceCreate = {
     supplier_id?: (number | null);
+    cost_center_id?: (number | null);
     uuid?: (string | null);
     folio_interno?: (string | null);
     monto_total: number;

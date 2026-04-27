@@ -118,7 +118,6 @@ export interface Supplier {
 
   // Clasificación
   contacto_principal?: string | null;
-  categoria?: string | null;
   tipo_proveedor?: string | null; // Ej: "refacciones", "servicios", "logística"
   zonas_cobertura?: string | null;
 

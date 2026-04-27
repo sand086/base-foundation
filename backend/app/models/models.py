@@ -984,7 +984,6 @@ class Supplier(AuditMixin, Base):
     limite_credito = Column(Float, default=0.0)
 
     contacto_principal = Column(String(100))
-    categoria = Column(String(50))
 
     tipo_proveedor = Column(String(50))
     zonas_cobertura = Column(String(255))

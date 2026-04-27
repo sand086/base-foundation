@@ -277,7 +277,6 @@ class SupplierBase(ORMBase):
     dias_credito: int = 0
     limite_credito: float = 0.0
     contacto_principal: Optional[str] = Field(default=None, max_length=100)
-    categoria: Optional[str] = Field(default=None, max_length=50)
 
     # Nuevos campos de banco y tipo
     tipo_proveedor: Optional[str] = Field(default=None, max_length=50)
@@ -304,7 +303,6 @@ class SupplierUpdate(ORMBase):
     dias_credito: Optional[int] = None
     limite_credito: Optional[float] = None
     contacto_principal: Optional[str] = Field(default=None, max_length=100)
-    categoria: Optional[str] = Field(default=None, max_length=50)
 
     tipo_proveedor: Optional[str] = Field(default=None, max_length=50)
     zonas_cobertura: Optional[str] = Field(default=None, max_length=255)

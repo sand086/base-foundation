@@ -26,7 +26,6 @@ export interface Supplier {
   dias_credito: number;
   limite_credito: number;
   contacto_principal?: string;
-  categoria?: string;
   tipo_proveedor?: string;
   zonas_cobertura?: string;
   banco?: string;

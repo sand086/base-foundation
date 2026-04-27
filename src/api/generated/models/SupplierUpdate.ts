@@ -14,7 +14,6 @@ export type SupplierUpdate = {
     dias_credito?: (number | null);
     limite_credito?: (number | null);
     contacto_principal?: (string | null);
-    categoria?: (string | null);
     tipo_proveedor?: (string | null);
     zonas_cobertura?: (string | null);
     banco?: (string | null);

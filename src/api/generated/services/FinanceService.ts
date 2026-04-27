@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__finance__schemas__CostCenterResponse } from '../models/app__modules__finance__schemas__CostCenterResponse';
 import type { BankAccountCreate } from '../models/BankAccountCreate';
 import type { BankAccountResponse } from '../models/BankAccountResponse';
 import type { BankMovementCreate } from '../models/BankMovementCreate';
@@ -9,7 +10,6 @@ import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
-import type { CostCenterResponse } from '../models/CostCenterResponse';
 import type { OperatorSettlementPayload } from '../models/OperatorSettlementPayload';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
@@ -19,10 +19,10 @@ export class FinanceService {
      * Read Cost Centers
      * Obtiene los Centros de Costos creados por la importación masiva del SAT
      * o creados manualmente, para mostrarlos en el frontend.
-     * @returns CostCenterResponse Successful Response
+     * @returns app__modules__finance__schemas__CostCenterResponse Successful Response
      * @throws ApiError
      */
-    public static readCostCentersApiFinanceCostCentersGet(): CancelablePromise<Array<CostCenterResponse>> {
+    public static readCostCentersApiFinanceCostCentersGet(): CancelablePromise<Array<app__modules__finance__schemas__CostCenterResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/finance/cost-centers',

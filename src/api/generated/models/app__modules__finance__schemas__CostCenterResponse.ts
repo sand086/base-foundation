@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type CostCenterResponse = {
+export type app__modules__finance__schemas__CostCenterResponse = {
     /**
      * Ej: ADM-01
      */
