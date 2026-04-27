@@ -21,7 +21,12 @@ def get_suppliers(db: Session, skip: int = 0, limit: int = 100):
     """
     return (
         db.query(models.Supplier)
-        .options(joinedload(models.Supplier.cost_center))  # 🚀 Carga el CECO asociado
+        .options(
+            joinedload(models.Supplier.cost_center),
+            joinedload(models.Supplier.invoices).joinedload(
+                models.PayableInvoice.payments
+            ),
+        )
         .filter(models.Supplier.record_status != RecordStatus.ELIMINADO)
         .order_by(models.Supplier.id.asc())
         .offset(skip)
@@ -36,7 +41,12 @@ def get_supplier(db: Session, supplier_id: int):
     """
     return (
         db.query(models.Supplier)
-        .options(joinedload(models.Supplier.cost_center))
+        .options(
+            joinedload(models.Supplier.cost_center),
+            joinedload(models.Supplier.invoices).joinedload(
+                models.PayableInvoice.payments
+            ),
+        )
         .filter(
             models.Supplier.id == supplier_id,
             models.Supplier.record_status != RecordStatus.ELIMINADO,
