@@ -6,7 +6,7 @@
 import { SupplierResponse } from "@/api/generated/models/SupplierResponse";
 import { SupplierCreate } from "@/api/generated/models/SupplierCreate";
 import { SupplierUpdate } from "@/api/generated/models/SupplierUpdate";
-import { CostCenterResponse } from "@/api/generated/models/CostCenterResponse";
+import type { app__modules__finance__schemas__CostCenterResponse as CostCenterResponse } from "@/api/generated/models/app__modules__finance__schemas__CostCenterResponse";
 import { PayableInvoiceResponse } from "@/api/generated/models/PayableInvoiceResponse";
 
 /**

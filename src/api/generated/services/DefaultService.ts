@@ -467,6 +467,19 @@ export class DefaultService {
         });
     }
     /**
+     * Get Costs By Ceco
+     * 🚀 TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
+     * Ideal para inyectar directo en un PieChart de React.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getCostsByCecoApiDashboardStatsCostsByCecoGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/dashboard/stats/costs-by-ceco',
+        });
+    }
+    /**
      * Read Clients
      * @param skip
      * @param limit

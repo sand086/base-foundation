@@ -22,6 +22,8 @@ from app.models.models import (
     WorkOrderPart,
     WorkOrderStatus,
     TripTimelineEvent,
+    CostCenter,
+    PayableInvoice,
 )
 from app.modules.dashboard.schemas import DashboardData
 
@@ -376,43 +378,52 @@ def get_dashboard_stats(
 
 from sqlalchemy import func
 
+# Asegúrate de que tus imports arriba tengan CostCenter y PayableInvoice así:
+# from app.models.models import CostCenter, PayableInvoice, RecordStatus, ...
 
-@router.get("/dashboard/stats/costs-by-ceco")
+
+@router.get("/stats/costs-by-ceco")
 def get_costs_by_ceco(db: Session = Depends(get_db)):
     """
     🚀 TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
-    Ideal para inyectar directo en un PieChart de React (Recharts / Chart.js).
+    Ideal para inyectar directo en un PieChart de React.
     """
-
-    # 1. Sumar facturas agrupadas por el nombre del Centro de Costos
-    results = (
-        db.query(
-            models.CostCenter.nombre,
-            func.sum(models.PayableInvoice.monto_total).label("total_gastado"),
-        )
-        .join(
-            models.PayableInvoice,
-            models.PayableInvoice.cost_center_id == models.CostCenter.id,
-        )
-        .filter(models.PayableInvoice.record_status != models.RecordStatus.ELIMINADO)
-        .group_by(models.CostCenter.nombre)
-        .all()
-    )
-
-    # 2. Formatear para el frontend: [{"name": "Mantenimiento", "value": 150000}]
-    data = [{"name": row.nombre, "value": float(row.total_gastado)} for row in results]
-
-    # 3. Calcular lo que no tiene CECO asignado ("Sin Asignar")
-    sin_asignar = (
-        db.query(func.sum(models.PayableInvoice.monto_total))
-        .filter(models.PayableInvoice.cost_center_id == None)
-        .filter(models.PayableInvoice.record_status != models.RecordStatus.ELIMINADO)
-        .scalar()
-    )
-
-    if sin_asignar and float(sin_asignar) > 0:
-        data.append(
-            {"name": "Sin Asignar (Revisión Manual)", "value": float(sin_asignar)}
+    try:
+        # Usamos los modelos directamente, sin el prefijo "models."
+        results = (
+            db.query(
+                CostCenter.nombre,
+                func.sum(PayableInvoice.monto_total).label("total_gastado"),
+            )
+            .join(
+                PayableInvoice,
+                PayableInvoice.cost_center_id == CostCenter.id,
+            )
+            .filter(PayableInvoice.record_status != RecordStatus.ELIMINADO)
+            .group_by(CostCenter.nombre)
+            .all()
         )
 
-    return data
+        data = [
+            {"name": row.nombre, "value": float(row.total_gastado)} for row in results
+        ]
+
+        sin_asignar = (
+            db.query(func.sum(PayableInvoice.monto_total))
+            .filter(PayableInvoice.cost_center_id == None)
+            .filter(PayableInvoice.record_status != RecordStatus.ELIMINADO)
+            .scalar()
+        )
+
+        if sin_asignar and float(sin_asignar) > 0:
+            data.append(
+                {"name": "Sin Asignar (Revisión Manual)", "value": float(sin_asignar)}
+            )
+
+        return data
+
+    except Exception as e:
+        import traceback
+
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Error obteniendo stats de CECOs")

@@ -31,6 +31,10 @@ class CostCenterResponse(ORMBase):
     nombre: str
     activo: bool
 
+    model_config = ConfigDict(
+        from_attributes=True, json_schema_extra={"title": "CostCenterResponse"}
+    )
+
 
 # =========================================================
 # PAYMENTS (InvoicePayment)

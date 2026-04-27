@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { costCentersService } from "../services/costCenters";
-import type { CostCenterResponse } from "@/api/generated/models/CostCenterResponse";
+import type { app__modules__finance__schemas__CostCenterResponse as CostCenterResponse } from "@/api/generated/models/app__modules__finance__schemas__CostCenterResponse";
 import { toast } from "sonner";
 
 export function useCostCenters() {

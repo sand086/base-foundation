@@ -13,8 +13,11 @@ import { OnTimeChart } from "@/features/dashboard/components/OnTimeChart";
 import { TopClientsChart } from "@/features/dashboard/components/TopClientsChart";
 import { OperatorStatsCharts } from "@/features/dashboard/components/OperatorStatsCharts";
 import { DashboardTrends } from "@/features/dashboard/components/DashboardTrends";
-// 1. IMPORTAMOS EL NUEVO COMPONENTE
 import { SalesAndWorkshopTrends } from "@/features/dashboard/components/SalesAndWorkshopTrends";
+
+// 🚀 1. IMPORTAMOS EL NUEVO COMPONENTE DE CENTRO DE COSTOS
+import { CostsByCecoChart } from "@/features/dashboard/components/CostsByCecoChart";
+
 import { useDashboard } from "@/features/dashboard/hooks/useDashboard";
 import { DashboardData } from "@/features/dashboard/types";
 
@@ -24,7 +27,6 @@ export default function Dashboard() {
     to: new Date(),
   });
 
-  // 2. EXTRAEMOS LA NUEVA DATA DEL HOOK
   const {
     serviceStats,
     clientServices,
@@ -33,8 +35,8 @@ export default function Dashboard() {
     revenueTrend,
     tripConfigTrend,
     fuelTrend,
-    dailyRevenue, // <-- NUEVO
-    mechanicStats, // <-- NUEVO
+    dailyRevenue,
+    mechanicStats,
     isLoading,
     error,
   } = useDashboard(dateRange?.from, dateRange?.to);
@@ -57,7 +59,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <PageHeader
-          title="Dashboard"
+          title="Dashboard Central"
           description="Resumen operativo y financiero en tiempo real"
         />
         <DateRangePicker
@@ -111,18 +113,23 @@ export default function Dashboard() {
           {/* Gráficas de Tendencias Mensuales */}
           <DashboardTrends data={dashboardData} />
 
-          {/* 3. AÑADIMOS EL NUEVO COMPONENTE AQUÍ */}
           <SalesAndWorkshopTrends
             dailyRevenue={dailyRevenue as any}
             mechanicStats={mechanicStats as any}
           />
 
-          {/* Fila de Gráficas: Pastel de Puntualidad + Barras de Clientes */}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="bento-card bento-card-featured">
+          {/* 🚀 2. FILA DE GRÁFICAS AMPLIADA: Añadimos la gráfica de CECO aquí */}
+          <div className="grid gap-4 lg:grid-cols-3 md:grid-cols-2">
+            <div className="bento-card bento-card-featured lg:col-span-1">
               {serviceStats && <OnTimeChart stats={serviceStats} />}
             </div>
-            <div className="bento-card">
+
+            {/* NUEVA GRÁFICA DE CECO */}
+            <div className="bento-card lg:col-span-1">
+              <CostsByCecoChart />
+            </div>
+
+            <div className="bento-card lg:col-span-1">
               <TopClientsChart clients={clientServices || []} />
             </div>
           </div>
