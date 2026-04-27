@@ -29,6 +29,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+
 interface ConceptoExtra {
   id: string;
   descripcion: string;
@@ -551,23 +552,48 @@ export function OperatorSettlementDetailModal({
                                 {leg.leg_type?.replace("_", " ")}
                               </span>
                             </div>
-                            <div className="col-span-2">
-                              <span className="text-[9px] uppercase font-bold text-slate-400 block mb-0.5">
-                                Trayecto / Cliente
-                              </span>
-                              <span className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2 truncate">
-                                <MapPin className="h-3 w-3 text-emerald-500 shrink-0" />{" "}
-                                {leg.trip?.origin || "S/D"}
-                                <span className="text-slate-300 dark:text-slate-600 mx-1 shrink-0">
-                                  ➔
-                                </span>
-                                <MapPin className="h-3 w-3 text-rose-500 shrink-0" />{" "}
-                                {leg.trip?.destination || "S/D"}
-                              </span>
-                              <span className="text-[9px] text-slate-400 mt-1 block truncate">
-                                Cliente: {leg.trip?.clientName || "N/A"}
-                              </span>
+
+                            {/* ======================================================== */}
+                            {/* MEJORA FASE 2.1: TRAYECTO, CLIENTE Y CONTENEDORES       */}
+                            {/* ======================================================== */}
+                            <div className="col-span-2 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-200 dark:border-white/5">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <span className="text-[9px] uppercase font-black text-slate-500 block mb-1 tracking-widest">
+                                    Trayecto Ejecutado
+                                  </span>
+                                  <span className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-2 truncate">
+                                    <MapPin className="h-3 w-3 text-emerald-500 shrink-0" />
+                                    {leg.trip?.origin || "Patio Origen"}
+                                    <span className="text-slate-300 dark:text-slate-600 mx-1 shrink-0">
+                                      ➔
+                                    </span>
+                                    <MapPin className="h-3 w-3 text-rose-500 shrink-0" />
+                                    {leg.trip?.destination || "Patio Destino"}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] uppercase font-black text-slate-500 block mb-1 tracking-widest">
+                                    Cliente y Contenedores
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block truncate">
+                                    🏢{" "}
+                                    {leg.trip?.clientName ||
+                                      "Movimiento Interno"}
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 mt-1 block truncate">
+                                    📦 Contenedores:{" "}
+                                    {[
+                                      leg.trip?.contenedor_1,
+                                      leg.trip?.contenedor_2,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" / ") || "Sin caja asignada"}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
+                            {/* FIN DE MEJORA FASE 2.1 */}
                           </div>
                         </div>
 

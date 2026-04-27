@@ -35,6 +35,11 @@ export interface Supplier {
   estatus: "activo" | "inactivo" | "suspendido";
   created_at?: string;
   updated_at?: string;
+  cost_center?: {
+    id: number;
+    codigo?: string;
+    nombre: string;
+  };
 }
 
 export interface InvoicePayment {

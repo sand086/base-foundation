@@ -38,33 +38,8 @@ class BulkUploadPayload(BaseModel):
 
 
 # =====================================================================
-# PROVIDERS, CATEGORIES & COST CENTERS
+# CATEGORIES & COST CENTERS
 # =====================================================================
-
-
-@router.get("/providers", response_model=List[schemas.ProviderResponse])
-def read_providers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_providers(db, skip, limit)
-
-
-@router.post("/providers", response_model=schemas.ProviderResponse)
-def create_provider(provider: schemas.ProviderCreate, db: Session = Depends(get_db)):
-    if db.query(models.Supplier).filter(models.Supplier.rfc == provider.rfc).first():
-        raise HTTPException(status_code=400, detail="RFC ya registrado")
-    return crud.create_provider(db, provider)
-
-
-@router.delete("/providers/{provider_id}")
-def delete_provider(provider_id: str, db: Session = Depends(get_db)):
-    if not crud.delete_provider(db, provider_id):
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
-    return {"message": "Proveedor eliminado"}
-
-
-@router.get("/indirect-categories")
-def read_indirect_categories(db: Session = Depends(get_db)):
-    """Obtiene las categorías de gastos indirectos (Fijos/Variables)"""
-    return crud.get_indirect_categories(db)
 
 
 #   NUEVO ENDPOINT: CENTROS DE COSTO (CECOS)

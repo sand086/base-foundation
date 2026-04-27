@@ -21,6 +21,7 @@ export type SupplierCreate = {
     cuenta_bancaria?: (string | null);
     clabe?: (string | null);
     estatus?: SupplierStatus;
+    cost_center_id?: (number | null);
     tariffs?: Array<SupplierTariffCreate>;
 };
 

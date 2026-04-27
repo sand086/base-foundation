@@ -20,6 +20,7 @@ export type SupplierUpdate = {
     banco?: (string | null);
     cuenta_bancaria?: (string | null);
     clabe?: (string | null);
+    cost_center_id?: (number | null);
     estatus?: (SupplierStatus | null);
     tariffs?: (Array<SupplierTariffUpdate> | null);
 };

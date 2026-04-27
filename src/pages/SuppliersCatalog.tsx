@@ -1,3 +1,4 @@
+// src/features/cxp/SuppliersCatalog.tsx
 import { useMemo, useState } from "react";
 import {
   Search,
@@ -10,8 +11,9 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
-import { ActionButton } from "@/components/ui/action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
+// 👇 Importamos el componente Badge que nos compartiste
+import { Badge } from "@/components/ui/badge";
 import {
   DataTable,
   DataTableHeader,
@@ -46,15 +48,33 @@ import { SupplierDetailSheet } from "@/features/suppliers/components/SupplierDet
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 import { Supplier } from "@/features/suppliers/types";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
+import { useCostCenters } from "@/features/costCenters/hooks/useCostCenters";
 import { cn } from "@/lib/utils";
 
 const safeLower = (v: unknown) =>
   typeof v === "string" ? v.toLowerCase() : "";
 
+// 👇 FUNCIÓN AUXILIAR PARA MAPEAR EL COLOR SEGÚN EL CÓDIGO DEL CECO
+const getCecoBadgeVariant = (codigo?: string) => {
+  if (!codigo) return "neutral";
+
+  const code = codigo.toUpperCase();
+
+  // Agrupamos los códigos de CECO por la familia de color que mejor los represente
+  if (["ADMIN", "COMBAN"].includes(code)) return "info";
+  if (["MTTO", "LLANTAS", "ADQ"].includes(code)) return "warning";
+  if (["DIESEL", "CASETAS"].includes(code)) return "neutral";
+  if (["PERSONAL", "SEG", "SEGUROS"].includes(code)) return "success";
+
+  return "default"; // Fallback por defecto
+};
+
 export default function SuppliersCatalog() {
   const { valueAsNumber: defaultCredito } = useSystemConfig(
     "dias_credito_default",
   );
+
+  const { costCenters } = useCostCenters();
 
   const {
     suppliers,
@@ -102,7 +122,7 @@ export default function SuppliersCatalog() {
         description="Directorio centralizado de proveedores de servicios y refacciones."
       />
 
-      {/* TOOLBAR TAHOE */}
+      {/* TOOLBAR */}
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
         <div className="relative w-full sm:max-w-md">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-white/60 pointer-events-none" />
@@ -125,7 +145,7 @@ export default function SuppliersCatalog() {
         </Button>
       </div>
 
-      {/* CASCARÓN DE LA TABLA (Liquid Glass) */}
+      {/* TABLA DE PROVEEDORES */}
       <Card className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           {isLoadingSuppliers ? (
@@ -140,6 +160,8 @@ export default function SuppliersCatalog() {
                     <DataTableHead>ID</DataTableHead>
                     <DataTableHead>Razón Social</DataTableHead>
                     <DataTableHead>RFC</DataTableHead>
+                    <DataTableHead>CECO</DataTableHead>
+                    <DataTableHead>Crédito</DataTableHead>
                     <DataTableHead>Contacto</DataTableHead>
                     <DataTableHead>Teléfono</DataTableHead>
                     <DataTableHead>Estatus</DataTableHead>
@@ -152,7 +174,7 @@ export default function SuppliersCatalog() {
                   {filteredSuppliers.length === 0 ? (
                     <DataTableRow>
                       <DataTableCell
-                        colSpan={7}
+                        colSpan={9}
                         className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                       >
                         No se encontraron proveedores.
@@ -173,6 +195,31 @@ export default function SuppliersCatalog() {
                         <DataTableCell className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
                           {supplier.rfc}
                         </DataTableCell>
+
+                        {/* 👇 COLUMNA CECO: Implementación del nuevo Badge */}
+                        <DataTableCell>
+                          {supplier.cost_center ? (
+                            <Badge
+                              variant={getCecoBadgeVariant(
+                                supplier.cost_center.codigo,
+                              )}
+                              title={`Código: ${supplier.cost_center.codigo}`}
+                            >
+                              {supplier.cost_center.nombre}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] uppercase tracking-[0.2em] opacity-40 font-bold italic">
+                              Sin Asignar
+                            </span>
+                          )}
+                        </DataTableCell>
+
+                        <DataTableCell className="text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight">
+                          {supplier.dias_credito
+                            ? `${supplier.dias_credito} Días`
+                            : "Contado"}
+                        </DataTableCell>
+
                         <DataTableCell className="text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight">
                           {supplier.contacto_principal || "—"}
                         </DataTableCell>
@@ -253,12 +300,12 @@ export default function SuppliersCatalog() {
         </CardContent>
       </Card>
 
-      {/* MODALES */}
       <SupplierModal
         open={isSupplierModalOpen}
         onOpenChange={setIsSupplierModalOpen}
         supplier={editingSupplier}
         defaultCredito={!editingSupplier ? defaultCredito : undefined}
+        costCenters={costCenters}
         onSubmit={async (payload) => {
           if (editingSupplier) {
             await updateSupplier(editingSupplier.id, payload);
@@ -274,7 +321,6 @@ export default function SuppliersCatalog() {
         supplier={selectedSupplier}
       />
 
-      {/* ALERT DIALOG - ELIMINAR PROVEEDOR */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}

@@ -9,54 +9,6 @@ from app.models.models import RecordStatus  # <-- Importante para el filtro
 from . import schemas
 
 # =====================================================================
-# PROVIDERS & CATEGORIES
-# =====================================================================
-
-
-def get_providers(db: Session, skip: int = 0, limit: int = 100):
-    return (
-        db.query(models.Provider)
-        .filter(models.Provider.record_status != RecordStatus.ELIMINADO)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-
-def create_provider(db: Session, provider: schemas.ProviderCreate):
-    db_provider = models.Provider(**provider.model_dump())
-    db.add(db_provider)
-    db.commit()
-    db.refresh(db_provider)
-    return db_provider
-
-
-def delete_provider(db: Session, provider_id: str):
-    provider = (
-        db.query(models.Provider)
-        .filter(
-            models.Provider.id == provider_id,
-            models.Provider.record_status != RecordStatus.ELIMINADO,
-        )
-        .first()
-    )
-    if provider:
-        # Reemplazamos db.delete por Soft Delete
-        provider.record_status = RecordStatus.ELIMINADO
-        db.commit()
-        return True
-    return False
-
-
-def get_indirect_categories(db: Session):
-    return (
-        db.query(models.IndirectExpenseCategory)
-        .filter(models.IndirectExpenseCategory.record_status != RecordStatus.ELIMINADO)
-        .all()
-    )
-
-
-# =====================================================================
 # TREASURY & BANKS (Cuentas y Tesorería)
 # =====================================================================
 
@@ -211,6 +163,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
     1. Evita duplicados por UUID.
     2. Crea el proveedor automáticamente si no existe por RFC.
     3. Calcula fecha de vencimiento basada en días de crédito.
+    4. (NUEVO) Hereda automáticamente el Centro de Costos (CECO) asignado al proveedor.
     """
     facturas_creadas = 0
     proveedores_creados = 0
@@ -288,11 +241,19 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
             subtotal = 0.0
             total = 0.0
 
+        # ========================================================
+        # NUEVO FASE 3.2: HERENCIA AUTOMÁTICA DEL CENTRO DE COSTOS
+        # ========================================================
+        # Usamos getattr por seguridad, por si en alguna migración antigua
+        # el modelo Provider aún no tiene reflejada la columna.
+        ceco_heredado = getattr(provider, "cost_center_id", None)
+
         # 5. CREACIÓN DE FACTURA (CXP)
         concepto = str(item.get("concepto") or "Factura importada del SAT")
 
         invoice = models.PayableInvoice(
             supplier_id=provider.id,
+            cost_center_id=ceco_heredado,  # <--- INYECCIÓN DEL CECO AQUÍ
             uuid=uuid_fiscal,
             folio=str(item.get("folio") or ""),
             concepto=concepto[:200],  # Truncar por si viene muy largo

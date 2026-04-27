@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__catalogs__schemas__SettlementConceptCreate } from '../models/app__modules__catalogs__schemas__SettlementConceptCreate';
 import type { Body_download_csd_secure_api_sat_csd_download_post } from '../models/Body_download_csd_secure_api_sat_csd_download_post';
 import type { Body_upload_client_document_api_clients__client_id__documents__doc_type__post } from '../models/Body_upload_client_document_api_clients__client_id__documents__doc_type__post';
 import type { Body_upload_csd_files_api_sat_csd_post } from '../models/Body_upload_csd_files_api_sat_csd_post';
@@ -21,7 +22,6 @@ import type { ReceivableInvoiceCreate } from '../models/ReceivableInvoiceCreate'
 import type { RegistroPagoPayload } from '../models/RegistroPagoPayload';
 import type { RouteCreate } from '../models/RouteCreate';
 import type { SettlementConceptBase } from '../models/SettlementConceptBase';
-import type { SettlementConceptCreate } from '../models/SettlementConceptCreate';
 import type { SystemConfigResponse } from '../models/SystemConfigResponse';
 import type { SystemConfigUpdate } from '../models/SystemConfigUpdate';
 import type { TerminalBase } from '../models/TerminalBase';
@@ -318,7 +318,7 @@ export class DefaultService {
      * @throws ApiError
      */
     public static saveSettlementConceptsBulkApiCatalogsSettlementConceptsBulkPost(
-        requestBody: Array<SettlementConceptCreate>,
+        requestBody: Array<app__modules__catalogs__schemas__SettlementConceptCreate>,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',

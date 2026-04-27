@@ -39,12 +39,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-//  IMPORTS CORREGIDOS A LA ARQUITECTURA FSD
+// IMPORTS CORREGIDOS A LA ARQUITECTURA FSD
 import {
   getOrderTypeColor,
   getStatusInfo,
   getOrderTypeLabel,
-  PurchaseOrder, // <-- ¡Solución al Error 2304!
+  PurchaseOrder, // <-- ¡Solución al Error de Tipos!
 } from "@/features/purchases/types";
 import { mockPurchaseOrders } from "@/features/purchases/data";
 import { PurchaseOrderWizard } from "@/features/purchases/components/PurchaseOrderWizard";
@@ -66,7 +66,7 @@ export default function Purchases() {
   );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  //  KPIs CORREGIDOS (Usando las propiedades en inglés de PurchaseOrder)
+  // KPIs CORREGIDOS (Usando las propiedades en inglés de PurchaseOrder)
   const kpis = useMemo(
     () => ({
       borradores: orders.filter((o) => o.status === "borrador").length,
@@ -115,7 +115,7 @@ export default function Purchases() {
     toast.success(`Orden ${order.folio} aprobada`);
   };
 
-  //  SOLUCIÓN DE TIPOS (string | number)
+  // SOLUCIÓN DE TIPOS (string | number)
   const handleReceive = (
     orderId: string | number,
     completo: boolean,
@@ -142,7 +142,7 @@ export default function Purchases() {
       ),
     );
     toast.success("Redirigiendo a Cuentas por Pagar...");
-    navigate("/payables"); //  Redirige a la nueva ruta en inglés
+    // La navegación real ocurre dentro del ConvertToCxPModal con los parámetros
   };
 
   const handleDelete = () => {
@@ -155,12 +155,7 @@ export default function Purchases() {
 
   const handlePrint = (order: PurchaseOrder) => {
     toast.info(`Generando PDF para la orden ${order.folio}...`);
-    // Aquí puedes invocar tu función printOrderPDF(order) si la tienes
   };
-
-  // ==========================================
-  // COLUMNAS (Alineadas a types.ts)
-  // ==========================================
 
   const columns: ColumnDef<PurchaseOrder>[] = useMemo(
     () => [
@@ -168,7 +163,9 @@ export default function Purchases() {
         key: "folio",
         header: "Folio",
         render: (v) => (
-          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">{v as string}</span>
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+            {v as string}
+          </span>
         ),
       },
       {
@@ -182,12 +179,24 @@ export default function Purchases() {
           </Badge>
         ),
       },
-      { key: "supplier_name", header: "Proveedor", render: (v) => (
-        <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">{v as string}</span>
-      ) },
-      { key: "requester", header: "Solicitante", render: (v) => (
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{v as string}</span>
-      ) },
+      {
+        key: "supplier_name",
+        header: "Proveedor",
+        render: (v) => (
+          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+            {v as string}
+          </span>
+        ),
+      },
+      {
+        key: "requester",
+        header: "Solicitante",
+        render: (v) => (
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            {v as string}
+          </span>
+        ),
+      },
       {
         key: "total",
         header: "Monto",
@@ -199,7 +208,7 @@ export default function Purchases() {
         ),
       },
       {
-        key: "status", //  Corregido de estatus
+        key: "status",
         header: "Estatus",
         type: "status",
         statusOptions: [
@@ -221,11 +230,18 @@ export default function Purchases() {
         render: (_, row) => (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+              >
                 <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90">
+            <DropdownMenuContent
+              align="end"
+              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
+            >
               <DropdownMenuItem
                 onClick={() => {
                   setEditingOrder(row);
@@ -236,7 +252,10 @@ export default function Purchases() {
                 <Edit className="h-4 w-4 mr-2 text-brand-green dark:text-[#009740]" />
                 Editar
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlePrint(row)} className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800">
+              <DropdownMenuItem
+                onClick={() => handlePrint(row)}
+                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+              >
                 <Printer className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />
                 Imprimir PDF
               </DropdownMenuItem>
@@ -260,7 +279,10 @@ export default function Purchases() {
                 </DropdownMenuItem>
               )}
               {row.status === "pendiente_aprobacion" && (
-                <DropdownMenuItem onClick={() => handleApprove(row)} className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800">
+                <DropdownMenuItem
+                  onClick={() => handleApprove(row)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
                   <CheckCircle className="h-4 w-4 mr-2 text-emerald-500 dark:text-emerald-400" />
                   Aprobar
                 </DropdownMenuItem>

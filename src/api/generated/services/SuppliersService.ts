@@ -14,6 +14,7 @@ import { request as __request } from '../core/request';
 export class SuppliersService {
     /**
      * Read Invoices
+     * Obtiene el listado de Cuentas por Pagar (Facturas de Proveedores).
      * @param skip
      * @param limit
      * @returns PayableInvoiceResponse Successful Response
@@ -37,6 +38,8 @@ export class SuppliersService {
     }
     /**
      * Create Invoice
+     * Crea una nueva factura de proveedor.
+     * Heredará automáticamente el CECO del proveedor si existe.
      * @param requestBody
      * @returns PayableInvoiceResponse Successful Response
      * @throws ApiError
@@ -56,6 +59,7 @@ export class SuppliersService {
     }
     /**
      * Read Suppliers
+     * Catálogo de proveedores activos. Incluye la relación con el Centro de Costos.
      * @param skip
      * @param limit
      * @returns SupplierResponse Successful Response
@@ -79,6 +83,7 @@ export class SuppliersService {
     }
     /**
      * Create Supplier
+     * Registra un nuevo proveedor en el sistema.
      * @param requestBody
      * @returns SupplierResponse Successful Response
      * @throws ApiError
@@ -162,6 +167,7 @@ export class SuppliersService {
     }
     /**
      * Register Payment
+     * Registra un pago a una factura y genera el movimiento de egreso en Tesorería.
      * @param invoiceId
      * @param requestBody
      * @returns PayableInvoiceResponse Successful Response
@@ -186,7 +192,7 @@ export class SuppliersService {
     }
     /**
      * Delete Payment
-     * Elimina (Soft Delete) un pago, recalcula la factura y devuelve el dinero a Tesorería.
+     * Cancela un pago, restaura el saldo de la factura y devuelve el dinero a Tesorería.
      * @param paymentId
      * @returns any Successful Response
      * @throws ApiError
@@ -251,6 +257,7 @@ export class SuppliersService {
     }
     /**
      * Delete Supplier
+     * Aplica borrado lógico al proveedor para no romper historial de facturas.
      * @param supplierId
      * @returns any Successful Response
      * @throws ApiError

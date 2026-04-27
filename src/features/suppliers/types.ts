@@ -126,12 +126,18 @@ export interface Supplier {
   banco?: string | null;
   cuenta_bancaria?: string | null;
   clabe?: string | null;
+  cost_center_id?: number | null;
 
   estatus: SupplierStatus;
 
   // Relaciones (Solo disponibles en SupplierResponse)
   tariffs?: SupplierTariff[];
   invoices?: PayableInvoice[];
+  cost_center?: {
+    id: number;
+    codigo?: string;
+    nombre: string;
+  };
 
   // AuditMixin
   record_status?: RecordStatus;

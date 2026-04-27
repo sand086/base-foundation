@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SettlementConceptCreate = {
+export type app__modules__catalogs__schemas__SettlementConceptCreate = {
     id?: (number | null);
     nombre: string;
     tipo: string;

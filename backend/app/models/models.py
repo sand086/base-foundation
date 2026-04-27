@@ -821,21 +821,6 @@ class SystemConfig(AuditMixin, Base):
     is_public = Column(Boolean, default=False)
 
 
-class Provider(AuditMixin, Base):
-    __tablename__ = "providers"
-
-    id = Column(Integer, primary_key=True, index=True)
-    razon_social = Column(String(200), nullable=False)
-    rfc = Column(String(13), unique=True, nullable=False)
-    email = Column(String(100))
-    telefono = Column(String(20))
-    direccion = Column(Text)
-    dias_credito = Column(Integer, default=0)
-    estatus = Column(
-        String(20), nullable=True, default="activo", server_default="activo"
-    )
-
-
 class BulkUploadHistory(AuditMixin, Base):
     __tablename__ = "bulk_upload_history"
 
@@ -1007,11 +992,14 @@ class Supplier(AuditMixin, Base):
     banco = Column(String(100))
     cuenta_bancaria = Column(String(50))
     clabe = Column(String(18))
+    cost_center_id = Column(
+        Integer, ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True
+    )
 
     estatus = Column(
         pg_enum(SupplierStatus, "supplierstatus"), default=SupplierStatus.ACTIVO
     )
-
+    cost_center = relationship("CostCenter")
     invoices = relationship("PayableInvoice", back_populates="supplier")
     tariffs = relationship(
         "SupplierTariff", back_populates="supplier", cascade="all, delete-orphan"

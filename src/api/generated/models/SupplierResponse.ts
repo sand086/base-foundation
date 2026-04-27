@@ -23,6 +23,7 @@ export type SupplierResponse = {
     cuenta_bancaria?: (string | null);
     clabe?: (string | null);
     estatus?: SupplierStatus;
+    cost_center_id?: (number | null);
     id: number;
     invoices?: Array<PayableInvoiceResponse>;
     tariffs?: Array<SupplierTariffResponse>;

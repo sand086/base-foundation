@@ -1,4 +1,6 @@
-import { Card } from "@/components/ui/card";
+// src/features/treasury/components/TreasuryFlowTab.tsx
+import { useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,12 +33,24 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Loader2,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
-
-//   Utilizamos nuestra utilidad global
 import { getBankLogo } from "../utils/bankUtils";
+
+// NUEVO FASE 3.1: Importamos Recharts para el Flujo de Efectivo
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 
 interface TreasuryFlowTabProps {
   stats: any;
@@ -69,9 +83,38 @@ export function TreasuryFlowTab({
   onViewMovement,
   onDeleteMovement,
 }: TreasuryFlowTabProps) {
+  // =====================================================================
+  // NUEVO FASE 3.1: MOTOR DEL GRÁFICO DE FLUJO DE EFECTIVO (REMPLAZA EXCEL)
+  // =====================================================================
+  const chartData = useMemo(() => {
+    if (!movimientos || movimientos.length === 0) return [];
+
+    const grouped = movimientos.reduce((acc: any, mov) => {
+      // Usamos la fecha tal cual venga o un fallback
+      const dateKey = mov.fecha ? mov.fecha.split("T")[0] : "Sin Fecha";
+
+      if (!acc[dateKey]) {
+        acc[dateKey] = {
+          fecha: dateKey,
+          Ingresos: 0,
+          Egresos: 0,
+        };
+      }
+      if (mov.tipo === "ingreso")
+        acc[dateKey].Ingresos += Number(mov.monto) || 0;
+      if (mov.tipo === "egreso") acc[dateKey].Egresos += Number(mov.monto) || 0;
+      return acc;
+    }, {});
+
+    // Ordenar cronológicamente y tomar los últimos 14 días operativos
+    return Object.values(grouped)
+      .sort((a: any, b: any) => a.fecha.localeCompare(b.fecha))
+      .slice(-14);
+  }, [movimientos]);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
-      {/* KPIs */}
+      {/* KPIs DE TESORERÍA */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card
           variant="default"
@@ -139,6 +182,72 @@ export function TreasuryFlowTab({
         </Card>
       </div>
 
+      {/* =========================================================== */}
+      {/* GRÁFICA DE FLUJO DE EFECTIVO (FASE 3.1)                       */}
+      {/* =========================================================== */}
+      {chartData.length > 0 && showBalances && (
+        <Card className="border border-slate-200/50 dark:border-white/10 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-md">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-blue-500" />
+                Flujo de Efectivo Real (Últimos Movimientos)
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[250px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 10, right: 10, left: 20, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    className="stroke-slate-200 dark:stroke-white/10"
+                  />
+                  <XAxis
+                    dataKey="fecha"
+                    tick={{ fontSize: 10 }}
+                    className="text-slate-500"
+                  />
+                  <YAxis
+                    tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                    tick={{ fontSize: 10 }}
+                    className="text-slate-500"
+                  />
+                  <Tooltip
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{
+                      borderRadius: "12px",
+                      border: "none",
+                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
+                    }}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: "11px", fontWeight: "bold" }}
+                  />
+                  <ReferenceLine y={0} stroke="#cbd5e1" />
+                  <Bar
+                    dataKey="Ingresos"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  />
+                  <Bar
+                    dataKey="Egresos"
+                    fill="#f43f5e"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={40}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* TOOLBAR */}
       <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
         <div className="relative flex-1 w-full lg:w-1/3 max-w-md">
@@ -197,7 +306,7 @@ export function TreasuryFlowTab({
         </Button>
       </div>
 
-      {/* TABLA */}
+      {/* TABLA DE MOVIMIENTOS */}
       <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
         <div className="overflow-auto max-h-[60vh] custom-scrollbar">
           <Table className="w-full text-sm">
@@ -242,11 +351,7 @@ export function TreasuryFlowTab({
                 </TableRow>
               ) : (
                 movimientos.map((mov) => {
-                  // 1. Obtenemos el logo SVG
                   const logoSvg = getBankLogo(mov.banco);
-
-                  //   2. Filtro destructor de emojis para el texto:
-                  // Esto elimina cualquier caracter Unicode alto (donde viven los emojis) y deja solo texto limpio.
                   const bankNameClean = mov.banco
                     ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
                     : "Banco";
@@ -294,8 +399,6 @@ export function TreasuryFlowTab({
                               <Landmark className="h-5 w-5 text-slate-400" />
                             )}
                           </span>
-
-                          {/*   3. Aquí renderizamos el nombre LIMPIO (bankNameClean) */}
                           <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
                             {bankNameClean}
                           </span>

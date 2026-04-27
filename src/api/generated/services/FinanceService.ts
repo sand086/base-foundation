@@ -10,86 +10,11 @@ import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } 
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
 import type { CostCenterResponse } from '../models/CostCenterResponse';
-import type { ProviderCreate } from '../models/ProviderCreate';
-import type { ProviderResponse } from '../models/ProviderResponse';
+import type { OperatorSettlementPayload } from '../models/OperatorSettlementPayload';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class FinanceService {
-    /**
-     * Read Providers
-     * @param skip
-     * @param limit
-     * @returns ProviderResponse Successful Response
-     * @throws ApiError
-     */
-    public static readProvidersApiFinanceProvidersGet(
-        skip?: number,
-        limit: number = 100,
-    ): CancelablePromise<Array<ProviderResponse>> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/finance/providers',
-            query: {
-                'skip': skip,
-                'limit': limit,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Create Provider
-     * @param requestBody
-     * @returns ProviderResponse Successful Response
-     * @throws ApiError
-     */
-    public static createProviderApiFinanceProvidersPost(
-        requestBody: ProviderCreate,
-    ): CancelablePromise<ProviderResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/finance/providers',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Delete Provider
-     * @param providerId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static deleteProviderApiFinanceProvidersProviderIdDelete(
-        providerId: string,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/api/finance/providers/{provider_id}',
-            path: {
-                'provider_id': providerId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Read Indirect Categories
-     * Obtiene las categorías de gastos indirectos (Fijos/Variables)
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static readIndirectCategoriesApiFinanceIndirectCategoriesGet(): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/finance/indirect-categories',
-        });
-    }
     /**
      * Read Cost Centers
      * Obtiene los Centros de Costos creados por la importación masiva del SAT
@@ -466,6 +391,27 @@ export class FinanceService {
             path: {
                 'invoice_id': invoiceId,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Process Settlement For Operator
+     * Procesa la liquidación de un Operador específico dentro de un Lote (Batch).
+     * Respeta la inmutabilidad de datos y dispara la creación de CxC automáticamente.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static processSettlementForOperatorApiFinanceSettlementsOperatorPost(
+        requestBody: OperatorSettlementPayload,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/settlements/operator',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },
