@@ -1115,7 +1115,7 @@ class PayableInvoice(AuditMixin, Base):
 
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
-    concepto = Column(String(200))
+    concepto = Column(Text, nullable=True)
 
     # MANTENIDO: No borramos este campo para no romper tu código actual
     clasificacion = Column(String(50))
