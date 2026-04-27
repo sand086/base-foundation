@@ -1,9 +1,8 @@
-import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ActionButton } from "@/components/ui/action-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,215 +11,150 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 import { PageHeader } from "@/components/ui/page-header";
 import {
-  Plus,
   MoreHorizontal,
-  Edit,
-  Trash2,
-  CheckCircle,
-  Send,
-  Printer,
-  ArrowRight,
-  Package,
+  DollarSign,
+  FileText,
+  AlertCircle,
+  Eye,
+  CreditCard,
+  RefreshCcw,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-// IMPORTS CORREGIDOS A LA ARQUITECTURA FSD
-import {
-  getOrderTypeColor,
-  getStatusInfo,
-  getOrderTypeLabel,
-  PurchaseOrder, // <-- ¡Solución al Error de Tipos!
-} from "@/features/purchases/types";
-import { mockPurchaseOrders } from "@/features/purchases/data";
-import { PurchaseOrderWizard } from "@/features/purchases/components/PurchaseOrderWizard";
-import {
-  ReceiveOrderModal,
-  ConvertToCxPModal,
-} from "@/features/purchases/components/ReceiveOrderModal";
+// 🚀 FSD: Importamos nuestro Hook Real de Cuentas por Pagar
+import { usePayables } from "@/features/payables/hooks/usePayables";
+import { RegisterExpenseModal } from "@/features/payables/components/RegisterExpenseModal";
+import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
+import { getStatusFromLabel, StatusBadge } from "@/components/ui/status-badge";
 
-export default function Purchases() {
-  const navigate = useNavigate();
+export default function Payables() {
+  // 🚀 CONEXIÓN REAL AL BACKEND
+  const { invoices, isLoading, error, refetch } = usePayables();
 
-  const [orders, setOrders] = useState<PurchaseOrder[]>(mockPurchaseOrders);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
-  const [receiveModalOpen, setReceiveModalOpen] = useState(false);
-  const [convertModalOpen, setConvertModalOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(
-    null,
-  );
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // KPIs CORREGIDOS (Usando las propiedades en inglés de PurchaseOrder)
-  const kpis = useMemo(
-    () => ({
-      borradores: orders.filter((o) => o.status === "borrador").length,
-      pendientes: orders.filter((o) => o.status === "pendiente_aprobacion")
-        .length,
-      aprobadas: orders.filter((o) => o.status === "aprobada").length,
-      sinConvertir: orders.filter(
-        (o) => o.status === "recibida" && !o.converted_to_cxp,
-      ).length,
-    }),
-    [orders],
-  );
-
-  const formatCurrency = (amount: number, moneda: string) =>
+  const formatCurrency = (amount: number, moneda: string = "MXN") =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
-      currency: moneda,
-    }).format(amount);
+      currency: moneda || "MXN",
+    }).format(Math.abs(amount || 0)); // 🚀 FIX: Math.abs para quitar negativos visuales
 
-  // ==========================================
-  // HANDLERS
-  // ==========================================
+  // KPIs Dinámicos basados en la BD real
+  const kpis = useMemo(() => {
+    if (!invoices)
+      return { totalPendiente: 0, vencidas: 0, pagadas: 0, total: 0 };
 
-  const handleSaveOrder = (order: PurchaseOrder) => {
-    if (editingOrder) {
-      setOrders(orders.map((o) => (o.id === order.id ? order : o)));
-      toast.success("Orden actualizada");
-    } else {
-      setOrders([order, ...orders]);
-      toast.success("Orden creada");
-    }
-    setEditingOrder(null);
-  };
+    return {
+      totalPendiente: invoices
+        .filter((i) => i.estatus !== "pagado")
+        .reduce((acc, curr) => acc + (curr.saldo_pendiente || 0), 0),
+      vencidas: invoices.filter(
+        (i) =>
+          new Date(i.fecha_vencimiento) < new Date() && i.estatus !== "pagado",
+      ).length,
+      pagadas: invoices.filter((i) => i.estatus === "pagado").length,
+      total: invoices.length,
+    };
+  }, [invoices]);
 
-  const handleApprove = (order: PurchaseOrder) => {
-    setOrders(
-      orders.map((o) =>
-        o.id === order.id
-          ? {
-              ...o,
-              status: "aprobada",
-            }
-          : o,
-      ),
-    );
-    toast.success(`Orden ${order.folio} aprobada`);
-  };
-
-  // SOLUCIÓN DE TIPOS (string | number)
-  const handleReceive = (
-    orderId: string | number,
-    completo: boolean,
-    notas: string,
-  ) => {
-    setOrders(
-      orders.map((o) =>
-        o.id === String(orderId)
-          ? {
-              ...o,
-              status: "recibida",
-              service_description: notas,
-            }
-          : o,
-      ),
-    );
-    toast.success("Orden marcada como recibida");
-  };
-
-  const handleConvert = (orderId: string | number) => {
-    setOrders(
-      orders.map((o) =>
-        o.id === String(orderId) ? { ...o, converted_to_cxp: true } : o,
-      ),
-    );
-    toast.success("Redirigiendo a Cuentas por Pagar...");
-    // La navegación real ocurre dentro del ConvertToCxPModal con los parámetros
-  };
-
-  const handleDelete = () => {
-    if (selectedOrder) {
-      setOrders(orders.filter((o) => o.id !== selectedOrder.id));
-      toast.success("Orden eliminada");
-    }
-    setDeleteDialogOpen(false);
-  };
-
-  const handlePrint = (order: PurchaseOrder) => {
-    toast.info(`Generando PDF para la orden ${order.folio}...`);
-  };
-
-  const columns: ColumnDef<PurchaseOrder>[] = useMemo(
+  const columns: ColumnDef<any>[] = useMemo(
     () => [
       {
         key: "folio",
-        header: "Folio",
-        render: (v) => (
-          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-            {v as string}
-          </span>
+        header: "Folio / UUID",
+        render: (_, row) => (
+          <div className="flex flex-col">
+            <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase truncate max-w-[120px]">
+              {row.folio || row.uuid?.split("-")[0] || "S/F"}
+            </span>
+            <span
+              className="text-[9px] text-slate-400 font-mono tracking-wider truncate max-w-[120px]"
+              title={row.uuid}
+            >
+              {row.uuid?.substring(0, 18)}...
+            </span>
+          </div>
         ),
       },
       {
-        key: "tipo",
-        header: "Tipo",
-        type: "status",
-        statusOptions: ["compra", "servicio", "gasto_indirecto"],
-        render: (v) => (
-          <Badge className={getOrderTypeColor(v as string)}>
-            {getOrderTypeLabel(v as string)}
-          </Badge>
-        ),
-      },
-      {
-        key: "supplier_name",
+        key: "supplier_razon_social",
         header: "Proveedor",
-        render: (v) => (
-          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
-            {v as string}
-          </span>
+        render: (_, row) => (
+          <div className="flex flex-col">
+            <span
+              className="font-black text-brand-navy dark:text-white uppercase tracking-tight truncate max-w-[200px]"
+              title={row.supplier_razon_social}
+            >
+              {row.supplier_razon_social || "Proveedor General"}
+            </span>
+            {row.cost_center && (
+              <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">
+                CECO: {row.cost_center.nombre}
+              </span>
+            )}
+          </div>
         ),
       },
       {
-        key: "requester",
-        header: "Solicitante",
-        render: (v) => (
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-            {v as string}
-          </span>
-        ),
+        key: "fecha_vencimiento",
+        header: "Vencimiento",
+        render: (v) => {
+          const isVencida = new Date(v as string) < new Date();
+          return (
+            <span
+              className={`text-xs font-bold ${isVencida ? "text-brand-red" : "text-slate-600 dark:text-slate-300"}`}
+            >
+              {v ? format(new Date(v as string), "dd/MMM/yyyy") : "N/A"}
+            </span>
+          );
+        },
       },
       {
-        key: "total",
-        header: "Monto",
+        key: "monto_total",
+        header: "Monto Total",
         type: "number",
         render: (v, r) => (
-          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
+          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300">
             {formatCurrency(v as number, r.moneda)}
           </span>
         ),
       },
       {
-        key: "status",
+        key: "saldo_pendiente",
+        header: "Saldo",
+        type: "number",
+        render: (v, r) => (
+          <span
+            className={`font-mono text-sm font-bold ${(v as number) > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-500"}`}
+          >
+            {formatCurrency(v as number, r.moneda)}
+          </span>
+        ),
+      },
+      {
+        key: "estatus",
         header: "Estatus",
-        type: "status",
-        statusOptions: [
-          "borrador",
-          "pendiente_aprobacion",
-          "aprobada",
-          "recibida",
-          "cancelada",
-        ],
-        render: (v) => {
-          const s = getStatusInfo(v as string);
-          return <Badge className={s.className}>{s.label}</Badge>;
+        render: (v, r) => {
+          let estatusCalculado = v as string;
+          if (
+            estatusCalculado !== "pagado" &&
+            new Date(r.fecha_vencimiento) < new Date()
+          ) {
+            estatusCalculado = "vencido";
+          }
+          return (
+            <StatusBadge status={getStatusFromLabel(estatusCalculado)}>
+              {estatusCalculado}
+            </StatusBadge>
+          );
         },
       },
       {
@@ -244,129 +178,94 @@ export default function Purchases() {
             >
               <DropdownMenuItem
                 onClick={() => {
-                  setEditingOrder(row);
-                  setWizardOpen(true);
+                  setSelectedInvoice(row);
+                  setIsDetailOpen(true);
                 }}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Edit className="h-4 w-4 mr-2 text-brand-green dark:text-[#009740]" />
-                Editar
+                <Eye className="h-4 w-4 mr-2 text-blue-500" />
+                Ver Detalles
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handlePrint(row)}
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-              >
-                <Printer className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />
-                Imprimir PDF
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="dark:bg-white/10" />
-              {row.status === "borrador" && (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setOrders(
-                      orders.map((o) =>
-                        o.id === row.id
-                          ? { ...o, status: "pendiente_aprobacion" }
-                          : o,
-                      ),
-                    );
-                    toast.success("Enviada a aprobación");
-                  }}
-                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-                >
-                  <Send className="h-4 w-4 mr-2 text-amber-500 dark:text-amber-400" />
-                  Enviar a Aprobación
-                </DropdownMenuItem>
+
+              {row.saldo_pendiente > 0 && (
+                <>
+                  <DropdownMenuSeparator className="dark:bg-white/10" />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedInvoice(row);
+                      setIsPaymentModalOpen(true);
+                    }}
+                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800 text-emerald-600"
+                  >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Registrar Pago
+                  </DropdownMenuItem>
+                </>
               )}
-              {row.status === "pendiente_aprobacion" && (
-                <DropdownMenuItem
-                  onClick={() => handleApprove(row)}
-                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2 text-emerald-500 dark:text-emerald-400" />
-                  Aprobar
-                </DropdownMenuItem>
-              )}
-              {row.status === "aprobada" && (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSelectedOrder(row);
-                    setReceiveModalOpen(true);
-                  }}
-                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-                >
-                  <Package className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />
-                  Recibir
-                </DropdownMenuItem>
-              )}
-              {row.status === "recibida" && !row.converted_to_cxp && (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSelectedOrder(row);
-                    setConvertModalOpen(true);
-                  }}
-                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-                >
-                  <ArrowRight className="h-4 w-4 mr-2 text-brand-green dark:text-[#009740]" />
-                  Convertir a CxP
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator className="dark:bg-white/10" />
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedOrder(row);
-                  setDeleteDialogOpen(true);
-                }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Eliminar
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ),
       },
     ],
-    [orders],
+    [],
   );
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="COMPRAS Y APROVISIONAMIENTO"
-        description="Gestión de órdenes de compra, servicio y gastos indirectos"
-      />
+      <div className="flex flex-col sm:flex-row justify-between gap-4 sm:items-center">
+        <PageHeader
+          title="CUENTAS POR PAGAR (CxP)"
+          description="Control de facturas de proveedores y egresos operativos"
+        />
+        <Button
+          onClick={refetch}
+          variant="outline"
+          size="sm"
+          className="gap-2 self-start sm:self-auto font-bold text-[10px] uppercase tracking-widest"
+        >
+          <RefreshCcw
+            className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`}
+          />
+          Sincronizar
+        </Button>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border-l-4 border-l-slate-400">
+        <Card className="border-l-4 border-l-slate-400 dark:bg-slate-900/50 backdrop-blur-xl">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Borradores</p>
-            <p className="text-3xl font-bold">{kpis.borradores}</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
+              Total Facturas
+            </p>
+            <p className="text-3xl font-black">{kpis.total}</p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-amber-500">
+        <Card className="border-l-4 border-l-amber-500 dark:bg-slate-900/50 backdrop-blur-xl">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">
-              Pendientes Aprobación
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
+              Saldo por Pagar
             </p>
-            <p className="text-3xl font-bold text-amber-600">
-              {kpis.pendientes}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-l-4 border-l-emerald-500">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Aprobadas</p>
-            <p className="text-3xl font-bold text-emerald-600">
-              {kpis.aprobadas}
+            <p className="text-2xl font-black font-mono text-amber-600 dark:text-amber-400">
+              {formatCurrency(kpis.totalPendiente)}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-l-4 border-l-blue-500">
+        <Card className="border-l-4 border-l-brand-red dark:bg-slate-900/50 backdrop-blur-xl">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Recibidas sin CxP</p>
-            <p className="text-3xl font-bold text-blue-600">
-              {kpis.sinConvertir}
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
+              Facturas Vencidas
+            </p>
+            <p className="text-3xl font-black text-brand-red">
+              {kpis.vencidas}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-l-4 border-l-emerald-500 dark:bg-slate-900/50 backdrop-blur-xl">
+          <CardContent className="pt-6">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
+              Facturas Pagadas
+            </p>
+            <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+              {kpis.pagadas}
             </p>
           </CardContent>
         </Card>
@@ -375,66 +274,62 @@ export default function Purchases() {
       <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
         <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
-            <Package className="h-5 w-5 text-brand-red" />
-            Órdenes
+            <FileText className="h-5 w-5 text-brand-red" />
+            Catálogo de CxP
           </CardTitle>
-          <ActionButton onClick={() => setWizardOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nueva Orden
-          </ActionButton>
         </CardHeader>
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
-          <EnhancedDataTable
-            data={orders}
-            columns={columns}
-            exportFileName="ordenes_compra"
-          />
+          {isLoading ? (
+            <div className="h-64 flex flex-col items-center justify-center text-slate-400">
+              <Loader2 className="h-8 w-8 animate-spin mb-4 text-brand-blue" />
+              <p className="text-xs font-bold uppercase tracking-widest">
+                Cargando Bóveda Financiera...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="h-64 flex flex-col items-center justify-center text-brand-red">
+              <AlertCircle className="h-8 w-8 mb-4" />
+              <p className="text-xs font-bold uppercase tracking-widest">
+                Error al cargar datos
+              </p>
+            </div>
+          ) : (
+            <EnhancedDataTable
+              data={invoices || []}
+              columns={columns}
+              exportFileName="Cuentas_Por_Pagar"
+              searchPlaceholder="Buscar por proveedor, folio o UUID..."
+            />
+          )}
         </CardContent>
       </Card>
 
-      <PurchaseOrderWizard
-        open={wizardOpen}
-        onOpenChange={(o) => {
-          setWizardOpen(o);
-          if (!o) setEditingOrder(null);
-        }}
-        onSave={handleSaveOrder}
-        editingOrder={editingOrder}
-      />
+      {/* MODAL DETALLES DE FACTURA */}
+      {selectedInvoice && (
+        <InvoicePayablesDetailSheet
+          invoice={selectedInvoice}
+          open={isDetailOpen}
+          onOpenChange={(isOpen) => {
+            setIsDetailOpen(isOpen);
+            if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
+          }}
+          onPaymentSuccess={refetch}
+        />
+      )}
 
-      <ReceiveOrderModal
-        order={selectedOrder}
-        open={receiveModalOpen}
-        onOpenChange={setReceiveModalOpen}
-        onReceive={handleReceive}
-      />
-
-      <ConvertToCxPModal
-        order={selectedOrder}
-        open={convertModalOpen}
-        onOpenChange={setConvertModalOpen}
-        onConvert={handleConvert}
-      />
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar orden?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* MODAL REGISTRAR PAGO (TESORERÍA) */}
+      {selectedInvoice && (
+        <RegisterE
+          xpenseModal
+          invoice={selectedInvoice}
+          open={isPaymentModalOpen}
+          onOpenChange={(isOpen) => {
+            setIsPaymentModalOpen(isOpen);
+            if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
+          }}
+          onSuccess={refetch}
+        />
+      )}
     </div>
   );
 }

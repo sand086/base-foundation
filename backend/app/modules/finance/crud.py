@@ -470,10 +470,388 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
 
     facturas_creadas = 0
     facturas_ignoradas = 0
-    cecos_creados = 0  # 🚀 Contador para CECOs creados automáticamente
+    cecos_creados = 0
 
     # =========================================================
-    # 🚀 HELPER: Convertidor a prueba de balas para fechas
+    # 🚀 HELPER 1: PRECARGAR CECOS EXISTENTES DE LA BD (Tus IDs 1 al 13)
+    # =========================================================
+    cecos_db = db.query(models.CostCenter).all()
+    # Creamos un diccionario en memoria: {"mtto": 1, "administrativo": 2, ...}
+    mapa_cecos = {c.nombre.strip().lower(): c.id for c in cecos_db}
+
+    # =========================================================
+    # 🚀 HELPER 2: DICCIONARIO BASE Y BUSCADOR INTELIGENTE
+    # =========================================================
+    BASE_PROVEEDORES = {
+        "CLO CLO": {"dias": 0, "ceco": "Personal"},
+        "CONCESIONARIA AUTOPISTA PEROTE-XALAPA": {"dias": 0, "ceco": "Operaciones"},
+        "CONSTRUCOMERCIO Y GESTORIA MG": {"dias": 0, "ceco": "Mtto"},
+        "CONSTRUCTORA E INMOBILIARIA MARYLAS": {"dias": 0, "ceco": "Administrativo"},
+        "DOGANIA ISAURA ROSALES LICONA": {"dias": 0, "ceco": "Mtto"},
+        "FISHER'S CONDESA": {"dias": 0, "ceco": "Personal"},
+        "FONDO NACIONAL DE INFRAESTRUCTURA": {"dias": 0, "ceco": "Operaciones"},
+        "LA CASA DEL SOL GASOLINERIA": {"dias": 0, "ceco": "Administrativo"},
+        "LA ESTANCIA DEL PUERTO DE VERACRUZ": {"dias": 0, "ceco": "Personal"},
+        "LA FERRE COMERCIALIZADORA": {"dias": 0, "ceco": "Mtto"},
+        "NUEVA WAL MART DE MEXICO": {"dias": 0, "ceco": "Personal"},
+        "OPERADORA BAJO DE LA TINTORERA": {"dias": 0, "ceco": "Personal"},
+        "OPERADORA DE ESTACIONES GL": {"dias": 0, "ceco": "Administrativo"},
+        "OPTIMA G AUTOSPORT": {"dias": 0, "ceco": "Personal"},
+        "PROMOTORA PLATINIUM": {"dias": 0, "ceco": "Administrativo"},
+        "PROVEEDORA DE ALIMENTOS GOURMET": {"dias": 0, "ceco": "Personal"},
+        "QUALITAS COMPAÑIA DE SEGUROS": {"dias": 0, "ceco": "Seguros"},
+        "ROCIO MOLINA CHAVEZ": {"dias": 0, "ceco": "Operaciones"},
+        "TONY TIENDAS": {"dias": 0, "ceco": "Administrativo"},
+        "ABRAHAM OSORIO TINOCO": {"dias": 0, "ceco": "Administrativo"},
+        "ALEJANDRA FABIOLA FLORES SANDOVAL": {"dias": 15, "ceco": "Administrativo"},
+        "ANGELICA TEMOXTLE GOMEZ": {"dias": 0, "ceco": "Mtto"},
+        "ARTURO ISIDRO PEREZ CUREÑO": {"dias": 0, "ceco": "Mtto"},
+        "ARTURO SABBAGH LANDA": {"dias": 15, "ceco": "Administrativo"},
+        "AUTO SERVICIO GUARDIA": {"dias": 0, "ceco": "Administrativo"},
+        "AUTOMOTRIZ ADRIMAR": {"dias": 8, "ceco": "Mtto"},
+        "BACOLUM": {"dias": 0, "ceco": "Personal"},
+        "BANCO MERCANTIL DEL NORTE": {"dias": 0, "ceco": "Comisiones bancarias"},
+        "BANCO MONEX": {"dias": 0, "ceco": "Personal"},
+        "BANCO NACIONAL DE MEXICO": {"dias": 0, "ceco": "Comisiones bancarias"},
+        "BERENICE GUTIERREZ CAMPOS": {"dias": 0, "ceco": "Mtto"},
+        "BETREIBER LOGISTIK": {"dias": 0, "ceco": "Personal"},
+        "CENTRO GASOLINERO ANIMAS": {"dias": 30, "ceco": "Administrativo"},
+        "CEVER SAN ANTONIO": {"dias": 0, "ceco": "Personal"},
+        "CLARA HERNANDEZ GOMEZ": {"dias": 0, "ceco": "Administrativo"},
+        "COMERCIALIZADORA TR ZONE": {"dias": 25, "ceco": "Mtto"},
+        "CORPORATIVO INTERNACIONAL DE COMERCIO SHIJEHECA": {
+            "dias": 0,
+            "ceco": "Gastos deducibles",
+        },
+        "DAIMLER FINANCIAL SERVICES": {"dias": 15, "ceco": "Adquisiciones"},
+        "DALIA CERON ROLDAN": {"dias": 0, "ceco": "Operaciones"},
+        "DHL EXPRESS MEXICO": {"dias": 0, "ceco": "Administrativo"},
+        "DIESEL MARIMAR": {"dias": 15, "ceco": "Mtto"},
+        "ECONOMIA EN MATERIALES PUBLICITARIOS": {"dias": 0, "ceco": "Administrativo"},
+        "EL PALACIO DE HIERRO": {"dias": 0, "ceco": "Personal"},
+        "EL SABOR AUSTRAL": {"dias": 0, "ceco": "Personal"},
+        "FERNANDO MARTINEZ RUIZ DEL HOYO": {"dias": 0, "ceco": "Mtto"},
+        "FRANCISCO FLORENCIO RODRIGUEZ ROMERO": {"dias": 0, "ceco": "Mtto"},
+        "GASOLINERA JEBLA": {"dias": 0, "ceco": "Administrativo"},
+        "GENOVEVO CHAVEZ GAMBOA": {"dias": 15, "ceco": "Mtto"},
+        "GOMSA CAMIONES": {"dias": 25, "ceco": "Mtto"},
+        "GRUPO FERCHE": {"dias": 30, "ceco": "Administrativo"},
+        "GRUPO RULLAN": {"dias": 0, "ceco": "Mtto"},
+        "HACEMOS FUEGO": {"dias": 0, "ceco": "Personal"},
+        "HAMBURGUESAS RAPIDAS LOMAS": {"dias": 0, "ceco": "Personal"},
+        "HERRAMIENTAS Y ACCESORIOS OLMECA": {"dias": 15, "ceco": "Mtto"},
+        "HOME DEPOT": {"dias": 0, "ceco": "Personal"},
+        "IGNACIO VILLEGAS MONTOYA": {"dias": 0, "ceco": "Operaciones"},
+        "IMPACTO COMERCIAL FERRETERO": {"dias": 0, "ceco": "Mtto"},
+        "INSTITUTO MEXICANO DEL SEGURO SOCIAL": {"dias": 0, "ceco": "Administrativo"},
+        "IVON CAMPOS HERRERA": {"dias": 0, "ceco": "Administrativo"},
+        "JANNA LOGISTIC": {"dias": 0, "ceco": "Administrativo"},
+        "JULIA MAGDALENA GOMEZ TERRONES": {"dias": 0, "ceco": "Administrativo"},
+        "JUST IN TIME": {"dias": 0, "ceco": "Operaciones"},
+        "ROGELIO AGUILAR ROGEL": {"dias": 0, "ceco": "Administrativo"},
+        "LATANST": {"dias": 0, "ceco": "Diesel"},
+        "LUCIO RODRIGUEZ PEREYRA": {"dias": 0, "ceco": "Administrativo"},
+        "LUIS ALBERTO GARCIA BALBUENA": {"dias": 0, "ceco": "Personal"},
+        "MARTHA ELENA MEDINA ROBLEDO": {"dias": 0, "ceco": "Mtto"},
+        "MUELLES Y TRACTOPARTES DEL GOLFO": {"dias": 25, "ceco": "Mtto"},
+        "OFFICE DEPOT": {"dias": 0, "ceco": "Administrativo"},
+        "OPERADORA DE ALIMENTOS DURANGO": {"dias": 0, "ceco": "Personal"},
+        "OPERADORA DE ESTACIONES Y PARADORES": {"dias": 0, "ceco": "Diesel"},
+        "OSCAR LOPEZ MARTINEZ": {"dias": 0, "ceco": "Administrativo"},
+        "PACCAR FINANCIAL": {"dias": 0, "ceco": "Adquisiciones"},
+        "PARADOR TURISTICO SAN PEDRO": {"dias": 0, "ceco": "Diesel"},
+        "PASE, SERVICIOS ELECTRONICOS": {"dias": 0, "ceco": "Casetas"},
+        "PASION SONORENSE": {"dias": 0, "ceco": "Diesel"},
+        "PETROMAX": {"dias": 0, "ceco": "Administrativo"},
+        "PETROVIM": {"dias": 0, "ceco": "Diesel"},
+        "PREVENCION Y REACCION": {"dias": 0, "ceco": "Seguridad"},
+        "PRODUCTOS AHULADOS INDUSTRIALES": {"dias": 25, "ceco": "Llantas"},
+        "PROPIMEX": {"dias": 0, "ceco": "Administrativo"},
+        "PROVEEDOR MAYORISTA AL REFACCIONARIO": {"dias": 20, "ceco": "Mtto"},
+        "RADIOMOVIL DIPSA": {"dias": 30, "ceco": "Administrativo"},
+        "RENOVADORA ZUCA DEL SURESTE": {"dias": 15, "ceco": "Llantas"},
+        "ROBERTO ENRIQUE MUÑOZ CEBALLOS": {"dias": 0, "ceco": "Operaciones"},
+        "SEGURIDAD INDUSTRIAL Y SOLDADURAS": {"dias": 0, "ceco": "Mtto"},
+        "SICONT MEX": {"dias": 0, "ceco": "Administrativo"},
+        "SITRACK": {"dias": 30, "ceco": "Operaciones"},
+        "SUMINISTROS TECNICOS COMAI": {"dias": 0, "ceco": "Mtto"},
+        "TELEFONOS DE MEXICO": {"dias": 0, "ceco": "Administrativo"},
+        "TIENDAS CHEDRAUI": {"dias": 0, "ceco": "Personal"},
+        "TRACTO ACCESORIOS COSTA SUR": {"dias": 15, "ceco": "Mtto"},
+        "TRASLADOS RAPIDOS DE CARGA": {"dias": 0, "ceco": "Operaciones"},
+        "VECTOR, CASA DE BOLSA": {"dias": 0, "ceco": "Administrativo"},
+        "VERIFICENTROS DEL SURESTE": {"dias": 8, "ceco": "Operaciones"},
+        "GRUPO AUTOPISTAS NACIONALES": {"dias": 0, "ceco": "Operaciones"},
+        "REFACCIONARIA GLOBAL TRUCK PARTS": {"dias": 0, "ceco": "Operaciones"},
+        "GOBIERNO DEL ESTADO DE VERACRUZ": {"dias": 0, "ceco": "Operaciones"},
+        "CONCESIONES Y PROMOCIONES MALIBRAN": {"dias": 0, "ceco": "Operaciones"},
+        "CONCESIONARIA LERMA SANTIAGO": {"dias": 0, "ceco": "Operaciones"},
+        "PILOTO AUTOMATICO": {"dias": 0, "ceco": "Mtto"},
+        "GRUPO TRACVER": {"dias": 0, "ceco": "Mtto"},
+        "APE ACEROS DE VERACRUZ": {"dias": 0, "ceco": "Mtto"},
+        "CAR MOTION": {"dias": 0, "ceco": "Administrativo"},
+        "AUTO PARTES Y MAS": {"dias": 0, "ceco": "Administrativo"},
+        "IN LAK ECH HALA KEN": {"dias": 0, "ceco": "Administrativo"},
+        "GRUPO FUCHELA": {"dias": 0, "ceco": "Administrativo"},
+        "SALAS VILLAGOMEZ": {"dias": 0, "ceco": "Administrativo"},
+        "AUTOUNO MOTORS": {"dias": 0, "ceco": "Administrativo"},
+        "HULES LAGO": {"dias": 0, "ceco": "Mtto"},
+        "VENTA Y RENTA DE MAQUINARIA VRM": {"dias": 0, "ceco": "Administrativo"},
+        "OMAR MARCELO GONZALEZ MACIAS": {"dias": 0, "ceco": "Administrativo"},
+        "GRUPO GASOLINERO DEL SUR": {"dias": 0, "ceco": "Administrativo"},
+        "ANA GRACIELA AYUSO HERNANDEZ": {"dias": 0, "ceco": "Administrativo"},
+        "TRANSPORTES Y RADIADORES DAOS": {"dias": 0, "ceco": "Mtto"},
+        "ADMINISTRADORA DE GASOLINERAS SAN AGUSTIN": {
+            "dias": 0,
+            "ceco": "Administrativo",
+        },
+        "NEKLAR": {"dias": 0, "ceco": "Administrativo"},
+        "JF HILLEBRAND MEXICO": {"dias": 0, "ceco": "Operaciones"},
+        "COMERCIALIZADORA DISHI": {"dias": 0, "ceco": "Mtto"},
+        "COMBUSTIBLES MALDONADO OLVERA": {"dias": 0, "ceco": "Diesel"},
+        "GRUPO ZORRO ABARROTERO": {"dias": 0, "ceco": "Administrativo"},
+        "OPERADORA DE RESTAURANTES LOS GIROS": {"dias": 0, "ceco": "Personal"},
+        "SANDRA POZOS PEREDO": {"dias": 0, "ceco": "Mtto"},
+        "OPERADORA CAMA": {"dias": 0, "ceco": "Personal"},
+        "JOSE OMAR BRAVO ALARCON": {"dias": 0, "ceco": "Operaciones"},
+        "HIDROLITRO LAGUNERO": {"dias": 0, "ceco": "Operaciones"},
+        "LOGISTICA INTEGRAL FULEM": {"dias": 0, "ceco": "Operaciones"},
+        "GLOBAL INTERNACIONAL AGENCIAS MARITIMAS": {"dias": 0, "ceco": "Operaciones"},
+        "SANTA FE GAS&OIL": {"dias": 0, "ceco": "Diesel"},
+        "SERVICIO CONDESA DE ZACATECAS": {"dias": 0, "ceco": "Operaciones"},
+        "YESENIA JANETH VAZQUEZ SANCHEZ": {"dias": 15, "ceco": "Mtto"},
+        "SAVINO DEL BENE MEXICO": {"dias": 15, "ceco": "Operaciones"},
+        "COMBUSTIBLES DEL SURESTE DE COATZACOALCOS": {"dias": 0, "ceco": "Diesel"},
+        "CORPORACION GASOLINERA MILLENIUM": {"dias": 0, "ceco": "Diesel"},
+        "FIDEICOMISO F/1596": {"dias": 0, "ceco": "Operaciones"},
+        "ALVAREZ AUTOMOTRIZ": {"dias": 0, "ceco": "Mtto"},
+        "OPERADORA OMX": {"dias": 0, "ceco": "Administrativo"},
+        "COSTCO DE MEXICO": {"dias": 0, "ceco": "Personal"},
+        "CANDEGAS": {"dias": 0, "ceco": "Diesel"},
+        "ACEREXPRESS DEL SURESTE": {"dias": 0, "ceco": "Mtto"},
+        "SERVICIO ESPECIALIZADO EN RODAMIENTOS": {"dias": 0, "ceco": "Mtto"},
+        "GAS Y DERIVADOS DEL CARIBE": {"dias": 0, "ceco": "Diesel"},
+        "INSTITUTO DE CAPACITACION DE LA INDUSTRIA": {
+            "dias": 15,
+            "ceco": "Operaciones",
+        },
+        "TRANSPORTE Y LOGISTICA BUZMYR": {"dias": 15, "ceco": "Operaciones"},
+        "LA CASA DE LAS LOMAS": {"dias": 0, "ceco": "Personal"},
+        "COMERCIALIZADORA DE COMBUSTIBLES TIFA": {"dias": 21, "ceco": "Diesel"},
+        "LLANTAS & RINES RUTA 17": {"dias": 0, "ceco": "Mtto"},
+        "VICTOR MANUEL SANTOS DELGADO": {"dias": 15, "ceco": "Mtto"},
+        "LOGISTICA EXPRESS DE CONTENEDORES": {"dias": 0, "ceco": "Operaciones"},
+        "SUTSA PRINT DE MEXICO": {"dias": 0, "ceco": "Operaciones"},
+        "GRUPO GEO DIESEL": {"dias": 0, "ceco": "Mtto"},
+        "SEGUROS INBURSA": {"dias": 15, "ceco": "Seguros"},
+        "REFRISERVICIO Y AIRE ACONDICIONADO": {"dias": 0, "ceco": "Mtto"},
+        "ASEGURADORA INSURGENTES": {"dias": 15, "ceco": "Administrativo"},
+        "SUPER SERVICIO DEL POTOSI": {"dias": 0, "ceco": "Operaciones"},
+        "TYMEG MEXICO": {"dias": 0, "ceco": "Operaciones"},
+        "TURISMO CAMPECHE": {"dias": 0, "ceco": "Administrativo"},
+        "CHRISTIAN ALBERTO HERNANDEZ ANGELES": {"dias": 0, "ceco": "Operaciones"},
+        "MIRIAM YESENIA PIMENTEL SANTIAGO": {"dias": 0, "ceco": "Operaciones"},
+        "SUMINISTROS ENERGETICOS DE CALIDAD": {"dias": 0, "ceco": "Operaciones"},
+        "CLAUDIA ALARCON RAMIREZ": {"dias": 0, "ceco": "Administrativo"},
+        "REMOLQUES Y EQUIPOS DEL GOLFO": {"dias": 0, "ceco": "Operaciones"},
+        "SERVICIO AUTOVIA": {"dias": 0, "ceco": "Operaciones"},
+        "GRUPO GASOLINERO REYNAR": {"dias": 0, "ceco": "Operaciones"},
+        "RICHEMONT DE MEXICO": {"dias": 0, "ceco": "Personal"},
+        "SURMAN POLANCO": {"dias": 0, "ceco": "Personal"},
+        "GRUPO RESTAURANTERO DEL CENTRO": {"dias": 0, "ceco": "Personal"},
+        "GM FINANCIAL DE MEXICO": {"dias": 0, "ceco": "Administrativo"},
+        "SUSPENSION Y DIRECCION": {"dias": 0, "ceco": "Operaciones"},
+        "AUTOZONE DE MEXICO": {"dias": 0, "ceco": "Operaciones"},
+        "COMERCIALIZADORA SDMHC": {"dias": 0, "ceco": "Administrativo"},
+        "PROMOTORA Y TURISTICA ATHENE": {"dias": 0, "ceco": "Administrativo"},
+        "NACIONAL DE COMBUSTIBLES Y LUBRICANTES": {"dias": 0, "ceco": "Administrativo"},
+        "GRUPO MURO TEX": {"dias": 0, "ceco": "Mtto"},
+        "CORS FLORES LOPEZ Y ASOCIADOS": {"dias": 15, "ceco": "Administrativo"},
+        "TRACTOPARTES DIESEL DON TRUCK": {"dias": 0, "ceco": "Mtto"},
+        "GASOIL TECNOLOGIAS": {"dias": 0, "ceco": "Administrativo"},
+        "RESTAURANTES SUNTORY": {"dias": 0, "ceco": "Personal"},
+        "SERVICIO GASOLINERO LA LOMA": {"dias": 0, "ceco": "Administrativo"},
+        "ADMINISTRACION HOTELERA DEL SUR": {"dias": 0, "ceco": "Personal"},
+        "SERVICIO RAULIAM": {"dias": 0, "ceco": "Administrativo"},
+        "RFV TRUCK PARTS": {"dias": 0, "ceco": "Mtto"},
+        "VINILOS Y GRAFICOS DIGITALES": {"dias": 0, "ceco": "Administrativo"},
+        "ESTACION DE SERVICIO FORA": {"dias": 0, "ceco": "Administrativo"},
+        "OPEDEC DE MEXICO": {"dias": 0, "ceco": "Diesel"},
+        "GRUPO BIO GUHUSA": {"dias": 0, "ceco": "Diesel"},
+        "ZURICH ASEGURADORA MEXICANA": {"dias": 0, "ceco": "Seguros"},
+        "VICTOR MARQUINEZ TRESS": {"dias": 0, "ceco": "Mtto"},
+        "SOLUCIONES P&L": {"dias": 0, "ceco": "Administrativo"},
+        "AMERICAN FILTER": {"dias": 0, "ceco": "Mtto"},
+        "PETRO 107": {"dias": 0, "ceco": "Mtto"},
+        "DISTRIBUIDORA SAGARO DE MEXICO": {"dias": 0, "ceco": "Administrativo"},
+        "SERVICIO PIRAMIDE DEL FUEGO": {"dias": 0, "ceco": "Diesel"},
+        "FLORGER COMBUSTIBLES Y ADITIVOS": {"dias": 0, "ceco": "Diesel"},
+        "GASOLINERIA RAQUEL": {"dias": 0, "ceco": "Administrativo"},
+        "KENWORTH DEL ESTE": {"dias": 30, "ceco": "Mtto"},
+        "AGUSTIN FRANCISCO DIAZ CUAUTLE": {"dias": 0, "ceco": "Administrativo"},
+        "INDUSTRIA MANUFACTURERA DE REMOLQUES": {"dias": 0, "ceco": "Mtto"},
+        "SERVICIOS MODERNOS DE JILOTEPEC": {"dias": 0, "ceco": "Diesel"},
+        "VITANOVA": {"dias": 15, "ceco": "Llantas"},
+        "EVER TIRE": {"dias": 15, "ceco": "Llantas"},
+        "EM WORLDWIDE SERVICES": {"dias": 0, "ceco": "Administrativo"},
+        "ROSALINA ADRIANA OROZCO LEON": {"dias": 15, "ceco": "Mtto"},
+        "PROMOTORA PP": {"dias": 15, "ceco": "Casetas"},
+        "RESTAURANTE TORRE DE CASTILLA": {"dias": 0, "ceco": "Personal"},
+        "GASOLINERIA COACALCO": {"dias": 0, "ceco": "Administrativo"},
+        "RUOLAC BANDERILLA": {"dias": 0, "ceco": "Administrativo"},
+        "PETRO MED": {"dias": 0, "ceco": "Diesel"},
+        "SUPER SERVICIO NUEVO BC": {"dias": 0, "ceco": "Diesel"},
+        "SUMINISTROS DE COMBUSTIBLE DIESEL Y GASOLINA": {"dias": 0, "ceco": "Diesel"},
+        "ALBERTO RAYMUNDO PEREDO CUBRIA": {"dias": 0, "ceco": "Operaciones"},
+        "AUTOEXPRESS GSM": {"dias": 0, "ceco": "Diesel"},
+        "REPRESENTACIONES AZTNOR": {"dias": 0, "ceco": "Mtto"},
+        "CONSORCIO GASOLINERO PLUS": {"dias": 0, "ceco": "Diesel"},
+        "HR SOL SERVICIOS ADMINISTRATIVOS": {"dias": 0, "ceco": "Diesel"},
+        "SERVICIO FAS": {"dias": 0, "ceco": "Diesel"},
+        "ABASTECEDORA GASTRONOMICA INTEGRAL": {"dias": 0, "ceco": "Personal"},
+        "GASOLINERA OPERADORA GONZER": {"dias": 0, "ceco": "Diesel"},
+        "CORPORACION RNB": {"dias": 0, "ceco": "Mtto"},
+        "PROMOTORA DE INVERSION MOCAMBO": {"dias": 0, "ceco": "Personal"},
+        "PAULA ALCARAZ MONTAÑO": {"dias": 0, "ceco": "Mtto"},
+        "TECNO UREA": {"dias": 20, "ceco": "Operaciones"},
+        "ANTONIO DE JESUS GARCIA GALVAN": {"dias": 0, "ceco": "Mtto"},
+        "ALEJANDRO ROMO OBSCURA": {"dias": 0, "ceco": "Mtto"},
+        "MIRIAM FLORES VICENTE": {"dias": 0, "ceco": "Mtto"},
+        "SISTEMAS EMPRESARIALES Y RESGUARDO PATRIMONIAL": {
+            "dias": 5,
+            "ceco": "Administrativo",
+        },
+        "TORA JAPONES": {"dias": 0, "ceco": "Personal"},
+        "DISTRIBUIDORA LIVERPOOL": {"dias": 0, "ceco": "Personal"},
+        "AUTOPISTA ARCO NORTE": {"dias": 0, "ceco": "Casetas"},
+        "CONCESIONARIA MEXIQUENSE": {"dias": 0, "ceco": "Casetas"},
+        "CONCESIONARIA DE VIAS TRONCALES": {"dias": 0, "ceco": "Casetas"},
+        "CFC CONCESIONES": {"dias": 0, "ceco": "Casetas"},
+        "PROMOTORA DE CARRETERAS ECATEPEC PIRAMIDES": {"dias": 0, "ceco": "Casetas"},
+        "PROMOTORA Y ADMINISTRADORA DE CARRETERAS": {"dias": 0, "ceco": "Casetas"},
+        "ANESA HOLDING": {"dias": 0, "ceco": "Casetas"},
+        "AUTOPISTAS DE VANGUARDIA": {"dias": 0, "ceco": "Casetas"},
+        "SEXTOMADERO": {"dias": 0, "ceco": "Personal"},
+        "DESARROLLO GLOBAL DE CONCESIONES": {"dias": 0, "ceco": "Casetas"},
+        "REVOLUCION EN MOVIMIENTO": {"dias": 0, "ceco": "Casetas"},
+        "AUTOVIAS SAN MARTIN TEXMELUCAN": {"dias": 0, "ceco": "Casetas"},
+        "CONCESIONARIA BICENTENARIO": {"dias": 0, "ceco": "Casetas"},
+        "AUTOPISTA MORELIA SALAMANCA": {"dias": 0, "ceco": "Casetas"},
+        "AUTOVIA QUERETARO": {"dias": 0, "ceco": "Casetas"},
+        "AMIGOS ATENDIENDO AMIGOS": {"dias": 0, "ceco": "Personal"},
+        "JEAN PIERRE PAGESY HERRERA": {"dias": 0, "ceco": "Personal"},
+        "SERVICIO SAN JUAN": {"dias": 0, "ceco": "Administrativo"},
+        "GASOLINERIA ALTADENA": {"dias": 0, "ceco": "Administrativo"},
+        "RACING TRADING": {"dias": 15, "ceco": "Mtto"},
+        "LIBRAMIENTO ELEVADO DE PUEBLA": {"dias": 0, "ceco": "Casetas"},
+        "CONCESIONARIA ASM": {"dias": 0, "ceco": "Casetas"},
+        "DANIEL RAMIREZ HERRERA": {"dias": 0, "ceco": "Mtto"},
+        "GRUPO NACIONAL PROVINCIAL": {"dias": 0, "ceco": "Administrativo"},
+        "SEGUROS ATLAS": {"dias": 0, "ceco": "Seguros"},
+        "RED STAR FUEL": {"dias": 0, "ceco": "Diesel"},
+        "MORENO DIESEL": {"dias": 15, "ceco": "Mtto"},
+        "VICTOR ALEJANDRO ZAVALA BRITO": {"dias": 15, "ceco": "Mtto"},
+        "GABRIELA CASAS DEL SAUZ": {"dias": 0, "ceco": "Operaciones"},
+        "RESTAURANTE SUNTORY": {"dias": 0, "ceco": "Personal"},
+        "MARISCOS VILLA RICA MOCAMBO": {"dias": 0, "ceco": "Personal"},
+        "JOSE CARLOS ALARCON RAMIREZ": {"dias": 0, "ceco": "Personal"},
+        "A.N.A. COMPAÑIA DE SEGUROS": {"dias": 0, "ceco": "Seguros"},
+        "COMINCAR": {"dias": 0, "ceco": "Operaciones"},
+        "SERVICIO SANMO": {"dias": 0, "ceco": "Diesel"},
+        "MUNDO DE LIMPIEZA DGO": {"dias": 0, "ceco": "Administrativo"},
+        "MARIA EUGENIA HERMIDA GUZMAN": {"dias": 0, "ceco": "Administrativo"},
+        "RIEGOS Y MAQUINARIA AGRICOLA PESCADOR": {"dias": 0, "ceco": "Administrativo"},
+        "AUTO PARTES BICENTENARIO": {"dias": 0, "ceco": "Operaciones"},
+        "LUIS DE JESUS RAMIREZ CADENA": {"dias": 0, "ceco": "Operaciones"},
+        "LUIS MOISES GIL AGUILAR": {"dias": 0, "ceco": "Operaciones"},
+        "GUSTAVO MARIN RODRIGUEZ": {"dias": 0, "ceco": "Operaciones"},
+        "TPS OPERADOR LOGISTICO": {"dias": 0, "ceco": "Operaciones"},
+        "REFACCIONES INDUSTRIALES OLAT": {"dias": 0, "ceco": "Mtto"},
+        "CIRIA LOPEZ RAMOS": {"dias": 0, "ceco": "Mtto"},
+        "AUTOS CON VALOR": {"dias": 0, "ceco": "Mtto"},
+        "MATERIALES RUMA": {"dias": 0, "ceco": "Administrativo"},
+        "SEPTIMO MADERO": {"dias": 0, "ceco": "Personal"},
+        "SANBORN HERMANOS": {"dias": 0, "ceco": "Personal"},
+        "ROGELIO VARGAS PEREZ": {"dias": 0, "ceco": "Mtto"},
+        "UNION DE SERVICIOS CONHUAS": {"dias": 0, "ceco": "Diesel"},
+        "HOGO GROUP": {"dias": 0, "ceco": "Personal"},
+        "SERVICIO Y CALIDAD DE HUEYATZACOALCO": {"dias": 0, "ceco": "Personal"},
+        "HECTOR MANUEL BOYLAN BALBUENA": {"dias": 0, "ceco": "Mtto"},
+        "REMAR DIESEL": {"dias": 0, "ceco": "Mtto"},
+        "QUATTRO TRADE SOLUTIONS": {"dias": 0, "ceco": "Administrativo"},
+        "CENTRO DE DISTRIBUCION DE AUTOCONSUMOS": {"dias": 15, "ceco": "Diesel"},
+        "PROMOTORA HOTELERA DE VERACRUZ": {"dias": 0, "ceco": "Personal"},
+        "TECNOLLANTAS": {"dias": 0, "ceco": "Administrativo"},
+        "PAPELERA SAN RAFAEL DE LEON": {"dias": 0, "ceco": "Administrativo"},
+        "DATOS EN TECNOLOGIAS DE INFORMACION": {"dias": 0, "ceco": "Operaciones"},
+        "TOTAL PLAY": {"dias": 0, "ceco": "Administrativo"},
+        "TOTAL BOX": {"dias": 0, "ceco": "Administrativo"},
+        "COMERCIOS INTEGRALES ZINGRUP": {"dias": 0, "ceco": "Mtto"},
+        "GC MOTORS": {"dias": 0, "ceco": "Personal"},
+        "B PARTES": {"dias": 0, "ceco": "Mtto"},
+        "RAMOS SERVIPARTES": {"dias": 0, "ceco": "Personal"},
+        "ESTANCIA HARBOR'S": {"dias": 0, "ceco": "Personal"},
+        "INMOBILIARIA HOTELERA DE QUERETARO": {"dias": 0, "ceco": "Personal"},
+        "FOFEL": {"dias": 0, "ceco": "Operaciones"},
+        "A LO GOURMET Y EXCELENCIA": {"dias": 0, "ceco": "Personal"},
+        "HOSPITALIDAD LATINA": {"dias": 0, "ceco": "Personal"},
+        "ALCENTRO ALIMENTOS": {"dias": 0, "ceco": "Personal"},
+        "INMOBILIARIA HNF": {"dias": 0, "ceco": "Personal"},
+        "PROMOTORA VINCENT": {"dias": 0, "ceco": "Personal"},
+        "ESTACION DE SERVICIO MAXIPISTA TAPATIA": {"dias": 0, "ceco": "Personal"},
+        "SERVICIO COMERCIAL GARIS": {"dias": 0, "ceco": "Personal"},
+        "CALUFER": {"dias": 0, "ceco": "Personal"},
+        "JOSE REYMUNDO IBARRA GUTIERREZ": {"dias": 0, "ceco": "Personal"},
+        "SIERRA SILLA MITRAS": {"dias": 0, "ceco": "Personal"},
+        "TURBOCARGANDO A MEXICO": {"dias": 0, "ceco": "Mtto"},
+        "CINTHYA GUERRERO SAGAHON": {"dias": 0, "ceco": "Mtto"},
+        "JESUS MANUEL PEREZ PEREZ": {"dias": 0, "ceco": "Mtto"},
+        "TUBELITE DE MEXICO": {"dias": 0, "ceco": "Mtto"},
+        "JUAN CARLOS PELAEZ SANCHEZ": {"dias": 0, "ceco": "Mtto"},
+        "ERNESTINA ESQUIVEL LOPEZ": {"dias": 0, "ceco": "Administrativo"},
+        "LUZ MIREYA SERRANO GOMEZ": {"dias": 0, "ceco": "Mtto"},
+        "MILANO OPERADORA": {"dias": 0, "ceco": "Personal"},
+        "COMERCIAL CITY FRESKO": {"dias": 0, "ceco": "Personal"},
+        "GRUPO PARISINA": {"dias": 0, "ceco": "Administrativo"},
+        "CEVIZI": {"dias": 0, "ceco": "Personal"},
+        "INFRA": {"dias": 0, "ceco": "Administrativo"},
+        "PODER EJECUTIVO DEL ESTADO DE CAMPECHE": {"dias": 0, "ceco": "Administrativo"},
+        "MISE EN PALACE": {"dias": 0, "ceco": "Personal"},
+        "TELECONTROLES DE VERACRUZ": {"dias": 0, "ceco": "Mtto"},
+        "MEXICANA DE LUBRICANTES": {"dias": 0, "ceco": "Mtto"},
+        "ILDEFONSO SOLIS LUCERO": {"dias": 0, "ceco": "Mtto"},
+        "CAMINOS Y PUENTES FEDERALES": {"dias": 0, "ceco": "Casetas"},
+        "SERVICIO REGIO OCHO": {"dias": 0, "ceco": "Diesel"},
+        "OFIX": {"dias": 0, "ceco": "Administrativo"},
+        "SFERP": {"dias": 0, "ceco": "Administrativo"},
+        "HIDROCARBUROS LA MARQUESILLA": {"dias": 0, "ceco": "Diesel"},
+        "LA BARRA MASARYK": {"dias": 0, "ceco": "Personal"},
+        "CINTYA LIZBETH DE THOMAS RAMOS": {"dias": 0, "ceco": "Personal"},
+        "ACRO MAC": {"dias": 0, "ceco": "Personal"},
+    }
+
+    # =========================================================
+    # 🚀 HELPER 2: BUSCADOR INTELIGENTE (Fuzzy Matcher)
+    # =========================================================
+    def buscar_coincidencia_proveedor(nombre_emisor: str):
+        if not nombre_emisor:
+            return {"dias": 0, "ceco": "Revisión Manual"}
+
+        nombre_clean = nombre_emisor.upper().strip()
+
+        # 1. Buscar Coincidencia Exacta
+        if nombre_clean in BASE_PROVEEDORES:
+            return BASE_PROVEEDORES[nombre_clean]
+
+        # 2. Buscar Coincidencia Parcial
+        for llave_base, datos in BASE_PROVEEDORES.items():
+            if llave_base in nombre_clean:
+                return datos
+
+        return {"dias": 0, "ceco": "Revisión Manual"}
+
+    # =========================================================
+    # 🚀 HELPER 3: Convertidor a prueba de balas para fechas
     # =========================================================
     def parse_flexible_date(raw_val) -> date:
         if not raw_val or str(raw_val).strip() == "None":
@@ -488,18 +866,17 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
                 clean_date = val_str.split("T")[0].split()[0]
                 return datetime.strptime(clean_date, "%Y-%m-%d").date()
         except Exception as e:
-            print(f"⚠️ Error parseando fecha '{val_str}': {e}. Usando fecha actual.")
             return date.today()
 
     # =========================================================
-    # INICIO DEL PROCESAMIENTO
+    # INICIO DEL PROCESAMIENTO BUCLE
     # =========================================================
     for row in payload_data:
         uuid_fiscal = str(row.get("UUID") or "").strip()
         if not uuid_fiscal or uuid_fiscal == "None":
             continue
 
-        # 🚀 Evitar duplicados
+        # 🚀 TICKET 2 (CANDADO): Evitar duplicados
         existing_invoice = (
             db.query(models.PayableInvoice)
             .filter(models.PayableInvoice.uuid == uuid_fiscal)
@@ -509,46 +886,72 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             facturas_ignoradas += 1
             continue
 
-        # Buscar o crear proveedor por RFC
         rfc_emisor = str(row.get("Rfc Emisor") or "").strip()
+        nombre_emisor_original = str(row.get("Nombre Emisor") or "").strip()
+
+        # 🚀 Buscamos coincidencias con tu lista
+        datos_sugeridos = buscar_coincidencia_proveedor(nombre_emisor_original)
+
+        # Buscar proveedor en la Base de Datos
         supplier = (
             db.query(models.Supplier).filter(models.Supplier.rfc == rfc_emisor).first()
         )
 
+        # Si el proveedor no existe, lo creamos con los datos del BuscarV
         if not supplier:
             supplier = models.Supplier(
-                razon_social=str(row.get("Nombre Emisor")),
+                razon_social=nombre_emisor_original,
                 rfc=rfc_emisor,
                 estatus="activo",
+                dias_credito=datos_sugeridos["dias"],
             )
             db.add(supplier)
             db.flush()
 
-        # Lógica Inteligente de CECOs
-        cost_center_id = None
+        # =========================================================
+        # 🚀 LÓGICA INTELIGENTE DE CENTROS DE COSTO (CECOS)
+        # =========================================================
+
+        # 1. Buscamos primero en el MAPA_CECOS (ID exacto por nombre en minúsculas)
         ceco_name_excel = str(
             row.get("Centro de Costos ") or row.get("Centro de Costos") or ""
         ).strip()
+        ceco_a_buscar = (
+            ceco_name_excel
+            if ceco_name_excel and ceco_name_excel.lower() not in ["none", "nan", ""]
+            else None
+        )
 
-        if ceco_name_excel and ceco_name_excel.lower() not in ["none", "nan", ""]:
-            ceco = (
-                db.query(models.CostCenter)
-                .filter(models.CostCenter.nombre.ilike(f"%{ceco_name_excel}%"))
-                .first()
-            )
-            if not ceco:
-                nuevo_ceco_codigo = ceco_name_excel[:15].upper().replace(" ", "-")
-                ceco = models.CostCenter(
-                    codigo=nuevo_ceco_codigo, nombre=ceco_name_excel, activo=True
+        # 2. Si el Excel no trajo nada y el proveedor no tiene CECO en BD, usamos el sugerido
+        if not ceco_a_buscar and not supplier.cost_center_id:
+            ceco_a_buscar = datos_sugeridos["ceco"]
+
+        cost_center_id = supplier.cost_center_id
+
+        if ceco_a_buscar:
+            ceco_key = ceco_a_buscar.strip().lower()
+            if ceco_key in mapa_cecos:
+                cost_center_id = mapa_cecos[ceco_key]
+            else:
+                # Si no existe, lo creamos y actualizamos el mapa
+                nuevo_ceco_codigo = ceco_a_buscar[:15].upper().replace(" ", "-")
+                nuevo_ceco = models.CostCenter(
+                    codigo=nuevo_ceco_codigo, nombre=ceco_a_buscar, activo=True
                 )
-                db.add(ceco)
+                db.add(nuevo_ceco)
                 db.flush()
                 cecos_creados += 1
-            cost_center_id = ceco.id
-        else:
-            cost_center_id = getattr(supplier, "cost_center_id", None)
+                cost_center_id = nuevo_ceco.id
+                mapa_cecos[ceco_key] = cost_center_id
 
-        # Extraer montos y fechas
+            # Si el proveedor era nuevo o no tenía CECO, le heredamos este para futuras facturas
+            if not supplier.cost_center_id:
+                supplier.cost_center_id = cost_center_id
+                db.add(supplier)
+
+        # =========================================================
+        # 🚀 EXTRAER MONTOS Y FECHAS
+        # =========================================================
         try:
             monto_total = float(row.get("Total", 0))
         except:
@@ -557,18 +960,27 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
         fecha_cruda = row.get("Fecha") or row.get("Fecha emisión")
         fecha_emision_limpia = parse_flexible_date(fecha_cruda)
 
-        dias_credito = getattr(supplier, "dias_credito", 15) or 15
-        fecha_vencimiento_limpia = fecha_emision_limpia + timedelta(days=dias_credito)
+        # Los días de crédito: Prioridad -> Lo que tenga la BD, si no, el buscarV
+        dias_credito = supplier.dias_credito
+        if not dias_credito or dias_credito == 0:
+            dias_credito = datos_sugeridos["dias"]
+            if dias_credito > 0:
+                supplier.dias_credito = dias_credito
+                db.add(supplier)
+
+        fecha_vencimiento_limpia = fecha_emision_limpia + timedelta(
+            days=(dias_credito or 0)
+        )
 
         metodo_pago = str(row.get("Método de Pago") or "").split("-")[0].strip()[:5]
         forma_pago = str(row.get("Forma de Pago") or "").split("-")[0].strip()[:5]
-        concepto = str(row.get("Conceptos") or "Factura importada del SAT")[:250]
 
-        # =========================================================
-        # 🚀 FIX DE MONEDA: Limpiar "XXX" o valores no válidos
-        # =========================================================
+        # Concepto (se guarda completo)
+        concepto_bruto = str(
+            row.get("Conceptos") or "Factura importada del SAT"
+        ).strip()
+
         moneda_raw = str(row.get("Moneda") or "MXN").strip()[:3].upper()
-        # Si la moneda no es MXN o USD, forzamos a que sea MXN para no romper la base de datos
         moneda_limpia = moneda_raw if moneda_raw in ["MXN", "USD", "EUR"] else "MXN"
 
         # Creación de la factura
@@ -577,12 +989,12 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             cost_center_id=cost_center_id,
             uuid=uuid_fiscal,
             folio=str(row.get("Folio") or ""),
-            concepto=concepto,
+            concepto=concepto_bruto,
             monto_total=monto_total,
             saldo_pendiente=monto_total,
             fecha_emision=fecha_emision_limpia,
             fecha_vencimiento=fecha_vencimiento_limpia,
-            moneda=moneda_limpia,  # <-- ¡Aquí usamos la moneda filtrada!
+            moneda=moneda_limpia,
             metodo_pago=metodo_pago,
             forma_pago=forma_pago,
             estatus=models.InvoiceStatus.PENDIENTE,
