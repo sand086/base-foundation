@@ -597,37 +597,6 @@ export function OperatorSettlementDetailModal({
                           </div>
                         </div>
 
-                        {/* Estadísticas */}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 flex flex-col items-center justify-center text-center">
-                            <Route className="h-5 w-5 text-blue-500 dark:text-blue-400 mb-1" />
-                            <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
-                              Recorrido
-                            </span>
-                            <span className="font-black text-slate-800 dark:text-slate-200 text-sm">
-                              {distancia}
-                            </span>
-                          </div>
-                          <div className="bg-amber-50/50 dark:bg-amber-500/10 p-3 rounded-xl border border-amber-100 dark:border-amber-500/20 flex flex-col items-center justify-center text-center">
-                            <Clock className="h-5 w-5 text-amber-500 dark:text-amber-400 mb-1" />
-                            <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
-                              Duración
-                            </span>
-                            <span className="font-black text-slate-800 dark:text-slate-200 text-sm">
-                              {tiempo}
-                            </span>
-                          </div>
-                          <div className="bg-purple-50/50 dark:bg-purple-500/10 p-3 rounded-xl border border-purple-100 dark:border-purple-500/20 flex flex-col items-center justify-center text-center">
-                            <Activity className="h-5 w-5 text-purple-500 dark:text-purple-400 mb-1" />
-                            <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">
-                              Paradas / Evt
-                            </span>
-                            <span className="font-black text-slate-800 dark:text-slate-200 text-sm">
-                              {paradas} reg.
-                            </span>
-                          </div>
-                        </div>
-
                         {/* BLOQUE DE AUDITORÍA DIÉSEL POR VIAJE - ¡SIEMPRE VISIBLE! */}
                         <div className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm break-inside-avoid mt-4">
                           <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-white/10 pb-2">
@@ -720,7 +689,7 @@ export function OperatorSettlementDetailModal({
                               </span>
                             </div>
 
-                            {legBonos > 0 && (
+                            {/*     {legBonos > 0 && (
                               <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400">
                                 <span>Bonos Extra</span>
                                 <span className="font-mono font-semibold">
@@ -728,7 +697,7 @@ export function OperatorSettlementDetailModal({
                                 </span>
                               </div>
                             )}
-
+ */}
                             {legConceptos
                               .filter(
                                 (c: ConceptoExtra) => c.tipo === "ingreso",
@@ -773,7 +742,7 @@ export function OperatorSettlementDetailModal({
                                 </span>
                               </div>
                             )}
-
+                            {/* 
                             {legManiobras > 0 && (
                               <div className="flex justify-between items-center text-rose-600 dark:text-rose-400">
                                 <span>Deducciones Maniobras</span>
@@ -782,7 +751,7 @@ export function OperatorSettlementDetailModal({
                                 </span>
                               </div>
                             )}
-
+ */}
                             {legPenalizacion > 0 && (
                               <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold">
                                 <div className="flex flex-col">

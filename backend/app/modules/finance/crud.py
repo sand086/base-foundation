@@ -466,8 +466,30 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
 
 
 def process_sat_master_report(db: Session, payload_data: list, original_file_name: str):
+    from datetime import datetime, timedelta, date
+
     facturas_creadas = 0
-    facturas_ignoradas = 0  # 🚀 TICKET 2: Contador de facturas saltadas
+    facturas_ignoradas = 0
+
+    # 🚀 HELPER: Convertidor a prueba de balas para fechas de Excel y SAT
+    def parse_flexible_date(raw_val) -> date:
+        if not raw_val or str(raw_val).strip() == "None":
+            return date.today()
+
+        val_str = str(raw_val).strip()
+        try:
+            # 1. Si es un número serial de Excel (ej. 46113.6999)
+            if val_str.replace(".", "", 1).isdigit():
+                serial = float(val_str)
+                # La fecha base de Excel es 30/Dic/1899
+                return (datetime(1899, 12, 30) + timedelta(days=serial)).date()
+            else:
+                # 2. Si es un string ISO normal (ej. "2026-04-25T10:30:00")
+                clean_date = val_str.split("T")[0].split()[0]
+                return datetime.strptime(clean_date, "%Y-%m-%d").date()
+        except Exception as e:
+            print(f"⚠️ Error parseando fecha '{val_str}': {e}. Usando fecha actual.")
+            return date.today()
 
     for row in payload_data:
         uuid_fiscal = str(row.get("UUID") or "").strip()
@@ -475,8 +497,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             continue
 
         # =========================================================
-        # 🚀 TICKET 2 (CANDADO): Si el UUID ya existe, lo saltamos
-        # Esto evita borrar los pagos o saldos que ya hizo Tesorería
+        # 🚀 TICKET 2 (CANDADO): Evitar duplicados
         # =========================================================
         existing_invoice = (
             db.query(models.PayableInvoice)
@@ -485,15 +506,14 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
         )
         if existing_invoice:
             facturas_ignoradas += 1
-            continue  # Salta a la siguiente fila del Excel/JSON
+            continue
 
-        # Buscar proveedor por RFC
+        # Buscar o crear proveedor por RFC
         rfc_emisor = str(row.get("Rfc Emisor") or "").strip()
         supplier = (
             db.query(models.Supplier).filter(models.Supplier.rfc == rfc_emisor).first()
         )
 
-        # Si el proveedor no existe, lo creamos rápido
         if not supplier:
             supplier = models.Supplier(
                 razon_social=str(row.get("Nombre Emisor")),
@@ -503,23 +523,35 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             db.add(supplier)
             db.flush()
 
-        # =========================================================
-        # 🚀 TICKET 4 (AUTOMATIZACIÓN): Heredar Centro de Costos
-        # =========================================================
-        monto_total = float(row.get("Total", 0))
+        # Extraer montos de forma segura
+        try:
+            monto_total = float(row.get("Total", 0))
+        except:
+            monto_total = 0.0
 
+        # =========================================================
+        # 🚀 FIX DE FECHA: Procesar la fecha usando nuestro helper
+        # =========================================================
+        fecha_cruda = row.get("Fecha") or row.get("Fecha emisión")
+        fecha_emision_limpia = parse_flexible_date(fecha_cruda)
+
+        # Calcular fecha de vencimiento sumando los días de crédito del proveedor
+        dias_credito = getattr(supplier, "dias_credito", 15) or 15
+        fecha_vencimiento_limpia = fecha_emision_limpia + timedelta(days=dias_credito)
+
+        # =========================================================
+        # 🚀 TICKET 4: Creación de factura heredando el CECO
+        # =========================================================
         nueva_factura = models.PayableInvoice(
             supplier_id=supplier.id,
-            cost_center_id=supplier.cost_center_id,  # <-- 🚀 HERENCIA AUTOMÁTICA DEL CECO
+            cost_center_id=getattr(
+                supplier, "cost_center_id", None
+            ),  # Herencia de CECO
             uuid=uuid_fiscal,
             monto_total=monto_total,
-            saldo_pendiente=monto_total,  # Nace con la deuda completa
-            fecha_emision=row.get(
-                "Fecha"
-            ),  # Asegúrate de parsear la fecha correctamente
-            fecha_vencimiento=row.get(
-                "Fecha"
-            ),  # O sumar los días de crédito del supplier
+            saldo_pendiente=monto_total,
+            fecha_emision=fecha_emision_limpia,  # <-- ¡Fecha corregida!
+            fecha_vencimiento=fecha_vencimiento_limpia,  # <-- ¡Fecha corregida!
             estatus=models.InvoiceStatus.PENDIENTE,
         )
         db.add(nueva_factura)
