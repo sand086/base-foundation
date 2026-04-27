@@ -47,9 +47,18 @@ def create_invoice(
 @router.get("", response_model=List[schemas.SupplierResponse])
 def read_suppliers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """
-    Catálogo de proveedores activos. Incluye la relación con el Centro de Costos.
+    Catálogo de proveedores activos.
     """
-    return crud.get_suppliers(db, skip, limit)
+    try:
+        return crud.get_suppliers(db, skip, limit)
+    except Exception as e:
+        # Esto captura todo el rastro del error
+        error_trace = traceback.format_exc()
+
+        # OJO: Solo usamos esto temporalmente para depurar
+        raise HTTPException(
+            status_code=500, detail=f"ERROR EXACTO: {str(e)} | DETALLE: {error_trace}"
+        )
 
 
 @router.post("", response_model=schemas.SupplierResponse)
