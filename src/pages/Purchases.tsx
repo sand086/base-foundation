@@ -37,8 +37,7 @@ import { getStatusFromLabel, StatusBadge } from "@/components/ui/status-badge";
 export default function Payables() {
   // 🚀 CONEXIÓN REAL AL BACKEND
   const { invoices, isLoading, error, refetch } = usePayables();
-  const { accounts: bankAccounts } = useBankAccounts();
-
+  const { bankAccounts } = useBankAccounts();
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
