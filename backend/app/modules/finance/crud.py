@@ -465,427 +465,72 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
     return nueva_factura
 
 
-def process_sat_master_report(
-    db: Session,
-    payload_data: list[dict],
-    my_rfc: str = "RTX110624KP5",
-    original_file_name: str = "",
-):
-    """
-    Motor de Conciliación Universal (CxP y CxC).
-    Lee el Excel del SAT convertido a dicts y cruza la operación con lo fiscal.
-    """
-    resultados = {
-        "cxp_creadas": 0,
-        "cxc_creadas": 0,
-        "pagos_pue_procesados": 0,
-        "complementos_procesados": 0,
-        "notas_credito_aplicadas": 0,
-        "ignorados_duplicados": 0,
-        "ignorados_cancelados": 0,
-        "cecos_creados_al_vuelo": 0,
-    }
+def process_sat_master_report(db: Session, payload_data: list, original_file_name: str):
+    facturas_creadas = 0
+    facturas_ignoradas = 0  # 🚀 TICKET 2: Contador de facturas saltadas
 
-    for item in payload_data:
-        estado_sat = str(item.get("Estado", "")).strip().upper()
-        if estado_sat == "CANCELADO":
-            resultados["ignorados_cancelados"] += 1
+    for row in payload_data:
+        uuid_fiscal = str(row.get("UUID") or "").strip()
+        if not uuid_fiscal or uuid_fiscal == "None":
             continue
 
-        rfc_emisor = str(item.get("Rfc Emisor", "")).strip()
-        nombre_emisor = str(item.get("Nombre Emisor", "")).strip()
-        rfc_receptor = str(item.get("Rfc Receptor", "")).strip()
-        nombre_receptor = str(item.get("Nombre Receptor", "")).strip()
-        uuid_fiscal = str(item.get("UUID", "")).strip()
-
-        if not uuid_fiscal:
-            continue
-
-        tipo_raw = str(item.get("Tipo", "")).strip().lower()
-        if "nota de crédito" in tipo_raw:
-            tipo_comprobante = "egreso"
-        elif "pago" in tipo_raw:
-            tipo_comprobante = "pago"
-        else:
-            tipo_comprobante = "ingreso"
-
-        metodo_pago_raw = (
-            str(item.get("Método de Pago") or item.get("MetodoDePagoDR") or "")
-            .strip()
-            .upper()
+        # =========================================================
+        # 🚀 TICKET 2 (CANDADO): Si el UUID ya existe, lo saltamos
+        # Esto evita borrar los pagos o saldos que ya hizo Tesorería
+        # =========================================================
+        existing_invoice = (
+            db.query(models.PayableInvoice)
+            .filter(models.PayableInvoice.uuid == uuid_fiscal)
+            .first()
         )
-        metodo_pago = (
-            metodo_pago_raw.split("-")[0].strip()[:5] if metodo_pago_raw else None
+        if existing_invoice:
+            facturas_ignoradas += 1
+            continue  # Salta a la siguiente fila del Excel/JSON
+
+        # Buscar proveedor por RFC
+        rfc_emisor = str(row.get("Rfc Emisor") or "").strip()
+        supplier = (
+            db.query(models.Supplier).filter(models.Supplier.rfc == rfc_emisor).first()
         )
 
-        forma_pago_raw = str(
-            item.get("Forma de Pago") or item.get("FormaDePago") or ""
-        ).strip()
-        forma_pago = (
-            forma_pago_raw.split("-")[0].strip()[:5] if forma_pago_raw else None
+        # Si el proveedor no existe, lo creamos rápido
+        if not supplier:
+            supplier = models.Supplier(
+                razon_social=str(row.get("Nombre Emisor")),
+                rfc=rfc_emisor,
+                estatus="activo",
+            )
+            db.add(supplier)
+            db.flush()
+
+        # =========================================================
+        # 🚀 TICKET 4 (AUTOMATIZACIÓN): Heredar Centro de Costos
+        # =========================================================
+        monto_total = float(row.get("Total", 0))
+
+        nueva_factura = models.PayableInvoice(
+            supplier_id=supplier.id,
+            cost_center_id=supplier.cost_center_id,  # <-- 🚀 HERENCIA AUTOMÁTICA DEL CECO
+            uuid=uuid_fiscal,
+            monto_total=monto_total,
+            saldo_pendiente=monto_total,  # Nace con la deuda completa
+            fecha_emision=row.get(
+                "Fecha"
+            ),  # Asegúrate de parsear la fecha correctamente
+            fecha_vencimiento=row.get(
+                "Fecha"
+            ),  # O sumar los días de crédito del supplier
+            estatus=models.InvoiceStatus.PENDIENTE,
         )
-
-        uuid_relacionado = str(
-            item.get("Relacionados") or item.get("idDocumento") or ""
-        ).strip()
-        folio = str(item.get("Folio", "")).strip()
-        moneda = str(item.get("Moneda") or item.get("MonedaDR") or "MXN").strip()[:3]
-
-        raw_fecha = str(
-            item.get("Fecha")
-            or item.get("FechaPago")
-            or item.get("Fecha emisión")
-            or ""
-        )
-        try:
-            fecha_obj = datetime.strptime(
-                raw_fecha.split("T")[0].split()[0], "%Y-%m-%d"
-            )
-        except:
-            fecha_obj = datetime.utcnow()
-
-        raw_subtotal = item.get("Sub Total", 0)
-        raw_total = item.get("Total") or item.get("ImpPagado") or 0
-        raw_iva = item.get("Traslado IVA 16 %", 0)
-        raw_ret_isr = item.get("Retención ISR", 0)
-        raw_ret_iva = item.get("Retención IVA", 0)
-
-        try:
-            subtotal = float(str(raw_subtotal).replace("$", "").replace(",", ""))
-            total = float(str(raw_total).replace("$", "").replace(",", ""))
-            iva = float(str(raw_iva).replace("$", "").replace(",", ""))
-            retenciones = float(
-                str(raw_ret_isr).replace("$", "").replace(",", "")
-            ) + float(str(raw_ret_iva).replace("$", "").replace(",", ""))
-        except (ValueError, TypeError):
-            subtotal, total, iva, retenciones = 0.0, 0.0, 0.0, 0.0
-
-        descuento_raw = item.get("Descuento", 0)
-        tc_raw = item.get("Tipo de Cambio", 1.0)
-        uso_cfdi_raw = str(item.get("Uso CFDI", "")).split("-")[0].strip()[:5]
-        serie_raw = str(item.get("Serie", "")).strip()[:20]
-
-        try:
-            descuento = (
-                float(str(descuento_raw).replace("$", "").replace(",", ""))
-                if descuento_raw
-                else 0.0
-            )
-            tipo_cambio = (
-                float(str(tc_raw).replace("$", "").replace(",", "")) if tc_raw else 1.0
-            )
-        except:
-            descuento, tipo_cambio = 0.0, 1.0
-
-        ish_raw = item.get("ISH:0.03%") or item.get("ISH:0.30%") or 0
-        try:
-            val_isr = (
-                float(str(raw_ret_isr).replace("$", "").replace(",", ""))
-                if raw_ret_isr
-                else 0.0
-            )
-            val_iva_ret = (
-                float(str(raw_ret_iva).replace("$", "").replace(",", ""))
-                if raw_ret_iva
-                else 0.0
-            )
-            val_ish = (
-                float(str(ish_raw).replace("$", "").replace(",", ""))
-                if ish_raw
-                else 0.0
-            )
-        except:
-            val_isr, val_iva_ret, val_ish = 0.0, 0.0, 0.0
-
-        desglose_impuestos = {
-            "retencion_isr": val_isr,
-            "retencion_iva": val_iva_ret,
-            "ish": val_ish,
-        }
-
-        is_cxc = rfc_emisor.upper() == my_rfc.upper()
-
-        if tipo_comprobante == "ingreso":
-            if is_cxc:
-                existing = (
-                    db.query(models.ReceivableInvoice)
-                    .filter(
-                        models.ReceivableInvoice.uuid == uuid_fiscal,
-                        models.ReceivableInvoice.record_status
-                        != models.RecordStatus.ELIMINADO,
-                    )
-                    .first()
-                )
-            else:
-                existing = (
-                    db.query(models.PayableInvoice)
-                    .filter(
-                        models.PayableInvoice.uuid == uuid_fiscal,
-                        models.PayableInvoice.record_status
-                        != models.RecordStatus.ELIMINADO,
-                    )
-                    .first()
-                )
-
-            if existing:
-                resultados["ignorados_duplicados"] += 1
-                continue
-
-        # ==========================================
-        # FLUJO A: COMPROBANTES TIPO "INGRESO"
-        # ==========================================
-        if tipo_comprobante == "ingreso":
-            # 🚀 FIX: Forzamos a que TODAS entren con deuda completa y como PENDIENTES
-            saldo_pendiente = total
-            estatus_factura = models.InvoiceStatus.PENDIENTE
-
-            if is_cxc:
-                client = (
-                    db.query(models.Client)
-                    .filter(
-                        models.Client.rfc == rfc_receptor,
-                        models.Client.record_status != models.RecordStatus.ELIMINADO,
-                    )
-                    .first()
-                )
-                if not client:
-                    client = models.Client(
-                        razon_social=nombre_receptor, rfc=rfc_receptor, estatus="activo"
-                    )
-                    db.add(client)
-                    db.flush()
-
-                invoice = models.ReceivableInvoice(
-                    client_id=client.id,
-                    uuid=uuid_fiscal,
-                    folio_interno=folio,
-                    subtotal=subtotal,
-                    iva=iva,
-                    retenciones=retenciones,
-                    monto_total=total,
-                    saldo_pendiente=saldo_pendiente,
-                    moneda=moneda,
-                    fecha_emision=fecha_obj.date(),
-                    fecha_vencimiento=(
-                        fecha_obj + timedelta(days=client.dias_credito or 15)
-                    ).date(),
-                    estatus=estatus_factura,
-                    metodo_pago=metodo_pago,
-                    forma_pago=forma_pago,
-                    tipo_comprobante="I",
-                )
-                db.add(invoice)
-                db.flush()  # CRÍTICO: Necesario para obtener invoice.id
-                resultados["cxc_creadas"] += 1
-            else:
-                provider = (
-                    db.query(models.Supplier)
-                    .filter(
-                        models.Supplier.rfc == rfc_emisor,
-                        models.Supplier.record_status != models.RecordStatus.ELIMINADO,
-                    )
-                    .first()
-                )
-                if not provider:
-                    provider = models.Supplier(
-                        razon_social=nombre_emisor, rfc=rfc_emisor, estatus="activo"
-                    )
-                    db.add(provider)
-                    db.flush()
-
-                cost_center_id = None
-                ceco_name = str(
-                    item.get("Centro de Costos ") or item.get("Centro de Costos") or ""
-                ).strip()
-                if ceco_name:
-                    ceco = (
-                        db.query(models.CostCenter)
-                        .filter(models.CostCenter.nombre.ilike(f"%{ceco_name}%"))
-                        .first()
-                    )
-                    if not ceco:
-                        nuevo_ceco_codigo = ceco_name[:15].upper().replace(" ", "-")
-                        ceco = models.CostCenter(
-                            codigo=nuevo_ceco_codigo, nombre=ceco_name
-                        )
-                        db.add(ceco)
-                        db.flush()
-                        resultados["cecos_creados_al_vuelo"] += 1
-                    cost_center_id = ceco.id
-
-                invoice = models.PayableInvoice(
-                    supplier_id=provider.id,
-                    cost_center_id=cost_center_id,
-                    uuid=uuid_fiscal,
-                    serie=serie_raw,
-                    folio=folio,
-                    folio_interno=folio,
-                    subtotal=subtotal,
-                    descuento=descuento,
-                    iva=iva,
-                    retenciones=retenciones,
-                    desglose_impuestos=desglose_impuestos,
-                    monto_total=total,
-                    saldo_pendiente=saldo_pendiente,
-                    moneda=moneda,
-                    tipo_cambio=tipo_cambio,
-                    fecha_emision=fecha_obj.date(),
-                    fecha_vencimiento=(
-                        fecha_obj
-                        + timedelta(
-                            days=provider.dias_credito if provider.dias_credito else 15
-                        )
-                    ).date(),
-                    estatus=estatus_factura,
-                    metodo_pago=metodo_pago,
-                    forma_pago=forma_pago,
-                    tipo_comprobante="I",
-                    uso_cfdi=uso_cfdi_raw,
-                    validacion_efos=False,
-                )
-                db.add(invoice)
-                db.flush()  # CRÍTICO: Necesario para obtener invoice.id
-                resultados["cxp_creadas"] += 1
-
-            # 🚀 FIX CRÍTICO: SI ES PUE, AFECTAR TESORERÍA EN LA CUENTA COMODÍN
-            """             if metodo_pago == "PUE":
-                cuenta_comodin = (
-                    db.query(models.BankAccount)
-                    .filter_by(alias="Por Conciliar (SAT)")
-                    .first()
-                )
-                if not cuenta_comodin:
-                    cuenta_comodin = models.BankAccount(
-                        banco="SAT Virtual",
-                        numero_cuenta="000",
-                        alias="Por Conciliar (SAT)",
-                        tipo_cuenta="virtual",
-                        created_by_id=1,
-                    )
-                    db.add(cuenta_comodin)
-                    db.flush()
-
-                tipo_mov = "ingreso" if is_cxc else "egreso"
-                mov_schema = schemas.BankMovementCreate(
-                    bank_account_id=cuenta_comodin.id,
-                    tipo=tipo_mov,
-                    monto=total,
-                    concepto=f"Factura PUE SAT - {folio or uuid_fiscal[:8]}",
-                    referencia="Carga SAT PUE",
-                    origen_modulo="CxC" if is_cxc else "CxP",
-                )
-                create_bank_movement(db, mov_schema, current_user_id=1)
-                resultados["pagos_pue_procesados"] += 1 """
-
-        # ==========================================
-        # FLUJO B: COMPROBANTES TIPO "EGRESO" (NOTAS DE CRÉDITO)
-        # ==========================================
-        elif tipo_comprobante == "egreso" and uuid_relacionado:
-            model_class = models.ReceivableInvoice if is_cxc else models.PayableInvoice
-            orig_inv = (
-                db.query(model_class)
-                .filter(
-                    model_class.uuid == uuid_relacionado,
-                    model_class.record_status != models.RecordStatus.ELIMINADO,
-                )
-                .first()
-            )
-
-            if orig_inv and orig_inv.saldo_pendiente > 0:
-                orig_inv.saldo_pendiente = max(0.0, orig_inv.saldo_pendiente - total)
-                if orig_inv.saldo_pendiente == 0:
-                    orig_inv.estatus = models.InvoiceStatus.PAGADO
-            resultados["notas_credito_aplicadas"] += 1
-
-        # ==========================================
-        # FLUJO C: COMPROBANTES TIPO "PAGO" (COMPLEMENTOS REP)
-        # ==========================================
-        elif tipo_comprobante == "pago" and uuid_relacionado:
-            payment_model = (
-                models.ReceivableInvoicePayment if is_cxc else models.InvoicePayment
-            )
-            invoice_model = (
-                models.ReceivableInvoice if is_cxc else models.PayableInvoice
-            )
-
-            pago_existente = (
-                db.query(payment_model)
-                .filter(payment_model.complemento_uuid == uuid_fiscal)
-                .first()
-            )
-            if pago_existente:
-                resultados["ignorados_duplicados"] += 1
-                continue
-
-            orig_inv = (
-                db.query(invoice_model)
-                .filter(
-                    invoice_model.uuid == uuid_relacionado,
-                    invoice_model.record_status != models.RecordStatus.ELIMINADO,
-                )
-                .first()
-            )
-
-            if orig_inv:
-                nuevo_pago = payment_model(
-                    invoice_id=orig_inv.id,
-                    monto=total,
-                    fecha_pago=fecha_obj.date(),
-                    metodo_pago=forma_pago,
-                    complemento_uuid=uuid_fiscal,
-                    referencia="Carga SAT",
-                )
-
-                if hasattr(nuevo_pago, "parcialidad"):
-                    nuevo_pago.parcialidad = int(item.get("Parcialidad", 1) or 1)
-                    nuevo_pago.saldo_anterior = float(
-                        item.get("ImpSaldoAnt") or orig_inv.saldo_pendiente
-                    )
-                    nuevo_pago.saldo_insoluto = float(
-                        item.get("SaldoInsoluto")
-                        or max(0, orig_inv.saldo_pendiente - total)
-                    )
-
-                db.add(nuevo_pago)
-
-                orig_inv.saldo_pendiente = max(0.0, orig_inv.saldo_pendiente - total)
-                orig_inv.estatus = (
-                    models.InvoiceStatus.PAGADO
-                    if orig_inv.saldo_pendiente == 0
-                    else models.InvoiceStatus.PAGO_PARCIAL
-                )
-
-                cuenta_comodin = (
-                    db.query(models.BankAccount)
-                    .filter_by(alias="Por Conciliar (SAT)")
-                    .first()
-                )
-                if not cuenta_comodin:
-                    cuenta_comodin = models.BankAccount(
-                        banco="SAT Virtual",
-                        numero_cuenta="000",
-                        alias="Por Conciliar (SAT)",
-                        tipo_cuenta="virtual",
-                        created_by_id=1,
-                    )
-                    db.add(cuenta_comodin)
-                    db.flush()
-
-                tipo_movimiento = "ingreso" if is_cxc else "egreso"
-                mov_schema = schemas.BankMovementCreate(
-                    bank_account_id=cuenta_comodin.id,
-                    tipo=tipo_movimiento,
-                    monto=total,
-                    concepto=f"Carga SAT REP - {uuid_fiscal[:8]}",
-                    referencia="Carga SAT",
-                    origen_modulo="CxC" if is_cxc else "CxP",
-                )
-
-                create_bank_movement(db, mov_schema, current_user_id=1)
-            resultados["complementos_procesados"] += 1
+        db.add(nueva_factura)
+        facturas_creadas += 1
 
     db.commit()
-    return {"message": "Sincronización SAT Completada", "detalles": resultados}
+
+    return {
+        "status": "success",
+        "message": f"Proceso SAT exitoso. Facturas Creadas: {facturas_creadas}. Duplicados Ignorados: {facturas_ignoradas}.",
+    }
 
 
 def conciliate_bank_movement(db: Session, movement_id: int):

@@ -606,26 +606,41 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
 
 def get_trip_settlement(db: Session, trip_leg_id: int):
     import uuid
+    from sqlalchemy.orm import joinedload
+    from app.models import models
+    from app.models.models import RecordStatus
     from . import schemas
 
+    # 1. Cargar el tramo con todas sus relaciones (Viaje, Cliente, Unidad, Operador)
     leg = (
         db.query(models.TripLeg)
-        .options(joinedload(models.TripLeg.trip))
+        .options(
+            joinedload(models.TripLeg.trip).joinedload(models.Trip.client),
+            joinedload(models.TripLeg.unit),
+            joinedload(models.TripLeg.operator),
+        )
         .filter(
             models.TripLeg.id == trip_leg_id,
             models.TripLeg.record_status != RecordStatus.ELIMINADO,
         )
         .first()
     )
+
     if not leg or not leg.trip:
         return None
 
     trip = leg.trip
     fecha_viaje = leg.start_date.strftime("%Y-%m-%d") if leg.start_date else "N/A"
 
-    is_ruta = leg.leg_type == models.TripLegType.RUTA
+    # Manejo seguro de Enums
+    is_ruta = getattr(leg, "leg_type", "") == getattr(
+        models.TripLegType, "RUTA", "ruta_carretera"
+    )
     is_full = (trip.dolly_id is not None) or (trip.remolque_2_id is not None)
 
+    # =========================================================
+    # CÁLCULO DE DISTANCIA
+    # =========================================================
     if (
         leg.odometro_final
         and leg.odometro_inicial
@@ -634,9 +649,14 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         kms_recorridos = float(leg.odometro_final - leg.odometro_inicial)
     else:
         kms_recorridos = float(
-            trip.tariff.distancia_km if trip.tariff and trip.tariff.distancia_km else 0
+            trip.tariff.distancia_km
+            if getattr(trip, "tariff", None) and trip.tariff.distancia_km
+            else 0
         )
 
+    # =========================================================
+    # AUDITORÍA DE DIÉSEL
+    # =========================================================
     fuel_logs = (
         db.query(models.FuelLog)
         .filter(
@@ -656,12 +676,26 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     deduccion_combustible = 0.0
     conceptos = []
 
+    # =========================================================
+    # 🚀 TICKET 1: DATOS DE TRANSPARENCIA PARA EL OPERADOR
+    # =========================================================
+    cliente_nombre = (
+        trip.client.razon_social if getattr(trip, "client", None) else "Cliente General"
+    )
+    contenedor_info = (
+        trip.contenedor_1 if getattr(trip, "contenedor_1", None) else "Carga Suelta"
+    )
+    referencia_operativa = f"{cliente_nombre} | Cont: {contenedor_info}"
+
+    # =========================================================
+    # 1. PERCEPCIONES: SUELDO BASE (RUTAS FORÁNEAS)
+    # =========================================================
     sueldo_fijo = 0.0
-    if trip.sueldo_operador and float(trip.sueldo_operador) > 0:
+    if getattr(trip, "sueldo_operador", None) and float(trip.sueldo_operador) > 0:
         sueldo_fijo = float(trip.sueldo_operador)
     elif (
-        trip.tariff
-        and trip.tariff.sueldo_operador
+        getattr(trip, "tariff", None)
+        and getattr(trip.tariff, "sueldo_operador", None)
         and float(trip.tariff.sueldo_operador) > 0
     ):
         sueldo_fijo = float(trip.tariff.sueldo_operador)
@@ -673,14 +707,22 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 tipo="ingreso",
                 categoria="tarifa",
                 descripcion="Sueldo Base Pactado",
+                referencia=f"Ruta: {trip.origin} a {trip.destination}",  # 🚀 TICKET 1
                 monto=sueldo_fijo,
                 esAutomatico=True,
             )
         )
 
+    # =========================================================
+    # 2. EVALUACIÓN Y PENALIZACIÓN DE COMBUSTIBLE
+    # =========================================================
     if is_ruta:
-        vales_diesel = [f for f in fuel_logs if f.tipo_combustible == "diesel"]
-        consumo_real_litros = sum(f.litros for f in vales_diesel)
+        vales_diesel = [
+            f
+            for f in fuel_logs
+            if getattr(f, "tipo_combustible", "diesel").lower() == "diesel"
+        ]
+        consumo_real_litros = sum(getattr(f, "litros", 0) for f in vales_diesel)
 
         rendimiento_esperado = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
         consumo_esperado = (
@@ -688,9 +730,9 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         )
 
         if vales_diesel:
-            precio_promedio_litro = sum(f.precio_por_litro for f in vales_diesel) / len(
-                vales_diesel
-            )
+            precio_promedio_litro = sum(
+                getattr(f, "precio_por_litro", 0) for f in vales_diesel
+            ) / len(vales_diesel)
 
         diferencia_cruda = consumo_real_litros - consumo_esperado
         diferencia_litros = diferencia_cruda if diferencia_cruda > 0 else 0.0
@@ -703,20 +745,33 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                     id=str(uuid.uuid4())[:8],
                     tipo="deduccion",
                     categoria="combustible",
-                    descripcion=f"Cargo Exceso Diésel (Según Auditoría)",
+                    descripcion="Cargo Exceso Diésel (Auditoría)",
+                    referencia=f"Excedente de {round(diferencia_litros, 1)} Lts",  # 🚀 TICKET 1
                     monto=deduccion_combustible,
                     esAutomatico=True,
                 )
             )
 
+    # =========================================================
+    # 3. PERCEPCIONES: BONOS DE PATIO (LOCALES)
+    # =========================================================
     else:
         if sueldo_fijo == 0:
             bono_movimiento = 300.0 if is_full else 200.0
-            tipo_mov_str = (
-                "Mov. Patio"
-                if leg.leg_type == models.TripLegType.CARGA
-                else "Retorno Vacío"
-            )
+
+            # Etiquetado inteligente del tipo de movimiento
+            leg_type_str = getattr(leg, "leg_type", "")
+            if leg_type_str == getattr(models.TripLegType, "CARGA", "carga"):
+                tipo_mov_str = "Carga en Muelle"
+            elif leg_type_str == getattr(models.TripLegType, "DESCARGA", "descarga"):
+                tipo_mov_str = "Descarga en Muelle"
+            elif leg_type_str == getattr(
+                models.TripLegType, "RETORNO_VACIO", "retorno_vacio"
+            ):
+                tipo_mov_str = "Retorno de Vacío"
+            else:
+                tipo_mov_str = "Movimiento Local"
+
             config_str = "FULL" if is_full else "SENCILLO"
 
             conceptos.append(
@@ -724,55 +779,66 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                     id=str(uuid.uuid4())[:8],
                     tipo="ingreso",
                     categoria="bono",
-                    descripcion=f"Bono {tipo_mov_str} ({config_str})",
+                    descripcion=f"{tipo_mov_str} ({config_str})",
+                    referencia=referencia_operativa,  # 🚀 TICKET 1: Aquí va el cliente y contenedor
                     monto=bono_movimiento,
                     esAutomatico=True,
                 )
             )
 
-    if leg.anticipo_viaticos > 0:
+    # =========================================================
+    # 4. DEDUCCIONES: ANTICIPOS (VIÁTICOS Y EFECTIVO)
+    # =========================================================
+    if getattr(leg, "anticipo_viaticos", 0) > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Anticipo Viáticos",
+                referencia="Efectivo/Tarjeta",
                 monto=leg.anticipo_viaticos,
                 esAutomatico=True,
             )
         )
-    if leg.anticipo_combustible > 0:
+    if getattr(leg, "anticipo_combustible", 0) > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Anticipo Diésel",
+                referencia="Carga en Ruta",
                 monto=leg.anticipo_combustible,
                 esAutomatico=True,
             )
         )
-    if leg.otros_anticipos > 0:
+    if getattr(leg, "otros_anticipos", 0) > 0:
         conceptos.append(
             schemas.ConceptoPago(
                 id=str(uuid.uuid4())[:8],
                 tipo="deduccion",
                 categoria="anticipo",
                 descripcion="Otros Anticipos",
+                referencia="Adelanto Operativo",
                 monto=leg.otros_anticipos,
                 esAutomatico=True,
             )
         )
 
+    # =========================================================
+    # 5. TOTALES FINALES
+    # =========================================================
     total_ingresos = sum(c.monto for c in conceptos if c.tipo == "ingreso")
     total_deducciones = sum(c.monto for c in conceptos if c.tipo == "deduccion")
     neto_pagar = total_ingresos - total_deducciones
 
+    # Armado final del Response respetando el Schema de Pydantic
     return schemas.TripSettlementResponse(
         viajeId=trip.public_id or f"VIAJE-{trip.id}",
         legId=leg.id,
-        operadorNombre=leg.operator.name if leg.operator else "N/A",
-        unidadNumero=leg.unit.numero_economico if leg.unit else "N/A",
+        operadorNombre=leg.operator.name if getattr(leg, "operator", None) else "N/A",
+        unidadNumero=leg.unit.numero_economico if getattr(leg, "unit", None) else "N/A",
         ruta=trip.route_name or f"{trip.origin} -> {trip.destination}",
         fechaViaje=fecha_viaje,
         kmsRecorridos=kms_recorridos,
