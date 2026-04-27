@@ -470,8 +470,11 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
 
     facturas_creadas = 0
     facturas_ignoradas = 0
+    cecos_creados = 0  # 🚀 Contador para CECOs creados automáticamente
 
+    # =========================================================
     # 🚀 HELPER: Convertidor a prueba de balas para fechas de Excel y SAT
+    # =========================================================
     def parse_flexible_date(raw_val) -> date:
         if not raw_val or str(raw_val).strip() == "None":
             return date.today()
@@ -491,14 +494,15 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             print(f"⚠️ Error parseando fecha '{val_str}': {e}. Usando fecha actual.")
             return date.today()
 
+    # =========================================================
+    # INICIO DEL PROCESAMIENTO BUCLE
+    # =========================================================
     for row in payload_data:
         uuid_fiscal = str(row.get("UUID") or "").strip()
         if not uuid_fiscal or uuid_fiscal == "None":
             continue
 
-        # =========================================================
         # 🚀 TICKET 2 (CANDADO): Evitar duplicados
-        # =========================================================
         existing_invoice = (
             db.query(models.PayableInvoice)
             .filter(models.PayableInvoice.uuid == uuid_fiscal)
@@ -523,15 +527,46 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             db.add(supplier)
             db.flush()
 
-        # Extraer montos de forma segura
+        # =========================================================
+        # 🚀 LÓGICA INTELIGENTE DE CENTROS DE COSTO (CECOS)
+        # =========================================================
+        cost_center_id = None
+        ceco_name_excel = str(
+            row.get("Centro de Costos ") or row.get("Centro de Costos") or ""
+        ).strip()
+
+        # Si el Excel trae un CECO escrito
+        if ceco_name_excel and ceco_name_excel.lower() not in ["none", "nan", ""]:
+            # Buscar el CECO en la Base de Datos
+            ceco = (
+                db.query(models.CostCenter)
+                .filter(models.CostCenter.nombre.ilike(f"%{ceco_name_excel}%"))
+                .first()
+            )
+
+            # Si alguien escribió un CECO nuevo en el Excel, lo creamos
+            if not ceco:
+                nuevo_ceco_codigo = ceco_name_excel[:15].upper().replace(" ", "-")
+                ceco = models.CostCenter(
+                    codigo=nuevo_ceco_codigo, nombre=ceco_name_excel, activo=True
+                )
+                db.add(ceco)
+                db.flush()
+                cecos_creados += 1
+
+            cost_center_id = ceco.id
+        else:
+            # Si la columna viene vacía, heredamos el del Proveedor
+            cost_center_id = getattr(supplier, "cost_center_id", None)
+
+        # =========================================================
+        # 🚀 EXTRACCIÓN SEGURA DE MONTOS Y FECHAS
+        # =========================================================
         try:
             monto_total = float(row.get("Total", 0))
         except:
             monto_total = 0.0
 
-        # =========================================================
-        # 🚀 FIX DE FECHA: Procesar la fecha usando nuestro helper
-        # =========================================================
         fecha_cruda = row.get("Fecha") or row.get("Fecha emisión")
         fecha_emision_limpia = parse_flexible_date(fecha_cruda)
 
@@ -539,19 +574,28 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
         dias_credito = getattr(supplier, "dias_credito", 15) or 15
         fecha_vencimiento_limpia = fecha_emision_limpia + timedelta(days=dias_credito)
 
+        # Manejo de Strings seguros para métodos y formas
+        metodo_pago = str(row.get("Método de Pago") or "").split("-")[0].strip()[:5]
+        forma_pago = str(row.get("Forma de Pago") or "").split("-")[0].strip()[:5]
+        moneda = str(row.get("Moneda") or "MXN").strip()[:3]
+        concepto = str(row.get("Conceptos") or "Factura importada del SAT")[:250]
+
         # =========================================================
-        # 🚀 TICKET 4: Creación de factura heredando el CECO
+        # 🚀 CREACIÓN DE LA FACTURA
         # =========================================================
         nueva_factura = models.PayableInvoice(
             supplier_id=supplier.id,
-            cost_center_id=getattr(
-                supplier, "cost_center_id", None
-            ),  # Herencia de CECO
+            cost_center_id=cost_center_id,  # <-- Inyección de CECO Dinámico/Heredado
             uuid=uuid_fiscal,
+            folio=str(row.get("Folio") or ""),
+            concepto=concepto,
             monto_total=monto_total,
             saldo_pendiente=monto_total,
-            fecha_emision=fecha_emision_limpia,  # <-- ¡Fecha corregida!
-            fecha_vencimiento=fecha_vencimiento_limpia,  # <-- ¡Fecha corregida!
+            fecha_emision=fecha_emision_limpia,  # <-- Fecha Corregida de Excel
+            fecha_vencimiento=fecha_vencimiento_limpia,
+            moneda=moneda,
+            metodo_pago=metodo_pago,
+            forma_pago=forma_pago,
             estatus=models.InvoiceStatus.PENDIENTE,
         )
         db.add(nueva_factura)
@@ -561,7 +605,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
 
     return {
         "status": "success",
-        "message": f"Proceso SAT exitoso. Facturas Creadas: {facturas_creadas}. Duplicados Ignorados: {facturas_ignoradas}.",
+        "message": f"Proceso SAT exitoso. Facturas Creadas: {facturas_creadas}. Ignoradas: {facturas_ignoradas}. Nuevos CECOs detectados: {cecos_creados}.",
     }
 
 
