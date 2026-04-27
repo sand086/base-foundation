@@ -1,7 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,7 +16,6 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import {
   MoreHorizontal,
-  DollarSign,
   FileText,
   AlertCircle,
   Eye,
@@ -27,15 +25,19 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// 🚀 FSD: Importamos nuestro Hook Real de Cuentas por Pagar
+// 🚀 FSD: Importaciones de Hooks, Componentes y APIs
 import { usePayables } from "@/features/payables/hooks/usePayables";
-import { RegisterExpenseModal } from "@/features/payables/components/RegisterExpenseModal";
+import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
+import axiosClient from "@/api/axiosClient";
+
+import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { getStatusFromLabel, StatusBadge } from "@/components/ui/status-badge";
 
 export default function Payables() {
   // 🚀 CONEXIÓN REAL AL BACKEND
   const { invoices, isLoading, error, refetch } = usePayables();
+  const { accounts: bankAccounts } = useBankAccounts();
 
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -319,15 +321,37 @@ export default function Payables() {
 
       {/* MODAL REGISTRAR PAGO (TESORERÍA) */}
       {selectedInvoice && (
-        <RegisterE
-          xpenseModal
+        <RegisterPaymentModal
           invoice={selectedInvoice}
           open={isPaymentModalOpen}
           onOpenChange={(isOpen) => {
             setIsPaymentModalOpen(isOpen);
             if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
           }}
-          onSuccess={refetch}
+          bankAccounts={bankAccounts || []}
+          onSubmit={async (invoiceId, paymentPayload) => {
+            try {
+              // Impactamos el Backend (Esto descuenta del banco y actualiza la CxP)
+              await axiosClient.post(
+                `/api/suppliers/invoices/${invoiceId}/payments`,
+                paymentPayload,
+              );
+
+              toast.success(
+                "Pago registrado con éxito. Se actualizó la Tesorería.",
+              );
+
+              // Cerramos el modal de pago y actualizamos la tabla
+              setIsPaymentModalOpen(false);
+              setTimeout(() => setSelectedInvoice(null), 300);
+              refetch();
+            } catch (err: any) {
+              console.error(err);
+              toast.error(
+                err.response?.data?.detail || "Error al registrar el pago",
+              );
+            }
+          }}
         />
       )}
     </div>
