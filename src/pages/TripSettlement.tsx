@@ -19,7 +19,7 @@ import {
   Trash2,
   Receipt,
   AlertTriangle,
-  Lock, // <-- NUEVO IMPORT PARA EL CANDADO
+  Lock,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -65,6 +64,10 @@ import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
 import { OperatorSettlementDetailModal } from "@/features/receivables/components/OperatorSettlementDetailModal";
+import {
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table"; // <-- IMPORTACIÓN DEL DATATABLE
 
 interface ConceptoExtra {
   id: string;
@@ -73,6 +76,12 @@ interface ConceptoExtra {
   tipo: "ingreso" | "deduccion";
   categoria: string;
 }
+
+const legTypeLabels: Record<string, string> = {
+  carga_muelle: "Muelle / Patio",
+  ruta_carretera: "Ruta Carretera",
+  entrega_vacio: "Retorno Vacío",
+};
 
 export default function TripSettlement() {
   const {
@@ -93,23 +102,23 @@ export default function TripSettlement() {
   const [activeTab, setActiveTab] = useState<"pendientes" | "historico">(
     "pendientes",
   );
-  const [filterOperator, setFilterOperator] = useState("ALL");
-  const [globalSearch, setGlobalSearch] = useState("");
+
+  // ESTADOS DE FILTROS ADICIONALES
+  const [filterUnit, setFilterUnit] = useState("");
+  const [filterOperatorName, setFilterOperatorName] = useState("");
+
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
-  //   ESTADO OPTIMISTA: Para ocultar al instante los liquidados
+  // ESTADO OPTIMISTA: Para ocultar al instante los liquidados
   const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
     [],
   );
 
-  //   NUEVO: Estado universal para el Sueldo Base
+  // ESTADOS FINANCIEROS
   const [sueldoBasePactado, setSueldoBasePactado] = useState<number>(0);
-
-  //   NUEVO: Estado para guardar la información histórica de la auditoría de diésel
   const [auditDetails, setAuditDetails] = useState<any>(null);
-
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -129,6 +138,7 @@ export default function TripSettlement() {
   const [newConceptoAmount, setNewConceptoAmount] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // 1. CONSOLIDAR TODOS LOS DATOS PARA LA TABLA
   const allLegs = useMemo(() => {
     const legs: any[] = [];
     if (!Array.isArray(trips)) return legs;
@@ -139,7 +149,14 @@ export default function TripSettlement() {
       const clientName =
         clientObj?.razon_social || clientObj?.rfc || "Sin Cliente";
       t.legs?.forEach((l: any) => {
-        legs.push({ ...l, trip: { ...t, clientName } });
+        legs.push({
+          ...l,
+          trip: { ...t, clientName },
+          // Campos virtuales para el buscador de EnhancedDataTable
+          _search_ref: `TRP-${t.public_id || t.id} ${l.operator?.name || ""}`,
+          _unit_eco: l.unit?.numero_economico || "",
+          _operator_name: l.operator?.name || "",
+        });
       });
     });
     return legs.sort(
@@ -149,7 +166,6 @@ export default function TripSettlement() {
     );
   }, [trips, clients]);
 
-  //   FILTRO ACTUALIZADO: Quita los liquidados al instante
   const pendingLegs = useMemo(
     () =>
       allLegs.filter(
@@ -160,7 +176,6 @@ export default function TripSettlement() {
     [allLegs, locallyLiquidatedIds],
   );
 
-  //   FILTRO ACTUALIZADO: Muestra los liquidados al instante en el histórico
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
@@ -187,9 +202,203 @@ export default function TripSettlement() {
     );
   }, [pendingLegs, selectedOperatorId]);
 
+  // 2. APLICAR FILTROS ADICIONALES ANTES DE ENVIAR A DATATABLE
+  const tableData = useMemo(() => {
+    const baseData =
+      activeTab === "pendientes" ? legsForSelectedOperator : historyLegs;
+    return baseData.filter((leg) => {
+      let matches = true;
+      if (filterUnit) {
+        matches =
+          matches &&
+          leg._unit_eco.toLowerCase().includes(filterUnit.toLowerCase());
+      }
+      if (filterOperatorName && activeTab === "historico") {
+        matches =
+          matches &&
+          leg._operator_name
+            .toLowerCase()
+            .includes(filterOperatorName.toLowerCase());
+      }
+      return matches;
+    });
+  }, [
+    activeTab,
+    legsForSelectedOperator,
+    historyLegs,
+    filterUnit,
+    filterOperatorName,
+  ]);
+
   const selectedLegsData = useMemo(() => {
     return allLegs.filter((l) => selectedLegIds.includes(String(l.id)));
   }, [allLegs, selectedLegIds]);
+
+  // 3. DEFINIR COLUMNAS DEL DATATABLE
+  const columns = useMemo<ColumnDef<any>[]>(() => {
+    const cols: ColumnDef<any>[] = [
+      {
+        key: "_search_ref", // Usado para el buscador global por Referencia y Operador
+        header: "Referencia",
+        render: (value, leg) => (
+          <div>
+            <div className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              <span className="text-slate-400">TRP-</span>
+              {leg.trip?.public_id || leg.trip?.id || "N/A"}
+            </div>
+            <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold flex items-center gap-1 mt-1">
+              <User className="h-3 w-3 shrink-0" />
+              <span className="truncate max-w-[140px]">
+                {leg.operator?.name || "Sin Operador"}
+              </span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "trip.route_name",
+        header: "Ruta",
+        render: (value, leg) => (
+          <div
+            className="text-xs font-bold text-slate-700 dark:text-slate-300 max-w-[250px] line-clamp-2"
+            title={leg.trip?.route_name}
+          >
+            {leg.trip?.route_name || "Sin ruta asignada"}
+          </div>
+        ),
+      },
+      {
+        key: "leg_type",
+        header: "Fase Operativa",
+        type: "status",
+        statusOptions: ["Muelle / Patio", "Ruta Carretera", "Retorno Vacío"],
+        statusNormalizer: (val) => legTypeLabels[val] || val, // Traduce los id base para el dropdown del datatable
+        render: (value, leg) => (
+          <div>
+            <Badge
+              variant="outline"
+              className="bg-slate-50 dark:bg-slate-800 font-black text-[9px] uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-1 border-slate-200 dark:border-white/10"
+            >
+              {legTypeLabels[leg.leg_type] || leg.leg_type}
+            </Badge>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1 mt-1">
+              <Truck className="h-3 w-3 text-slate-600 dark:text-slate-400 shrink-0" />
+              Eco: {leg.unit?.numero_economico || "S/A"}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "monto_neto_pagado",
+        header: "Estatus / Base",
+        render: (value, leg) => {
+          const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+          if (activeTab === "pendientes") {
+            return (
+              <div className="flex flex-col items-end">
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-0 text-[10px] uppercase tracking-wider mb-1">
+                  Pendiente
+                </Badge>
+                <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-500/20">
+                  {leg.leg_type === "ruta_carretera"
+                    ? "Base Fija"
+                    : isFull
+                      ? "$300"
+                      : "$200"}
+                </div>
+              </div>
+            );
+          } else {
+            return (
+              <div className="flex flex-col items-end">
+                <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                  {new Intl.NumberFormat("es-MX", {
+                    style: "currency",
+                    currency: "MXN",
+                  }).format(value || 0)}
+                </span>
+                <div className="text-[9px] text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                  <CheckCircle className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />{" "}
+                  Liquidado
+                </div>
+              </div>
+            );
+          }
+        },
+      },
+    ];
+
+    if (activeTab === "historico") {
+      cols.push({
+        key: "acciones",
+        header: "Acciones",
+        sortable: false,
+        render: (_, leg) => {
+          const isPaidOrHasAbonos =
+            leg.trip?.cxc_pagada === true ||
+            leg.is_paid === true ||
+            leg.estatus_pago === "pagado";
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewReceipt(leg);
+                }}
+                title="Ver Recibo"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isPaidOrHasAbonos}
+                className={cn(
+                  "h-8 w-8 transition-all",
+                  isPaidOrHasAbonos
+                    ? "text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50"
+                    : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/20",
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isPaidOrHasAbonos)
+                    setActionModal({ type: "reopen", leg });
+                }}
+                title={
+                  isPaidOrHasAbonos
+                    ? "BLOQUEADO: CXC Pagada"
+                    : "Anular y Reabrir (Opción A)"
+                }
+              >
+                {isPaidOrHasAbonos ? (
+                  <Lock className="h-4 w-4" />
+                ) : (
+                  <Undo className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActionModal({ type: "hide", leg });
+                }}
+                title="Ocultar de la lista (Opción B)"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
+      });
+    }
+
+    return cols;
+  }, [activeTab]);
 
   const isAuditPending = previewData?.legs_sin_ticket?.length > 0;
 
@@ -238,7 +447,6 @@ export default function TripSettlement() {
     });
 
     const pagoBaseBruto = sueldoBasePactado;
-
     const bonosAdicionales = conceptosExtra
       .filter((c) => c.tipo === "ingreso")
       .reduce((s, c) => s + c.monto, 0);
@@ -365,15 +573,10 @@ export default function TripSettlement() {
       minimumFractionDigits: 2,
     }).format(amount || 0);
 
-  const toggleLegSelection = (id: string) =>
+  const toggleLegSelection = (id: string) => {
     setSelectedLegIds((prev) =>
       prev.includes(id) ? prev.filter((legId) => legId !== id) : [...prev, id],
     );
-
-  const toggleAllLegs = () => {
-    if (selectedLegIds.length === legsForSelectedOperator.length)
-      setSelectedLegIds([]);
-    else setSelectedLegIds(legsForSelectedOperator.map((l) => String(l.id)));
   };
 
   const handleAddConcepto = () => {
@@ -456,8 +659,6 @@ export default function TripSettlement() {
         `/api/logistics/trips/leg/${leg.id}/settlement`,
       );
 
-      console.log(" API DE LIQUIDACIÓN DEVOLVIÓ:", response.data);
-
       const auditEvent = leg.timeline_events?.find(
         (e: any) =>
           e.location === "Conciliación de Combustible" ||
@@ -475,9 +676,6 @@ export default function TripSettlement() {
       let texto = "Datos recuperados de la liquidación oficial.";
 
       if (vales === 0 && auditEvent && auditEvent.comments) {
-        console.log(
-          "⚠️ El backend omitió el diésel. Rescatando datos de la bitácora...",
-        );
         const text = auditEvent.comments;
 
         const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
@@ -510,7 +708,6 @@ export default function TripSettlement() {
       setSelectedLegIds([String(leg.id)]);
       setShowReceiptModal(true);
     } catch (error) {
-      console.error("Error al traer conciliación histórica:", error);
       toast.error("Aviso: Se abrirá el recibo básico sin detalle de diésel.");
 
       setSelectedLegIds([String(leg.id)]);
@@ -546,13 +743,6 @@ export default function TripSettlement() {
       }
     }
     setActionModal(null);
-  };
-
-  const currentList = activeTab === "pendientes" ? pendingLegs : historyLegs;
-  const legTypeLabels: Record<string, string> = {
-    carga_muelle: "Muelle / Patio",
-    ruta_carretera: "Ruta Carretera",
-    entrega_vacio: "Retorno Vacío",
   };
 
   return (
@@ -651,279 +841,58 @@ export default function TripSettlement() {
               </TabsTrigger>
             </TabsList>
 
-            <Card className="border-slate-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col h-full max-h-[600px] bg-white dark:bg-slate-900">
-              <div className="bg-slate-50 dark:bg-slate-900/50 border-b dark:border-white/10 px-4 py-3 flex justify-between items-center shrink-0">
-                <h3 className="font-bold text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  {activeTab === "pendientes"
-                    ? "2. Selecciona los tramos a pagar"
-                    : "Historial de Liquidaciones"}
-                </h3>
-                {activeTab === "pendientes" && selectedOperatorId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={toggleAllLegs}
-                    className="h-8 text-xs font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
-                  >
-                    {selectedLegIds.length === legsForSelectedOperator.length
-                      ? "Deseleccionar Todos"
-                      : "Seleccionar Todos"}
-                  </Button>
-                )}
-              </div>
-              <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-[10px] text-slate-600 dark:text-slate-400 font-bold uppercase tracking-widest bg-slate-50/80 dark:bg-slate-900/80 border-b dark:border-white/10 sticky top-0 z-10 backdrop-blur-sm">
-                    <tr>
-                      {activeTab === "pendientes" && (
-                        <th
-                          scope="col"
-                          className="px-4 py-3 w-[50px] text-center"
-                        ></th>
-                      )}
-                      <th scope="col" className="px-6 py-3">
-                        Referencia
-                      </th>
-                      <th scope="col" className="px-6 py-3">
-                        Ruta
-                      </th>
-                      <th scope="col" className="px-6 py-3">
-                        Fase Operativa
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right">
-                        Estatus / Base
-                      </th>
-                      {activeTab === "historico" && (
-                        <th scope="col" className="px-6 py-3 text-center">
-                          Acciones
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentList.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={activeTab === "historico" ? 6 : 5}
-                          className="px-6 py-16 text-center bg-white dark:bg-transparent"
-                        >
-                          <div className="flex flex-col items-center justify-center text-slate-600 dark:text-slate-400">
-                            <History className="h-10 w-10 mb-3 opacity-20" />
-                            <p className="text-base font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                              {activeTab === "pendientes"
-                                ? "Sin movimientos pendientes"
-                                : "Historial vacío"}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      currentList.map((leg) => {
-                        const isSelected = selectedLegIds.includes(
-                          String(leg.id),
-                        );
-                        const isFull = !!(
-                          leg.trip?.dolly_id || leg.trip?.remolque_2_id
-                        );
+            {/* TABLA PRINCIPAL */}
+            <div className="mb-4 flex justify-between items-center px-2">
+              <h3 className="font-bold text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                {activeTab === "pendientes"
+                  ? "2. Selecciona los tramos a pagar"
+                  : "Historial de Liquidaciones"}
+              </h3>
+            </div>
 
-                        return (
-                          <tr
-                            key={leg.id}
-                            className={cn(
-                              "border-b dark:border-white/5 last:border-0 transition-colors group cursor-pointer",
-                              isSelected
-                                ? "bg-blue-50/60 hover:bg-blue-50/80 dark:bg-blue-500/10 dark:hover:bg-blue-500/20"
-                                : "bg-white hover:bg-slate-50/60 dark:bg-transparent dark:hover:bg-white/5",
-                            )}
-                            onClick={() => {
-                              if (activeTab === "pendientes")
-                                toggleLegSelection(String(leg.id));
-                            }}
-                          >
-                            {activeTab === "pendientes" && (
-                              <td
-                                className="px-4 py-3"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() =>
-                                    toggleLegSelection(String(leg.id))
-                                  }
-                                  className={cn(
-                                    "transition-all",
-                                    isSelected
-                                      ? "border-brand-navy bg-brand-navy dark:border-blue-500 dark:bg-blue-600 text-white"
-                                      : "border-slate-300 dark:border-slate-600",
-                                  )}
-                                />
-                              </td>
-                            )}
-                            {/* 1. COLUMNA: REFERENCIA (ID del viaje y Operador) */}
-                            <td className="px-6 py-3">
-                              <div className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                                <span className="text-slate-400">TRP-</span>
-                                {leg.trip?.id || "N/A"}
-                              </div>
-                              <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold flex items-center gap-1 mt-1">
-                                <User className="h-3 w-3 shrink-0" />
-                                <span className="truncate max-w-[140px]">
-                                  {leg.operator?.name || "Sin Operador"}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* 2. COLUMNA: RUTA (Nombre de la ruta asignada al cliente) */}
-                            <td className="px-6 py-3">
-                              <div
-                                className="text-xs font-bold text-slate-700 dark:text-slate-300 max-w-[250px] line-clamp-2"
-                                title={leg.trip?.route_name}
-                              >
-                                {leg.trip?.route_name || "Sin ruta asignada"}
-                              </div>
-                            </td>
-                            <td className="px-6 py-3">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></div>
-                                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
-                                    {leg.trip?.origin}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></div>
-                                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[150px]">
-                                    {leg.trip?.destination}
-                                  </span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-3">
-                              <Badge
-                                variant="outline"
-                                className="bg-slate-50 dark:bg-slate-800 font-semibold text-slate-600 dark:text-slate-300 mb-1 border-slate-200 dark:border-white/10"
-                              >
-                                {legTypeLabels[leg.leg_type] || leg.leg_type}
-                              </Badge>
-                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1">
-                                <Truck className="h-3 w-3 text-slate-600 dark:text-slate-400" />{" "}
-                                Eco: {leg.unit?.numero_economico}
-                              </div>
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              {activeTab === "pendientes" ? (
-                                <div className="flex flex-col items-end">
-                                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-0 text-[10px] uppercase tracking-wider mb-1">
-                                    Pendiente
-                                  </Badge>
-                                  <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-500/20">
-                                    {leg.leg_type === "ruta_carretera"
-                                      ? "Base Fija"
-                                      : isFull
-                                        ? "$300"
-                                        : "$200"}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex flex-col items-end">
-                                  <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                                    $
-                                    {(
-                                      leg.monto_neto_pagado || 0
-                                    ).toLocaleString("es-MX", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </span>
-                                  <div className="text-[9px] text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
-                                    <CheckCircle className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />{" "}
-                                    Liquidado
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            {activeTab === "historico" && (
-                              <td
-                                className="px-6 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex items-center justify-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/20"
-                                    onClick={() => handleViewReceipt(leg)}
-                                    title="Ver Recibo"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-
-                                  {/* 🚀 NUEVO: LÓGICA DE BLOQUEO DE LA ESCALERITA */}
-                                  {(() => {
-                                    // Comprobamos si la CXC tiene pagos
-                                    const isPaidOrHasAbonos =
-                                      leg.trip?.cxc_pagada === true ||
-                                      leg.is_paid === true ||
-                                      leg.estatus_pago === "pagado";
-
-                                    return (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        disabled={isPaidOrHasAbonos}
-                                        className={cn(
-                                          "h-8 w-8 transition-all",
-                                          isPaidOrHasAbonos
-                                            ? "text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50"
-                                            : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/20",
-                                        )}
-                                        onClick={() =>
-                                          !isPaidOrHasAbonos &&
-                                          setActionModal({
-                                            type: "reopen",
-                                            leg,
-                                          })
-                                        }
-                                        title={
-                                          isPaidOrHasAbonos
-                                            ? "BLOQUEADO: La factura CXC tiene pagos registrados en Tesorería."
-                                            : "Anular y Reabrir (Opción A)"
-                                        }
-                                      >
-                                        {isPaidOrHasAbonos ? (
-                                          <Lock className="h-4 w-4" />
-                                        ) : (
-                                          <Undo className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                    );
-                                  })()}
-
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/20"
-                                    onClick={() =>
-                                      setActionModal({ type: "hide", leg })
-                                    }
-                                    title="Ocultar de la lista (Opción B)"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+            <EnhancedDataTable
+              data={tableData}
+              columns={columns}
+              rowKey="id"
+              enableRowSelection={activeTab === "pendientes"}
+              selectedRows={selectedLegsData}
+              onSelectedRowsChange={(rows) =>
+                setSelectedLegIds(rows.map((r) => String(r.id)))
+              }
+              onRowClick={(row) => {
+                if (activeTab === "pendientes") {
+                  toggleLegSelection(String(row.id));
+                }
+              }}
+              searchPlaceholder="BUSCAR TRP O RUTA..."
+              customFilters={
+                <>
+                  <div className="w-[130px]">
+                    <Input
+                      placeholder="Eco Unidad..."
+                      value={filterUnit}
+                      onChange={(e) => setFilterUnit(e.target.value)}
+                      className="h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-bold"
+                    />
+                  </div>
+                  {activeTab === "historico" && (
+                    <div className="w-[180px]">
+                      <Input
+                        placeholder="Operador..."
+                        value={filterOperatorName}
+                        onChange={(e) => setFilterOperatorName(e.target.value)}
+                        className="h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-bold"
+                      />
+                    </div>
+                  )}
+                </>
+              }
+            />
           </Tabs>
         </div>
 
+        {/* ========== PANEL DERECHO DE CÁLCULOS ========== */}
         {selectedLegIds.length > 0 &&
           liquidacion &&
           activeTab === "pendientes" && (
