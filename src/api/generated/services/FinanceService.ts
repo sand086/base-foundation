@@ -10,6 +10,9 @@ import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
+import type { IndirectCategoryCreate } from '../models/IndirectCategoryCreate';
+import type { IndirectCategoryResponse } from '../models/IndirectCategoryResponse';
+import type { IndirectCategoryUpdate } from '../models/IndirectCategoryUpdate';
 import type { OperatorSettlementPayload } from '../models/OperatorSettlementPayload';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
@@ -330,31 +333,6 @@ export class FinanceService {
         });
     }
     /**
-     * Register Provider Payment
-     * Aplica un pago a una factura de proveedor (CXP) y descuenta del banco.
-     * @param invoiceId
-     * @param requestBody
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static registerProviderPaymentApiFinancePayablesInvoiceIdPaymentsPost(
-        invoiceId: number,
-        requestBody: Record<string, any>,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/finance/payables/{invoice_id}/payments',
-            path: {
-                'invoice_id': invoiceId,
-            },
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Register Petty Cash
      * Registra un gasto de Caja Chica (Sin XML) afectando directo la Tesorería.
      * @param requestBody
@@ -412,6 +390,84 @@ export class FinanceService {
             url: '/api/finance/settlements/operator',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Read Indirect Categories
+     * Obtiene el listado de categorías para gastos indirectos
+     * @returns IndirectCategoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static readIndirectCategoriesApiFinanceIndirectCategoriesGet(): CancelablePromise<Array<IndirectCategoryResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/indirect-categories',
+        });
+    }
+    /**
+     * Create Indirect Category
+     * Crea una nueva categoría de gasto indirecto
+     * @param requestBody
+     * @returns IndirectCategoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static createIndirectCategoryApiFinanceIndirectCategoriesPost(
+        requestBody: IndirectCategoryCreate,
+    ): CancelablePromise<IndirectCategoryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/indirect-categories',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Indirect Category
+     * Actualiza una categoría existente
+     * @param catId
+     * @param requestBody
+     * @returns IndirectCategoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static updateIndirectCategoryApiFinanceIndirectCategoriesCatIdPut(
+        catId: number,
+        requestBody: IndirectCategoryUpdate,
+    ): CancelablePromise<IndirectCategoryResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/finance/indirect-categories/{cat_id}',
+            path: {
+                'cat_id': catId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Indirect Category
+     * Realiza un borrado lógico de la categoría
+     * @param catId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteIndirectCategoryApiFinanceIndirectCategoriesCatIdDelete(
+        catId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/finance/indirect-categories/{cat_id}',
+            path: {
+                'cat_id': catId,
+            },
             errors: {
                 422: `Validation Error`,
             },
