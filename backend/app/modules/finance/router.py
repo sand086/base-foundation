@@ -577,32 +577,6 @@ def fix_orphan_payments(
 # =====================================================================
 
 
-@router.post("/payables/{invoice_id}/payments")
-def register_provider_payment(
-    invoice_id: int,
-    payment: dict = Body(...),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
-):
-    """Aplica un pago a una factura de proveedor (CXP) y descuenta del banco."""
-    try:
-        invoice = crud.register_payable_payment(
-            db, invoice_id, payment, current_user.id
-        )
-        if not invoice:
-            raise HTTPException(
-                status_code=404, detail="Factura de proveedor no encontrada"
-            )
-
-        return {
-            "message": "Pago a proveedor registrado exitosamente. Se descontó del banco.",
-            "nuevo_saldo_factura": invoice.saldo_pendiente,
-            "estatus": invoice.estatus,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @router.post("/petty-cash")
 def register_petty_cash(
     expense: dict = Body(...),
@@ -695,3 +669,55 @@ def process_settlement_for_operator(
         raise HTTPException(
             status_code=500, detail=f"Error interno al liquidar: {str(e)}"
         )
+
+
+# =========================================================
+# RUTAS DE CATEGORÍAS INDIRECTAS
+# =========================================================
+
+
+@router.get(
+    "/indirect-categories", response_model=List[schemas.IndirectCategoryResponse]
+)
+def read_indirect_categories(db: Session = Depends(get_db)):
+    """Obtiene el listado de categorías para gastos indirectos"""
+    return crud.get_indirect_categories(db)
+
+
+@router.post("/indirect-categories", response_model=schemas.IndirectCategoryResponse)
+def create_indirect_category(
+    payload: schemas.IndirectCategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Crea una nueva categoría de gasto indirecto"""
+    return crud.create_indirect_category(db, payload, current_user.id)
+
+
+@router.put(
+    "/indirect-categories/{cat_id}", response_model=schemas.IndirectCategoryResponse
+)
+def update_indirect_category(
+    cat_id: int,
+    payload: schemas.IndirectCategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Actualiza una categoría existente"""
+    cat = crud.update_indirect_category(db, cat_id, payload, current_user.id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    return cat
+
+
+@router.delete("/indirect-categories/{cat_id}")
+def delete_indirect_category(
+    cat_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Realiza un borrado lógico de la categoría"""
+    success = crud.delete_indirect_category(db, cat_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    return {"message": "Categoría eliminada exitosamente"}

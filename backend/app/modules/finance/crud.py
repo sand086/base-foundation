@@ -950,13 +950,43 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
                 db.add(supplier)
 
         # =========================================================
-        #  EXTRAER MONTOS Y FECHAS
+        #  EXTRAER MONTOS, FECHAS Y CLASIFICAR EL TIPO DE COMPROBANTE
         # =========================================================
         try:
-            monto_total = float(row.get("Total", 0))
+            monto_total_raw = float(row.get("Total", 0))
         except:
-            monto_total = 0.0
+            monto_total_raw = 0.0
 
+        # 1. Detectar el Tipo de Comprobante (I=Ingreso, E=Egreso, P=Pago)
+        tipo_raw = (
+            str(row.get("Tipo") or row.get("Tipo de Comprobante") or "I")
+            .strip()
+            .upper()
+        )
+        tipo_comprobante = tipo_raw[0] if tipo_raw else "I"
+
+        # 2. Lógica Financiera Inteligente según el Tipo
+        if tipo_comprobante == "E" or monto_total_raw < 0:
+            tipo_comprobante = "E"
+            # Asegurarnos de que el monto de la nota de crédito sea estrictamente negativo
+            monto_total = -abs(monto_total_raw) if monto_total_raw != 0 else 0.0
+            saldo_pendiente = monto_total
+            estatus = models.InvoiceStatus.PENDIENTE
+
+        elif tipo_comprobante == "P":
+            # Es un complemento de pago del SAT
+            monto_total = abs(monto_total_raw)
+            saldo_pendiente = 0.0
+            estatus = models.InvoiceStatus.PAGADO
+
+        else:
+            # Factura normal de CxP (Ingreso - 'I')
+            tipo_comprobante = "I"
+            monto_total = abs(monto_total_raw)
+            saldo_pendiente = monto_total
+            estatus = models.InvoiceStatus.PENDIENTE
+
+        # Fechas
         fecha_cruda = row.get("Fecha") or row.get("Fecha emisión")
         fecha_emision_limpia = parse_flexible_date(fecha_cruda)
 
@@ -991,13 +1021,14 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             folio=str(row.get("Folio") or ""),
             concepto=concepto_bruto,
             monto_total=monto_total,
-            saldo_pendiente=monto_total,
+            saldo_pendiente=saldo_pendiente,
+            moneda=moneda_limpia,
             fecha_emision=fecha_emision_limpia,
             fecha_vencimiento=fecha_vencimiento_limpia,
-            moneda=moneda_limpia,
             metodo_pago=metodo_pago,
             forma_pago=forma_pago,
-            estatus=models.InvoiceStatus.PENDIENTE,
+            tipo_comprobante=tipo_comprobante,  # <- Aquí inyectamos I, E o P
+            estatus=estatus,  # <- Aquí inyectamos el estatus corregido
         )
         db.add(nueva_factura)
         facturas_creadas += 1
@@ -1239,3 +1270,71 @@ def process_operator_settlement(
 
     db.commit()
     return {"status": "success", "batch_id": batch.id}
+
+
+# =========================================================
+# CATEGORÍAS INDIRECTAS (IndirectExpenseCategory)
+# =========================================================
+
+
+def get_indirect_categories(db: Session):
+    return (
+        db.query(models.IndirectExpenseCategory)
+        .filter(models.IndirectExpenseCategory.record_status != RecordStatus.ELIMINADO)
+        .order_by(models.IndirectExpenseCategory.nombre.asc())
+        .all()
+    )
+
+
+def create_indirect_category(
+    db: Session, cat_in: schemas.IndirectCategoryCreate, user_id: int = None
+):
+    db_cat = models.IndirectExpenseCategory(
+        **cat_in.model_dump(), created_by_id=user_id, updated_by_id=user_id
+    )
+    db.add(db_cat)
+    db.commit()
+    db.refresh(db_cat)
+    return db_cat
+
+
+def update_indirect_category(
+    db: Session,
+    cat_id: int,
+    cat_in: schemas.IndirectCategoryUpdate,
+    user_id: int = None,
+):
+    db_cat = (
+        db.query(models.IndirectExpenseCategory)
+        .filter(models.IndirectExpenseCategory.id == cat_id)
+        .first()
+    )
+    if not db_cat:
+        return None
+
+    data = cat_in.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(db_cat, k, v)
+
+    db_cat.updated_by_id = user_id
+    db.add(db_cat)
+    db.commit()
+    db.refresh(db_cat)
+    return db_cat
+
+
+def delete_indirect_category(db: Session, cat_id: int, user_id: int = None):
+    db_cat = (
+        db.query(models.IndirectExpenseCategory)
+        .filter(models.IndirectExpenseCategory.id == cat_id)
+        .first()
+    )
+    if not db_cat:
+        return False
+
+    # Soft delete (Borrado lógico)
+    db_cat.record_status = RecordStatus.ELIMINADO
+    db_cat.updated_by_id = user_id
+    db.add(db_cat)
+    db.commit()
+    return True

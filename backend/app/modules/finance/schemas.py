@@ -232,3 +232,32 @@ class OperatorSettlementPayload(BaseModel):
         ..., description="Lista de IDs de TripLegs seleccionados para este operador"
     )
     manual_concepts: List[SettlementConceptCreate] = []
+
+
+# =========================================================
+# INDIRECT EXPENSE CATEGORIES (Categorías Indirectas)
+# =========================================================
+
+
+class IndirectCategoryBase(BaseModel):
+    nombre: str
+    tipo: str  # "fijo" o "variable"
+
+
+class IndirectCategoryCreate(IndirectCategoryBase):
+    pass
+
+
+class IndirectCategoryUpdate(BaseModel):
+    nombre: Optional[str] = None
+    tipo: Optional[str] = None
+    record_status: Optional[RecordStatus] = None
+
+
+class IndirectCategoryResponse(IndirectCategoryBase):
+    id: int
+    record_status: RecordStatus
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)

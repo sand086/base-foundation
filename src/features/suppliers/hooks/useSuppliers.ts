@@ -1,11 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { SuppliersService, FinanceService } from "@/api/generated";
-import {
-  Supplier,
-  PayableInvoice,
-  IndirectCategory,
-} from "@/features/payables/types";
+import { SuppliersService } from "@/api/generated";
+import { PayableInvoice, IndirectCategory } from "@/features/payables/types";
+import { Supplier } from "@/features/suppliers/types";
 import axiosClient from "@/api/axiosClient";
 
 //  HELPER DE BLINDAJE: Extrae el texto del error del backend
@@ -34,9 +31,9 @@ export const useSuppliers = () => {
   const categoriesQuery = useQuery({
     queryKey: ["indirect-categories"],
     queryFn: () =>
-      FinanceService.readIndirectCategoriesApiFinanceIndirectCategoriesGet() as Promise<
-        IndirectCategory[]
-      >,
+      axiosClient
+        .get<IndirectCategory[]>("/api/finance/indirect-categories")
+        .then((res) => res.data),
     staleTime: 1000 * 60 * 30,
   });
 
@@ -144,7 +141,7 @@ export const useSuppliers = () => {
 
   const deleteCategoryMut = useMutation({
     mutationFn: (id: number) =>
-      axiosClient.delete(`api/api/finance/indirect-categories/${id}`),
+      axiosClient.delete(`/api/finance/indirect-categories/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["indirect-categories"] });
       toast.success("Categoría eliminada");

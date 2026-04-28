@@ -2,6 +2,14 @@ import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,10 +30,13 @@ import {
   CreditCard,
   RefreshCcw,
   Loader2,
+  Briefcase,
+  Search,
+  FilterX,
 } from "lucide-react";
 import { toast } from "sonner";
 
-//  FSD: Importaciones de Hooks, Componentes y APIs
+// Importaciones de Hooks, Componentes y APIs
 import { usePayables } from "@/features/payables/hooks/usePayables";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import axiosClient from "@/api/axiosClient";
@@ -41,30 +52,97 @@ export default function Payables() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
+  // ==========================================
+  // ESTADOS PARA LOS FILTROS
+  // ==========================================
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [cecoFilter, setCecoFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
+
   const formatCurrency = (amount: number, moneda: string = "MXN") =>
     new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: moneda || "MXN",
     }).format(Math.abs(amount || 0));
 
-  // KPIs Dinámicos basados en la BD real
+  // ==========================================
+  // LÓGICA DE FILTRADO Y EXTRACCIÓN DE OPCIONES
+  // ==========================================
+  const uniqueCecos = useMemo(() => {
+    if (!invoices) return [];
+    const cecosMap = new Map();
+    invoices.forEach((inv) => {
+      if (inv.cost_center) {
+        cecosMap.set(inv.cost_center.id, inv.cost_center.nombre);
+      }
+    });
+    return Array.from(cecosMap.entries()).map(([id, nombre]) => ({
+      id: String(id),
+      nombre,
+    }));
+  }, [invoices]);
+
+  const filteredInvoices = useMemo(() => {
+    if (!invoices) return [];
+    return invoices.filter((inv) => {
+      // 1. Filtro de Búsqueda (Texto)
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        !searchTerm ||
+        inv.folio?.toLowerCase().includes(searchLower) ||
+        inv.supplier_razon_social?.toLowerCase().includes(searchLower) ||
+        inv.uuid?.toLowerCase().includes(searchLower);
+
+      // 2. Filtro de Estatus
+      const matchesStatus =
+        statusFilter === "all" ||
+        inv.estatus?.toLowerCase() === statusFilter.toLowerCase();
+
+      // 3. Filtro de Centro de Costos
+      const matchesCeco =
+        cecoFilter === "all" || String(inv.cost_center_id) === cecoFilter;
+
+      // 4. Filtro de Fecha (Emisión)
+      const matchesDate =
+        !dateFilter || inv.fecha_emision?.startsWith(dateFilter);
+
+      return matchesSearch && matchesStatus && matchesCeco && matchesDate;
+    });
+  }, [invoices, searchTerm, statusFilter, cecoFilter, dateFilter]);
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCecoFilter("all");
+    setDateFilter("");
+  };
+
+  // ==========================================
+  // KPIS DINÁMICOS (Responden a los filtros)
+  // ==========================================
   const kpis = useMemo(() => {
-    if (!invoices)
+    if (!filteredInvoices)
       return { totalPendiente: 0, vencidas: 0, pagadas: 0, total: 0 };
 
     return {
-      totalPendiente: invoices
-        .filter((i) => i.estatus !== "pagado")
+      totalPendiente: filteredInvoices
+        .filter((i) => i.estatus !== "pagado" && i.estatus !== "cancelado")
         .reduce((acc, curr) => acc + (curr.saldo_pendiente || 0), 0),
-      vencidas: invoices.filter(
+      vencidas: filteredInvoices.filter(
         (i) =>
-          new Date(i.fecha_vencimiento) < new Date() && i.estatus !== "pagado",
+          new Date(i.fecha_vencimiento) < new Date() &&
+          i.estatus !== "pagado" &&
+          i.estatus !== "cancelado",
       ).length,
-      pagadas: invoices.filter((i) => i.estatus === "pagado").length,
-      total: invoices.length,
+      pagadas: filteredInvoices.filter((i) => i.estatus === "pagado").length,
+      total: filteredInvoices.length,
     };
-  }, [invoices]);
+  }, [filteredInvoices]);
 
+  // ==========================================
+  // COLUMNAS DE LA TABLA
+  // ==========================================
   const columns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -86,34 +164,52 @@ export default function Payables() {
       },
       {
         key: "supplier_razon_social",
-        header: "Proveedor",
+        header: "Proveedor __",
         render: (_, row) => (
-          <div className="flex flex-col">
-            <span
-              className="font-black text-brand-navy dark:text-white uppercase tracking-tight truncate max-w-[200px]"
-              title={row.supplier_razon_social}
-            >
-              {row.supplier_razon_social || "Proveedor General"}
-            </span>
-            {row.cost_center && (
-              <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest mt-0.5">
-                CECO: {row.cost_center.nombre}
-              </span>
-            )}
-          </div>
+          <span
+            className="font-black text-brand-navy dark:text-white uppercase tracking-tight truncate max-w-[200px] block"
+            title={row.supplier_razon_social}
+          >
+            {row.supplier_razon_social || "Proveedor General"}
+          </span>
         ),
       },
       {
-        key: "fecha_vencimiento",
-        header: "Vencimiento",
-        render: (v) => {
-          const isVencida = new Date(v as string) < new Date();
-          return (
-            <span
-              className={`text-xs font-bold ${isVencida ? "text-brand-red" : "text-slate-600 dark:text-slate-300"}`}
-            >
-              {v ? format(new Date(v as string), "dd/MMM/yyyy") : "N/A"}
+        key: "cost_center",
+        header: "Centro de Costos",
+        render: (_, row) =>
+          row.cost_center ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 uppercase tracking-widest whitespace-nowrap">
+              <Briefcase className="h-3 w-3" />
+              {row.cost_center.nombre}
             </span>
+          ) : (
+            <span className="text-[10px] font-medium italic text-slate-400 uppercase tracking-widest">
+              Sin asignar
+            </span>
+          ),
+      },
+      {
+        key: "fecha_vencimiento",
+        header: "Vencimiento / Crédito",
+        render: (v, r) => {
+          const isVencida =
+            new Date(v as string) < new Date() &&
+            r.estatus !== "pagado" &&
+            r.estatus !== "cancelado";
+          const diasCredito = r.supplier?.dias_credito || 0;
+
+          return (
+            <div className="flex flex-col">
+              <span
+                className={`text-xs font-black ${isVencida ? "text-brand-red dark:text-red-500" : "text-slate-600 dark:text-slate-300"}`}
+              >
+                {v ? format(new Date(v as string), "dd/MMM/yyyy") : "N/A"}
+              </span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5 font-bold">
+                {diasCredito > 0 ? `${diasCredito} Días` : "Contado"}
+              </span>
+            </div>
           );
         },
       },
@@ -131,28 +227,31 @@ export default function Payables() {
         key: "saldo_pendiente",
         header: "Saldo",
         type: "number",
-        render: (v, r) => (
-          <span
-            className={`font-mono text-sm font-bold ${(v as number) > 0 ? "text-amber-600 dark:text-amber-500" : "text-emerald-600 dark:text-emerald-500"}`}
-          >
-            {formatCurrency(v as number, r.moneda)}
-          </span>
-        ),
+        render: (v, r) => {
+          const isNotaCredito = r.tipo_comprobante === "E" || (v as number) < 0;
+          return (
+            <span
+              className={`font-mono text-sm font-bold ${
+                isNotaCredito
+                  ? "text-blue-600 dark:text-blue-500"
+                  : (v as number) > 0
+                    ? "text-amber-600 dark:text-amber-500"
+                    : "text-emerald-600 dark:text-emerald-500"
+              }`}
+            >
+              {formatCurrency(v as number, r.moneda)}
+            </span>
+          );
+        },
       },
       {
         key: "estatus",
         header: "Estatus",
-        render: (v, r) => {
-          let estatusCalculado = v as string;
-          if (
-            estatusCalculado !== "pagado" &&
-            new Date(r.fecha_vencimiento) < new Date()
-          ) {
-            estatusCalculado = "vencido";
-          }
+        render: (v) => {
+          const estatusReal = String(v).toLowerCase();
           return (
-            <StatusBadge status={getStatusFromLabel(estatusCalculado)}>
-              {estatusCalculado}
+            <StatusBadge status={getStatusFromLabel(estatusReal)}>
+              {estatusReal.replace("_", " ")}
             </StatusBadge>
           );
         },
@@ -215,7 +314,7 @@ export default function Payables() {
       <div className="flex flex-col sm:flex-row justify-between gap-4 sm:items-center">
         <PageHeader
           title="CUENTAS POR PAGAR (CxP)"
-          description="Control de facturas de proveedores y egresos operativos"
+          description="Control de facturas de proveedores, filtros y egresos operativos"
         />
         <Button
           onClick={refetch}
@@ -230,11 +329,79 @@ export default function Payables() {
         </Button>
       </div>
 
+      {/* ==========================================
+          BARRA DE FILTROS SUPERIOR
+          ========================================== */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
+        {/* Buscador */}
+        <div className="relative col-span-1 md:col-span-2 lg:col-span-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Buscar proveedor o folio..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 h-10 bg-white dark:bg-slate-950"
+          />
+        </div>
+
+        {/* Estatus */}
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
+            <SelectValue placeholder="Estatus" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los Estatus</SelectItem>
+            <SelectItem value="pendiente">Pendiente</SelectItem>
+            <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
+            <SelectItem value="pagado">Pagado</SelectItem>
+            <SelectItem value="cancelado">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Centro de Costos */}
+        <Select value={cecoFilter} onValueChange={setCecoFilter}>
+          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
+            <SelectValue placeholder="Centro de Costos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los CECOs</SelectItem>
+            {uniqueCecos.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.nombre}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Rango de Fechas (Por Emisión) */}
+        <div className="relative">
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="h-10 bg-white dark:bg-slate-950 w-full text-sm text-slate-700 dark:text-slate-300"
+            title="Filtrar por Fecha de Emisión"
+          />
+        </div>
+
+        {/* Botón Limpiar */}
+        <Button
+          variant="ghost"
+          onClick={clearFilters}
+          className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-xs uppercase tracking-widest"
+        >
+          <FilterX className="h-4 w-4" /> Limpiar
+        </Button>
+      </div>
+
+      {/* ==========================================
+          KPIS
+          ========================================== */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-slate-400 dark:bg-slate-900/50 backdrop-blur-xl">
           <CardContent className="pt-6">
             <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
-              Total Facturas
+              Total Resultados
             </p>
             <p className="text-3xl font-black">{kpis.total}</p>
           </CardContent>
@@ -271,6 +438,9 @@ export default function Payables() {
         </Card>
       </div>
 
+      {/* ==========================================
+          TABLA
+          ========================================== */}
       <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
         <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
           <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
@@ -295,10 +465,9 @@ export default function Payables() {
             </div>
           ) : (
             <EnhancedDataTable
-              data={invoices || []}
+              data={filteredInvoices || []}
               columns={columns}
               exportFileName="Cuentas_Por_Pagar"
-              searchPlaceholder="Buscar por proveedor, folio o UUID..."
             />
           )}
         </CardContent>
@@ -329,17 +498,13 @@ export default function Payables() {
           bankAccounts={bankAccounts || []}
           onSubmit={async (invoiceId, paymentPayload) => {
             try {
-              // Impactamos el Backend (Esto descuenta del banco y actualiza la CxP)
               await axiosClient.post(
                 `/api/suppliers/invoices/${invoiceId}/payments`,
                 paymentPayload,
               );
-
               toast.success(
                 "Pago registrado con éxito. Se actualizó la Tesorería.",
               );
-
-              // Cerramos el modal de pago y actualizamos la tabla
               setIsPaymentModalOpen(false);
               setTimeout(() => setSelectedInvoice(null), 300);
               refetch();

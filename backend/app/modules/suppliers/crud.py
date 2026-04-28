@@ -222,6 +222,11 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
 
 
 def register_payment(db: Session, invoice_id: int, payment_in: dict):
+    from sqlalchemy.exc import IntegrityError
+    import traceback
+
+    # 1. Bloqueamos la factura en la base de datos para evitar que
+    # dos personas paguen la misma factura al mismo tiempo (Concurrencia)
     invoice = (
         db.query(models.PayableInvoice)
         .filter(
@@ -233,42 +238,88 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
     )
 
     if not invoice:
-        raise HTTPException(status_code=404, detail="Factura no encontrada")
+        raise HTTPException(
+            status_code=404, detail="Factura no encontrada o ya eliminada."
+        )
 
     try:
+        # 2. Validación y limpieza de montos (Evitamos el error de muchos decimales en Python)
+        monto_pago = round(float(payment_in.get("monto", 0.0)), 2)
+        if monto_pago <= 0:
+            raise ValueError("El monto del pago debe ser mayor a cero.")
+
+        # 3. Guardar el registro del pago en la tabla InvoicePayment
         db_payment = models.InvoicePayment(invoice_id=invoice_id, **payment_in)
         db.add(db_payment)
 
-        monto_pago = float(payment_in.get("monto", 0.0))
-        invoice.saldo_pendiente = max((invoice.saldo_pendiente or 0.0) - monto_pago, 0)
+        # 4. Actualizar el saldo de la factura de forma segura
+        nuevo_saldo = round((invoice.saldo_pendiente or 0.0) - monto_pago, 2)
+        invoice.saldo_pendiente = max(nuevo_saldo, 0.0)
 
-        if invoice.saldo_pendiente <= 0:
+        # Usamos 0.01 de tolerancia por si quedan basuras de centavos por redondeos del SAT
+        if invoice.saldo_pendiente <= 0.01:
             invoice.estatus = models.InvoiceStatus.PAGADO
-            invoice.saldo_pendiente = 0
+            invoice.saldo_pendiente = 0.0
         else:
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-        # Registrar el movimiento de salida en Tesorería
-        if db_payment.bank_account_id:
-            account = db.query(models.BankAccount).get(db_payment.bank_account_id)
-            if account:
-                account.saldo -= monto_pago
+        # 5. AFECTAR LA TESORERÍA (El Estado de Cuenta de la Empresa)
+        bank_account_id = payment_in.get("bank_account_id")
 
-                mov = models.BankMovement(
-                    bank_account_id=account.id,
-                    tipo="egreso",
-                    monto=monto_pago,
-                    concepto=f"Pago Factura ID: {invoice.id}",
-                    referencia=payment_in.get("referencia", ""),
-                    origen_modulo="CxP",
-                )
-                db.add(mov)
+        if bank_account_id:
+            # Bloqueamos también la cuenta de banco mientras descontamos el dinero
+            account = (
+                db.query(models.BankAccount)
+                .filter(models.BankAccount.id == bank_account_id)
+                .with_for_update()
+                .first()
+            )
 
+            if not account:
+                raise ValueError("La cuenta bancaria seleccionada no existe.")
+
+            # Descontamos el dinero de la cuenta de banco
+            account.saldo = round((account.saldo or 0.0) - monto_pago, 2)
+
+            # =========================================================
+            # TEXTO CLARO PARA TESORERÍA: "Para que Gustavo sepa qué se pagó"
+            # =========================================================
+            proveedor_nombre = (
+                invoice.supplier.razon_social
+                if invoice.supplier
+                else "Proveedor Desconocido"
+            )
+            folio_factura = invoice.folio if invoice.folio else invoice.uuid[:8]
+            concepto_claro = f"Pago CxP: {proveedor_nombre[:35]} - Fra: {folio_factura}"
+            referencia_clara = payment_in.get("referencia", f"PAGO-{invoice.id}")
+
+            mov = models.BankMovement(
+                bank_account_id=account.id,
+                tipo="egreso",
+                monto=monto_pago,
+                concepto=concepto_claro,
+                referencia=referencia_clara,
+                origen_modulo="CxP",
+            )
+            db.add(mov)
+
+        # Confirmamos todos los cambios juntos (Atomicidad)
         db.commit()
         return get_invoice(db, invoice_id)
+
+    except ValueError as ve:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(ve))
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Error de integridad en la base de datos al registrar el pago.",
+        )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error en pago: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error crítico en pago: {str(e)}")
 
 
 def delete_payment(db: Session, payment_id: int, user_id: int):
