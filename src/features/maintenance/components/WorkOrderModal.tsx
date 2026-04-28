@@ -139,7 +139,7 @@ export const WorkOrderModal = ({
   const watchManoObra = form.watch("costo_mano_obra");
   const watchIvaRate = form.watch("porcentaje_iva");
 
-  // 3. SINCRONIZACIÓN DE DATOS (Precarga en edición)
+  // 3. SINCRONIZACIÓN DE DATOS (Precarga en edición) BLINDADA
   useEffect(() => {
     if (open) {
       if (orderToEdit) {
@@ -155,17 +155,36 @@ export const WorkOrderModal = ({
           porcentaje_iva: (orderToEdit as any).porcentaje_iva ?? 16,
         });
 
-        // Precargar partes visuales
-        if (orderToEdit.parts && Array.isArray(orderToEdit.parts)) {
-          const preLoadedParts: SelectedPart[] = orderToEdit.parts
-            .map((p: any) => {
-              const invItem = inventory.find(
-                (i) => i.id === p.inventory_item_id,
-              );
-              return invItem ? { item: invItem, cantidad: p.cantidad } : null;
-            })
-            .filter(Boolean) as SelectedPart[];
+        // PRECARGA DE PARTES BLINDADA
+        if (
+          orderToEdit.parts &&
+          Array.isArray(orderToEdit.parts) &&
+          orderToEdit.parts.length > 0
+        ) {
+          const preLoadedParts: SelectedPart[] = orderToEdit.parts.map(
+            (p: any) => {
+              // Intentamos buscar en el inventario cargado
+              let invItem = inventory.find((i) => i.id === p.inventory_item_id);
+
+              // Si la pieza ya no existe en catálogo, reconstruimos la pieza visual
+              // con los datos históricos de la orden para que no se desaparezca
+              if (!invItem) {
+                invItem = {
+                  id: p.inventory_item_id,
+                  sku: p.item_sku || `SKU-${p.inventory_item_id}`,
+                  descripcion: p.item_descripcion || "Refacción Guardada",
+                  precio_unitario: p.costo_unitario_snapshot || 0,
+                  stock_actual: 9999, // Simulamos para evitar alerta falsa de falta de stock al editar
+                  stock_minimo: 0,
+                  categoria: "general" as any,
+                } as InventoryItem;
+              }
+              return { item: invItem, cantidad: p.cantidad };
+            },
+          );
           setSelectedParts(preLoadedParts);
+        } else {
+          setSelectedParts([]);
         }
       } else {
         form.reset({
@@ -184,7 +203,9 @@ export const WorkOrderModal = ({
       setSelectedSkuId("");
       setPartQuantity(1);
     }
-  }, [open, orderToEdit, inventory, form]);
+    // Se quitó 'inventory' de las dependencias para evitar que React borre el form si el inventario carga un milisegundo tarde
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, orderToEdit]);
 
   // Actualizar el array de Zod cuando cambia el estado visual de las refacciones
   useEffect(() => {
@@ -224,7 +245,7 @@ export const WorkOrderModal = ({
     return selectedParts.reduce((sum, p) => sum + p.cantidad, 0);
   }, [selectedParts]);
 
-  // NUEVO: Motor de cálculo financiero en tiempo real (Con o sin refacciones)
+  // Motor de cálculo financiero en tiempo real (Con o sin refacciones)
   const resumenFinanciero = useMemo(() => {
     const costoRefacciones = selectedParts.reduce((acc, part) => {
       const precio = part.item.precio_unitario || 0;
@@ -234,7 +255,9 @@ export const WorkOrderModal = ({
     const manoObra = Number(watchManoObra) || 0;
     const subtotal = costoRefacciones + manoObra;
     const ivaRate = Number(watchIvaRate) || 0;
-    const iva = subtotal * (ivaRate / 100);
+
+    // El IVA solo se calcula sobre la mano de obra, las refacciones ya traen IVA en inventario
+    const iva = manoObra * (ivaRate / 100);
     const total = subtotal + iva;
 
     return { costoRefacciones, manoObra, subtotal, iva, total };
@@ -264,14 +287,26 @@ export const WorkOrderModal = ({
     );
   };
 
-  // Submit General
+  // Submit General Blindado
   const handleFormSubmit = async (data: WorkOrderFormData) => {
     setIsSubmitting(true);
     try {
+      // Forzamos a mapear las partes seleccionadas directamente desde el estado de React
+      // para evitar que React Hook Form envíe un arreglo vacío por desincronización
+      const partesAseguradas = selectedParts.map((p) => ({
+        inventory_item_id: p.item.id,
+        cantidad: p.cantidad,
+      }));
+
       const payload = {
         ...data,
+        parts: partesAseguradas,
         trip_id: data.tipo_mantenimiento === "ruta" ? data.trip_id : null,
+        // Aseguramos que viajen como números
+        costo_mano_obra: Number(data.costo_mano_obra) || 0,
+        porcentaje_iva: Number(data.porcentaje_iva) || 0,
       };
+
       const success = await onCreate(payload);
       if (success) {
         onOpenChange(false);
@@ -682,7 +717,9 @@ export const WorkOrderModal = ({
                             <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mt-1">
                               Disponible en almacén:{" "}
                               <span className="font-mono">
-                                {part.item.stock_actual}
+                                {part.item.stock_actual === 9999
+                                  ? "Reservado"
+                                  : part.item.stock_actual}
                               </span>
                             </p>
                           </div>
@@ -791,7 +828,7 @@ export const WorkOrderModal = ({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                          Porcentaje de IVA Aplicable
+                          Porcentaje de IVA (Aplica a Servicio)
                         </FormLabel>
                         <FormControl>
                           <div className="relative">
@@ -838,14 +875,14 @@ export const WorkOrderModal = ({
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs font-medium text-rose-600 dark:text-rose-400/80">
-                      <span>IVA ({watchIvaRate || 0}%)</span>
+                      <span>IVA (Aplica a M.Obra: {watchIvaRate || 0}%)</span>
                       <span className="font-mono">
                         +{formatCurrency(resumenFinanciero.iva, "MXN")}
                       </span>
                     </div>
                     <div className="pt-3 mt-1 border-t-2 border-slate-200 dark:border-white/10 flex justify-between items-center">
                       <span className="text-xs font-black uppercase tracking-widest text-brand-navy dark:text-emerald-400">
-                        Costo Total a Descontar
+                        Costo Total Estimado
                       </span>
                       <span className="text-xl font-black font-mono text-brand-navy dark:text-emerald-400">
                         {formatCurrency(resumenFinanciero.total, "MXN")}

@@ -635,7 +635,7 @@ def update_work_order_status(
                 bank_account_id=1,
                 tipo="egreso",
                 monto=costo_total_a_pagar,
-                concepto=f"Pago Liquidación OT: {order.folio}",
+                concepto=f"OT: {order.folio}",
                 referencia=f"OT-{order.folio}",
                 origen_modulo="CxP",  # Lo marcamos como CxP para que Tesorería sepa que fue un pago de Mantenimiento
                 fecha=datetime.now(),
