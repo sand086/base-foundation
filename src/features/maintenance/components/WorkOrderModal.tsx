@@ -40,9 +40,11 @@ import {
   Home,
   MapPin,
   Save,
+  Receipt,
+  Calculator,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 // Hooks de tu aplicación
 import { useMaintenance } from "@/features/maintenance/hooks/useMaintenance";
@@ -71,6 +73,9 @@ const workOrderSchema = z
       .string()
       .min(5, "Describe el problema (mínimo 5 caracteres)"),
     parts: z.array(partSchema).default([]),
+    // NUEVOS CAMPOS FINANCIEROS
+    costo_mano_obra: z.coerce.number().min(0).default(0),
+    porcentaje_iva: z.coerce.number().min(0).max(100).default(16),
   })
   .superRefine((data, ctx) => {
     if (data.tipo_mantenimiento === "ruta" && !data.trip_id) {
@@ -124,11 +129,15 @@ export const WorkOrderModal = ({
       trip_id: undefined,
       descripcion_problema: "",
       parts: [],
+      costo_mano_obra: 0,
+      porcentaje_iva: 16,
     },
   });
 
   const watchTipoMantenimiento = form.watch("tipo_mantenimiento");
   const watchUnitId = form.watch("unit_id");
+  const watchManoObra = form.watch("costo_mano_obra");
+  const watchIvaRate = form.watch("porcentaje_iva");
 
   // 3. SINCRONIZACIÓN DE DATOS (Precarga en edición)
   useEffect(() => {
@@ -141,7 +150,9 @@ export const WorkOrderModal = ({
             (orderToEdit as any).tipo_mantenimiento || "patio",
           trip_id: (orderToEdit as any).trip_id,
           descripcion_problema: orderToEdit.descripcion_problema || "",
-          parts: [], // Manejamos visualmente en selectedParts
+          parts: [],
+          costo_mano_obra: (orderToEdit as any).costo_mano_obra || 0,
+          porcentaje_iva: (orderToEdit as any).porcentaje_iva ?? 16,
         });
 
         // Precargar partes visuales
@@ -164,6 +175,8 @@ export const WorkOrderModal = ({
           trip_id: undefined,
           descripcion_problema: "",
           parts: [],
+          costo_mano_obra: 0,
+          porcentaje_iva: 16,
         });
         setSelectedParts([]);
       }
@@ -210,6 +223,22 @@ export const WorkOrderModal = ({
   const totalDeduction = useMemo(() => {
     return selectedParts.reduce((sum, p) => sum + p.cantidad, 0);
   }, [selectedParts]);
+
+  // NUEVO: Motor de cálculo financiero en tiempo real (Con o sin refacciones)
+  const resumenFinanciero = useMemo(() => {
+    const costoRefacciones = selectedParts.reduce((acc, part) => {
+      const precio = part.item.precio_unitario || 0;
+      return acc + part.cantidad * precio;
+    }, 0);
+
+    const manoObra = Number(watchManoObra) || 0;
+    const subtotal = costoRefacciones + manoObra;
+    const ivaRate = Number(watchIvaRate) || 0;
+    const iva = subtotal * (ivaRate / 100);
+    const total = subtotal + iva;
+
+    return { costoRefacciones, manoObra, subtotal, iva, total };
+  }, [selectedParts, watchManoObra, watchIvaRate]);
 
   // Manejadores de Refacciones
   const handleAddPart = () => {
@@ -698,7 +727,7 @@ export const WorkOrderModal = ({
                       No se han agregado refacciones
                     </p>
                     <p className="text-[10px] font-medium text-slate-400 mt-1">
-                      Puede crear la orden solo con mano de obra.
+                      Puede crear la orden ingresando un Costo Base (Sección 3).
                     </p>
                   </div>
                 )}
@@ -715,11 +744,115 @@ export const WorkOrderModal = ({
                         <span className="font-black">
                           {totalDeduction} refacciones
                         </span>{" "}
-                        del catálogo. Se registrará el gasto en CxP si aplica.
+                        del catálogo.
                       </p>
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* SECCIÓN 3: COSTOS Y FINANZAS (NUEVO) */}
+              <div className="p-5 border border-border rounded-2xl bg-slate-50/50 dark:bg-slate-900/20 shadow-sm space-y-5">
+                <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-2 border-b border-border pb-2">
+                  <Calculator className="h-3 w-3 text-emerald-600 dark:text-emerald-500" />{" "}
+                  Resumen de Costos y Finanzas
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="costo_mano_obra"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                          Costo Base / Servicio (Mano de Obra)
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">
+                              $
+                            </span>
+                            <Input
+                              type="number"
+                              min="0"
+                              {...field}
+                              className="pl-7 font-mono font-bold text-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="porcentaje_iva"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                          Porcentaje de IVA Aplicable
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              {...field}
+                              className="pr-8 font-mono font-bold text-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">
+                              %
+                            </span>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {/* TARJETA DE TOTALES EN VIVO */}
+                <div className="mt-4 p-5 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 shadow-sm">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-xs font-medium text-slate-600 dark:text-slate-400">
+                      <span>Costo Refacciones (Inventario)</span>
+                      <span className="font-mono">
+                        {formatCurrency(
+                          resumenFinanciero.costoRefacciones,
+                          "MXN",
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-medium text-slate-600 dark:text-slate-400">
+                      <span>Costo Base (Servicio/Mano Obra)</span>
+                      <span className="font-mono">
+                        {formatCurrency(resumenFinanciero.manoObra, "MXN")}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-100 dark:border-white/5 flex justify-between items-center text-sm font-bold text-slate-700 dark:text-slate-300">
+                      <span>Subtotal</span>
+                      <span className="font-mono">
+                        {formatCurrency(resumenFinanciero.subtotal, "MXN")}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-medium text-rose-600 dark:text-rose-400/80">
+                      <span>IVA ({watchIvaRate || 0}%)</span>
+                      <span className="font-mono">
+                        +{formatCurrency(resumenFinanciero.iva, "MXN")}
+                      </span>
+                    </div>
+                    <div className="pt-3 mt-1 border-t-2 border-slate-200 dark:border-white/10 flex justify-between items-center">
+                      <span className="text-xs font-black uppercase tracking-widest text-brand-navy dark:text-emerald-400">
+                        Costo Total a Descontar
+                      </span>
+                      <span className="text-xl font-black font-mono text-brand-navy dark:text-emerald-400">
+                        {formatCurrency(resumenFinanciero.total, "MXN")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 

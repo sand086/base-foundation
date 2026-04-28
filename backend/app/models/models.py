@@ -942,6 +942,10 @@ class WorkOrder(AuditMixin, Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     fecha_cierre = Column(DateTime(timezone=True), nullable=True)
+    porcentaje_iva = Column(Float, default=16.0, server_default="16.0")
+    subtotal = Column(Float, default=0.0)
+    total = Column(Float, default=0.0)
+    costo_mano_obra = Column(Float, default=0.0)
 
     unit = relationship("Unit", back_populates="work_orders")
     mechanic = relationship("Mechanic", back_populates="work_orders")

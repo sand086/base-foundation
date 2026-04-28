@@ -83,4 +83,9 @@ export interface WorkOrder extends WorkOrderResponse {
     marca?: string;
   };
   mechanic?: Partial<Mechanic>;
+
+  porcentaje_iva?: number;
+  subtotal?: number;
+  total?: number;
+  costo_mano_obra?: number;
 }
