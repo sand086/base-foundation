@@ -58,29 +58,6 @@ export function BankAccountsTab({
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* HERO CARD: LIQUIDEZ GLOBAL */}
-      <div className="bg-brand-navy p-6 md:p-8 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center shadow-2xl border-t-4 border-emerald-500 relative overflow-hidden gap-4">
-        <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-4 -translate-y-4">
-          <PiggyBank className="h-40 w-40 text-white" />
-        </div>
-        <div className="text-white relative z-10">
-          <p className="text-emerald-400 font-black uppercase text-[11px] tracking-[0.3em] mb-1">
-            Liquidez Total Disponible
-          </p>
-          <div className="flex items-center gap-2 text-slate-300">
-            <Wallet className="h-4 w-4" />
-            <span className="text-sm font-bold uppercase tracking-widest">
-              Suma de todas las cuentas bancarias
-            </span>
-          </div>
-        </div>
-        <div className="text-left md:text-right relative z-10 w-full md:w-auto">
-          <p className="text-5xl md:text-6xl font-black text-white font-mono tracking-tighter drop-shadow-lg">
-            {showBalances ? formatCurrency(liquidezTotal) : "••••••••"}
-          </p>
-        </div>
-      </div>
-
       {/* TOOLBAR SUPERIOR */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-card/40 p-4 rounded-2xl border border-white/20 dark:border-white/10 shadow-sm backdrop-blur-md">
         <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">

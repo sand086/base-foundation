@@ -1181,12 +1181,12 @@ export function TripDetailsModal({
                                 </div>
 
                                 <Separator className="my-4 dark:bg-white/10" />
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                                {/*    <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>Subtotal:</span>
                                   <span className="font-mono">
                                     {formatCurrency(finanzasComercial.subtotal)}
                                   </span>
-                                </div>
+                                </div> */}
                                 <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>IVA (16%):</span>
                                   <span className="font-mono">
@@ -1210,7 +1210,7 @@ export function TripDetailsModal({
                                     Total a Facturar:
                                   </span>
                                   <span className="text-3xl font-black font-mono tracking-tighter relative z-10 drop-shadow-md">
-                                    {formatCurrency(finanzasComercial.total)}
+                                    {formatCurrency(finanzasComercial.subtotal)}
                                   </span>
                                 </div>
                               </div>

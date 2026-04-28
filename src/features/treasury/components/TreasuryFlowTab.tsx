@@ -1,6 +1,6 @@
 // src/features/treasury/components/TreasuryFlowTab.tsx
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,8 +23,6 @@ import {
   Landmark,
   TrendingUp,
   TrendingDown,
-  CheckCircle2,
-  Clock,
   Search,
   RefreshCw,
   MoreHorizontal,
@@ -33,24 +31,13 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Loader2,
-  BarChart3,
+  Calculator,
+  Wallet,
+  Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
 import { getBankLogo } from "../utils/bankUtils";
-
-// NUEVO FASE 3.1: Importamos Recharts para el Flujo de Efectivo
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
 
 interface TreasuryFlowTabProps {
   stats: any;
@@ -84,106 +71,233 @@ export function TreasuryFlowTab({
   onDeleteMovement,
 }: TreasuryFlowTabProps) {
   // =====================================================================
-  // NUEVO FASE 3.1: MOTOR DEL GRÁFICO DE FLUJO DE EFECTIVO (REMPLAZA EXCEL)
+  // MOTOR FINANCIERO PARA EL CONTADOR (Agrupación de Flujo de Efectivo)
   // =====================================================================
-  const chartData = useMemo(() => {
-    if (!movimientos || movimientos.length === 0) return [];
+  const reporteFinanciero = useMemo(() => {
+    let ingresosCxC = 0; // Lo que ya me pagaron de facturas
+    let ingresosOtros = 0; // Préstamos, aportaciones de capital, etc.
+    let egresosCxP = 0; // Lo que ya pagué a proveedores
+    let egresosOtros = 0; // Nómina, impuestos, caja chica, etc.
 
-    const grouped = movimientos.reduce((acc: any, mov) => {
-      // Usamos la fecha tal cual venga o un fallback
-      const dateKey = mov.fecha ? mov.fecha.split("T")[0] : "Sin Fecha";
-
-      if (!acc[dateKey]) {
-        acc[dateKey] = {
-          fecha: dateKey,
-          Ingresos: 0,
-          Egresos: 0,
-        };
+    movimientos.forEach((mov) => {
+      const monto = Number(mov.monto) || 0;
+      if (mov.tipo === "ingreso") {
+        if (mov.origen_modulo === "CxC") ingresosCxC += monto;
+        else ingresosOtros += monto;
+      } else if (mov.tipo === "egreso") {
+        if (mov.origen_modulo === "CxP") egresosCxP += monto;
+        else egresosOtros += monto;
       }
-      if (mov.tipo === "ingreso")
-        acc[dateKey].Ingresos += Number(mov.monto) || 0;
-      if (mov.tipo === "egreso") acc[dateKey].Egresos += Number(mov.monto) || 0;
-      return acc;
-    }, {});
+    });
 
-    // Ordenar cronológicamente y tomar los últimos 14 días operativos
-    return Object.values(grouped)
-      .sort((a: any, b: any) => a.fecha.localeCompare(b.fecha))
-      .slice(-14);
+    const totalIngresos = ingresosCxC + ingresosOtros;
+    const totalEgresos = egresosCxP + egresosOtros;
+    const flujoNeto = totalIngresos - totalEgresos;
+
+    return {
+      ingresosCxC,
+      ingresosOtros,
+      totalIngresos,
+      egresosCxP,
+      egresosOtros,
+      totalEgresos,
+      flujoNeto,
+    };
   }, [movimientos]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
-      {/* KPIs DE TESORERÍA */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card
-          variant="default"
-          className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
-        >
-          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+      {/* ========================================================= */}
+      {/* CARDS BONITAS Y ELEGANTES (KPIs FINANCIEROS)              */}
+      {/* ========================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 relative overflow-hidden group hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-all cursor-default bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-sm hover:shadow-md">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <TrendingUp className="w-24 h-24 text-emerald-600" />
           </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Total Ingresos
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500 mb-2">
+              <ArrowUpRight className="w-4 h-4" />
+              <p className="text-[11px] font-black uppercase tracking-widest">
+                Entradas (Cobrado)
+              </p>
+            </div>
+            <p className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tighter">
+              {showBalances
+                ? formatCurrency(reporteFinanciero.totalIngresos)
+                : "••••••••"}
             </p>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tighter leading-none">
-              {showBalances ? formatCurrency(stats.total_ingresos) : "••••••••"}
-            </p>
-          </div>
-        </Card>
-        <Card
-          variant="default"
-          className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default"
-        >
-          <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <TrendingDown className="h-6 w-6 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Total Egresos
-            </p>
-            <p className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono tracking-tighter leading-none">
-              {showBalances ? formatCurrency(stats.total_egresos) : "••••••••"}
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              Dinero real en cuentas
             </p>
           </div>
         </Card>
-        <Card
-          variant="default"
-          className="p-6 flex items-center gap-5 group hover:border-cyan-300 dark:hover:border-cyan-500/50 transition-all cursor-default"
-        >
-          <div className="p-3.5 bg-cyan-50 dark:bg-cyan-950/30 rounded-2xl border border-cyan-100 dark:border-cyan-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <CheckCircle2 className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
+
+        <Card className="p-6 relative overflow-hidden group hover:border-rose-200 dark:hover:border-rose-900/50 transition-all cursor-default bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-sm hover:shadow-md">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <TrendingDown className="w-24 h-24 text-rose-600" />
           </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Conciliados
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-500 mb-2">
+              <ArrowDownLeft className="w-4 h-4" />
+              <p className="text-[11px] font-black uppercase tracking-widest">
+                Salidas (Pagado)
+              </p>
+            </div>
+            <p className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tighter">
+              {showBalances
+                ? formatCurrency(reporteFinanciero.totalEgresos)
+                : "••••••••"}
             </p>
-            <p className="text-3xl font-black text-cyan-600 dark:text-cyan-400 leading-none tracking-tighter">
-              {stats.conciliados}
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              Pagos a proveedores y gastos
             </p>
           </div>
         </Card>
-        <Card
-          variant="default"
-          className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default"
-        >
-          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+
+        <Card className="p-6 relative overflow-hidden group transition-all cursor-default shadow-sm hover:shadow-md border-brand-navy/20 dark:border-blue-900/50 bg-brand-navy dark:bg-slate-900">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Wallet className="w-24 h-24 text-white" />
           </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Pendientes
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-blue-200 mb-2">
+              <Calculator className="w-4 h-4" />
+              <p className="text-[11px] font-black uppercase tracking-widest">
+                Flujo Neto del Periodo
+              </p>
+            </div>
+            <p
+              className={cn(
+                "text-3xl font-black font-mono tracking-tighter",
+                reporteFinanciero.flujoNeto >= 0
+                  ? "text-white"
+                  : "text-rose-400",
+              )}
+            >
+              {showBalances
+                ? formatCurrency(reporteFinanciero.flujoNeto)
+                : "••••••••"}
             </p>
-            <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
-              {stats.pendientes}
+            <p className="text-xs font-medium text-blue-200/70">
+              {reporteFinanciero.flujoNeto >= 0
+                ? "Superávit de efectivo"
+                : "Déficit de efectivo"}
             </p>
           </div>
         </Card>
       </div>
 
-      {/* TOOLBAR */}
-      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
+      {/* ========================================================= */}
+      {/* VISTA CONTADOR: ESTADO DE FLUJO DE EFECTIVO (TABLA)       */}
+      {/* ========================================================= */}
+      <Card className="overflow-hidden border-slate-200/60 dark:border-white/10 shadow-md">
+        <div className="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200/60 dark:border-white/10 px-6 py-4 flex items-center gap-3">
+          <Building2 className="w-5 h-5 text-slate-500" />
+          <div>
+            <h3 className="font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight text-sm">
+              Estado de Flujo de Efectivo
+            </h3>
+            <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">
+              Resumen Operativo Conciliado
+            </p>
+          </div>
+        </div>
+        <div className="p-0">
+          <table className="w-full text-sm">
+            <tbody>
+              {/* SECCIÓN INGRESOS */}
+              <tr className="bg-slate-50 dark:bg-slate-900/50">
+                <td
+                  colSpan={2}
+                  className="px-6 py-3 font-black text-xs uppercase tracking-widest text-emerald-700 dark:text-emerald-500"
+                >
+                  Actividades de Operación (Ingresos)
+                </td>
+              </tr>
+              <tr className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                <td className="px-6 py-3 pl-10 font-medium text-slate-600 dark:text-slate-300">
+                  Cobro a Clientes (CxC)
+                </td>
+                <td className="px-6 py-3 text-right font-mono text-slate-800 dark:text-slate-200">
+                  {formatCurrency(reporteFinanciero.ingresosCxC)}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                <td className="px-6 py-3 pl-10 font-medium text-slate-600 dark:text-slate-300">
+                  Otros Ingresos
+                </td>
+                <td className="px-6 py-3 text-right font-mono text-slate-800 dark:text-slate-200">
+                  {formatCurrency(reporteFinanciero.ingresosOtros)}
+                </td>
+              </tr>
+              <tr className="border-b-2 border-slate-200 dark:border-white/10 bg-emerald-50/30 dark:bg-emerald-900/10">
+                <td className="px-6 py-3 font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight text-xs">
+                  Total Ingresos Operativos
+                </td>
+                <td className="px-6 py-3 text-right font-black font-mono text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(reporteFinanciero.totalIngresos)}
+                </td>
+              </tr>
+
+              {/* SECCIÓN EGRESOS */}
+              <tr className="bg-slate-50 dark:bg-slate-900/50">
+                <td
+                  colSpan={2}
+                  className="px-6 py-3 font-black text-xs uppercase tracking-widest text-rose-700 dark:text-rose-500"
+                >
+                  Actividades de Operación (Egresos)
+                </td>
+              </tr>
+              <tr className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                <td className="px-6 py-3 pl-10 font-medium text-slate-600 dark:text-slate-300">
+                  Pago a Proveedores (CxP)
+                </td>
+                <td className="px-6 py-3 text-right font-mono text-slate-800 dark:text-slate-200">
+                  {formatCurrency(reporteFinanciero.egresosCxP)}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                <td className="px-6 py-3 pl-10 font-medium text-slate-600 dark:text-slate-300">
+                  Otros Egresos Operativos
+                </td>
+                <td className="px-6 py-3 text-right font-mono text-slate-800 dark:text-slate-200">
+                  {formatCurrency(reporteFinanciero.egresosOtros)}
+                </td>
+              </tr>
+              <tr className="border-b border-slate-200 dark:border-white/10 bg-rose-50/30 dark:bg-rose-900/10">
+                <td className="px-6 py-3 font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight text-xs">
+                  Total Egresos Operativos
+                </td>
+                <td className="px-6 py-3 text-right font-black font-mono text-rose-600 dark:text-rose-400">
+                  {formatCurrency(reporteFinanciero.totalEgresos)}
+                </td>
+              </tr>
+
+              {/* GRAN TOTAL */}
+              <tr className="bg-slate-100 dark:bg-slate-800">
+                <td className="px-6 py-4 font-black text-slate-900 dark:text-white uppercase tracking-widest">
+                  Flujo de Efectivo Neto
+                </td>
+                <td
+                  className={cn(
+                    "px-6 py-4 text-right font-black font-mono text-lg underline decoration-double underline-offset-4",
+                    reporteFinanciero.flujoNeto >= 0
+                      ? "text-emerald-600 dark:text-emerald-400 decoration-emerald-300"
+                      : "text-rose-600 dark:text-rose-400 decoration-rose-300",
+                  )}
+                >
+                  {formatCurrency(reporteFinanciero.flujoNeto)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* ========================================================= */}
+      {/* TOOLBAR Y LIBRO MAYOR (DETALLE DE MOVIMIENTOS BANCARIOS)  */}
+      {/* ========================================================= */}
+      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner mt-8">
         <div className="relative flex-1 w-full lg:w-1/3 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <Input
@@ -203,7 +317,7 @@ export function TreasuryFlowTab({
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
           >
-            Libro Total
+            Libro Mayor
           </button>
           <button
             onClick={() => setMovementFilter("egreso")}
@@ -240,7 +354,7 @@ export function TreasuryFlowTab({
         </Button>
       </div>
 
-      {/* TABLA DE MOVIMIENTOS */}
+      {/* TABLA DE DETALLE BANCARIO */}
       <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
         <div className="overflow-auto max-h-[60vh] custom-scrollbar">
           <Table className="w-full text-sm">
@@ -309,17 +423,17 @@ export function TreasuryFlowTab({
                         />
                       </TableCell>
                       <TableCell className="py-4 font-mono text-sm font-medium text-slate-500 dark:text-slate-400">
-                        {mov.fecha}
+                        {mov.fecha ? mov.fecha.split("T")[0] : ""}
                       </TableCell>
                       <TableCell className="py-4 max-w-[250px]">
                         <p className="font-black text-slate-700 dark:text-slate-200 truncate uppercase tracking-tight text-sm">
                           {mov.concepto}
                         </p>
                         <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 uppercase tracking-wider">
-                          REF: {mov.referencia_bancaria || "N/A"}
+                          REF: {mov.referencia_bancaria || "N/A"} • ORIGEN:{" "}
+                          {mov.origen_modulo || "MANUAL"}
                         </p>
                       </TableCell>
-
                       <TableCell className="py-4">
                         <div className="flex items-center gap-2">
                           <span className="flex items-center justify-center w-6 h-6 shrink-0">
@@ -338,7 +452,6 @@ export function TreasuryFlowTab({
                           </span>
                         </div>
                       </TableCell>
-
                       <TableCell className="py-4 text-right">
                         <span
                           className={cn(
@@ -348,8 +461,8 @@ export function TreasuryFlowTab({
                               : "text-rose-600 dark:text-rose-400",
                           )}
                         >
-                          {mov.tipo === "ingreso" ? "+" : "-"}
-                          {formatCurrency(mov.monto)}
+                          {mov.tipo === "ingreso" ? "+" : "-"}{" "}
+                          {formatCurrency(Number(mov.monto))}
                         </span>
                       </TableCell>
                       <TableCell className="py-4 text-center pr-6">
@@ -358,7 +471,7 @@ export function TreasuryFlowTab({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
+                              className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
                             >
                               <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                             </Button>

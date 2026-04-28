@@ -400,7 +400,35 @@ export default function TripSettlement() {
     return cols;
   }, [activeTab]);
 
-  const isAuditPending = previewData?.legs_sin_ticket?.length > 0;
+  // REEMPLAZA ESTO EN TripSettlement.tsx
+  const isAuditPending = useMemo(() => {
+    if (!selectedLegsData || selectedLegsData.length === 0) return false;
+
+    return selectedLegsData.some((leg) => {
+      // Solo obligamos la auditoría en carretera (si quieres que aplique a patio, quita este if)
+      if (leg.leg_type !== "ruta_carretera") return false;
+
+      // 1. Buscar si existe el evento de "Conciliación" en su bitácora
+      const auditEvent = leg.timeline_events?.find(
+        (e: any) =>
+          e.location === "Conciliación de Combustible" ||
+          e.comments?.includes("Detalles Fase"),
+      );
+
+      // Si no hay evento de conciliación, BLOQUEAMOS
+      if (!auditEvent) return true;
+
+      // 2. Verificar que tenga Vales registrados > 0
+      const cleanText = auditEvent.comments?.replace(/\n/g, " ") || "";
+      const valesMatch = cleanText.match(/Vales:\s*([\d.,]+)/);
+      const vales = valesMatch ? Number(valesMatch[1].replace(/,/g, "")) : 0;
+
+      // Si tiene 0 vales de combustible, BLOQUEAMOS
+      if (vales <= 0) return true;
+
+      return false; // Todo en orden, permitimos liquidar
+    });
+  }, [selectedLegsData]);
 
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
@@ -574,9 +602,35 @@ export default function TripSettlement() {
     }).format(amount || 0);
 
   const toggleLegSelection = (id: string) => {
-    setSelectedLegIds((prev) =>
-      prev.includes(id) ? prev.filter((legId) => legId !== id) : [...prev, id],
-    );
+    const targetLeg = allLegs.find((l) => String(l.id) === id);
+    if (!targetLeg) return;
+
+    setSelectedLegIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((legId) => legId !== id); // Si ya estaba, lo quita
+      } else {
+        // Validamos si ya hay tramos seleccionados
+        if (prev.length > 0) {
+          const firstSelectedId = prev[0];
+          const firstSelectedLeg = allLegs.find(
+            (l) => String(l.id) === firstSelectedId,
+          );
+
+          // Si el viaje del nuevo tramo no coincide con el que ya tenemos seleccionado, BLOQUEAMOS
+          if (
+            firstSelectedLeg &&
+            firstSelectedLeg.trip_id !== targetLeg.trip_id
+          ) {
+            toast.error("Selección Inválida", {
+              description:
+                "Solo puedes liquidar tramos que pertenezcan al mismo número de viaje.",
+            });
+            return prev;
+          }
+        }
+        return [...prev, id];
+      }
+    });
   };
 
   const handleAddConcepto = () => {
@@ -738,8 +792,16 @@ export default function TripSettlement() {
             "La CxC ha sido cancelada y el viaje regresó a 'Por Liquidar'.",
         });
         if (refresh) refresh();
-      } catch (error) {
-        toast.error("Error al reabrir la liquidación.");
+      } catch (error: any) {
+        // Extraemos el mensaje de error específico que manda FastAPI
+        const backendMessage =
+          error.response?.data?.detail ||
+          "Error interno al reabrir la liquidación.";
+
+        // Mostramos el mensaje exacto en la alerta (Toast)
+        toast.error("Operación bloqueada", {
+          description: backendMessage,
+        });
       }
     }
     setActionModal(null);
@@ -857,9 +919,26 @@ export default function TripSettlement() {
               rowKey="id"
               enableRowSelection={activeTab === "pendientes"}
               selectedRows={selectedLegsData}
-              onSelectedRowsChange={(rows) =>
-                setSelectedLegIds(rows.map((r) => String(r.id)))
-              }
+              onSelectedRowsChange={(rows) => {
+                // Si deseleccionan todo
+                if (rows.length === 0) {
+                  setSelectedLegIds([]);
+                  return;
+                }
+
+                // Forzamos a que todos sean del mismo viaje que el primero que seleccionaron
+                const firstTripId = rows[0].trip_id;
+                const validRows = rows.filter((r) => r.trip_id === firstTripId);
+
+                if (validRows.length !== rows.length) {
+                  toast.warning("Filtro aplicado", {
+                    description:
+                      "Se omitieron tramos de otros viajes. Se liquidará por viaje completo.",
+                  });
+                }
+
+                setSelectedLegIds(validRows.map((r) => String(r.id)));
+              }}
               onRowClick={(row) => {
                 if (activeTab === "pendientes") {
                   toggleLegSelection(String(row.id));

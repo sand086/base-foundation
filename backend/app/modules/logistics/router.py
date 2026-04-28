@@ -1270,3 +1270,37 @@ def sync_distances(db: Session = Depends(get_db)):
         "errores": errores,
         "mensaje": "Sincronización completada",
     }
+
+
+@router.post("/trips/legs/{leg_id}/reopen")
+def reopen_trip_leg_endpoint(leg_id: int, db: Session = Depends(get_db)):
+    """
+    Reabre un tramo liquidado:
+    - Borra saldos
+    - Pasa a 'cerrado'
+    - Anula la CxC generada (Si no tiene pagos)
+    """
+    try:
+        leg = crud.reopen_trip_leg(db, leg_id)
+
+        return {
+            "message": "Tramo reabierto con éxito. Listo para una nueva liquidación.",
+            "leg_id": leg.id,
+            "status_actual": leg.status,
+            "saldos_actualizados": {
+                "monto_sueldo": leg.monto_sueldo,
+                "monto_bonos": leg.monto_bonos,
+                "monto_neto_pagado": leg.monto_neto_pagado,
+                "saldo_operador": leg.saldo_operador,
+            },
+        }
+    except ValueError as e:
+        # Excepción de Reglas de Negocio (ej. CXC ya pagada)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Excepción Crítica
+        print(f"💥 Error reabriendo tramo: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, detail="Error interno al reabrir el tramo."
+        )

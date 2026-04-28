@@ -233,7 +233,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             models.PayableInvoice.id == invoice_id,
             models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
         )
-        .with_for_update()
+        .with_for_update(of=models.PayableInvoice)  # <--- AQUI ESTÁ LA SOLUCIÓN
         .first()
     )
 
@@ -271,7 +271,9 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             account = (
                 db.query(models.BankAccount)
                 .filter(models.BankAccount.id == bank_account_id)
-                .with_for_update()
+                .with_for_update(
+                    of=models.BankAccount
+                )  # <--- AGREGAR EL PARÁMETRO "of" AQUÍ
                 .first()
             )
 
@@ -293,6 +295,10 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             concepto_claro = f"Pago CxP: {proveedor_nombre[:35]} - Fra: {folio_factura}"
             referencia_clara = payment_in.get("referencia", f"PAGO-{invoice.id}")
 
+            fecha_movimiento = payment_in.get(
+                "fecha_pago", payment_in.get("fecha", datetime.now())
+            )
+
             mov = models.BankMovement(
                 bank_account_id=account.id,
                 tipo="egreso",
@@ -300,6 +306,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
                 concepto=concepto_claro,
                 referencia=referencia_clara,
                 origen_modulo="CxP",
+                fecha=fecha_movimiento,  # <--- AQUÍ ESTÁ LA SOLUCIÓN
             )
             db.add(mov)
 
@@ -342,7 +349,7 @@ def delete_payment(db: Session, payment_id: int, user_id: int):
         invoice = (
             db.query(models.PayableInvoice)
             .filter(models.PayableInvoice.id == payment.invoice_id)
-            .with_for_update()
+            .with_for_update(of=models.PayableInvoice)  # <--- MISMA SOLUCIÓN
             .first()
         )
 
