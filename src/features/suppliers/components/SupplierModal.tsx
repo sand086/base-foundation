@@ -225,7 +225,7 @@ export function SupplierModal({
   const handleFormSubmit = async (data: SupplierFormData) => {
     setIsSubmitting(true);
     try {
-      // 🚀 LIMPIEZA TOTAL: FastAPI requiere 'null' en vez de '""' (string vacío)
+      //  LIMPIEZA TOTAL: FastAPI requiere 'null' en vez de '""' (string vacío)
       // para los campos opcionales como el email.
       const payload = {
         ...data,
@@ -249,7 +249,7 @@ export function SupplierModal({
       await onSubmit(payload as Partial<Supplier>);
       onOpenChange(false);
     } catch (e: any) {
-      // 🚀 MEJORA: Leer el error exacto que envía FastAPI para mostrarlo en pantalla
+      //  MEJORA: Leer el error exacto que envía FastAPI para mostrarlo en pantalla
       const backendError =
         e?.body?.detail?.[0]?.msg ||
         e?.body?.detail ||
@@ -709,7 +709,7 @@ export function SupplierModal({
             >
               Cancelar
             </Button>
-            {/* 🚀 EL BOTÓN DE SUBMIT INVOCA LA FUNCIÓN DE REACT HOOK FORM */}
+            {/*  EL BOTÓN DE SUBMIT INVOCA LA FUNCIÓN DE REACT HOOK FORM */}
             <Button
               type="submit"
               disabled={isSubmitting}

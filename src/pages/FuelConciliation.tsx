@@ -124,7 +124,7 @@ export default function FuelConciliation() {
   const [isEditing, setIsEditing] = useState(false);
   const [cobrarOperador, setCobrarOperador] = useState(true);
 
-  // 🚀 NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
+  //  NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
   const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
@@ -140,7 +140,7 @@ export default function FuelConciliation() {
       );
   }, [trips]);
 
-  // 🚀 2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
+  //  2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
   const filteredAuditedLegs = useMemo(() => {
     let filtered = auditedLegs;
     const hoyStr = new Date().toLocaleDateString("es-MX");
@@ -601,7 +601,7 @@ export default function FuelConciliation() {
         header: "",
         sortable: false,
         render: (_, row) => {
-          // 🚀 BLINDAJE: Detectar si el viaje ya fue pagado
+          //  BLINDAJE: Detectar si el viaje ya fue pagado
           const isLiquidado = row.status === "liquidado";
 
           return (
@@ -632,7 +632,7 @@ export default function FuelConciliation() {
 
                 <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
 
-                {/* 🚀 EDITAR (Protegido) */}
+                {/*  EDITAR (Protegido) */}
                 <DropdownMenuItem
                   onClick={() => {
                     if (isLiquidado) {
@@ -650,7 +650,7 @@ export default function FuelConciliation() {
                   <Pencil className="h-3.5 w-3.5 mr-2" /> Editar / Recalcular
                 </DropdownMenuItem>
 
-                {/* 🚀 ELIMINAR (Protegido) */}
+                {/*  ELIMINAR (Protegido) */}
                 <DropdownMenuItem
                   className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
                   onClick={() => {
@@ -855,7 +855,7 @@ export default function FuelConciliation() {
               </h3>
             </div>
 
-            {/* 🚀 NUEVO: Pestañas de Hoy / Histórico */}
+            {/*  NUEVO: Pestañas de Hoy / Histórico */}
             <div className="flex items-center pb-2">
               <Tabs
                 value={dateFilter}
@@ -882,7 +882,7 @@ export default function FuelConciliation() {
             <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
               <CardContent className="p-0">
                 <EnhancedDataTable
-                  data={filteredAuditedLegs} // 🚀 Usamos la tabla filtrada
+                  data={filteredAuditedLegs} //  Usamos la tabla filtrada
                   columns={auditedColumns as any}
                   className="border-none"
                   searchPlaceholder="Buscar por folio o operador..."

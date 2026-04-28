@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { logos_3t } from "@/assets/img";
 import { AxiosError } from "axios";
 
-// 🚀 IMPORTAMOS NEXT-THEMES PARA FORZAR MODO CLARO
+//  IMPORTAMOS NEXT-THEMES PARA FORZAR MODO CLARO
 import { useTheme } from "next-themes";
 
 // Form Components (Tahoe UI)
@@ -53,7 +53,7 @@ export default function Login() {
   const { toast } = useToast();
 
   // =====================
-  // 🚀 UX: FORZAR TEMA CLARO Y RESTAURARLO
+  //  UX: FORZAR TEMA CLARO Y RESTAURARLO
   // =====================
   const { theme, setTheme } = useTheme();
   const originalTheme = useRef<string | undefined>(undefined);
@@ -119,7 +119,7 @@ export default function Login() {
             : "Ingresa el código de tu autenticador",
         });
 
-        restoreOriginalTheme(); // 🚀 Restauramos tema
+        restoreOriginalTheme(); //  Restauramos tema
 
         navigate(targetRoute, {
           replace: true,
@@ -139,7 +139,7 @@ export default function Login() {
           description: "Has iniciado sesión correctamente",
         });
 
-        restoreOriginalTheme(); // 🚀 Restauramos tema
+        restoreOriginalTheme(); //  Restauramos tema
         navigate("/", { replace: true });
       } else if (
         response.access_token &&
@@ -212,7 +212,7 @@ export default function Login() {
             {/* Error Message (API) */}
             {apiError && (
               <div className="mt-6 flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 backdrop-blur-sm p-4 animate-in fade-in slide-in-from-top-2 shadow-inner">
-                {/* 🚀 Fuerza de color vía prop de Lucide */}
+                {/*  Fuerza de color vía prop de Lucide */}
                 <AlertCircle
                   color="#fb7185"
                   className="h-5 w-5 flex-shrink-0"
@@ -236,7 +236,7 @@ export default function Login() {
                     <FormItem>
                       <FormControl>
                         <div className="relative group text-white">
-                          {/* 🚀 Fuerza de color vía prop de Lucide */}
+                          {/*  Fuerza de color vía prop de Lucide */}
                           <User
                             color="#ffffff"
                             className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 opacity-50 transition-all duration-300 group-focus-within:opacity-100 group-focus-within:scale-110"
@@ -263,7 +263,7 @@ export default function Login() {
                     <FormItem>
                       <FormControl>
                         <div className="relative group text-white">
-                          {/* 🚀 Fuerza de color vía prop de Lucide */}
+                          {/*  Fuerza de color vía prop de Lucide */}
                           <Lock
                             color="#ffffff"
                             className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 opacity-50 transition-all duration-300 group-focus-within:opacity-100 group-focus-within:scale-110"
@@ -280,7 +280,7 @@ export default function Login() {
                             onClick={() => setShowPass((v) => !v)}
                             className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-lg opacity-50 transition-all duration-300 hover:bg-white/10 hover:opacity-100 active:scale-95"
                           >
-                            {/* 🚀 Fuerza de color vía prop de Lucide */}
+                            {/*  Fuerza de color vía prop de Lucide */}
                             {showPass ? (
                               <EyeOff color="#ffffff" className="h-5 w-5" />
                             ) : (
@@ -321,7 +321,7 @@ export default function Login() {
                 >
                   {isSubmitting ? (
                     <span className="flex items-center gap-3 text-white">
-                      {/* 🚀 Fuerza de color vía prop de Lucide */}
+                      {/*  Fuerza de color vía prop de Lucide */}
                       <Loader2
                         color="#ffffff"
                         className="h-5 w-5 animate-spin"
@@ -330,8 +330,7 @@ export default function Login() {
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-3 text-white">
-                      INICIAR SESIÓN{" "}
-                      {/* 🚀 Fuerza de color vía prop de Lucide */}
+                      INICIAR SESIÓN {/*  Fuerza de color vía prop de Lucide */}
                       <ArrowRight color="#ffffff" className="h-5 w-5" />
                     </span>
                   )}

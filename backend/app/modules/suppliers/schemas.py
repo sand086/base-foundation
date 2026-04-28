@@ -90,7 +90,7 @@ class InvoicePaymentResponse(ORMBase):
 
 class PayableInvoiceBase(ORMBase):
     supplier_id: Optional[int] = None
-    cost_center_id: Optional[int] = None  # 🚀 Ajuste: CECO en la base
+    cost_center_id: Optional[int] = None  #  Ajuste: CECO en la base
     uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
 
@@ -115,7 +115,7 @@ class PayableInvoiceBase(ORMBase):
 
 class PayableInvoiceCreate(ORMBase):
     supplier_id: Optional[int] = None
-    cost_center_id: Optional[int] = None  # 🚀 Ajuste: Permitir enviar CECO al crear
+    cost_center_id: Optional[int] = None  #  Ajuste: Permitir enviar CECO al crear
 
     uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
@@ -142,7 +142,7 @@ class PayableInvoiceCreate(ORMBase):
 class PayableInvoiceUpdate(ORMBase):
     uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
-    cost_center_id: Optional[int] = None  # 🚀 Ajuste: Permitir cambiar CECO
+    cost_center_id: Optional[int] = None  #  Ajuste: Permitir cambiar CECO
 
     monto_total: Optional[float] = None
     saldo_pendiente: Optional[float] = None
@@ -192,7 +192,7 @@ class PayableInvoiceResponse(ORMBase):
     orden_compra_id: Optional[str] = None
 
     payments: List[InvoicePaymentResponse] = Field(default_factory=list)
-    cost_center: Optional[CostCenterResponse] = None  # 🚀 Ajuste: Ver detalle del CECO
+    cost_center: Optional[CostCenterResponse] = None  #  Ajuste: Ver detalle del CECO
 
     record_status: RecordStatus
     created_at: Optional[datetime] = None
@@ -323,7 +323,7 @@ class SupplierUpdate(ORMBase):
 class SupplierResponse(SupplierBase):
     id: int
 
-    # 🚀 AJUSTE CRÍTICO: Incluir el objeto CECO para que React lo vea
+    #  AJUSTE CRÍTICO: Incluir el objeto CECO para que React lo vea
     cost_center: Optional[CostCenterResponse] = None
 
     invoices: List[PayableInvoiceResponse] = Field(default_factory=list)

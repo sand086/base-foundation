@@ -401,7 +401,7 @@ def add_timeline_event(
 
 
 # =====================================================================
-# 🚀 LA VERDADERA MAGIA: LIQUIDACIÓN POR LOTE BLINDADA Y CON RASTREO
+#  LA VERDADERA MAGIA: LIQUIDACIÓN POR LOTE BLINDADA Y CON RASTREO
 # =====================================================================
 
 
@@ -677,7 +677,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     conceptos = []
 
     # =========================================================
-    # 🚀 TICKET 1: DATOS DE TRANSPARENCIA PARA EL OPERADOR
+    #  TICKET 1: DATOS DE TRANSPARENCIA PARA EL OPERADOR
     # =========================================================
     cliente_nombre = (
         trip.client.razon_social if getattr(trip, "client", None) else "Cliente General"
@@ -707,7 +707,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                 tipo="ingreso",
                 categoria="tarifa",
                 descripcion="Sueldo Base Pactado",
-                referencia=f"Ruta: {trip.origin} a {trip.destination}",  # 🚀 TICKET 1
+                referencia=f"Ruta: {trip.origin} a {trip.destination}",  #  TICKET 1
                 monto=sueldo_fijo,
                 esAutomatico=True,
             )
@@ -746,7 +746,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                     tipo="deduccion",
                     categoria="combustible",
                     descripcion="Cargo Exceso Diésel (Auditoría)",
-                    referencia=f"Excedente de {round(diferencia_litros, 1)} Lts",  # 🚀 TICKET 1
+                    referencia=f"Excedente de {round(diferencia_litros, 1)} Lts",  #  TICKET 1
                     monto=deduccion_combustible,
                     esAutomatico=True,
                 )
@@ -780,7 +780,7 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
                     tipo="ingreso",
                     categoria="bono",
                     descripcion=f"{tipo_mov_str} ({config_str})",
-                    referencia=referencia_operativa,  # 🚀 TICKET 1: Aquí va el cliente y contenedor
+                    referencia=referencia_operativa,  #  TICKET 1: Aquí va el cliente y contenedor
                     monto=bono_movimiento,
                     esAutomatico=True,
                 )

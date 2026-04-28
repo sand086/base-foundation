@@ -8,7 +8,7 @@ import {
 } from "@/features/payables/types";
 import axiosClient from "@/api/axiosClient";
 
-// 🚀 HELPER DE BLINDAJE: Extrae el texto del error del backend
+//  HELPER DE BLINDAJE: Extrae el texto del error del backend
 const getErrorMessage = (error: any, fallback: string) => {
   const detail = error.response?.data?.detail;
   if (Array.isArray(detail)) return detail[0]?.msg || fallback;

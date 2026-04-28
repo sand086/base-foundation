@@ -181,7 +181,7 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
             estatus=models.InvoiceStatus.PENDIENTE,
         )
 
-        # 🚀 HERENCIA AUTOMÁTICA: Si el proveedor tiene un CECO, se le asigna a la factura
+        #  HERENCIA AUTOMÁTICA: Si el proveedor tiene un CECO, se le asigna a la factura
         if db_invoice.supplier_id and not db_invoice.cost_center_id:
             prov = db.query(models.Supplier).get(db_invoice.supplier_id)
             if prov and prov.cost_center_id:

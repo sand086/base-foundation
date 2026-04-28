@@ -78,7 +78,7 @@ logger = logging.getLogger("billing.audit")
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
 
 # =========================================================
-# 🚀 FIX QUIRÚRGICO: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
+#  FIX QUIRÚRGICO: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
 # =========================================================
 SAT_ESTADOS_MAP = {
     "01": "AGU",
@@ -140,7 +140,7 @@ def normalizar_estado_sat(estado: str) -> str:
         resultado = SAT_ESTADOS_MAP.get(estado_str, estado_str)
 
     logger.info(
-        f"🚀 [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
+        f" [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
     )
     return resultado
 
@@ -413,7 +413,7 @@ class CartaPorteService:
             .first()
         )
         if loc_emisor:
-            # 🚀 FIX QUIRÚRGICO: Normalizamos el estado de la empresa
+            #  FIX QUIRÚRGICO: Normalizamos el estado de la empresa
             self.emisor_estado = normalizar_estado_sat(loc_emisor.estado_clave)
             self.emisor_municipio = str(loc_emisor.municipio_clave).zfill(3)
         else:
@@ -522,7 +522,7 @@ class CartaPorteService:
             else "PUBLICO EN GENERAL"
         )
 
-        # 🚀 VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
+        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
         cp_cliente = (
             str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
         )
@@ -532,7 +532,7 @@ class CartaPorteService:
                 detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal guardado en el catálogo de clientes.",
             )
 
-        # 🚀 VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
+        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
         rfc_cliente = (
             str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
         )
@@ -542,14 +542,14 @@ class CartaPorteService:
                 detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido. No se permite RFC genérico en Carta Porte 3.1.",
             )
 
-        # 🚀 VALIDACIÓN CRÍTICA SAT CP147: ESTADO Y MUNICIPIO DEL CLIENTE
+        #  VALIDACIÓN CRÍTICA SAT CP147: ESTADO Y MUNICIPIO DEL CLIENTE
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_cliente)
             .first()
         )
         if loc_destino:
-            # 🚀 FIX QUIRÚRGICO: Normalizamos el estado de destino
+            #  FIX QUIRÚRGICO: Normalizamos el estado de destino
             estado_dest = normalizar_estado_sat(loc_destino.estado_clave)
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
@@ -561,7 +561,7 @@ class CartaPorteService:
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
         tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
 
-        # 🚀 VALIDACIÓN CRÍTICA SAT CP195: OPERADOR
+        #  VALIDACIÓN CRÍTICA SAT CP195: OPERADOR
         raw_rfc = getattr(operador, "rfc", "")
         rfc_op_final = (
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""

@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 
 import { FUEL_CONFIG } from "../types";
 import { useTrips } from "@/features/trips/hooks/useTrips";
-import { useUnits } from "@/features/units/hooks/useUnits"; // 🚀 PASO 2.1: Importamos el hook
+import { useUnits } from "@/features/units/hooks/useUnits"; //  PASO 2.1: Importamos el hook
 
 /** =========================
  * Types & Interfaces
@@ -292,7 +292,7 @@ export function AddTicketModal({
   initialData,
 }: AddTicketModalProps) {
   const { trips = [] } = useTrips();
-  const { fetchLastOdometer } = useUnits(); // 🚀 PASO 2.2: Extracción de función
+  const { fetchLastOdometer } = useUnits(); //  PASO 2.2: Extracción de función
 
   // Estados de vinculación
   const [parentData, setParentData] = useState({
@@ -302,7 +302,7 @@ export function AddTicketModal({
     odometro: "" as string | number,
   });
 
-  const [lastOdoCache, setLastOdoCache] = useState<number>(0); // 🚀 PASO 2.3: Estado para caché
+  const [lastOdoCache, setLastOdoCache] = useState<number>(0); //  PASO 2.3: Estado para caché
 
   const [tickets, setTickets] = useState<SubTicket[]>([
     {
@@ -392,7 +392,7 @@ export function AddTicketModal({
     });
   };
 
-  // 🚀 PASO 2.4: EFECTO MAGICO DE PERSISTENCIA
+  //  PASO 2.4: EFECTO MAGICO DE PERSISTENCIA
   useEffect(() => {
     if (parentData.unit_id && parentData.unit_id !== "undefined") {
       fetchLastOdometer(parentData.unit_id).then((km) => {
@@ -487,7 +487,7 @@ export function AddTicketModal({
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     Odómetro Actual (Opcional)
                   </Label>
-                  {/* 🚀 PASO 2.5: INDICADOR VISUAL DEL ODÓMETRO */}
+                  {/*  PASO 2.5: INDICADOR VISUAL DEL ODÓMETRO */}
                   <div className="relative">
                     <Input
                       type="number"

@@ -31,7 +31,7 @@ try:
 except ImportError:
     HAS_NUM2WORDS = False
 
-# 🚀 IMPORTAMOS MODELOS DE FINANZAS
+#  IMPORTAMOS MODELOS DE FINANZAS
 from app.models.models import (
     ReceivableInvoice,
     Client as ClientModel,
@@ -43,7 +43,7 @@ from app.models.models import (
     RecordStatus,
 )
 
-# 🚀 IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
+#  IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
 from app.modules.finance.crud import create_bank_movement
 from app.modules.finance import schemas as finance_schemas
 
@@ -564,7 +564,7 @@ class PaymentComplementService:
                         monto=monto_abono_float,
                         concepto=f"Cobro Fra. {factura.folio_interno or factura.id} (REP)",
                         referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
-                        origen_modulo="CxC",  # 🚀 FIX CRÍTICO: ORIGEN MODULO AÑADIDO
+                        origen_modulo="CxC",  #  FIX CRÍTICO: ORIGEN MODULO AÑADIDO
                     )
                     create_bank_movement(self.db, mov_schema, current_user_id=user_id)
 

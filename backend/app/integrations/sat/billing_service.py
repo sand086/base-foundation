@@ -55,7 +55,7 @@ logger = logging.getLogger("billing.audit")
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
 
 # =========================================================
-# 🚀 FIX: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
+#  FIX: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
 # =========================================================
 SAT_ESTADOS_MAP = {
     "01": "AGU",
@@ -115,7 +115,7 @@ def normalizar_estado_sat(estado: str) -> str:
         resultado = SAT_ESTADOS_MAP.get(estado_str, estado_str)
 
     logger.info(
-        f"🚀 [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
+        f" [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
     )
     return resultado
 
@@ -470,7 +470,7 @@ class BillingService:
     ) -> dict:
         tarifa = viaje.tariff
 
-        # 🚀 FIX: FACTURA SIEMPRE SIN CASETAS. Solo toma la tarifa base pura.
+        #  FIX: FACTURA SIEMPRE SIN CASETAS. Solo toma la tarifa base pura.
         if tarifa and not is_nominal:
             subtotal = float(tarifa.tarifa_base or 0.0)
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
@@ -969,7 +969,7 @@ class BillingService:
         monto_total = Decimal(str(_clean_float(data["total"])))
 
         try:
-            # 🚀 FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
+            #  FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
             factura = (
                 self.db.query(ReceivableInvoice)
                 .filter(
@@ -1125,7 +1125,7 @@ class BillingService:
         monto_total = Decimal(str(_clean_float(data["total"])))
 
         try:
-            # 🚀 FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
+            #  FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
             factura = (
                 self.db.query(ReceivableInvoice)
                 .filter(

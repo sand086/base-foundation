@@ -385,7 +385,7 @@ from sqlalchemy import func
 @router.get("/stats/costs-by-ceco")
 def get_costs_by_ceco(db: Session = Depends(get_db)):
     """
-    🚀 TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
+     TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
     Ideal para inyectar directo en un PieChart de React.
     """
     try:

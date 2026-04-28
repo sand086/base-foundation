@@ -27,7 +27,7 @@ import { toast } from "sonner";
 
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
-// 🚀 IMPORTAMOS LOS TIPOS Y SERVICIOS DE OPENAPI
+//  IMPORTAMOS LOS TIPOS Y SERVICIOS DE OPENAPI
 import { FinanceService } from "@/api/generated/services/FinanceService";
 import type { BankMovementResponse } from "@/api/generated/models/BankMovementResponse";
 import type { BankAccountResponse } from "@/api/generated/models/BankAccountResponse";
@@ -81,7 +81,7 @@ export default function Treasury() {
   const [isAccountDetailOpen, setIsAccountDetailOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
 
-  // 🚀 FETCH DE MOVIMIENTOS CON OPENAPI
+  //  FETCH DE MOVIMIENTOS CON OPENAPI
   const fetchMovements = async () => {
     setIsMovementsLoading(true);
     try {
@@ -422,7 +422,7 @@ export default function Treasury() {
                   return;
                 }
                 try {
-                  // 🚀 LLAMADA SEGURA AL BACKEND AUTOGENERADO
+                  //  LLAMADA SEGURA AL BACKEND AUTOGENERADO
                   await FinanceService.deleteBankMovementApiFinanceMovementsMovementIdDelete(
                     movementToDelete!.id,
                   );

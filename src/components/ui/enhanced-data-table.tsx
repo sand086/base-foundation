@@ -67,7 +67,7 @@ interface EnhancedDataTableProps<T> {
   rowKey?: keyof T;
   customFilters?: React.ReactNode;
   onCustomExport?: () => void;
-  // 🚀 NUEVA PROP: Permite decidir qué filas tienen el checkbox habilitado
+  //  NUEVA PROP: Permite decidir qué filas tienen el checkbox habilitado
   isRowSelectable?: (row: T) => boolean;
 }
 
@@ -104,7 +104,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   rowKey = "id" as keyof T,
   customFilters,
   onCustomExport,
-  isRowSelectable, // 🚀 RECIBIMOS LA REGLA
+  isRowSelectable, //  RECIBIMOS LA REGLA
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -274,7 +274,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return <ChevronDown className="h-3.5 w-3.5 text-brand-red ml-2" />;
   };
 
-  // 🚀 LÓGICA INTELIGENTE PARA EL CHECKBOX MAESTRO
+  //  LÓGICA INTELIGENTE PARA EL CHECKBOX MAESTRO
   const selectablePaginatedData = useMemo(() => {
     return paginatedData.filter((row) =>
       isRowSelectable ? isRowSelectable(row) : true,
@@ -525,7 +525,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
-                    {/* 🚀 CHECKBOX HEADER: Solo reacciona a las filas seleccionables */}
+                    {/*  CHECKBOX HEADER: Solo reacciona a las filas seleccionables */}
                     <Checkbox
                       disabled={selectablePaginatedData.length === 0}
                       checked={
@@ -614,7 +614,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 </tr>
               ) : (
                 paginatedData.map((row, idx) => {
-                  // 🚀 VALIDACIÓN INDIVIDUAL DE FILA
+                  //  VALIDACIÓN INDIVIDUAL DE FILA
                   const isSelectable = isRowSelectable
                     ? isRowSelectable(row)
                     : true;
@@ -638,13 +638,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Checkbox
-                            disabled={!isSelectable} // 🚀 BLOQUEAMOS CHECKBOX
+                            disabled={!isSelectable} //  BLOQUEAMOS CHECKBOX
                             checked={selectedRows?.some(
                               (sr) => sr[rowKey] === row[rowKey],
                             )}
                             onCheckedChange={(checked) => {
                               if (!onSelectedRowsChange || !isSelectable)
-                                return; // 🚀 PREVENIMOS ONCHANGE
+                                return; //  PREVENIMOS ONCHANGE
                               if (checked) {
                                 onSelectedRowsChange([...selectedRows, row]);
                               } else {

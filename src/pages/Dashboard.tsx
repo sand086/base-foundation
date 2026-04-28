@@ -15,7 +15,7 @@ import { OperatorStatsCharts } from "@/features/dashboard/components/OperatorSta
 import { DashboardTrends } from "@/features/dashboard/components/DashboardTrends";
 import { SalesAndWorkshopTrends } from "@/features/dashboard/components/SalesAndWorkshopTrends";
 
-// 🚀 1. IMPORTAMOS EL NUEVO COMPONENTE DE CENTRO DE COSTOS
+//  1. IMPORTAMOS EL NUEVO COMPONENTE DE CENTRO DE COSTOS
 import { CostsByCecoChart } from "@/features/dashboard/components/CostsByCecoChart";
 
 import { useDashboard } from "@/features/dashboard/hooks/useDashboard";
@@ -118,7 +118,7 @@ export default function Dashboard() {
             mechanicStats={mechanicStats as any}
           />
 
-          {/* 🚀 2. FILA DE GRÁFICAS AMPLIADA: Añadimos la gráfica de CECO aquí */}
+          {/*  2. FILA DE GRÁFICAS AMPLIADA: Añadimos la gráfica de CECO aquí */}
           <div className="grid gap-4 lg:grid-cols-3 md:grid-cols-2">
             <div className="bento-card bento-card-featured lg:col-span-1">
               {serviceStats && <OnTimeChart stats={serviceStats} />}

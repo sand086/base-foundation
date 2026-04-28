@@ -82,7 +82,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// 🚀 IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
+//  IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
 import { useTrips } from "@/features/trips/hooks/useTrips";
 
 interface FuelLoadDisplay extends FuelLoad {
@@ -93,7 +93,7 @@ interface FuelLoadDisplay extends FuelLoad {
 }
 
 const FuelLoads = () => {
-  // 🚀 INYECTAMOS USTRIPS PARA EL BLINDAJE
+  //  INYECTAMOS USTRIPS PARA EL BLINDAJE
   const { trips } = useTrips();
 
   const [units, setUnits] = useState<Unit[]>([]);
@@ -312,7 +312,7 @@ const FuelLoads = () => {
     [cargas, idParaEliminar],
   );
 
-  // 🚀 LÓGICA DE BLINDAJE
+  //  LÓGICA DE BLINDAJE
   const getTicketTripStatus = useCallback(
     (tripId: number | string | null | undefined) => {
       if (!tripId) return { isLiquidado: false };
@@ -900,7 +900,7 @@ const FuelLoads = () => {
 
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
-              {/* 🚀 ALERTA DE REVERSIÓN DE CONCILIACIÓN */}
+              {/*  ALERTA DE REVERSIÓN DE CONCILIACIÓN */}
               {ticketToDelete?.is_conciliated ? (
                 <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm mb-4">
                   <div className="flex items-center gap-2 mb-3">

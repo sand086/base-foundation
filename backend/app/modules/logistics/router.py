@@ -535,7 +535,7 @@ def read_trip(trip_id: int, db: Session = Depends(get_db)):
 
 @router.post("/trips", response_model=schemas.TripResponse)
 def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
-    # 🚀 LIBERADO: Ya no bloqueamos la unidad en el router, permite multiasignación en patio
+    #  LIBERADO: Ya no bloqueamos la unidad en el router, permite multiasignación en patio
 
     # Generamos el viaje de la forma tradicional
     db_trip = crud.create_trip(db, trip)
@@ -691,7 +691,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     )
 
     if carretera_liquidada:
-        # 🚀 FIX CRÍTICO: with_for_update() para evitar dobles facturas en clics rápidos
+        #  FIX CRÍTICO: with_for_update() para evitar dobles facturas en clics rápidos
         existing_cxc = (
             db.query(models.ReceivableInvoice)
             .filter(
@@ -718,7 +718,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
             fecha_vencimiento = date.today() + timedelta(days=dias_credito)
 
             # =========================================================
-            # 🚀 MAGIA FISCAL: PREPARACIÓN PARA SUSTITUCIÓN SAT (04)
+            #  MAGIA FISCAL: PREPARACIÓN PARA SUSTITUCIÓN SAT (04)
             # =========================================================
             cp_nominal = (
                 db.query(models.ReceivableInvoice)
@@ -759,7 +759,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 status_sat="PROVISIONAL",
             )
             db.add(nueva_cxc)
-            db.flush()  # 🚀 FIX: OBLIGAMOS QUE SE GRABE ANTES DE SOLTAR EL CANDADO
+            db.flush()  #  FIX: OBLIGAMOS QUE SE GRABE ANTES DE SOLTAR EL CANDADO
             cxc_creada = True
 
     # 4. GUARDAMOS TODOS LOS CAMBIOS DE GOLPE
@@ -1039,7 +1039,7 @@ def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
     if not event:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
 
-    # 🚀 FIX: SOFT DELETE EN LUGAR DE DB.DELETE PARA NO ROMPER INTEGRIDAD REFERENCIAL
+    #  FIX: SOFT DELETE EN LUGAR DE DB.DELETE PARA NO ROMPER INTEGRIDAD REFERENCIAL
     event.record_status = RecordStatus.ELIMINADO
     db.commit()
     return {"message": "Evento eliminado correctamente"}
@@ -1115,7 +1115,7 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
         )
 
     # 5. LIMPIEZA DE DUPLICADOS:
-    # 🚀 FIX: Usar Soft Delete para no causar un Error 500 al borrar la provisional
+    #  FIX: Usar Soft Delete para no causar un Error 500 al borrar la provisional
     if cxc_provisional and cxc_provisional.id != factura.id:
         cxc_provisional.record_status = RecordStatus.ELIMINADO
         db.commit()
@@ -1200,7 +1200,7 @@ def dispatch_trip(
                 db.add(new_leg_2)
 
         db.flush()
-        # 🚀 LIBERADO: Removimos el bloque que forzaba status EN_RUTA a unidades y operadores.
+        #  LIBERADO: Removimos el bloque que forzaba status EN_RUTA a unidades y operadores.
 
     db.commit()
     db.refresh(trip)

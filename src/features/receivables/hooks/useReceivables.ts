@@ -62,7 +62,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 🚀 NUEVO 5.1 FIX: Timbrar Factura CXC (Provisional -> Timbrada) apuntando al endpoint de Logística
+  //  NUEVO 5.1 FIX: Timbrar Factura CXC (Provisional -> Timbrada) apuntando al endpoint de Logística
   const stampInvoiceMut = useMutation({
     mutationFn: (viajeId: number) =>
       axiosClient.post(`/api/logistics/trips/${viajeId}/stamp-real`),
@@ -136,7 +136,7 @@ export const useReceivables = () => {
       }
     },
 
-    // 🚀 ACCIÓN REFACTORIZADA: Con estado de carga (toast.loading)
+    //  ACCIÓN REFACTORIZADA: Con estado de carga (toast.loading)
     stampInvoice: async (viajeId: number) => {
       const toastId = toast.loading(
         "Conectando con el SAT y emidiendo factura definitiva...",

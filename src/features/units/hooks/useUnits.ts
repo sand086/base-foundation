@@ -117,7 +117,7 @@ export const useUnits = () => {
     }
   };
 
-  // 🚀 FIX: Usando el servicio oficial generado por OpenAPI
+  //  FIX: Usando el servicio oficial generado por OpenAPI
   const fetchLastOdometer = async (
     unitId: string | number,
   ): Promise<number> => {

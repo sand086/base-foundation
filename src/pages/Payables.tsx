@@ -765,7 +765,7 @@ export default function Payables() {
         onDelete={deleteIndirectCategory}
       />
 
-      {/* 🚀 MODAL ALERTA ESCALERITA CxP */}
+      {/*  MODAL ALERTA ESCALERITA CxP */}
       <AlertDialog
         open={isDeleteInvoiceOpen}
         onOpenChange={setIsDeleteInvoiceOpen}

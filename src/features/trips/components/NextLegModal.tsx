@@ -211,14 +211,14 @@ export function NextLegModal({
   onSubmit,
   onSuccessRefresh,
 }: NextLegModalProps) {
-  // 🚀 INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
+  //  INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
   const { unidades, updateLoadStatus, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { products: satProducts } = useSatCatalogs();
 
   const [loading, setLoading] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
-  const [odoInicial, setOdoInicial] = useState(0); // 🚀 ESTADO DEL ODÓMETRO
+  const [odoInicial, setOdoInicial] = useState(0); //  ESTADO DEL ODÓMETRO
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
@@ -234,7 +234,7 @@ export function NextLegModal({
     destino_vacio: "",
   });
 
-  // 🚀 EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
+  //  EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
   useEffect(() => {
     if (formData.unit_id) {
       fetchLastOdometer(formData.unit_id).then(setOdoInicial);
@@ -529,7 +529,7 @@ export function NextLegModal({
         remolque_2_id: formData.remolque_2_id,
       });
 
-      // 🚀 QUIRÚRGICO: Enviamos el odómetro inyectado en el payload al backend
+      //  QUIRÚRGICO: Enviamos el odómetro inyectado en el payload al backend
       const payloadConOdometro = {
         ...formData,
         odometro_inicial: odoInicial,
@@ -566,7 +566,7 @@ export function NextLegModal({
   }, [
     tripPadre,
     formData,
-    odoInicial, // 🚀 Dependencia para asegurar la sincronía de React
+    odoInicial, //  Dependencia para asegurar la sincronía de React
     validateForm,
     onSubmit,
     updateLoadStatus,
@@ -1046,7 +1046,7 @@ export function NextLegModal({
                 <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                   Unidad (Tractocamión)
                 </Label>
-                {/* 🚀 INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
+                {/*  INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
                 {odoInicial > 0 && (
                   <span className="text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded shadow-sm border border-emerald-200 dark:border-emerald-800/50">
                     ODÓMETRO ACTUAL: {odoInicial.toLocaleString()} KM

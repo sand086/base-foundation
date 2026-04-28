@@ -176,7 +176,7 @@ export function TripDetailsModal({
   const [isGeneratingNom, setIsGeneratingNom] = useState(false);
   const [isUnhooking, setIsUnhooking] = useState(false);
 
-  // 🚀 ESTADO NUEVO PARA EL TIMBRADO FINAL
+  //  ESTADO NUEVO PARA EL TIMBRADO FINAL
   const [isStampingFinal, setIsStampingFinal] = useState(false);
 
   const [localUuid, setLocalUuid] = useState<string | null>(null);
@@ -1234,7 +1234,7 @@ export function TripDetailsModal({
                                   </div>
                                 </div>
                                 <div className="flex flex-col gap-3 mt-4">
-                                  {/* 🚀 RENDERIZADO CONDICIONAL DECLARATIVO (ESTADO GENERADO VS POR GENERAR) */}
+                                  {/*  RENDERIZADO CONDICIONAL DECLARATIVO (ESTADO GENERADO VS POR GENERAR) */}
                                   {finalUuid ? (
                                     // ESTADO: FACTURA YA GENERADA
                                     <div className="flex flex-col items-start gap-4 w-full p-5 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/30">
@@ -1292,7 +1292,7 @@ export function TripDetailsModal({
                                                 `/api/logistics/trips/${localTrip.id}/stamp-real`,
                                               );
 
-                                            // 🚀 FIX: Leer el UUID directamente desde la raíz del objeto Trip que devuelve Python
+                                            //  FIX: Leer el UUID directamente desde la raíz del objeto Trip que devuelve Python
                                             const tripData =
                                               response.data?.data ||
                                               response.data;

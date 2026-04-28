@@ -309,7 +309,7 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
             detail="No se puede eliminar una factura con pagos registrados",
         )
 
-    # 🚀 FIX CRÍTICO: Usar Soft Delete para no romper la relación con el Viaje
+    #  FIX CRÍTICO: Usar Soft Delete para no romper la relación con el Viaje
     invoice.record_status = models.RecordStatus.ELIMINADO
     invoice.estatus = "cancelado"
     db.commit()

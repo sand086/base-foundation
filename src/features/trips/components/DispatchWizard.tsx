@@ -332,14 +332,14 @@ export const DispatchWizard = ({
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // 🚀 INYECCIÓN PASO 3.1: Obtenemos fetchLastOdometer
+  //  INYECCIÓN PASO 3.1: Obtenemos fetchLastOdometer
   const { unidades, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { createTrip, trips } = useTrips();
   const { clients } = useClients();
   const { products: satProducts } = useSatCatalogs();
 
-  // 🚀 INYECCIÓN PASO 3.2: Estados para almacenar la memoria de los camiones
+  //  INYECCIÓN PASO 3.2: Estados para almacenar la memoria de los camiones
   const [odoTramo1, setOdoTramo1] = useState(0);
   const [odoTramo2, setOdoTramo2] = useState(0);
 
@@ -388,7 +388,7 @@ export const DispatchWizard = ({
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
   });
 
-  // 🚀 INYECCIÓN PASO 3.3: Efectos silenciosos que consultan el backend cuando se escoge un camión
+  //  INYECCIÓN PASO 3.3: Efectos silenciosos que consultan el backend cuando se escoge un camión
   useEffect(() => {
     if (data.unitId) {
       fetchLastOdometer(data.unitId).then(setOdoTramo1);
@@ -680,7 +680,7 @@ export const DispatchWizard = ({
           unit_id: cleanId(data.unitId) || null,
           leg_type: data.leg_type || "carga_muelle",
           operator_id: cleanId(data.driverId) || null,
-          odometro_inicial: odoTramo1, // 🚀 PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
+          odometro_inicial: odoTramo1, //  PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
           nivel_tanque_inicial: 0,
         };
 
@@ -689,7 +689,7 @@ export const DispatchWizard = ({
             unit_id: cleanId(data.unit2Id) || null,
             operator_id: cleanId(data.driver2Id) || null,
             leg_type: "ruta_carretera",
-            odometro_inicial: odoTramo2, // 🚀 PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
+            odometro_inicial: odoTramo2, //  PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
             nivel_tanque_inicial: 0,
           };
         }

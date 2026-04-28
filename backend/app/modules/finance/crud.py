@@ -141,7 +141,7 @@ def create_bank_movement(
         referencia=movement_data.referencia,
         origen_modulo=getattr(
             movement_data, "origen_modulo", None
-        ),  # 🚀 FIX: Aseguramos el módulo (CxC o CxP)
+        ),  #  FIX: Aseguramos el módulo (CxC o CxP)
         fecha=fecha_mov,
         created_by_id=current_user_id,
     )
@@ -366,7 +366,7 @@ def register_payable_payment(
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
         # 3. Crear el Egreso en Tesorería (Flujo de Caja)
-        # 🚀 FIX: AÑADIMOS origen_modulo="CxP" PARA TESORERÍA
+        #  FIX: AÑADIMOS origen_modulo="CxP" PARA TESORERÍA
         mov_schema = schemas.BankMovementCreate(
             bank_account_id=bank_account_id,
             tipo="egreso",
@@ -473,14 +473,14 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
     cecos_creados = 0
 
     # =========================================================
-    # 🚀 HELPER 1: PRECARGAR CECOS EXISTENTES DE LA BD (Tus IDs 1 al 13)
+    #  HELPER 1: PRECARGAR CECOS EXISTENTES DE LA BD (Tus IDs 1 al 13)
     # =========================================================
     cecos_db = db.query(models.CostCenter).all()
     # Creamos un diccionario en memoria: {"mtto": 1, "administrativo": 2, ...}
     mapa_cecos = {c.nombre.strip().lower(): c.id for c in cecos_db}
 
     # =========================================================
-    # 🚀 HELPER 2: DICCIONARIO BASE Y BUSCADOR INTELIGENTE
+    #  HELPER 2: DICCIONARIO BASE Y BUSCADOR INTELIGENTE
     # =========================================================
     BASE_PROVEEDORES = {
         "CLO CLO": {"dias": 0, "ceco": "Personal"},
@@ -831,7 +831,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
     }
 
     # =========================================================
-    # 🚀 HELPER 2: BUSCADOR INTELIGENTE (Fuzzy Matcher)
+    #  HELPER 2: BUSCADOR INTELIGENTE (Fuzzy Matcher)
     # =========================================================
     def buscar_coincidencia_proveedor(nombre_emisor: str):
         if not nombre_emisor:
@@ -851,7 +851,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
         return {"dias": 0, "ceco": "Revisión Manual"}
 
     # =========================================================
-    # 🚀 HELPER 3: Convertidor a prueba de balas para fechas
+    #  HELPER 3: Convertidor a prueba de balas para fechas
     # =========================================================
     def parse_flexible_date(raw_val) -> date:
         if not raw_val or str(raw_val).strip() == "None":
@@ -876,7 +876,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
         if not uuid_fiscal or uuid_fiscal == "None":
             continue
 
-        # 🚀 TICKET 2 (CANDADO): Evitar duplicados
+        #  TICKET 2 (CANDADO): Evitar duplicados
         existing_invoice = (
             db.query(models.PayableInvoice)
             .filter(models.PayableInvoice.uuid == uuid_fiscal)
@@ -889,7 +889,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
         rfc_emisor = str(row.get("Rfc Emisor") or "").strip()
         nombre_emisor_original = str(row.get("Nombre Emisor") or "").strip()
 
-        # 🚀 Buscamos coincidencias con tu lista
+        #  Buscamos coincidencias con tu lista
         datos_sugeridos = buscar_coincidencia_proveedor(nombre_emisor_original)
 
         # Buscar proveedor en la Base de Datos
@@ -909,7 +909,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             db.flush()
 
         # =========================================================
-        # 🚀 LÓGICA INTELIGENTE DE CENTROS DE COSTO (CECOS)
+        #  LÓGICA INTELIGENTE DE CENTROS DE COSTO (CECOS)
         # =========================================================
 
         # 1. Buscamos primero en el MAPA_CECOS (ID exacto por nombre en minúsculas)
@@ -950,7 +950,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
                 db.add(supplier)
 
         # =========================================================
-        # 🚀 EXTRAER MONTOS Y FECHAS
+        #  EXTRAER MONTOS Y FECHAS
         # =========================================================
         try:
             monto_total = float(row.get("Total", 0))
@@ -1030,7 +1030,7 @@ def conciliate_bank_movement(db: Session, movement_id: int):
 
 def delete_bank_movement(db: Session, movement_id: int):
     """
-    🚀 FIX: Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
+     FIX: Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
     Si proviene de CxC o CxP, también revierte el pago en la factura y restaura su saldo.
     """
     movement = (

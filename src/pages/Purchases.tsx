@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-// 🚀 FSD: Importaciones de Hooks, Componentes y APIs
+//  FSD: Importaciones de Hooks, Componentes y APIs
 import { usePayables } from "@/features/payables/hooks/usePayables";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import axiosClient from "@/api/axiosClient";
@@ -35,7 +35,6 @@ import { InvoicePayablesDetailSheet } from "@/features/payables/components/Invoi
 import { getStatusFromLabel, StatusBadge } from "@/components/ui/status-badge";
 
 export default function Payables() {
-  // 🚀 CONEXIÓN REAL AL BACKEND
   const { invoices, isLoading, error, refetch } = usePayables();
   const { bankAccounts } = useBankAccounts();
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -46,7 +45,7 @@ export default function Payables() {
     new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: moneda || "MXN",
-    }).format(Math.abs(amount || 0)); // 🚀 FIX: Math.abs para quitar negativos visuales
+    }).format(Math.abs(amount || 0));
 
   // KPIs Dinámicos basados en la BD real
   const kpis = useMemo(() => {

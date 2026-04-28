@@ -16,7 +16,7 @@ import {
   Loader2,
   BadgeDollarSign,
   ReceiptText,
-  FileSignature, // 🚀 NUEVO ÍCONO
+  FileSignature, //  NUEVO ÍCONO
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -364,7 +364,7 @@ export default function Receivables() {
         header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
-          // 🚀 BLINDAJE VISUAL: Detectar si es Provisional
+          //  BLINDAJE VISUAL: Detectar si es Provisional
           const isProvisional = row.status_sat === "PROVISIONAL";
 
           return (
@@ -533,7 +533,7 @@ export default function Receivables() {
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
 
-          // 🚀 VERIFICACIONES DE SEGURIDAD (CANDADOS)
+          //  VERIFICACIONES DE SEGURIDAD (CANDADOS)
           const isProvisional = row.status_sat === "PROVISIONAL";
 
           return (
@@ -568,7 +568,7 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {/* 🚀 ACCIÓN 1: TIMBRAR FACTURA PROVISIONAL */}
+                {/*  ACCIÓN 1: TIMBRAR FACTURA PROVISIONAL */}
                 {isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -579,7 +579,7 @@ export default function Receivables() {
                             "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
                           )
                         ) {
-                          // 🚀 FIX: Mandamos el VIAJE_ID, no el Invoice ID, porque así lo pide el backend
+                          //  FIX: Mandamos el VIAJE_ID, no el Invoice ID, porque así lo pide el backend
                           const viajeId =
                             (row as any).viaje_id || (row as any).trip_id;
                           if (!viajeId) {
@@ -600,7 +600,7 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* 🚀 ACCIÓN 2: REGISTRAR COBRO (BLOQUEADO SI ES PROVISIONAL) */}
+                {/*  ACCIÓN 2: REGISTRAR COBRO (BLOQUEADO SI ES PROVISIONAL) */}
                 {(row.saldo_pendiente || 0) > 0 && !isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -617,7 +617,7 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* 🚀 ACCIÓN 3: ANULAR REP (DESBLOQUEO DE ESCALERA) */}
+                {/*  ACCIÓN 3: ANULAR REP (DESBLOQUEO DE ESCALERA) */}
                 {hasPayments && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
