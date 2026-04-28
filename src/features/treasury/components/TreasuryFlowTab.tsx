@@ -138,10 +138,8 @@ export function TreasuryFlowTab({
             >
               {showBalances ? formatCurrency(flujoNeto) : "••••••••"}
             </p>
-            <p className="text-xs font-medium text-blue-200/80 leading-relaxed mt-1">
-              {flujoNeto >= 0
-                ? "Entró más dinero del que salió en este periodo. Tienes saldo a favor."
-                : "Salió más dinero del que ingresó en este periodo. Tienes saldo en contra."}
+            <p className="text-[11px] font-bold text-blue-200/90 uppercase tracking-widest mt-1">
+              {flujoNeto >= 0 ? "Flujo Positivo" : "Flujo Negativo"}
             </p>
           </div>
         </Card>
