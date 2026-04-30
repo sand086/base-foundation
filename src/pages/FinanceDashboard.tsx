@@ -362,7 +362,7 @@ export default function FinanceDashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <ReceiptText className="h-5 w-5" />
+            <ReceiptText className="h-5 w-5 text-slate-500 dark:text-white/70" />
             Estado de Resultados - {months[selectedMonth]} {selectedYear}
           </CardTitle>
           <CardDescription>
@@ -556,7 +556,7 @@ export default function FinanceDashboard() {
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5" />
+              <Wallet className="h-5 w-5 text-slate-500 dark:text-white/70" />
               Flujo de Efectivo Proyectado
               <Badge
                 variant="outline"
@@ -669,7 +669,7 @@ export default function FinanceDashboard() {
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+              <Building2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
               Top Gastos Indirectos
             </CardTitle>
             <CardDescription>

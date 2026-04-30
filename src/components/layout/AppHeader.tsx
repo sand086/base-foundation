@@ -119,7 +119,7 @@ export function AppHeader({
             onClick={onMobileMenuToggle}
             className="md:hidden h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
           >
-            <PanelLeft className="h-5 w-5" />
+            <PanelLeft className="h-5 w-5 text-slate-500 dark:text-white/70" />
           </Button>
         )}
         <button

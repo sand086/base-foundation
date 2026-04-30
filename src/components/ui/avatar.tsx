@@ -66,7 +66,7 @@ const AvatarFallback = React.forwardRef<
     ref={ref}
     className={cn(
       "flex h-full w-full items-center justify-center rounded-full uppercase",
-      // 🛠️ TIPOGRAFÍA INDUSTRIAL
+      //  ️ TIPOGRAFÍA INDUSTRIAL
       "text-[11px] font-black tracking-[0.15em]",
       // 🌓 COLORS & THEME (Reactividad Total)
       "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-brand-navy dark:to-black",

@@ -86,7 +86,7 @@ const ToastAction = React.forwardRef<
     ref={ref}
     className={cn(
       "inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-4 transition-all duration-200",
-      // 🛠 ESTILO BOTÓN HARDWARE
+      //   ESTILO BOTÓN HARDWARE
       "text-[10px] font-black uppercase tracking-widest",
       "bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-current",
       "hover:bg-brand-red hover:text-white hover:border-brand-red",

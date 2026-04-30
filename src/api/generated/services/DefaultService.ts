@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__catalogs__schemas__SettlementConceptCreate } from '../models/app__modules__catalogs__schemas__SettlementConceptCreate';
 import type { Body_download_csd_secure_api_sat_csd_download_post } from '../models/Body_download_csd_secure_api_sat_csd_download_post';
 import type { Body_upload_client_document_api_clients__client_id__documents__doc_type__post } from '../models/Body_upload_client_document_api_clients__client_id__documents__doc_type__post';
 import type { Body_upload_csd_files_api_sat_csd_post } from '../models/Body_upload_csd_files_api_sat_csd_post';
@@ -21,7 +22,6 @@ import type { ReceivableInvoiceCreate } from '../models/ReceivableInvoiceCreate'
 import type { RegistroPagoPayload } from '../models/RegistroPagoPayload';
 import type { RouteCreate } from '../models/RouteCreate';
 import type { SettlementConceptBase } from '../models/SettlementConceptBase';
-import type { SettlementConceptCreate } from '../models/SettlementConceptCreate';
 import type { SystemConfigResponse } from '../models/SystemConfigResponse';
 import type { SystemConfigUpdate } from '../models/SystemConfigUpdate';
 import type { TerminalBase } from '../models/TerminalBase';
@@ -318,7 +318,7 @@ export class DefaultService {
      * @throws ApiError
      */
     public static saveSettlementConceptsBulkApiCatalogsSettlementConceptsBulkPost(
-        requestBody: Array<SettlementConceptCreate>,
+        requestBody: Array<app__modules__catalogs__schemas__SettlementConceptCreate>,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
@@ -464,6 +464,19 @@ export class DefaultService {
             errors: {
                 422: `Validation Error`,
             },
+        });
+    }
+    /**
+     * Get Costs By Ceco
+     * TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
+     * Ideal para inyectar directo en un PieChart de React.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getCostsByCecoApiDashboardStatsCostsByCecoGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/dashboard/stats/costs-by-ceco',
         });
     }
     /**
@@ -644,6 +657,29 @@ export class DefaultService {
         });
     }
     /**
+     * Get Unit Last Odometer
+     * Devuelve el último odómetro registrado para una unidad específica.
+     * Busca primero en la liquidación del último viaje (TripLeg) y
+     * luego en el último vale de combustible (FuelLog).
+     * @param unitId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getUnitLastOdometerApiFleetUnitsUnitIdLastOdometerGet(
+        unitId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/fleet/units/{unit_id}/last-odometer',
+            path: {
+                'unit_id': unitId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Test Invoice Pro
      * @returns any Successful Response
      * @throws ApiError
@@ -668,7 +704,7 @@ export class DefaultService {
     /**
      * Generar Carta Porte Nominal
      * Endpoint Fase 3 (Bypass Aduanal):
-     * Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN.
+     * Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN o montos ocultos.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -679,6 +715,28 @@ export class DefaultService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/sat/stamp/nominal',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Generar Carta Porte One Shot
+     * Endpoint Motor 1 (1 Solo Timbre):
+     * Genera y timbra la Carta Porte 3.1 con ruta completa (Multi-Origen / Multi-Destino)
+     * consumiendo solo 1 timbre.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static generarCartaPorteOneShotApiSatStampOneShotPost(
+        requestBody: ReceivableInvoiceCreate,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/one-shot',
             body: requestBody,
             mediaType: 'application/json',
             errors: {
@@ -779,7 +837,6 @@ export class DefaultService {
     /**
      * Update Sat Params
      * Endpoint para la Pestaña 3: Guarda la leyenda legal y otros textos.
-     * Recibe un dict: {"sat_leyenda_legal": "TEXTO LARGO...", "sat_ppd_default": "true"}
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -837,8 +894,6 @@ export class DefaultService {
     }
     /**
      * Test Csd Connection
-     * Verifica que los certificados existan, lee la fecha de caducidad del .cer
-     * y simula la conexión con el PAC.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -860,7 +915,6 @@ export class DefaultService {
      * Reintentar Cancelaciones Pendientes SAT
      * Este endpoint busca facturas con status 'PENDIENTE_CANCELAR_SAT'
      * y vuelve a mandar la petición SOAP de cancelación al PAC.
-     * Ideal para configurar en un CRONJOB (ej. cada hora).
      * @returns any Successful Response
      * @throws ApiError
      */
@@ -873,7 +927,7 @@ export class DefaultService {
     /**
      * Generar Complemento de Pago
      * Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-     * el Complemento de Pago (REP) ante el SAT.
+     * el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA BLINDADO PARA BANCOS 1 A 1)
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError

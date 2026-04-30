@@ -14,9 +14,9 @@ import {
   CheckCircle2,
   Sheet as SheetIcon,
   Loader2,
-  FileCode2,
   BadgeDollarSign,
   ReceiptText,
+  FileSignature, //  NUEVO ÍCONO
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,12 +47,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-import { ImportServicesModal } from "@/features/receivables/components/ImportServicesModal";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
-import { ImportXMLPaymentModal } from "@/features/receivables/components/ImportXMLPaymentModal";
 
 import {
   ReceivableInvoice,
@@ -60,7 +58,8 @@ import {
   getInvoiceStatusInfo,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
-
+import axiosClient from "@/api/axiosClient";
+import { cn } from "@/lib/utils";
 // HOOKS
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useReceivables } from "@/features/receivables/hooks/useReceivables";
@@ -73,6 +72,8 @@ export default function Receivables() {
     deleteReceivable,
     registerMultiplePaymentRep,
     registerPayment,
+    reopenReceivable,
+    stampInvoice,
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -85,7 +86,6 @@ export default function Receivables() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
-  const [isImportXMLOpen, setIsImportXMLOpen] = useState(false);
 
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
@@ -110,32 +110,86 @@ export default function Receivables() {
         [];
     }
 
-    return dataArray.map((inv: any) => ({
-      ...inv,
-      id: inv.id,
-      client_id: inv.client_id || inv.cliente_id || inv.client?.id,
-      folio:
-        inv.folio_interno ||
-        (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
-      cliente:
-        inv.client?.razon_social ||
-        inv.clientName ||
-        inv.client_razon_social ||
-        "Cliente Desconocido",
-      monto_total: Number(inv.monto_total) || 0,
-      saldo_pendiente:
-        inv.saldo_pendiente !== undefined
-          ? Number(inv.saldo_pendiente)
-          : Number(inv.monto_total) || 0,
-      requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
-      fecha_emision: inv.fecha_emision || inv.created_at,
-      fecha_vencimiento: inv.fecha_vencimiento,
-      estatus: inv.estatus || inv.status || "corriente",
-      cobros: inv.payments || [],
-    })) as ReceivableInvoice[];
+    return dataArray
+      .filter((inv: any) => {
+        const montoValido = Number(inv.monto_total) !== 1.12;
+        const folioValido =
+          inv.folio_interno === null ||
+          inv.folio_interno !== "folio interno bueno";
+
+        return montoValido && folioValido;
+      })
+      .map((inv: any) => {
+        const clienteNombre =
+          inv.client?.razon_social ||
+          inv.clientName ||
+          inv.client_razon_social ||
+          "Cliente Desconocido";
+
+        let diasCredito = Number(
+          inv.client?.dias_credito ||
+            inv.cliente?.dias_credito ||
+            inv.dias_credito,
+        );
+
+        if (!diasCredito) {
+          if (clienteNombre.toUpperCase().includes("HANSA")) {
+            diasCredito = 15;
+          } else if (clienteNombre.toUpperCase().includes("KARCHER")) {
+            diasCredito = 8;
+          } else {
+            diasCredito = 15;
+          }
+        }
+
+        const fechaEmision = inv.fecha_emision || inv.created_at;
+        let fechaVencimientoCalculada = inv.fecha_vencimiento;
+
+        if (fechaEmision) {
+          const cleanDateStr = fechaEmision.includes("T")
+            ? fechaEmision.split("T")[0]
+            : fechaEmision;
+          const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
+
+          let addedDays = 0;
+          while (addedDays < diasCredito) {
+            fechaObj.setDate(fechaObj.getDate() + 1);
+            if (fechaObj.getDay() !== 0 && fechaObj.getDay() !== 6) {
+              addedDays++;
+            }
+          }
+
+          const yyyy = fechaObj.getFullYear();
+          const mm = String(fechaObj.getMonth() + 1).padStart(2, "0");
+          const dd = String(fechaObj.getDate()).padStart(2, "0");
+
+          fechaVencimientoCalculada = `${yyyy}-${mm}-${dd}`;
+        }
+
+        return {
+          ...inv,
+          id: inv.id,
+          client_id: inv.client_id || inv.cliente_id || inv.client?.id,
+          folio:
+            inv.folio_interno ||
+            (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
+          cliente: clienteNombre,
+          monto_total: Number(inv.monto_total) || 0,
+          saldo_pendiente:
+            inv.saldo_pendiente !== undefined
+              ? Number(inv.saldo_pendiente)
+              : Number(inv.monto_total) || 0,
+          requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
+          fecha_emision: fechaEmision,
+          fecha_vencimiento: fechaVencimientoCalculada,
+          dias_credito: diasCredito,
+          estatus: inv.estatus || inv.status || "corriente",
+          referencia: inv.referencia || "S/R",
+          cobros: inv.payments || [],
+        };
+      }) as ReceivableInvoice[];
   }, [receivables]);
 
-  // CÁLCULO DEL RESUMEN FINANCIERO (Facturado, Cobrado, Pendiente, Vencido)
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
     let totalCobrado = 0;
@@ -147,11 +201,9 @@ export default function Receivables() {
       const saldo = Number(inv.saldo_pendiente) || 0;
       const cobrado = monto - saldo > 0 ? monto - saldo : 0;
 
-      // Sumamos a los totales históricos
       totalFacturado += monto;
       totalCobrado += cobrado;
 
-      // Evaluamos el saldo pendiente para saber si está vencido o a tiempo
       if (saldo > 0) {
         if (!inv.fecha_vencimiento) {
           porCobrarVigente += saldo;
@@ -212,6 +264,7 @@ export default function Receivables() {
       "Cliente",
       "Fecha Emisión",
       "Fecha Vencimiento",
+      "Días Crédito",
       "Monto Total",
       "Saldo Pendiente",
       "Estatus",
@@ -225,6 +278,7 @@ export default function Receivables() {
         `"${inv.cliente}"`,
         inv.fecha_emision,
         inv.fecha_vencimiento,
+        (inv as any).dias_credito || 0,
         inv.monto_total,
         inv.saldo_pendiente,
         inv.estatus?.toUpperCase() || "",
@@ -257,10 +311,23 @@ export default function Receivables() {
     setIsCreateModalOpen(true);
   };
 
-  const handleCreateInvoice = async (
-    invoiceData: Omit<ReceivableInvoice, "id" | "folio" | "cobros" | "estatus">,
-  ) => {
-    toast.info("Función de creación manual en desarrollo");
+  const handleCreateInvoice = async (invoiceData: any) => {
+    try {
+      await axiosClient.post("/api/finance/receivables", invoiceData);
+
+      setIsCreateModalOpen(false);
+      setImportedServices(undefined);
+      toast.success("Factura generada y guardada exitosamente");
+
+      await refreshReceivables?.();
+    } catch (error: any) {
+      console.error("Error al crear factura:", error);
+      toast.error("Error al generar la factura", {
+        description:
+          error.response?.data?.detail ||
+          "Verifica la conexión con el servidor",
+      });
+    }
   };
 
   const handleRegisterPayment = async (payload: any) => {
@@ -294,16 +361,24 @@ export default function Receivables() {
     () => [
       {
         key: "folio",
-        header: "Folio",
+        header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
+          //  BLINDAJE VISUAL: Detectar si es Provisional
+          const isProvisional = row.status_sat === "PROVISIONAL";
+
           return (
-            <div className="flex flex-col">
+            <div className="flex flex-col items-start">
               <span
                 className={`font-mono text-sm font-bold uppercase ${statusInfo.status === "danger" ? "text-red-700 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
               >
                 {value}
               </span>
+              {isProvisional && (
+                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[9px] uppercase tracking-widest border-none mt-1">
+                  PROVISIONAL (SIN TIMBRAR)
+                </Badge>
+              )}
             </div>
           );
         },
@@ -372,19 +447,29 @@ export default function Receivables() {
         type: "date",
         render: (value, row) => {
           if (!value) return "—";
-          if (row.saldo_pendiente === 0)
-            return (
-              <span className="text-emerald-600 font-bold uppercase text-[10px]">
-                Liquidado
-              </span>
-            );
 
-          const daysOverdue = calculateDaysOverdue(value);
+          if (row.saldo_pendiente === 0) {
+            return (
+              <div className="flex flex-col">
+                <span className="text-emerald-600 font-bold uppercase text-[10px] tracking-widest">
+                  Liquidado
+                </span>
+              </div>
+            );
+          }
+
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
           const safeDate = new Date(
             value.includes("-")
               ? value.split("T")[0].replace(/-/g, "/")
               : value,
           );
+          safeDate.setHours(0, 0, 0, 0);
+
+          const diffTime = today.getTime() - safeDate.getTime();
+          const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           const formattedDate = safeDate.toLocaleDateString("es-MX");
 
           if (daysOverdue > 0) {
@@ -398,25 +483,24 @@ export default function Receivables() {
                 </span>
               </div>
             );
-          } else if (daysOverdue >= -5 && daysOverdue <= 0) {
-            return (
-              <div className="flex flex-col">
-                <span className="font-mono text-sm font-bold uppercase text-amber-600 dark:text-amber-400">
-                  {formattedDate}
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 mt-1">
-                  POR VENCER ({Math.abs(daysOverdue)}D)
-                </span>
-              </div>
-            );
           } else {
+            const diasFaltantes = Math.abs(daysOverdue);
+            const colorCls =
+              diasFaltantes <= 3
+                ? "text-amber-600 dark:text-amber-400"
+                : "text-emerald-600 dark:text-emerald-400";
+
             return (
               <div className="flex flex-col">
-                <span className="font-mono text-sm font-bold uppercase text-slate-700 dark:text-slate-300">
+                <span
+                  className={`font-mono text-sm font-bold uppercase ${colorCls}`}
+                >
                   {formattedDate}
                 </span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-500 mt-1">
-                  A TIEMPO
+                <span
+                  className={`text-[10px] font-black uppercase tracking-widest ${colorCls} mt-1`}
+                >
+                  VENCE EN {diasFaltantes} DÍA{diasFaltantes !== 1 ? "S" : ""}
                 </span>
               </div>
             );
@@ -444,64 +528,122 @@ export default function Receivables() {
         key: "id",
         header: "Acciones",
         sortable: false,
-        render: (_, row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
-              >
-                <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
-            >
-              <DropdownMenuItem
-                onClick={() => {
-                  setSelectedInvoice(row);
-                  setIsDetailSheetOpen(true);
-                }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-              >
-                <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
-                Ver Detalle
-              </DropdownMenuItem>
+        render: (_, row) => {
+          const isSelectionActive = selectedRows.length > 0;
+          const hasPayments =
+            (row.monto_total || 0) > (row.saldo_pendiente || 0);
 
-              {(row.saldo_pendiente || 0) > 0 && (
-                <>
-                  <DropdownMenuSeparator className="dark:bg-white/10" />
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setInvoicesToPay([row]);
-                      setIsPaymentModalOpen(true);
-                    }}
-                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-amber-600 dark:text-amber-400 dark:focus:bg-amber-900/30"
-                  >
-                    <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
-                    REP
-                  </DropdownMenuItem>
-                </>
-              )}
+          //  VERIFICACIONES DE SEGURIDAD (CANDADOS)
+          const isProvisional = row.status_sat === "PROVISIONAL";
 
-              <DropdownMenuSeparator className="dark:bg-white/10" />
-              <DropdownMenuItem
-                onClick={() => {
-                  setInvoiceToDelete(row);
-                  setIsDeleteDialogOpen(true);
-                }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  disabled={isSelectionActive}
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10",
+                    isSelectionActive
+                      ? "opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800"
+                      : "hover:bg-slate-100 dark:hover:bg-slate-800 bg-white/50 dark:bg-slate-900/50",
+                  )}
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Factura
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedInvoice(row);
+                    setIsDetailSheetOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
+                  Ver Detalle
+                </DropdownMenuItem>
+
+                {/*  ACCIÓN 1: TIMBRAR FACTURA PROVISIONAL */}
+                {isProvisional && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        if (
+                          window.confirm(
+                            "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
+                          )
+                        ) {
+                          //  FIX: Mandamos el VIAJE_ID, no el Invoice ID, porque así lo pide el backend
+                          const viajeId =
+                            (row as any).viaje_id || (row as any).trip_id;
+                          if (!viajeId) {
+                            toast.error("Error", {
+                              description:
+                                "Esta factura no tiene un viaje asociado válido.",
+                            });
+                            return;
+                          }
+                          await stampInvoice(Number(viajeId));
+                        }
+                      }}
+                      className="gap-2 font-black text-[11px] uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50 dark:focus:bg-indigo-900/30"
+                    >
+                      <FileSignature className="h-4 w-4 mr-2" /> Timbrar Factura
+                      SAT
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/*  ACCIÓN 2: REGISTRAR COBRO (BLOQUEADO SI ES PROVISIONAL) */}
+                {(row.saldo_pendiente || 0) > 0 && !isProvisional && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setInvoicesToPay([row]);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-900/30"
+                    >
+                      <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
+                      REP
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/*  ACCIÓN 3: ANULAR REP (DESBLOQUEO DE ESCALERA) */}
+                {hasPayments && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        if (
+                          window.confirm(
+                            "¿Estás seguro de ANULAR EL PAGO de esta factura?\n\nAl confirmar, la factura volverá a estar Por Cobrar y se liberará el candado de la Liquidación.",
+                          )
+                        ) {
+                          await reopenReceivable(Number(row.id));
+                        }
+                      }}
+                      className="gap-2 font-bold text-[11px] uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                    >
+                      <Ban className="h-4 w-4 mr-2" /> Anular Pago y Desbloquear
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
-    [],
+    [selectedRows.length, reopenReceivable, stampInvoice],
   );
 
   if (isLoadingReceivables) {
@@ -515,67 +657,24 @@ export default function Receivables() {
   return (
     <div className="space-y-6 pb-20 animate-page-enter relative">
       <PageHeader
-        title="Cuentas por Cobrar (Tesorería)"
+        title="Cuentas por Cobrar"
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            className="border-emerald-500 bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 font-black tracking-wide shadow-sm haptic-press transition-all"
-            onClick={() => setIsImportXMLOpen(true)}
+          <ActionButton
+            size="md"
+            className="bg-brand-navy hover:bg-brand-navy/90"
+            onClick={() => {
+              setImportedServices(undefined);
+              setIsCreateModalOpen(true);
+            }}
           >
-            <FileCode2 className="h-4 w-4 mr-2 text-emerald-600" /> Cobro
-            Automático (XML)
-          </Button>
-
-          <Button
-            variant="outline"
-            className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50 font-bold haptic-press shadow-sm"
-            onClick={handleExportToExcel}
-          >
-            <SheetIcon className="h-4 w-4 mr-2 text-emerald-600" /> Exportar a
-            Excel
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <ActionButton
-                size="md"
-                className="bg-brand-navy hover:bg-brand-navy/90"
-              >
-                <Plus className="h-4 w-4 mr-2" /> Nueva Factura
-              </ActionButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-56 rounded-xl p-1 shadow-xl bg-white"
-            >
-              <DropdownMenuItem
-                onClick={() => setIsImportModalOpen(true)}
-                className="rounded-lg cursor-pointer py-2"
-              >
-                <FileInput className="h-4 w-4 mr-3 text-brand-navy" />{" "}
-                <span className="font-medium">Importar desde Operaciones</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setImportedServices(undefined);
-                  setIsCreateModalOpen(true);
-                }}
-                className="rounded-lg cursor-pointer py-2"
-              >
-                <Plus className="h-4 w-4 mr-3 text-slate-600" />{" "}
-                <span className="font-medium">Crear Factura Manual</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <Plus className="h-4 w-4 mr-2" /> Nueva Factura
+          </ActionButton>
         </div>
       </PageHeader>
 
-      {/* NUEVAS TARJETAS DE MÉTRICAS GLOBALES */}
       <div className="grid gap-4 md:grid-cols-4">
-        {/* TOTAL FACTURADO */}
         <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -590,7 +689,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
 
-        {/* TOTAL COBRADO */}
         <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow bg-emerald-50/30">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -606,7 +704,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
 
-        {/* POR COBRAR (VIGENTE) */}
         <Card className="border-l-4 border-l-amber-400 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -621,7 +718,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
 
-        {/* CARTERA VENCIDA */}
         <Card className="border-l-4 border-l-rose-500 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
             <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-1">
@@ -647,11 +743,14 @@ export default function Receivables() {
             selectedRows={selectedRows}
             onSelectedRowsChange={setSelectedRows}
             rowKey="id"
+            onCustomExport={handleExportToExcel}
+            isRowSelectable={(row) =>
+              (row.saldo_pendiente || 0) > 0 && row.status_sat !== "PROVISIONAL"
+            }
           />
         </CardContent>
       </Card>
 
-      {/* PANEL FLOTANTE DE COBRO MULTIPLE   */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
@@ -682,13 +781,6 @@ export default function Receivables() {
         </div>
       )}
 
-      {/* MODALES */}
-      <ImportServicesModal
-        open={isImportModalOpen}
-        onOpenChange={setIsImportModalOpen}
-        services={services}
-        onImport={handleImportServices}
-      />
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -716,12 +808,6 @@ export default function Receivables() {
         open={isAccountStatementOpen}
         onClose={() => setIsAccountStatementOpen(false)}
         invoices={formattedInvoices}
-      />
-
-      <ImportXMLPaymentModal
-        open={isImportXMLOpen}
-        onOpenChange={setIsImportXMLOpen}
-        onSuccess={refreshReceivables}
       />
 
       <AlertDialog

@@ -60,12 +60,10 @@ import { useBilling } from "@/features/receivables/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 
-// Extendemos TripLeg localmente
 interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
 }
 
-// Helper Para traducir las fases dinámicamente en el Modal
 const getDynamicLegStatus = (leg: ExtendedTripLeg) => {
   const status = String(leg.status).toLowerCase();
   const type = leg.leg_type;
@@ -156,19 +154,16 @@ interface TripDetailsModalProps {
 export function TripDetailsModal({
   open,
   onOpenChange,
-  trip: initialTrip, //  Renombramos la prop
+  trip: initialTrip,
   onRelayClick,
   onSettleClick,
   onUpdateStatusClick,
 }: TripDetailsModalProps) {
-  // FIX: Cambiamos refreshTrips por fetchTrips para asegurar la sincronización global
-  const { editTrip, fetchTrips, addTimelineEvent, unhookTrip } = useTrips();
+  const { editTrip, fetchTrips, addTimelineEvent } = useTrips();
   const { updateLoadStatus } = useUnits();
-  const { isStamping, handleStampNominal, handleStampFinal } = useBilling();
+  const { isStamping, handleStampNominal } = useBilling();
 
-  //  ESTADO LOCAL (La copia independiente de la verdad)
   const [localTrip, setLocalTrip] = useState<Trip | null>(null);
-
   const [activeTab, setActiveTab] = useState("fases");
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -180,6 +175,9 @@ export function TripDetailsModal({
   const [isUndoing, setIsUndoing] = useState(false);
   const [isGeneratingNom, setIsGeneratingNom] = useState(false);
   const [isUnhooking, setIsUnhooking] = useState(false);
+
+  //  ESTADO NUEVO PARA EL TIMBRADO FINAL
+  const [isStampingFinal, setIsStampingFinal] = useState(false);
 
   const [localUuid, setLocalUuid] = useState<string | null>(null);
   const [finalUuid, setFinalUuid] = useState<string | null>(null);
@@ -193,25 +191,69 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  //  Sincronizar prop inicial con estado local cuando se abre el modal
+  //   FIX MAGISTRAL: "Memoria Fotográfica" con localStorage
   useEffect(() => {
     if (open && initialTrip) {
-      if (localTrip?.id !== initialTrip.id) {
-        setLocalTrip(initialTrip);
-      }
-    } else if (!open) {
-      setLocalTrip(null);
-    }
-  }, [initialTrip?.id, open]);
+      setLocalTrip(initialTrip);
 
-  //  FUNCIÓN MAESTRA DE REFRESCO INTERNO
+      // UUID Nominal (Carta Porte Bypass)
+      setLocalUuid(initialTrip.uuid_fiscal || null);
+
+      // Buscamos UUID Final en el JSON (si por milagro viene)
+      const facturas =
+        (initialTrip as any).receivable_invoices ||
+        (initialTrip as any).invoices ||
+        [];
+      const facturaFinal = facturas.find(
+        (f: any) => f.is_nominal === false && f.uuid,
+      );
+
+      // Buscamos en nuestra memoria caché del navegador por si el backend no lo mandó
+      const cachedFinalUuid = localStorage.getItem(
+        `final_uuid_${initialTrip.id}`,
+      );
+      const incomingFinalUuid = (initialTrip as any).uuid_fiscal;
+
+      // Seteamos lo que encontremos (priorizando lo que ya sabíamos que se timbró)
+      setFinalUuid(cachedFinalUuid || incomingFinalUuid || null);
+      setTarifaBase(initialTrip.tarifa_base || 0);
+      setCostoCasetas(initialTrip.costo_casetas || 0);
+      setIsEditing(false);
+      setActiveTab("fases");
+    } else if (!open) {
+      // Limpieza SÓLO cuando se cierra el modal
+      setLocalTrip(null);
+      setLocalUuid(null);
+      setFinalUuid(null);
+      setTarifaBase(0);
+      setCostoCasetas(0);
+      setIsEditing(false);
+    }
+  }, [open, initialTrip]);
+
   const refreshLocalTrip = async () => {
     if (!localTrip?.id) return;
     try {
-      // 1. Buscamos el viaje actualizado directo en la base de datos
       const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
-      // 2. Avisamos al padre (el tablero) que actualice lo suyo en el fondo (AQUI ES CLAVE)
+
+      if (res.data.uuid_fiscal) {
+        setLocalUuid(res.data.uuid_fiscal);
+      }
+
+      //   Re-evaluamos con el caché para evitar que el JSON vacío borre el botón
+      const facturas = res.data.receivable_invoices || res.data.invoices || [];
+      const facturaFinal = facturas.find(
+        (f: any) => f.is_nominal === false && f.uuid,
+      );
+      const incomingFinalUuid =
+        res.data.uuid_factura_final || facturaFinal?.uuid;
+      const cachedFinalUuid = localStorage.getItem(
+        `final_uuid_${localTrip.id}`,
+      );
+
+      setFinalUuid(incomingFinalUuid || cachedFinalUuid || null);
+
       await fetchTrips();
     } catch (e) {
       console.error("Error recargando viaje local", e);
@@ -221,18 +263,6 @@ export function TripDetailsModal({
   const isFullTrip = useMemo(() => {
     return checkIsFullTrip(localTrip);
   }, [localTrip]);
-
-  useEffect(() => {
-    if (localTrip) {
-      if (!isEditing) {
-        setTarifaBase(localTrip.tarifa_base || 0);
-        setCostoCasetas(localTrip.costo_casetas || 0);
-      }
-      if (localTrip.uuid_fiscal || !localUuid) {
-        setLocalUuid(localTrip.uuid_fiscal || null);
-      }
-    }
-  }, [localTrip?.id, localTrip?.uuid_fiscal, isEditing]);
 
   const activeLeg = useMemo(() => {
     if (!localTrip) return undefined;
@@ -305,7 +335,6 @@ export function TripDetailsModal({
     toast.success("Datos sincronizados.");
   };
 
-  //  DESHACER INTELIGENTE CON RECARGA LOCAL
   const executeUndoLeg = async () => {
     setIsUndoing(true);
     try {
@@ -333,14 +362,13 @@ export function TripDetailsModal({
         isFirstLeg ? "Viaje retornado a Planeador." : "Fase revertida.",
       );
 
-      setShowUndoDialog(false); // Cerramos el dialog rojo
+      setShowUndoDialog(false);
 
-      //  LÓGICA DE CIERRE CONDICIONAL
       if (isFirstLeg) {
-        onOpenChange(false); // Si era la única fase, cerramos todo.
-        await fetchTrips(); // FIX: recargar tabla padre
+        onOpenChange(false);
+        await fetchTrips();
       } else {
-        await refreshLocalTrip(); // Si quedan fases, repintamos el modal abierto.
+        await refreshLocalTrip();
       }
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al deshacer la fase.");
@@ -349,9 +377,8 @@ export function TripDetailsModal({
     }
   };
 
-  //  FASE 3: ENTREGA DE VACÍO
   const submitEmptyReturn = async () => {
-    if (!activeLeg) return; // Quitamos la validación de emptyTerminal
+    if (!activeLeg) return;
     setFinishingLeg(true);
 
     try {
@@ -360,7 +387,7 @@ export function TripDetailsModal({
         activeLeg.id,
         {
           status: "entregado",
-          location: "Patio de Retorno Asignado", // Ya no dependemos del input
+          location: "Patio de Retorno Asignado",
           comments: `VIAJE FINALIZADO: Equipo/Contenedor retornado vacío exitosamente.`,
         },
         true,
@@ -373,7 +400,9 @@ export function TripDetailsModal({
 
       toast.success("Viaje concluido y equipo liberado exitosamente.");
 
-      await refreshLocalTrip();
+      onOpenChange(false);
+      await fetchTrips();
+      window.location.href = "/dispatch";
     } catch {
       toast.error("Error al registrar la entrega del vacío.");
     } finally {
@@ -384,19 +413,10 @@ export function TripDetailsModal({
   const handleDownloadPDF = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando PDF...");
     try {
-      // 1. Obtenemos la URL base desde el archivo .env (Local o Producción)
-      // Si no existe la variable, usamos localhost por defecto.
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-
-      // Limpiamos la URL por si tiene un slash al final (ej: /api/ -> /api)
       const baseURL = rawBaseURL.replace(/\/$/, "");
+      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/pdf`;
 
-      // 2. Construimos la ruta dinámica correcta
-      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/pdf`;
-
-      console.log(rawBaseURL);
-
-      // 3. Descarga nativa (inmune a corrupciones de Axios)
       const link = document.createElement("a");
       link.href = fileUrl;
       link.target = "_blank";
@@ -415,13 +435,9 @@ export function TripDetailsModal({
   const handleDownloadXML = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando XML...");
     try {
-      // 1. URL Dinámica
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      console.log(rawBaseURL);
       const baseURL = rawBaseURL.replace(/\/$/, "");
-
-      // 2. Ruta dinámica
-      const fileUrl = `${baseURL}/sat/invoice/${uuidToDownload}/xml`;
+      const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/xml`;
 
       const link = document.createElement("a");
       link.href = fileUrl;
@@ -443,8 +459,6 @@ export function TripDetailsModal({
     isFinal: boolean = false,
   ) => {
     handleDownloadPDF(uuidToDownload);
-
-    // Le damos medio segundo al navegador para que no bloquee la segunda descarga
     setTimeout(() => {
       handleDownloadXML(uuidToDownload);
     }, 500);
@@ -515,7 +529,7 @@ export function TripDetailsModal({
   if (!localTrip) return null;
 
   return (
-    <>
+    <div>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-6xl w-[95vw] h-[90vh] bg-card/95 backdrop-blur-xl border border-border flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
           {/* HEADER PRINCIPAL */}
@@ -804,7 +818,6 @@ export function TripDetailsModal({
                                           {leg.unit?.numero_economico || "N/A"}
                                         </span>
                                       </div>
-                                      {/* INYECCIÓN NUEVA: VALES DE COMBUSTIBLE */}
                                       {activeFuelLogs.length > 0 && (
                                         <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-white/10">
                                           <p className="text-[9px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest flex items-center gap-1 mb-2">
@@ -867,7 +880,6 @@ export function TripDetailsModal({
                                         );
                                       })()}
                                       <div className="flex flex-col gap-3">
-                                        {/* SI ES ENTREGA DE VACÍO: Mostramos Input + Botón Finalizar */}
                                         {leg.id === activeLeg?.id &&
                                         leg.leg_type === "entrega_vacio" &&
                                         ![
@@ -891,17 +903,14 @@ export function TripDetailsModal({
                                             </Button>
                                           </div>
                                         ) : (
-                                          /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
-                                          /* SI ES CUALQUIER OTRA FASE: Botones Dinámicos */
                                           <div className="flex flex-wrap gap-2">
-                                            {/* 1. BOTÓN DE SIGUIENTE FASE / PASAR A RUTA */}
-                                            {/* FIX: Agregamos "entregado" y "detenido" para que NO desaparezca tras desenganchar */}
-                                            {[
-                                              "creado",
-                                              "en_transito",
-                                              "entregado",
-                                              "detenido",
-                                            ].includes(leg.status) &&
+                                            {leg.id === activeLeg?.id &&
+                                              [
+                                                "creado",
+                                                "en_transito",
+                                                "entregado",
+                                                "detenido",
+                                              ].includes(leg.status) &&
                                               leg.leg_type !==
                                                 "entrega_vacio" && (
                                                 <Button
@@ -927,60 +936,6 @@ export function TripDetailsModal({
                                                     btnUI.icon
                                                   )}
                                                   {btnUI.text}
-                                                </Button>
-                                              )}
-
-                                            {/* 2. BOTÓN DE DESENGANCHAR EN PATIO */}
-                                            {/* Este SÍ desaparece después de usarse para no duplicar desenganches */}
-                                            {leg.leg_type === "carga_muelle" &&
-                                              [
-                                                "creado",
-                                                "en_transito",
-                                              ].includes(leg.status) && (
-                                                <Button
-                                                  size="sm"
-                                                  className="h-8 bg-purple-600 hover:bg-purple-700 text-white font-black text-[9px] uppercase tracking-widest shadow-lg shadow-purple-500/20 haptic-press border-none"
-                                                  disabled={
-                                                    finishingLeg || isUnhooking
-                                                  }
-                                                  onClick={async () => {
-                                                    setIsUnhooking(true);
-                                                    const success =
-                                                      await unhookTrip(
-                                                        String(localTrip.id),
-                                                      );
-                                                    if (success) {
-                                                      await fetchTrips();
-                                                      onOpenChange(false);
-                                                    }
-                                                    setIsUnhooking(false);
-                                                  }}
-                                                >
-                                                  {isUnhooking ? (
-                                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                                  ) : (
-                                                    <Container className="h-3.5 w-3.5 mr-1.5" />
-                                                  )}
-                                                  Desenganchar Carga
-                                                </Button>
-                                              )}
-
-                                            {/* 3. BOTÓN DE LIQUIDAR OP. */}
-                                            {leg.status === "entregado" &&
-                                              onSettleClick && (
-                                                <Button
-                                                  size="sm"
-                                                  className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[9px] uppercase shadow-lg shadow-emerald-500/20"
-                                                  onClick={() => {
-                                                    onOpenChange(false);
-                                                    onSettleClick(
-                                                      leg as any,
-                                                      localTrip!,
-                                                    );
-                                                  }}
-                                                >
-                                                  <Wallet className="h-3.5 w-3.5 mr-1.5" />{" "}
-                                                  LIQUIDAR OP.
                                                 </Button>
                                               )}
                                           </div>
@@ -1035,10 +990,9 @@ export function TripDetailsModal({
                                       <div className="space-y-1">
                                         <Label className="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-1">
                                           <DollarSign className="h-3 w-3" />{" "}
-                                          Anticipos / Vales
+                                          Casetas
                                         </Label>
                                         {(() => {
-                                          // Parche visual
                                           const displayAnticipos =
                                             leg.leg_type === "entrega_vacio"
                                               ? Math.max(
@@ -1225,19 +1179,14 @@ export function TripDetailsModal({
                                     {formatCurrency(finanzasComercial.base)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between items-center text-sm font-black text-slate-600 dark:text-slate-400 uppercase tracking-tight">
-                                  <span>Reembolso Casetas:</span>
-                                  <span className="font-mono text-brand-navy dark:text-white text-base">
-                                    {formatCurrency(finanzasComercial.casetas)}
-                                  </span>
-                                </div>
+
                                 <Separator className="my-4 dark:bg-white/10" />
-                                <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                                {/*    <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>Subtotal:</span>
                                   <span className="font-mono">
                                     {formatCurrency(finanzasComercial.subtotal)}
                                   </span>
-                                </div>
+                                </div> */}
                                 <div className="flex justify-between items-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
                                   <span>IVA (16%):</span>
                                   <span className="font-mono">
@@ -1261,93 +1210,138 @@ export function TripDetailsModal({
                                     Total a Facturar:
                                   </span>
                                   <span className="text-3xl font-black font-mono tracking-tighter relative z-10 drop-shadow-md">
-                                    {formatCurrency(finanzasComercial.total)}
+                                    {formatCurrency(finanzasComercial.subtotal)}
                                   </span>
                                 </div>
                               </div>
+
                               <div className="bg-card p-6 sm:p-8 rounded-2xl border border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-6 mt-8 shadow-sm">
                                 <div className="text-left">
                                   <h4 className="text-brand-navy dark:text-blue-400 font-black text-sm uppercase tracking-tight flex items-center gap-2">
-                                    <FileText className="h-5 w-5" /> Emisión
-                                    Factura Ingreso (CFDI 4.0)
+                                    <FileText className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                                    Emisión Factura Ingreso (CFDI 4.0)
                                   </h4>
                                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mt-2">
                                     Genera la factura real del servicio
                                     aplicando Sustitución (04) de la Carta Porte
                                     Bypass.
+                                    <br />
+                                    <span className="text-blue-500 font-medium lowercase">
+                                      *Nota: El botón se habilitará para generar
+                                      la factura solo si el viaje cuenta con un
+                                      UUID de Carta Porte.
+                                    </span>
                                   </div>
                                 </div>
-                                <div className="flex flex-col gap-2">
-                                  <Button
-                                    variant="default"
-                                    className={cn(
-                                      "font-black px-8 h-12 shadow-xl disabled:opacity-50 uppercase tracking-widest text-[10px] text-white transition-all w-full sm:w-auto haptic-press border-none",
-                                      finalUuid
-                                        ? "bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
-                                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
-                                    )}
-                                    disabled={
-                                      isStamping ||
-                                      (!localUuid &&
-                                        !finalUuid &&
-                                        !localTrip.uuid_fiscal)
-                                    }
-                                    onClick={() => {
-                                      if (finalUuid) {
-                                        handleDownloadBothFiles(
-                                          finalUuid,
-                                          true,
-                                        );
-                                      } else {
-                                        const uuidToRelate =
-                                          localUuid || localTrip.uuid_fiscal;
-                                        if (!uuidToRelate) {
-                                          toast.error(
-                                            "Error: No se encontró el UUID de la Carta Porte original.",
+                                <div className="flex flex-col gap-3 mt-4">
+                                  {/*  RENDERIZADO CONDICIONAL DECLARATIVO (ESTADO GENERADO VS POR GENERAR) */}
+                                  {finalUuid ? (
+                                    // ESTADO: FACTURA YA GENERADA
+                                    <div className="flex flex-col items-start gap-4 w-full p-5 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/30">
+                                      <div className="flex items-center gap-2">
+                                        <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                                        <span className="text-xs font-black text-emerald-800 dark:text-emerald-400 uppercase tracking-widest">
+                                          Factura Final Generada Exitosamente
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                        <Button
+                                          variant="outline"
+                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
+                                          onClick={() =>
+                                            handleDownloadPDF(finalUuid)
+                                          }
+                                        >
+                                          <FileText className="h-4 w-4 mr-2 text-rose-500" />
+                                          Descargar PDF
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
+                                          onClick={() =>
+                                            handleDownloadXML(finalUuid)
+                                          }
+                                        >
+                                          <FileCode2 className="h-4 w-4 mr-2 text-blue-500" />
+                                          Descargar XML
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    // ESTADO: FACTURA POR GENERAR
+                                    <Button
+                                      variant="default"
+                                      className="bg-emerald-600 hover:bg-emerald-700 font-black px-8 h-12 shadow-xl shadow-emerald-500/20 uppercase tracking-widest text-[10px] text-white transition-all w-full sm:w-auto haptic-press border-none"
+                                      disabled={
+                                        isStampingFinal ||
+                                        (!localUuid && !localTrip.uuid_fiscal)
+                                      }
+                                      onClick={async () => {
+                                        if (
+                                          window.confirm(
+                                            "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
+                                          )
+                                        ) {
+                                          setIsStampingFinal(true);
+                                          const toastId = toast.loading(
+                                            "Conectando con el SAT y emitiendo factura definitiva...",
                                           );
-                                          return;
-                                        }
-                                        handleStampFinal(
-                                          localTrip.id,
-                                          uuidToRelate,
-                                          async (responseData: any) => {
+                                          try {
+                                            const response =
+                                              await axiosClient.post(
+                                                `/api/logistics/trips/${localTrip.id}/stamp-real`,
+                                              );
+
+                                            //  FIX: Leer el UUID directamente desde la raíz del objeto Trip que devuelve Python
+                                            const tripData =
+                                              response.data?.data ||
+                                              response.data;
                                             const generatedFinalUuid =
-                                              responseData?.data?.uuid ||
-                                              responseData?.uuid;
+                                              tripData.uuid_fiscal; // <-- AQUÍ ESTÁ LA CLAVE
+
                                             if (generatedFinalUuid) {
-                                              setFinalUuid(generatedFinalUuid);
+                                              setFinalUuid(generatedFinalUuid); // Actualiza el estado para ocultar el botón
+                                              localStorage.setItem(
+                                                `final_uuid_${localTrip.id}`,
+                                                generatedFinalUuid,
+                                              );
+
+                                              // Esto llamará a tus endpoints GET de PDF y XML automáticamente
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
                                               );
                                             }
+
+                                            toast.success("FACTURA TIMBRADA", {
+                                              id: toastId,
+                                              description:
+                                                "El documento ha sido certificado por el SAT exitosamente.",
+                                            });
+
                                             await refreshLocalTrip();
-                                          },
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    {isStamping ? (
-                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    ) : finalUuid ? (
-                                      <FileText className="h-4 w-4 mr-2" />
-                                    ) : (
-                                      <Activity className="h-4 w-4 mr-2" />
-                                    )}
-                                    {finalUuid
-                                      ? "Descargar CFDI Final"
-                                      : "Timbrar Factura Final"}
-                                  </Button>
-                                  {finalUuid && (
-                                    <Button
-                                      variant="outline"
-                                      className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-                                      onClick={() =>
-                                        handleDownloadXML(finalUuid)
-                                      }
+                                          } catch (error: any) {
+                                            const detail =
+                                              error.response?.data?.detail ||
+                                              "Error al timbrar la factura en el SAT";
+                                            toast.error("Error de Timbrado", {
+                                              id: toastId,
+                                              description: Array.isArray(detail)
+                                                ? detail[0]?.msg
+                                                : detail,
+                                            });
+                                          } finally {
+                                            setIsStampingFinal(false);
+                                          }
+                                        }
+                                      }}
                                     >
-                                      <FileCode2 className="h-3.5 w-3.5 mr-2" />{" "}
-                                      Descargar XML (4.0)
+                                      {isStampingFinal ? (
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      ) : (
+                                        <Activity className="h-4 w-4 mr-2" />
+                                      )}
+                                      Timbrar Factura Final
                                     </Button>
                                   )}
                                 </div>
@@ -1490,6 +1484,6 @@ export function TripDetailsModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

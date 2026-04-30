@@ -41,5 +41,9 @@ export type TripCreate = {
     start_date: string;
     closed_at?: (string | null);
     initial_leg?: (TripLegCreate | null);
+    final_leg?: (TripLegCreate | null);
+    conoce_ruta_completa?: (boolean | null);
+    ocultar_montos_pdf?: (boolean | null);
+    is_dummy_stamping?: (boolean | null);
 };
 

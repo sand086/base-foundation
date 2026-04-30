@@ -11,14 +11,7 @@ from sqlalchemy.orm import Session, joinedload, lazyload
 
 from app.models import models
 
-""" print("RecordStatus ELIMINADO value =>", models.RecordStatus.ELIMINADO.value)
-print("RecordStatus members =>", [e.value for e in models.RecordStatus])
-print("models loaded from =>", getattr(models, "__file__", None))
- """
-
 from . import schemas
-from app.modules.finance import crud as finance_crud
-from app.modules.finance import schemas as finance_schemas
 
 # -----------------------------
 # Helpers
@@ -89,7 +82,7 @@ def get_inventory_item(db: Session, item_id: int):
 
 
 def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
-    # 1. Evitar duplicados (Tu lógica actual)
+    # 1. Evitar duplicados
     existe = (
         db.query(models.InventoryItem)
         .filter(
@@ -101,80 +94,11 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
     if existe:
         raise HTTPException(status_code=400, detail="El SKU ya existe.")
 
-    # 2. Crear el registro en inventario
+    # 2. Crear el registro exclusivamente en inventario
+    # Eliminamos la regla que creaba facturas y afectaba caja chica automáticamente
+    # a petición operativa (El gasto entra vía carga de Excel SAT)
     db_item = models.InventoryItem(**item_in.model_dump(exclude={"bank_account_id"}))
     db.add(db_item)
-    db.flush()
-
-    # 3.   INTEGRACIÓN AUTOMÁTICA CON CXP
-    if db_item.stock_actual > 0 and db_item.precio_unitario > 0:
-        total_compra = db_item.stock_actual * db_item.precio_unitario
-        es_caja_chica = db_item.proveedor_id is None
-
-        # Asignar proveedor (Si es nulo, usamos el genérico de Caja Chica)
-        supplier_id = db_item.proveedor_id
-        if es_caja_chica:
-            petty_cash_supplier = get_or_create_petty_cash_supplier(db)
-            supplier_id = petty_cash_supplier.id
-
-        # Definir estatus fiscal para la Provisión
-        # Si es caja chica nace PAGADA (PUE), si no, nace PENDIENTE (PPD)
-        estatus_factura = (
-            models.InvoiceStatus.PAGADO
-            if es_caja_chica
-            else models.InvoiceStatus.PENDIENTE
-        )
-        metodo_pago = "PUE" if es_caja_chica else "PPD"
-        saldo_inicial = 0.0 if es_caja_chica else total_compra
-
-        # Crear la factura por pagar (CXP)
-        new_payable = models.PayableInvoice(
-            supplier_id=supplier_id,
-            folio_interno=f"INV-{db_item.sku}-{int(time.time())}",
-            concepto=f"Carga de inventario: {db_item.descripcion} ({db_item.stock_actual} pzas)",
-            subtotal=total_compra,
-            monto_total=total_compra,
-            saldo_pendiente=saldo_inicial,
-            moneda=models.Currency.MXN,
-            fecha_emision=date.today(),
-            fecha_vencimiento=(
-                date.today() if es_caja_chica else date.today() + timedelta(days=30)
-            ),
-            estatus=estatus_factura,
-            metodo_pago=metodo_pago,  # <--- Importante para el Excel de Gustavo
-            tipo_comprobante="I",  # <--- "I" de Ingreso (Factura)
-            clasificacion="mantenimiento_refacciones",
-        )
-        db.add(new_payable)
-        db.flush()
-
-        # 4. Si es Caja Chica, registramos el pago y el movimiento bancario inmediato
-        if es_caja_chica:
-            # Registrar el pago de la factura
-            pago_automatico = models.InvoicePayment(
-                invoice_id=new_payable.id,
-                bank_account_id=getattr(
-                    item_in, "bank_account_id", 1
-                ),  # Default a la cuenta 1 si no viene
-                fecha_pago=date.today(),
-                monto=total_compra,
-                metodo_pago="efectivo",
-                referencia="COMPRA DIRECTA CAJA CHICA",
-            )
-            db.add(pago_automatico)
-
-            # Descontar saldo de la cuenta bancaria en Tesorería
-            from app.modules.finance import crud as finance_crud
-            from app.modules.finance import schemas as finance_schemas
-
-            mov_schema = finance_schemas.BankMovementCreate(
-                bank_account_id=pago_automatico.bank_account_id,
-                tipo="egreso",
-                monto=total_compra,
-                concepto=f"Gasto Caja Chica: Refacción {db_item.sku}",
-                referencia="INV_AUTO",
-            )
-            finance_crud.create_bank_movement(db, mov_schema, current_user_id=1)
 
     db.commit()
     db.refresh(db_item)
@@ -420,6 +344,7 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
         folio = generate_work_order_folio(db)
         now = datetime.now(timezone.utc)  # Generamos la hora en Python
 
+        # 1. Asignamos los datos base y financieros (Mano de obra e IVA)
         db_order = models.WorkOrder(
             folio=folio,
             unit_id=order_in.unit_id,
@@ -429,11 +354,15 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
             fecha_apertura=now,
             tipo_mantenimiento=order_in.tipo_mantenimiento,
             trip_id=order_in.trip_id,
+            costo_mano_obra=getattr(order_in, "costo_mano_obra", 0.0),
+            porcentaje_iva=getattr(order_in, "porcentaje_iva", 16.0),
         )
         db.add(db_order)
         db.flush()  # obtiene id sin commit
 
-        # Partes: bloquear inventario, validar stock, snapshot costo
+        sum_parts_cost = 0.0
+
+        # 2. Partes: bloquear inventario, validar stock, snapshot costo
         for part in order_in.parts:
             item = (
                 db.query(models.InventoryItem)
@@ -470,6 +399,15 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
             item.stock_actual -= part.cantidad
             db.add(db_part)
 
+            # Acumulamos el costo de refacciones
+            sum_parts_cost += part.cantidad * item.precio_unitario
+
+        # 3. CÁLCULO FINANCIERO EXACTO
+        # Como las refacciones ya incluyen IVA, el porcentaje solo aplica a la mano de obra
+        db_order.subtotal = sum_parts_cost + db_order.costo_mano_obra
+        iva_mano_obra = db_order.costo_mano_obra * (db_order.porcentaje_iva / 100)
+        db_order.total = sum_parts_cost + db_order.costo_mano_obra + iva_mano_obra
+
         db.commit()
         return get_work_order(db, db_order.id)
 
@@ -495,12 +433,17 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
     if not db_order:
         _not_found("Orden de trabajo")
 
-    # 2. Actualizar campos generales
+    # 2. Actualizar campos generales y financieros
     db_order.unit_id = order_in.unit_id
     db_order.mechanic_id = order_in.mechanic_id
     db_order.descripcion_problema = order_in.descripcion_problema
     db_order.tipo_mantenimiento = order_in.tipo_mantenimiento
     db_order.trip_id = order_in.trip_id
+
+    if hasattr(order_in, "costo_mano_obra"):
+        db_order.costo_mano_obra = order_in.costo_mano_obra
+    if hasattr(order_in, "porcentaje_iva"):
+        db_order.porcentaje_iva = order_in.porcentaje_iva
 
     # 3. Manejo de Refacciones (CERO DELETES)
     for old_part in db_order.parts:
@@ -511,6 +454,8 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
                 old_part.record_status = models.RecordStatus.ELIMINADO
 
     now = datetime.now(timezone.utc)
+    sum_parts_cost = 0.0
+
     for part in order_in.parts:
         item = (
             db.query(models.InventoryItem)
@@ -541,30 +486,76 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
         )
         db.add(new_part)
 
+        # Acumulamos el costo de refacciones nuevas
+        sum_parts_cost += part.cantidad * item.precio_unitario
+
+    # 4. CÁLCULO FINANCIERO EXACTO (Actualizado)
+    db_order.subtotal = sum_parts_cost + getattr(db_order, "costo_mano_obra", 0.0)
+    db_order.total = db_order.subtotal * (
+        1 + (getattr(db_order, "porcentaje_iva", 16.0) / 100)
+    )
+
     db.commit()
     db.refresh(db_order)
     return get_work_order(db, db_order.id)
 
 
 def delete_work_order(db: Session, order_id: int):
-    # Soft delete: record_status (AÑADIDA PROTECCIÓN ELIMINADO)
+    # Bloqueamos la orden para evitar errores
     order = (
         db.query(models.WorkOrder)
         .filter(
             models.WorkOrder.id == order_id,
             models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
         )
+        .with_for_update(of=models.WorkOrder)
         .first()
     )
     if not order:
         _not_found("Orden de trabajo")
 
-    #  NUEVO: Si se elimina la orden y no estaba cancelada, devolvemos el stock
+    # 1. REVERSO DE TESORERÍA (Si la orden ya estaba cerrada y pagada)
+    if order.status == models.WorkOrderStatus.CERRADA:
+        # Ya no sumamos las piezas, usamos el TOTAL EXACTO (piezas + mano de obra + IVA)
+        costo_total_pagado = getattr(order, "total", 0.0)
+
+        if costo_total_pagado > 0:
+            account = (
+                db.query(models.BankAccount)
+                .filter(models.BankAccount.id == 1)
+                .with_for_update(of=models.BankAccount)
+                .first()
+            )
+            if account:
+                # Regresamos el dinero a la cuenta
+                account.saldo += costo_total_pagado
+
+                # Dejamos rastro en Tesorería de que el dinero regresó por eliminación
+                mov_reverso = models.BankMovement(
+                    bank_account_id=1,
+                    tipo="ingreso",
+                    monto=costo_total_pagado,
+                    concepto=f"Reverso por Eliminación OT: {order.folio}",
+                    referencia=f"CANC-OT-{order.folio}",
+                    origen_modulo="Mantenimiento",
+                    fecha=datetime.now(),
+                )
+                db.add(mov_reverso)
+
+    # 2. DEVOLUCIÓN DE INVENTARIO (Si no estaba cancelada, devolvemos stock)
     if order.status != models.WorkOrderStatus.CANCELADA:
         for part in order.parts:
-            if part.item:
-                part.item.stock_actual += part.cantidad
+            # Bloqueamos el inventario para regresarle las piezas seguro
+            item = (
+                db.query(models.InventoryItem)
+                .filter(models.InventoryItem.id == part.inventory_item_id)
+                .with_for_update(of=models.InventoryItem)
+                .first()
+            )
+            if item:
+                item.stock_actual += part.cantidad
 
+    # 3. Soft delete de la orden
     order.record_status = models.RecordStatus.ELIMINADO
     db.commit()
     return True
@@ -573,44 +564,92 @@ def delete_work_order(db: Session, order_id: int):
 def update_work_order_status(
     db: Session, order_id: int, status: models.WorkOrderStatus
 ):
-    # (AÑADIDA PROTECCIÓN ELIMINADO)
+    # Aplicamos bloqueo de concurrencia (with_for_update) a la orden
     order = (
         db.query(models.WorkOrder)
         .filter(
             models.WorkOrder.id == order_id,
             models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
         )
+        .with_for_update(of=models.WorkOrder)
         .first()
     )
     if not order:
         _not_found("Orden de trabajo")
 
-    # Devolver el stock si se cancela
+    # Devolver el stock si se cancela (y no estaba ya cancelada)
     if (
         status == models.WorkOrderStatus.CANCELADA
         and order.status != models.WorkOrderStatus.CANCELADA
     ):
         for part in order.parts:
-            if part.item:
-                part.item.stock_actual += part.cantidad
+            # Bloqueamos el inventario para regresarle las piezas seguro
+            item = (
+                db.query(models.InventoryItem)
+                .filter(models.InventoryItem.id == part.inventory_item_id)
+                .with_for_update(of=models.InventoryItem)
+                .first()
+            )
+            if item:
+                item.stock_actual += part.cantidad
 
-    order.status = status
-
-    if status == models.WorkOrderStatus.CERRADA:
+    # --- LÓGICA DE CIERRE Y TESORERÍA ---
+    if (
+        status == models.WorkOrderStatus.CERRADA
+        and order.status != models.WorkOrderStatus.CERRADA
+    ):
         order.fecha_cierre = datetime.now(timezone.utc)
 
-        # --- CORRECCIÓN DE DOBLE CONTABILIDAD ---
-        # El gasto de las refacciones YA SE REGISTRÓ en CxP cuando ingresaron al inventario.
-        # Aquí NO creamos otra PayableInvoice para evitar duplicar la deuda en finanzas.
-        # Solo descontamos físicamente las piezas (lo cual ya se hizo al crear la WorkOrder).
+        # 1. Liberar Mecánico
+        if order.mechanic_id:
+            mechanic = (
+                db.query(models.Mechanic)
+                .filter(models.Mechanic.id == order.mechanic_id)
+                .first()
+            )
+            if mechanic and hasattr(mechanic, "estatus"):
+                mechanic.estatus = "Disponible"
 
+        # 2. Tomamos el TOTAL EXACTO YA CALCULADO EN LA BD (Piezas + Mano Obra + IVA)
+        costo_total_a_pagar = getattr(order, "total", 0.0)
+
+        # 3. Afectar Tesorería (Cuenta Banamex ID 1) si hubo un costo
+        if costo_total_a_pagar > 0:
+            account = (
+                db.query(models.BankAccount)
+                .filter(models.BankAccount.id == 1)
+                .with_for_update(of=models.BankAccount)
+                .first()
+            )
+            if not account:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Cuenta Bancaria principal (Banamex) no encontrada para el pago.",
+                )
+
+            # Descontamos el dinero
+            account.saldo -= costo_total_a_pagar
+
+            # Creamos el registro del movimiento para el libro mayor de Tesorería
+            mov = models.BankMovement(
+                bank_account_id=1,
+                tipo="egreso",
+                monto=costo_total_a_pagar,
+                concepto=f"OT: {order.folio}",
+                referencia=f"OT-{order.folio}",
+                origen_modulo="CxP",  # Lo marcamos como CxP para que Tesorería sepa que fue un pago de Mantenimiento
+                fecha=datetime.now(),
+            )
+            db.add(mov)
+
+    # Actualizamos el estatus general
+    order.status = status
     db.commit()
     return get_work_order(db, order_id)
 
 
 def get_or_create_petty_cash_supplier(db: Session):
     rfc_generico = "XAXX010101000"
-    # (AÑADIDA PROTECCIÓN ELIMINADO)
     supplier = (
         db.query(models.Supplier)
         .filter(
@@ -630,6 +669,6 @@ def get_or_create_petty_cash_supplier(db: Session):
             estatus=models.SupplierStatus.ACTIVO,
         )
         db.add(supplier)
-        db.flush()  # Importante: flush para obtener el ID sin cerrar la transacción
+        db.flush()
 
     return supplier

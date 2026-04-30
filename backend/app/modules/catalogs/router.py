@@ -69,18 +69,22 @@ from app.modules.auth.router import get_current_active_user
 
 DEFAULT_MODULES = [
     {"id": "dashboard", "nombre": "Dashboard", "icono": "LayoutDashboard"},
-    {"id": "monitoreo", "nombre": "Historico", "icono": "Radio"},
     {"id": "clients", "nombre": "Clientes", "icono": "Users"},
-    {"id": "flota", "nombre": "Flota", "icono": "Truck"},
-    {"id": "combustible", "nombre": "Combustible", "icono": "Fuel"},
-    {"id": "tarifas", "nombre": "Tarifas", "icono": "DollarSign"},
-    {"id": "Dispatch", "nombre": "Dispatch", "icono": "FileText"},
-    {"id": "cxc", "nombre": "Cuentas por Cobrar", "icono": "Receipt"},
-    {"id": "cxp", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
-    {"id": "reportes", "nombre": "Reportes", "icono": "BarChart3"},
-    {"id": "usuarios", "nombre": "Usuarios", "icono": "Shield"},
-    {"id": "configuracion", "nombre": "Configuración", "icono": "Settings"},
-    {"id": "trackingop", "nombre": "Rastreo operativo", "icono": "Truck"},
+    {"id": "rates", "nombre": "Tarifas", "icono": "Calculator"},
+    {"id": "fleet", "nombre": "Flota", "icono": "Truck"},
+    {"id": "monitoring", "nombre": "Histórico", "icono": "Radar"},
+    {"id": "traffic", "nombre": "Tracking Op", "icono": "Navigation"},
+    {"id": "dispatch", "nombre": "Despacho", "icono": "CalendarPlus"},
+    {"id": "fuel", "nombre": "Combustible", "icono": "Fuel"},
+    {"id": "settlements", "nombre": "Liquidación", "icono": "FileCheck"},
+    {"id": "suppliers", "nombre": "Proveedores", "icono": "Briefcase"},
+    {"id": "payables", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
+    {"id": "receivables", "nombre": "Cuentas por Cobrar", "icono": "DollarSign"},
+    {"id": "treasury", "nombre": "Tesorería", "icono": "Landmark"},
+    {"id": "reports", "nombre": "Reportes", "icono": "BarChart3"},
+    {"id": "users", "nombre": "Usuarios", "icono": "Users"},
+    {"id": "roles", "nombre": "Roles y Permisos", "icono": "Shield"},
+    {"id": "settings", "nombre": "Configuración", "icono": "Settings"}
 ]
 
 # =========================================================

@@ -27,6 +27,7 @@ from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 
 from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
+from app.modules.logistics.crud import get_last_unit_odometer
 
 #  importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud
@@ -407,6 +408,29 @@ def update_unit_load_status(
     return db_unit
 
 
+# =====================================================================
+# ENDPOINT PARA PERSISTENCIA DE ODÓMETRO (ESCALERITA)
+# =====================================================================
+@router.get("/units/{unit_id}/last-odometer")
+def get_unit_last_odometer(unit_id: int, db: Session = Depends(get_db)):
+    """
+    Devuelve el último odómetro registrado para una unidad específica.
+    Busca primero en la liquidación del último viaje (TripLeg) y
+    luego en el último vale de combustible (FuelLog).
+    """
+    try:
+        # Llamamos a la función que Elena ya había construido en el CRUD
+        last_odo = get_last_unit_odometer(db, unit_id)
+
+        # Devolvemos el JSON exacto que espera tu React
+        return {"last_odometer": last_odo}
+
+    except Exception as e:
+        print(f"Error obteniendo odómetro para unidad {unit_id}: {e}")
+        # Si algo falla, devolvemos 0 para que el Frontend no se bloquee
+        return {"last_odometer": 0}
+
+
 # =========================================================
 # OPERATORS (Operadores)
 # =========================================================
@@ -623,6 +647,7 @@ def get_fuel_logs(
                 joinedload(models.FuelLog.unit),
                 joinedload(models.FuelLog.operator),
                 joinedload(models.FuelLog.created_by),
+                joinedload(models.FuelLog.trip_leg),
             )
             .where(models.FuelLog.record_status == "A")
         )
@@ -669,6 +694,20 @@ async def create_fuel_log(
         )
         evidencia_url, filename = storage["url"], storage["filename"]
 
+    #   IDEA 1: LA MEMORIA DEL CAMIÓN
+    # Buscamos el último ticket registrado para ESTA unidad, ordenado por odómetro
+    last_log = (
+        db.query(models.FuelLog)
+        .filter(models.FuelLog.unit_id == unit_id, models.FuelLog.record_status != "E")
+        .order_by(models.FuelLog.odometro.desc())
+        .first()
+    )
+
+    km_recorridos = 0
+    # Si encontramos un ticket anterior, y el odómetro actual es mayor:
+    if last_log and odometro > last_log.odometro:
+        km_recorridos = odometro - last_log.odometro
+
     created_logs = []
 
     def _crear_registro(tipo: str, litros: float, precio: float):
@@ -683,6 +722,7 @@ async def create_fuel_log(
             precio_por_litro=precio,
             total=litros * precio,
             odometro=odometro,
+            km_sm=km_recorridos,  #   AQUÍ SE GUARDAN LOS KM AUTOMÁTICAMENTE
             evidencia_url=evidencia_url,
             created_by_id=current_user.id,
         )

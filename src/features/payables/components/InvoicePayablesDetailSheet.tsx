@@ -36,6 +36,7 @@ interface InvoiceDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   invoice: PayableInvoice | null;
   onPayClick?: (invoice: PayableInvoice) => void;
+  onPaymentSuccess?: () => void;
 }
 
 const toNumber = (v: any): number => {

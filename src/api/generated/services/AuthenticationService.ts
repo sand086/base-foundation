@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { Body_setup_2fa_temp_api_auth_2fa_setup_temp_post } from '../models/Body_setup_2fa_temp_api_auth_2fa_setup_temp_post';
 import type { Body_upload_user_avatar_api_auth__user_id__avatar_post } from '../models/Body_upload_user_avatar_api_auth__user_id__avatar_post';
 import type { EmergencyRequest } from '../models/EmergencyRequest';
 import type { LoginRequest } from '../models/LoginRequest';
@@ -496,6 +497,25 @@ export class AuthenticationService {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/auth/dev/migrar-contrasenas',
+        });
+    }
+    /**
+     * Setup 2Fa Temp
+     * @param requestBody
+     * @returns TwoFactorSetupResponse Successful Response
+     * @throws ApiError
+     */
+    public static setup2FaTempApiAuth2FaSetupTempPost(
+        requestBody: Body_setup_2fa_temp_api_auth_2fa_setup_temp_post,
+    ): CancelablePromise<TwoFactorSetupResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/auth/2fa/setup-temp',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
 }

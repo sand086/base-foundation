@@ -467,26 +467,6 @@ export class LogisticsService {
         });
     }
     /**
-     * Reopen Trip Leg
-     * @param legId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static reopenTripLegApiLogisticsTripsLegsLegIdReopenPost(
-        legId: number,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/logistics/trips/legs/{leg_id}/reopen',
-            path: {
-                'leg_id': legId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Generate Carta Porte
      * @param tripId
      * @returns any Successful Response
@@ -673,26 +653,6 @@ export class LogisticsService {
         });
     }
     /**
-     * Reset Audit Endpoint
-     * @param legId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static resetAuditEndpointApiLogisticsTripsLegsLegIdResetAuditPost(
-        legId: number,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/logistics/trips/legs/{leg_id}/reset-audit',
-            path: {
-                'leg_id': legId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Unhook Trip In Yard
      * @param tripId
      * @returns TripResponse Successful Response
@@ -710,6 +670,19 @@ export class LogisticsService {
             errors: {
                 422: `Validation Error`,
             },
+        });
+    }
+    /**
+     * Sync Distances
+     * Sincroniza masivamente las distancias en carretera de los RateTemplates
+     * utilizando la función helper existente (Nominatim + OSRM).
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncDistancesApiLogisticsRateTemplatesSyncDistancesPost(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/logistics/rate-templates/sync-distances',
         });
     }
 }

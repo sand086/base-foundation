@@ -373,9 +373,9 @@ class FuelLogBase(BaseModel):
     trip_leg_id: Optional[int] = None
     estacion: str = Field(..., min_length=1, max_length=200)
     tipo_combustible: str
-    litros: float = Field(..., gt=0)
-    precio_por_litro: float = Field(..., gt=0)
-    total: float = Field(..., gt=0)
+    litros: float = Field(..., ge=0)
+    precio_por_litro: float = Field(..., ge=0)
+    total: float = Field(..., ge=0)
     odometro: int = Field(..., ge=0)
     model_config = ConfigDict(from_attributes=True)
 
@@ -400,9 +400,9 @@ class FuelLogUpdate(BaseModel):
     operator_id: Optional[int] = None
     estacion: Optional[str] = Field(default=None, min_length=1, max_length=200)
     tipo_combustible: Optional[str] = None
-    litros: Optional[float] = Field(default=None, gt=0)
-    precio_por_litro: Optional[float] = Field(default=None, gt=0)
-    total: Optional[float] = Field(default=None, gt=0)
+    litros: Optional[float] = Field(default=None, ge=0)
+    precio_por_litro: Optional[float] = Field(default=None, ge=0)
+    total: Optional[float] = Field(default=None, ge=0)
     odometro: Optional[int] = Field(default=None, ge=0)
     fecha_hora: Optional[datetime] = None
     evidencia_url: Optional[str] = Field(default=None, max_length=500)
@@ -433,6 +433,7 @@ class FuelLogResponse(FuelLogBase):
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+    trip_id: Optional[int] = None
 
     unit: Optional[UnitFuelInfo] = Field(default=None)
     operator: Optional[OperatorFuelInfo] = Field(default=None)

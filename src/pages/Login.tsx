@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,6 +20,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { logos_3t } from "@/assets/img";
 import { AxiosError } from "axios";
+
+//  IMPORTAMOS NEXT-THEMES PARA FORZAR MODO CLARO
+import { useTheme } from "next-themes";
 
 // Form Components (Tahoe UI)
 import {
@@ -49,7 +52,33 @@ export default function Login() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  //  REACT HOOK FORM
+  // =====================
+  //  UX: FORZAR TEMA CLARO Y RESTAURARLO
+  // =====================
+  const { theme, setTheme } = useTheme();
+  const originalTheme = useRef<string | undefined>(undefined);
+
+  useEffect(() => {
+    // 1. Guardamos el tema original que tenía el usuario al entrar
+    if (!originalTheme.current) {
+      originalTheme.current = theme;
+    }
+    // 2. Forzamos la vista del Login a "light"
+    if (theme !== "light") {
+      setTheme("light");
+    }
+  }, [theme, setTheme]);
+
+  // Función para devolverle su tema justo antes de salir de esta pantalla
+  const restoreOriginalTheme = () => {
+    if (originalTheme.current && originalTheme.current !== "light") {
+      setTheme(originalTheme.current);
+    }
+  };
+
+  // =====================
+  // REACT HOOK FORM
+  // =====================
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -71,15 +100,12 @@ export default function Login() {
     setApiError("");
 
     try {
-      // 1. Llamada al Backend a través del Servicio
       const response = await authService.login({
         email: data.email,
         password: data.password,
       });
 
-      // 2. Caso: El backend dice que el usuario tiene 2FA activado
       if (response.require_2fa) {
-        // Determinamos la ruta: si es configuración obligatoria o solo verificación
         const targetRoute = response.must_setup_2fa
           ? "/setup-2fa"
           : "/verify-2fa";
@@ -93,6 +119,8 @@ export default function Login() {
             : "Ingresa el código de tu autenticador",
         });
 
+        restoreOriginalTheme(); //  Restauramos tema
+
         navigate(targetRoute, {
           replace: true,
           state: {
@@ -103,10 +131,7 @@ export default function Login() {
         return;
       }
 
-      // 3. Si el login es directo (y tenemos token + user + refresh_token)
-      //  CORRECCIÓN: Validamos y pasamos el refresh_token exigido por el AuthContext
       if (response.access_token && response.user && response.refresh_token) {
-        // Guardamos en el estado global (Contexto) y en localStorage
         login(response.user, response.access_token, response.refresh_token);
 
         toast({
@@ -114,14 +139,13 @@ export default function Login() {
           description: "Has iniciado sesión correctamente",
         });
 
-        // Redirigimos al Dashboard
+        restoreOriginalTheme(); //  Restauramos tema
         navigate("/", { replace: true });
       } else if (
         response.access_token &&
         response.user &&
         !response.refresh_token
       ) {
-        // Fallback de seguridad por si el backend no manda refresh token en algún entorno
         setApiError("Respuesta del servidor incompleta (Falta Refresh Token).");
       }
     } catch (err) {
@@ -188,7 +212,11 @@ export default function Login() {
             {/* Error Message (API) */}
             {apiError && (
               <div className="mt-6 flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 backdrop-blur-sm p-4 animate-in fade-in slide-in-from-top-2 shadow-inner">
-                <AlertCircle className="h-5 w-5 text-rose-400 flex-shrink-0" />
+                {/*  Fuerza de color vía prop de Lucide */}
+                <AlertCircle
+                  color="#fb7185"
+                  className="h-5 w-5 flex-shrink-0"
+                />
                 <span className="text-xs font-bold text-rose-200">
                   {apiError}
                 </span>
@@ -207,14 +235,18 @@ export default function Login() {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <div className="relative group">
-                          <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
+                        <div className="relative group text-white">
+                          {/*  Fuerza de color vía prop de Lucide */}
+                          <User
+                            color="#ffffff"
+                            className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 opacity-50 transition-all duration-300 group-focus-within:opacity-100 group-focus-within:scale-110"
+                          />
                           <Input
                             {...field}
                             type="email"
                             placeholder="Correo Electrónico"
                             autoComplete="username"
-                            className="h-14 rounded-xl border border-white/20 bg-white/5 pl-12 pr-4 text-base font-medium text-white placeholder:text-white/30 transition-all duration-300 focus:bg-white/10 focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/10 hover:border-white/30"
+                            className="h-14 rounded-xl border border-white/20 bg-white/5 pl-12 pr-4 text-base font-medium text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/10 focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/10 hover:border-white/30"
                           />
                         </div>
                       </FormControl>
@@ -230,24 +262,29 @@ export default function Login() {
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <div className="relative group">
-                          <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-white/40 transition-all duration-300 group-focus-within:text-white group-focus-within:scale-110" />
+                        <div className="relative group text-white">
+                          {/*  Fuerza de color vía prop de Lucide */}
+                          <Lock
+                            color="#ffffff"
+                            className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 opacity-50 transition-all duration-300 group-focus-within:opacity-100 group-focus-within:scale-110"
+                          />
                           <Input
                             {...field}
                             type={showPass ? "text" : "password"}
                             placeholder="Contraseña"
                             autoComplete="current-password"
-                            className="h-14 rounded-xl border border-white/20 bg-white/5 pl-12 pr-12 text-base font-medium text-white placeholder:text-white/30 transition-all duration-300 focus:bg-white/10 focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/10 hover:border-white/30"
+                            className="h-14 rounded-xl border border-white/20 bg-white/5 pl-12 pr-12 text-base font-medium text-white placeholder:text-white/40 transition-all duration-300 focus:bg-white/10 focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)] focus-visible:ring-0 focus-visible:ring-offset-0 hover:bg-white/10 hover:border-white/30"
                           />
                           <button
                             type="button"
                             onClick={() => setShowPass((v) => !v)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/40 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-lg opacity-50 transition-all duration-300 hover:bg-white/10 hover:opacity-100 active:scale-95"
                           >
+                            {/*  Fuerza de color vía prop de Lucide */}
                             {showPass ? (
-                              <EyeOff className="h-5 w-5" />
+                              <EyeOff color="#ffffff" className="h-5 w-5" />
                             ) : (
-                              <Eye className="h-5 w-5" />
+                              <Eye color="#ffffff" className="h-5 w-5" />
                             )}
                           </button>
                         </div>
@@ -263,7 +300,7 @@ export default function Login() {
                     control={form.control}
                     name="remember"
                     render={({ field }) => (
-                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/50 hover:text-white/90 transition-colors">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/60 hover:text-white/90 transition-colors">
                         <input
                           type="checkbox"
                           checked={field.value}
@@ -283,20 +320,25 @@ export default function Login() {
                   className="mt-6 h-14 w-full rounded-xl bg-brand-red text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all duration-300 hover:bg-red-700 hover:-translate-y-[2px] hover:shadow-[0_0_30px_rgba(190,8,17,0.5)] active:translate-y-0 active:shadow-[0_0_15px_rgba(190,8,17,0.3)] disabled:opacity-70 disabled:hover:translate-y-0 disabled:hover:shadow-none border-0 haptic-press"
                 >
                   {isSubmitting ? (
-                    <span className="flex items-center gap-3">
-                      <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="flex items-center gap-3 text-white">
+                      {/*  Fuerza de color vía prop de Lucide */}
+                      <Loader2
+                        color="#ffffff"
+                        className="h-5 w-5 animate-spin"
+                      />
                       AUTENTICANDO...
                     </span>
                   ) : (
-                    <span className="flex items-center justify-center gap-3">
-                      INICIAR SESIÓN <ArrowRight className="h-5 w-5" />
+                    <span className="flex items-center justify-center gap-3 text-white">
+                      INICIAR SESIÓN {/*  Fuerza de color vía prop de Lucide */}
+                      <ArrowRight color="#ffffff" className="h-5 w-5" />
                     </span>
                   )}
                 </Button>
 
-                <div className="pt-4 text-center text-[10px] font-bold uppercase tracking-widest text-white/40">
+                <div className="pt-4 text-center text-[10px] font-bold uppercase tracking-widest text-white/50">
                   Soporte Técnico:{" "}
-                  <span className="text-white/70 tracking-normal normal-case">
+                  <span className="text-white/80 tracking-normal normal-case">
                     admin@transportes.com
                   </span>
                 </div>

@@ -13,18 +13,28 @@ import {
   Package,
   Trash2,
   Receipt,
+  Clock,
   FileCode2,
   Loader2,
+  Briefcase,
+  FilterX,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { ActionButton } from "@/components/ui/action-button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, getStatusFromLabel } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,7 +64,6 @@ import { es } from "date-fns/locale";
 import { ManageCategoriesModal } from "@/features/suppliers/components/ManageCategoriesModal";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 
-// FIX: Importamos el LocalPrefillData (que ahora está extendido)
 import {
   RegisterExpenseModal,
   LocalPrefillData,
@@ -62,25 +71,15 @@ import {
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
 
-// FIX: Importamos el nuevo Importador de XML
-import {
-  ImportXMLExpenseModal,
-  XMLParsedData,
-} from "@/features/payables/components/ImportXMLExpenseModal";
+import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 
-import {
-  getInvoiceStatusInfo,
-  getClasificacionLabel,
-  getClasificacionColor,
-} from "@/lib/utils";
+import { getInvoiceStatusInfo } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
-const safeLower = (v: unknown) =>
-  typeof v === "string" ? v.toLowerCase() : "";
 const isValidDate = (d: Date) => !Number.isNaN(d.getTime());
 const parseDateSafe = (v: unknown): Date | null => {
   if (!v) return null;
@@ -110,15 +109,17 @@ export default function Payables() {
     indirectCategories,
   } = useSuppliers();
 
-  const { bankAccounts, isLoading: isLoadingBankAccounts } = useBankAccounts();
+  const {
+    bankAccounts,
+    isLoading: isLoadingBankAccounts,
+    refresh: refreshBankAccounts,
+  } = useBankAccounts();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
-
-  // FIX: Estado para el modal de arrastrar XML
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
@@ -131,6 +132,14 @@ export default function Payables() {
     null,
   );
   const [prefillData, setPrefillData] = useState<LocalPrefillData | null>(null);
+
+  // ==========================================
+  // ESTADOS PARA LOS FILTROS SUPERIORES
+  // ==========================================
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [cecoFilter, setCecoFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
 
   useEffect(() => {
     const fromPurchases = searchParams.get("fromPurchases");
@@ -162,29 +171,17 @@ export default function Payables() {
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
 
-  // FIX: Función que recibe el XML parseado y abre el formulario final
-  const handleXmlParsed = (data: XMLParsedData) => {
+  const handleBulkUploadSuccess = () => {
     setIsXmlModalOpen(false);
-    setPrefillData({
-      proveedor: data.emisorNombre,
-      proveedorId: "", // Buscaremos por nombre en el UseEffect del Modal
-      concepto: `Gasto amparado por CFDI (${data.emisorRfc})`,
-      montoTotal: data.montoTotal,
-      uuid: data.uuid,
-      fecha_emision: data.fecha,
-      xml_file: data.xmlFile,
-    });
-    setEditingInvoice(null);
-    setIsExpenseModalOpen(true); // Abre el modal de siempre, pero ya Lleno!
+    refreshInvoices?.();
   };
 
-  // 1. FORMATEO DE DATOS DE FACTURAS
   const normalizedInvoices = useMemo(() => {
     const dataArray = Array.isArray(invoices)
       ? invoices
-      : (invoices as any).items ||
-        (invoices as any).data ||
-        (invoices as any).results ||
+      : (invoices as any)?.items ||
+        (invoices as any)?.data ||
+        (invoices as any)?.results ||
         [];
 
     return dataArray.map((inv: any) => ({
@@ -199,9 +196,61 @@ export default function Payables() {
     })) as PayableInvoice[];
   }, [invoices]);
 
-  // 2. FORMATEO DE DATOS DE PAGOS
+  // ==========================================
+  // LÓGICA DE FILTRADO Y EXTRACCIÓN DE CECOS
+  // ==========================================
+  const uniqueCecos = useMemo(() => {
+    const cecosMap = new Map();
+    normalizedInvoices.forEach((inv: any) => {
+      if (inv.cost_center) {
+        cecosMap.set(inv.cost_center.id, inv.cost_center.nombre);
+      }
+    });
+    return Array.from(cecosMap.entries()).map(([id, nombre]) => ({
+      id: String(id),
+      nombre,
+    }));
+  }, [normalizedInvoices]);
+
+  const filteredInvoices = useMemo(() => {
+    return normalizedInvoices.filter((inv: any) => {
+      // 1. Buscador (Folio, Proveedor, UUID o Concepto)
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        !searchTerm ||
+        inv.folio_interno?.toLowerCase().includes(searchLower) ||
+        inv.supplier_razon_social?.toLowerCase().includes(searchLower) ||
+        inv.uuid?.toLowerCase().includes(searchLower) ||
+        inv.concepto?.toLowerCase().includes(searchLower);
+
+      // 2. Filtro de Estatus
+      const matchesStatus =
+        statusFilter === "all" ||
+        inv.estatus?.toLowerCase() === statusFilter.toLowerCase();
+
+      // 3. Filtro de CECO
+      const matchesCeco =
+        cecoFilter === "all" || String(inv.cost_center_id) === cecoFilter;
+
+      // 4. Filtro de Fecha (Emisión o Vencimiento)
+      const matchesDate =
+        !dateFilter ||
+        inv.fecha_emision?.startsWith(dateFilter) ||
+        inv.fecha_vencimiento?.startsWith(dateFilter);
+
+      return matchesSearch && matchesStatus && matchesCeco && matchesDate;
+    });
+  }, [normalizedInvoices, searchTerm, statusFilter, cecoFilter, dateFilter]);
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCecoFilter("all");
+    setDateFilter("");
+  };
+
   const allPayments = useMemo(() => {
-    const rows = normalizedInvoices.flatMap((inv) => {
+    const rows = filteredInvoices.flatMap((inv: any) => {
       const supplierName = inv.supplier_razon_social || "";
       const folioFactura =
         inv.folio_interno ||
@@ -226,30 +275,52 @@ export default function Payables() {
       const db = parseDateSafe(b.fecha_pago)?.getTime() ?? 0;
       return db - da;
     });
-  }, [normalizedInvoices]);
+  }, [filteredInvoices]);
 
+  // KPIs Dinámicos basados en la tabla FILTRADA
   const kpis = useMemo(() => {
-    const totalVencido = normalizedInvoices
-      .filter((inv) => getInvoiceStatusInfo(inv).status === "danger")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
 
-    const totalPorPagar = normalizedInvoices
+    const en7Dias = new Date(hoy);
+    en7Dias.setDate(hoy.getDate() + 7);
+
+    const totalVencido = filteredInvoices
       .filter((inv) => {
-        const s = getInvoiceStatusInfo(inv).status;
-        return s === "warning" || s === "default";
+        const fechaVencimiento = new Date(inv.fecha_vencimiento);
+        return (
+          fechaVencimiento < hoy &&
+          inv.estatus !== "pagado" &&
+          inv.estatus !== "cancelado"
+        );
       })
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const totalParcial = normalizedInvoices
-      .filter((inv) => getInvoiceStatusInfo(inv).status === "info")
+    const totalPorPagar = filteredInvoices
+      .filter((inv) => inv.estatus !== "pagado" && inv.estatus !== "cancelado")
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const fromPurchasesCount = normalizedInvoices.filter(
-      (inv) => !!inv.orden_compra_id,
-    ).length;
+    const totalParcial = filteredInvoices
+      .filter((inv) => inv.estatus === "pago_parcial")
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    return { totalVencido, totalPorPagar, totalParcial, fromPurchasesCount };
-  }, [normalizedInvoices]);
+    // NUEVO KPI DE VALOR AGREGADO: Flujo de caja requerido a 7 días
+    const compromisos7Dias = filteredInvoices
+      .filter((inv) => {
+        if (
+          inv.estatus === "pagado" ||
+          inv.estatus === "cancelado" ||
+          inv.tipo_comprobante === "E" ||
+          (inv.saldo_pendiente || 0) < 0
+        )
+          return false;
+        const fechaVencimiento = new Date(inv.fecha_vencimiento);
+        return fechaVencimiento >= hoy && fechaVencimiento <= en7Dias;
+      })
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
+    return { totalVencido, totalPorPagar, totalParcial, compromisos7Dias };
+  }, [filteredInvoices]);
 
   const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     const payloadConDefaults = {
@@ -298,7 +369,7 @@ export default function Payables() {
     if (ok) {
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
-      await refreshInvoices?.();
+      await Promise.all([refreshInvoices?.(), refreshBankAccounts?.()]);
     }
   };
 
@@ -310,7 +381,9 @@ export default function Payables() {
     }).format(amount || 0);
   };
 
-  // 3. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (FACTURAS)
+  // ==========================================
+  // COLUMNAS ACTUALIZADAS
+  // ==========================================
   const payablesColumns: ColumnDef<PayableInvoice>[] = useMemo(
     () => [
       {
@@ -326,51 +399,64 @@ export default function Payables() {
         key: "supplier_razon_social",
         header: "Proveedor",
         render: (value) => (
-          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+          <span
+            className="font-black text-brand-navy dark:text-white uppercase tracking-tight block max-w-[200px] truncate"
+            title={value}
+          >
             {value || "—"}
           </span>
         ),
       },
       {
-        key: "clasificacion",
-        header: "Clasificación",
-        render: (value) => {
-          if (!value)
-            return <span className="text-[10px] text-muted-foreground">—</span>;
-          return (
-            <Badge className={getClasificacionColor(value)}>
-              {getClasificacionLabel(value)}
-            </Badge>
-          );
-        },
+        key: "cost_center",
+        header: "Centro de Costos",
+        render: (_, row) =>
+          row.cost_center ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 uppercase tracking-widest whitespace-nowrap">
+              <Briefcase className="h-3 w-3" />
+              {row.cost_center.codigo || row.cost_center.nombre}
+            </span>
+          ) : (
+            <span className="text-[10px] font-medium italic text-slate-400 uppercase tracking-widest">
+              Sin Asignar
+            </span>
+          ),
       },
       {
         key: "concepto",
         header: "Concepto",
         render: (value) => (
-          <span className="max-w-[200px] truncate text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block">
+          <span
+            className="max-w-[200px] truncate text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block"
+            title={value}
+          >
             {value}
           </span>
         ),
       },
       {
         key: "fecha_vencimiento",
-        header: "Vencimiento",
+        header: "Vencimiento / Crédito",
         type: "date",
         render: (value, row) => {
-          const statusInfo = getInvoiceStatusInfo(row);
-          const isOverdue =
-            statusInfo.status === "danger" && (row.saldo_pendiente || 0) > 0;
+          const isVencida =
+            new Date(value as string) < new Date() &&
+            row.estatus !== "pagado" &&
+            row.estatus !== "cancelado";
+          const diasCredito =
+            row.supplier?.dias_credito || (row as any).dias_credito || 0;
+
           return (
-            <span
-              className={
-                isOverdue
-                  ? "text-red-600 font-bold"
-                  : "text-slate-600 dark:text-slate-300 font-medium text-xs"
-              }
-            >
-              {value || "—"}
-            </span>
+            <div className="flex flex-col">
+              <span
+                className={`text-xs font-black ${isVencida ? "text-brand-red dark:text-red-500" : "text-slate-600 dark:text-slate-300"}`}
+              >
+                {value ? format(new Date(value as string), "dd/MMM/yyyy") : "—"}
+              </span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5 font-bold">
+                {diasCredito > 0 ? `${diasCredito} Días` : "Contado"}
+              </span>
+            </div>
           );
         },
       },
@@ -389,17 +475,16 @@ export default function Payables() {
         header: "Saldo",
         type: "number",
         render: (value, row) => {
-          const statusInfo = getInvoiceStatusInfo(row);
-          const isOverdue =
-            statusInfo.status === "danger" && (row.saldo_pendiente || 0) > 0;
+          const isNotaCredito =
+            row.tipo_comprobante === "E" || (value as number) < 0;
           return (
             <span
               className={`font-mono text-sm font-black ${
-                value === 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : isOverdue
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-amber-600 dark:text-amber-400"
+                isNotaCredito
+                  ? "text-blue-600 dark:text-blue-500"
+                  : (value as number) > 0
+                    ? "text-amber-600 dark:text-amber-500"
+                    : "text-emerald-600 dark:text-emerald-500"
               }`}
             >
               {formatMoney(value)}
@@ -410,13 +495,11 @@ export default function Payables() {
       {
         key: "estatus",
         header: "Estatus",
-        type: "status",
-        statusOptions: ["pendiente", "pago_parcial", "pagado", "cancelado"],
-        render: (_, row) => {
-          const statusInfo = getInvoiceStatusInfo(row);
+        render: (v) => {
+          const estatusReal = String(v).toLowerCase();
           return (
-            <StatusBadge status={statusInfo.status}>
-              {statusInfo.label}
+            <StatusBadge status={getStatusFromLabel(estatusReal)}>
+              {estatusReal.replace("_", " ")}
             </StatusBadge>
           );
         },
@@ -495,7 +578,6 @@ export default function Payables() {
     [],
   );
 
-  // 4. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (PAGOS)
   const paymentsColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -588,20 +670,19 @@ export default function Payables() {
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
       <PageHeader
         title="Cuentas por Pagar & Gastos"
-        description="Gestión centralizada de facturas de proveedores y control de pagos."
+        description="Gestión centralizada de facturas, control de pagos y filtros operativos."
         icon={
           <CreditCard className="h-8 w-8 text-brand-navy dark:text-white" />
         }
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* FIX: BOTÓN QUE ABRE EL MODAL DE ARRASTRAR XML */}
           <Button
             variant="outline"
             className="border-indigo-500 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-black tracking-wide shadow-sm haptic-press transition-all"
             onClick={() => setIsXmlModalOpen(true)}
           >
-            <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer XML /
-            Gasto
+            <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer Reporte
+            SAT
           </Button>
 
           <ActionButton
@@ -617,6 +698,66 @@ export default function Payables() {
           </ActionButton>
         </div>
       </PageHeader>
+
+      {/* ==========================================
+          BARRA DE FILTROS SUPERIOR
+          ========================================== */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
+        <div className="relative col-span-1 md:col-span-2 lg:col-span-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Buscar folio o proveedor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 h-10 bg-white dark:bg-slate-950"
+          />
+        </div>
+
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
+            <SelectValue placeholder="Estatus" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los Estatus</SelectItem>
+            <SelectItem value="pendiente">Pendiente</SelectItem>
+            <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
+            <SelectItem value="pagado">Pagado</SelectItem>
+            <SelectItem value="cancelado">Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={cecoFilter} onValueChange={setCecoFilter}>
+          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
+            <SelectValue placeholder="Centro de Costos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los CECOs</SelectItem>
+            {uniqueCecos.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.nombre}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="relative">
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="h-10 bg-white dark:bg-slate-950 w-full text-sm text-slate-700 dark:text-slate-300"
+            title="Filtrar por Fecha de Emisión"
+          />
+        </div>
+
+        <Button
+          variant="ghost"
+          onClick={clearFilters}
+          className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-xs uppercase tracking-widest"
+        >
+          <FilterX className="h-4 w-4" /> Limpiar
+        </Button>
+      </div>
 
       <Tabs defaultValue="cuentas" className="w-full space-y-6">
         <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
@@ -639,12 +780,10 @@ export default function Payables() {
           </TabsList>
         </div>
 
-        {/* TAB 1: CUENTAS POR PAGAR */}
         <TabsContent
           value="cuentas"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
-          {/* KPI CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card
               className={cn(
@@ -660,7 +799,10 @@ export default function Payables() {
                   Total Vencido
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-rose-600 dark:text-rose-400">
-                  ${kpis.totalVencido.toLocaleString("es-MX")}
+                  $
+                  {kpis.totalVencido.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </Card>
@@ -674,7 +816,10 @@ export default function Payables() {
                   Por Pagar (Vigente)
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-amber-600 dark:text-amber-400">
-                  ${kpis.totalPorPagar.toLocaleString("es-MX")}
+                  $
+                  {kpis.totalPorPagar.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </Card>
@@ -688,21 +833,31 @@ export default function Payables() {
                   Pagos Parciales
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-blue-600 dark:text-blue-400">
-                  ${kpis.totalParcial.toLocaleString("es-MX")}
+                  $
+                  {kpis.totalParcial.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </Card>
 
-            <Card className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default">
-              <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-                <Package className="h-6 w-6 text-brand-navy dark:text-slate-300" />
+            {/* KPI DE VALOR AGREGADO: Proyección a 7 Días */}
+            <Card className="p-6 flex items-center gap-5 group hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all cursor-default relative overflow-hidden">
+              <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-indigo-600 dark:text-indigo-400">
+                <Clock className="h-6 w-6" />
               </div>
-              <div className="flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-                  Desde Purchases
+              <div className="flex flex-col justify-center relative z-10">
+                <p
+                  className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1"
+                  title="Flujo de efectivo requerido para facturas que vencen en los próximos 7 días"
+                >
+                  A Vencer (7 Días)
                 </p>
-                <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
-                  {kpis.fromPurchasesCount}
+                <p className="text-2xl font-black leading-none tracking-tighter text-indigo-600 dark:text-indigo-400">
+                  $
+                  {kpis.compromisos7Dias.toLocaleString("es-MX", {
+                    minimumFractionDigits: 2,
+                  })}
                 </p>
               </div>
             </Card>
@@ -711,7 +866,7 @@ export default function Payables() {
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
               <EnhancedDataTable
-                data={normalizedInvoices}
+                data={filteredInvoices}
                 columns={payablesColumns}
                 exportFileName="cuentas_por_pagar"
               />
@@ -719,7 +874,6 @@ export default function Payables() {
           </Card>
         </TabsContent>
 
-        {/* TAB 2: PAGOS Y COMPLEMENTOS */}
         <TabsContent
           value="pagos"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
@@ -736,13 +890,10 @@ export default function Payables() {
         </TabsContent>
       </Tabs>
 
-      {/* MODALES */}
-
-      {/* FIX: Componente Drag & Drop para Leer XML */}
       <ImportXMLExpenseModal
         open={isXmlModalOpen}
         onOpenChange={setIsXmlModalOpen}
-        onSuccess={handleXmlParsed}
+        onSuccess={handleBulkUploadSuccess}
       />
 
       <RegisterExpenseModal
@@ -811,28 +962,51 @@ export default function Payables() {
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Se eliminará la factura con folio interno{" "}
+                Estás intentando eliminar la factura con folio interno{" "}
                 <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
                   {invoiceToDelete?.folio_interno || "—"}
                 </b>
                 .
               </p>
 
-              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Pérdida de Datos
-                  </h4>
+              {invoiceToDelete &&
+              (invoiceToDelete.saldo_pendiente || 0) <
+                (invoiceToDelete.monto_total || 0) ? (
+                <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                      BLOQUEO POR AUDITORÍA (TESORERÍA)
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 font-bold">
+                    Esta factura no se puede eliminar porque ya tiene abonos o
+                    pagos registrados en los bancos. <br />
+                    <br />
+                    Si necesitas corregirla,{" "}
+                    <span className="underline">
+                      primero debes ir al módulo de Tesorería y anular el pago
+                    </span>{" "}
+                    para que el dinero regrese a la cuenta.
+                  </p>
                 </div>
-                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Esta acción no se puede deshacer y{" "}
-                  <b className="font-black underline">
-                    borrará los pagos asociados
-                  </b>
-                  .
-                </p>
-              </div>
+              ) : (
+                <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                      Pérdida de Datos
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                    Esta acción no se puede deshacer y{" "}
+                    <b className="font-black underline">
+                      borrará permanentemente el registro
+                    </b>
+                    .
+                  </p>
+                </div>
+              )}
             </AlertDialogDescription>
           </div>
 
@@ -846,14 +1020,19 @@ export default function Payables() {
               >
                 Cancelar
               </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                size="lg"
-                onClick={handleConfirmDeleteInvoice}
-                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
-              >
-                Sí, eliminar
-              </AlertDialogAction>
+
+              {(!invoiceToDelete ||
+                (invoiceToDelete.saldo_pendiente || 0) ===
+                  (invoiceToDelete.monto_total || 0)) && (
+                <AlertDialogAction
+                  variant="destructive"
+                  size="lg"
+                  onClick={handleConfirmDeleteInvoice}
+                  className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+                >
+                  Sí, eliminar
+                </AlertDialogAction>
+              )}
             </div>
           </AlertDialogFooter>
         </AlertDialogContent>

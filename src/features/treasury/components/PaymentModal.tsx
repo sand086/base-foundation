@@ -19,7 +19,7 @@ import {
 import { CreditCard, Landmark, AlertCircle, Loader2 } from "lucide-react";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { BankAccount } from "@/features/treasury/types";
-import { Supplier } from "@/features/payables/types";
+import { Supplier } from "@/features/suppliers/types";
 
 interface PaymentModalProps {
   open: boolean;

@@ -1,7 +1,7 @@
-// src/pages/Dispatch.tsx
+import { useSearchParams } from "react-router-dom"; //   NUEVO IMPORT
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { PageHeader } from "@/components/ui/page-header"; //  Importado nuestro Header estándar
+import { PageHeader } from "@/components/ui/page-header";
 import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
 import { TripPlanner } from "@/features/trips/components/TripPlanner";
 import { StandByTrips } from "@/features/trips/components/StandByTrips";
@@ -10,9 +10,17 @@ import { Clock, LayoutDashboard, PlusCircle, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Dispatch = () => {
+  //   FIX: Leemos la pestaña desde la URL
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab") || "planner";
+
+  const handleTabChange = (value: string) => {
+    searchParams.set("tab", value);
+    setSearchParams(searchParams);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6 min-h-[calc(100vh-4rem)] flex flex-col animate-page-enter pb-20 bg-slate-50/30 dark:bg-transparent">
-      {/*  PAGE HEADER TAHOE */}
       <PageHeader
         title="Centro de Dispatch"
         description="Gestión de salida, asignación de unidades y monitoreo de equipos en stand-by."
@@ -21,12 +29,11 @@ const Dispatch = () => {
         }
       />
 
-      {/*  TABS CONTENEDOR FLEX PARA SCROLL PERFECTO */}
       <Tabs
-        defaultValue="planner"
+        value={currentTab} //   FIX: Pestaña controlada por estado
+        onValueChange={handleTabChange}
         className="w-full flex-1 flex flex-col min-h-0"
       >
-        {/*  TABS LIST TAHOE */}
         <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
           <TabsList className="bg-slate-200/50 dark:bg-slate-800/80 backdrop-blur-md p-1 h-12 rounded-xl border border-slate-300/50 dark:border-white/5 inline-flex min-w-max sm:w-full max-w-[600px] grid-cols-3 shadow-sm">
             <TabsTrigger
@@ -56,7 +63,6 @@ const Dispatch = () => {
           </TabsList>
         </div>
 
-        {/*  TABS CONTENT (Con animación de entrada) */}
         <div className="flex-1 mt-6">
           <TabsContent
             value="planner"

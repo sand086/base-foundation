@@ -61,11 +61,14 @@ interface EnhancedDataTableProps<T> {
   exportFileName?: string;
   searchPlaceholder?: string;
   isLoading?: boolean;
-  //   NUEVAS PROPS PARA SELECCIÓN MULTIPLE
   enableRowSelection?: boolean;
   selectedRows?: T[];
   onSelectedRowsChange?: (rows: T[]) => void;
-  rowKey?: keyof T; // e.g., 'id'
+  rowKey?: keyof T;
+  customFilters?: React.ReactNode;
+  onCustomExport?: () => void;
+  //  NUEVA PROP: Permite decidir qué filas tienen el checkbox habilitado
+  isRowSelectable?: (row: T) => boolean;
 }
 
 type SortDirection = "asc" | "desc" | null;
@@ -99,8 +102,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   selectedRows = [],
   onSelectedRowsChange,
   rowKey = "id" as keyof T,
+  customFilters,
+  onCustomExport,
+  isRowSelectable, //  RECIBIMOS LA REGLA
 }: EnhancedDataTableProps<T>) {
-  // State
   const [globalSearch, setGlobalSearch] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [pageSize, setPageSize] = useState(10);
@@ -108,16 +113,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
   const [showFilters, setShowFilters] = useState(false);
 
-  // Get value from nested keys
   const getValue = (row: T, key: string): any => {
     return key.split(".").reduce((obj, k) => obj?.[k], row);
   };
 
-  // Filter data
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    // Global search
     if (globalSearch) {
       const searchLower = globalSearch.toLowerCase();
       result = result.filter((row) =>
@@ -128,7 +130,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
       );
     }
 
-    // Column filters
     Object.entries(columnFilters).forEach(([key, filter]) => {
       if (!filter.value) return;
 
@@ -151,8 +152,17 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         if (range.from || range.to) {
           result = result.filter((row) => {
             const dateValue = new Date(getValue(row, key));
-            if (range.from && dateValue < range.from) return false;
-            if (range.to && dateValue > range.to) return false;
+
+            if (range.from) {
+              const fromDate = new Date(range.from);
+              fromDate.setHours(0, 0, 0, 0);
+              if (dateValue < fromDate) return false;
+            }
+            if (range.to) {
+              const toDate = new Date(range.to);
+              toDate.setHours(23, 59, 59, 999);
+              if (dateValue > toDate) return false;
+            }
             return true;
           });
         }
@@ -178,7 +188,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return result;
   }, [data, globalSearch, columnFilters, columns]);
 
-  // Sort data
   const sortedData = useMemo(() => {
     if (!sortConfig || !sortConfig.direction) return filteredData;
 
@@ -195,9 +204,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     });
   }, [filteredData, sortConfig]);
 
-  // Paginate data
   const paginatedData = useMemo(() => {
-    if (pageSize === -1) return sortedData; // Show all
+    if (pageSize === -1) return sortedData;
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, currentPage, pageSize]);
@@ -205,7 +213,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const totalPages =
     pageSize === -1 ? 1 : Math.ceil(sortedData.length / pageSize);
 
-  // Handlers
   const handleSort = (key: string) => {
     setSortConfig((prev) => {
       if (prev?.key !== key) return { key, direction: "asc" };
@@ -267,27 +274,40 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return <ChevronDown className="h-3.5 w-3.5 text-brand-red ml-2" />;
   };
 
+  //  LÓGICA INTELIGENTE PARA EL CHECKBOX MAESTRO
+  const selectablePaginatedData = useMemo(() => {
+    return paginatedData.filter((row) =>
+      isRowSelectable ? isRowSelectable(row) : true,
+    );
+  }, [paginatedData, isRowSelectable]);
+
   return (
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
-      {/* CAPA 3: TOOLBAR (SUNKEN AREA TAHOE) */}
-      <div className="flex flex-wrap items-center gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
-        {/* Global Search */}
-        <div className="relative flex-1 min-w-[250px] max-w-sm group">
-          <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />{" "}
-          <Input
-            placeholder={searchPlaceholder}
-            value={globalSearch}
-            onChange={(e) => {
-              setGlobalSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
-          />
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
+        {/* Left Side: Global Search + Custom Filters (Si existen) */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className="relative flex-1 min-w-[250px] max-w-sm group">
+            <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
+            <Input
+              placeholder={searchPlaceholder}
+              value={globalSearch}
+              onChange={(e) => {
+                setGlobalSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
+            />
+          </div>
+
+          {/* AQUI SE INYECTA LA ESTACIÓN Y FECHAS DE FuelLoads.tsx */}
+          {customFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              {customFilters}
+            </div>
+          )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 ml-auto">
-          {/* Filters Button & Popover */}
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
           <Popover open={showFilters} onOpenChange={setShowFilters}>
             <PopoverTrigger asChild>
               <Button
@@ -300,7 +320,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 )}
               >
                 <Filter className="h-4 w-4 mr-2" />
-                Filtros
+                Filtros Int.
                 {hasActiveFilters && (
                   <Badge className="ml-2 h-5 px-1.5 bg-white/20 text-white border-none shadow-sm font-mono text-[10px]">
                     {Object.keys(columnFilters).length + (globalSearch ? 1 : 0)}
@@ -310,12 +330,12 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             </PopoverTrigger>
             <PopoverContent
               className="w-80 glass-panel bg-white/95 dark:bg-brand-navy/95 border-slate-200 dark:border-white/10 shadow-2xl p-6 backdrop-blur-2xl rounded-2xl"
-              align="start"
+              align="end"
             >
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-4">
                   <h4 className="text-[11px] font-black text-brand-navy dark:text-white uppercase tracking-[0.2em]">
-                    Filtros Avanzados
+                    Filtros Internos
                   </h4>
                   {hasActiveFilters && (
                     <Button
@@ -490,7 +510,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           <Button
             variant="outline"
             className="h-11 px-5 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 hover:border-emerald-200 dark:hover:border-emerald-500/30 shadow-sm transition-all rounded-xl haptic-press"
-            onClick={handleExportExcel}
+            onClick={onCustomExport ? onCustomExport : handleExportExcel}
           >
             <Download className="h-4 w-4 mr-2" /> Excel
           </Button>
@@ -503,13 +523,14 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           <table className="w-full caption-bottom text-sm border-collapse">
             <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
-                {/*   COLUMNA DE SELECCIÓN HEADER   */}
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
+                    {/*  CHECKBOX HEADER: Solo reacciona a las filas seleccionables */}
                     <Checkbox
+                      disabled={selectablePaginatedData.length === 0}
                       checked={
-                        paginatedData.length > 0 &&
-                        paginatedData.every((row) =>
+                        selectablePaginatedData.length > 0 &&
+                        selectablePaginatedData.every((row) =>
                           selectedRows?.some(
                             (sr) => sr[rowKey] === row[rowKey],
                           ),
@@ -519,7 +540,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         if (!onSelectedRowsChange) return;
                         if (checked) {
                           const newRows = [...selectedRows];
-                          paginatedData.forEach((row) => {
+                          selectablePaginatedData.forEach((row) => {
                             if (
                               !newRows.some((sr) => sr[rowKey] === row[rowKey])
                             ) {
@@ -530,7 +551,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         } else {
                           const newRows = selectedRows.filter(
                             (sr) =>
-                              !paginatedData.some(
+                              !selectablePaginatedData.some(
                                 (row) => row[rowKey] === sr[rowKey],
                               ),
                           );
@@ -546,7 +567,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     key={col.key as string}
                     className={cn(
                       "h-14 px-6 py-4 text-left align-middle transition-colors",
-                      "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white group/head",
+                      "text-[14px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white group/head",
                       col.sortable !== false && "cursor-pointer select-none",
                       col.width,
                     )}
@@ -592,60 +613,69 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    className={cn(
-                      "interactive-row transition-all duration-300 outline-none group",
-                      "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
-                      selectedRows?.some((sr) => sr[rowKey] === row[rowKey]) &&
-                        "bg-brand-navy/5 dark:bg-brand-navy/20",
-                      onRowClick && "cursor-pointer active:scale-[0.998]",
-                    )}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {/*   COLUMNA DE SELECCIÓN ROW   */}
-                    {enableRowSelection && (
-                      <td
-                        className="px-6 py-4 align-middle text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Checkbox
-                          checked={selectedRows?.some(
-                            (sr) => sr[rowKey] === row[rowKey],
-                          )}
-                          onCheckedChange={(checked) => {
-                            if (!onSelectedRowsChange) return;
-                            if (checked) {
-                              onSelectedRowsChange([...selectedRows, row]);
-                            } else {
-                              onSelectedRowsChange(
-                                selectedRows.filter(
-                                  (sr) => sr[rowKey] !== row[rowKey],
-                                ),
-                              );
-                            }
-                          }}
-                        />
-                      </td>
-                    )}
+                paginatedData.map((row, idx) => {
+                  //  VALIDACIÓN INDIVIDUAL DE FILA
+                  const isSelectable = isRowSelectable
+                    ? isRowSelectable(row)
+                    : true;
 
-                    {columns.map((col) => (
-                      <td
-                        key={col.key as string}
-                        className={cn(
-                          "px-6 py-4 align-middle transition-all duration-300",
-                          "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
-                          "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
-                        )}
-                      >
-                        {col.render
-                          ? col.render(getValue(row, col.key as string), row)
-                          : getValue(row, col.key as string)}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                  return (
+                    <tr
+                      key={idx}
+                      className={cn(
+                        "interactive-row transition-all duration-300 outline-none group",
+                        "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
+                        selectedRows?.some(
+                          (sr) => sr[rowKey] === row[rowKey],
+                        ) && "bg-brand-navy/5 dark:bg-brand-navy/20",
+                        onRowClick && "cursor-pointer active:scale-[0.998]",
+                      )}
+                      onClick={() => onRowClick?.(row)}
+                    >
+                      {enableRowSelection && (
+                        <td
+                          className="px-6 py-4 align-middle text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            disabled={!isSelectable} //  BLOQUEAMOS CHECKBOX
+                            checked={selectedRows?.some(
+                              (sr) => sr[rowKey] === row[rowKey],
+                            )}
+                            onCheckedChange={(checked) => {
+                              if (!onSelectedRowsChange || !isSelectable)
+                                return; //  PREVENIMOS ONCHANGE
+                              if (checked) {
+                                onSelectedRowsChange([...selectedRows, row]);
+                              } else {
+                                onSelectedRowsChange(
+                                  selectedRows.filter(
+                                    (sr) => sr[rowKey] !== row[rowKey],
+                                  ),
+                                );
+                              }
+                            }}
+                          />
+                        </td>
+                      )}
+
+                      {columns.map((col) => (
+                        <td
+                          key={col.key as string}
+                          className={cn(
+                            "px-6 py-4 align-middle transition-all duration-300",
+                            "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
+                            "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
+                          )}
+                        >
+                          {col.render
+                            ? col.render(getValue(row, col.key as string), row)
+                            : getValue(row, col.key as string)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

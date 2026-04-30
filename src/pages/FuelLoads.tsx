@@ -1,15 +1,32 @@
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
+
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
 import {
   Fuel,
   Plus,
   AlertTriangle,
   TrendingUp,
-  Gauge,
   Droplets,
   MoreVertical,
   Eye,
@@ -18,18 +35,17 @@ import {
   Loader2,
   BarChart3,
   Activity,
-  ShieldCheck,
-  Zap,
+  FilterX,
+  Check,
+  ChevronsUpDown,
+  Lock,
 } from "lucide-react";
 
 // Tipos y Servicios
 import { Unit } from "@/features/units/types";
 import { Operator } from "@/features/operators/types";
 import { FuelLoad } from "@/features/settlements/types";
-import {
-  AddTicketModal,
-  type TicketFormData,
-} from "@/features/settlements/components/AddTicketModal";
+import { AddTicketModal } from "@/features/settlements/components/AddTicketModal";
 import { ViewFuelModal } from "@/features/settlements/components/ViewFuelModal";
 import { EditFuelModal } from "@/features/settlements/components/EditFuelModal";
 import {
@@ -66,13 +82,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+//  IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
+import { useTrips } from "@/features/trips/hooks/useTrips";
+
 interface FuelLoadDisplay extends FuelLoad {
   unidad_numero: string;
   operador_nombre: string;
   excede_tanque: boolean;
+  is_conciliated?: boolean;
 }
 
 const FuelLoads = () => {
+  //  INYECTAMOS USTRIPS PARA EL BLINDAJE
+  const { trips } = useTrips();
+
   const [units, setUnits] = useState<Unit[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [cargas, setCargas] = useState<FuelLoadDisplay[]>([]);
@@ -80,6 +103,12 @@ const FuelLoads = () => {
   const [idParaEliminar, setIdParaEliminar] = useState<number | null>(null);
 
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
+  const [openUnitSearch, setOpenUnitSearch] = useState(false);
+
+  const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
+
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [selectedStation, setSelectedStation] = useState<string>("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cargaToView, setCargaToView] = useState<FuelLoadDisplay | null>(null);
@@ -93,7 +122,6 @@ const FuelLoads = () => {
         fuelService.getAll(),
       ]);
 
-      // 1. Aseguramos que siempre sean arrays antes de usarlos
       const safeUnits = uData || [];
       const safeOperators = oData || [];
       const safeFuel = fData || [];
@@ -101,10 +129,8 @@ const FuelLoads = () => {
       setUnits(safeUnits);
       setOperators(safeOperators);
 
-      // 2. Usamos los arrays seguros para el mapeo
       const normalizedFuel: FuelLoadDisplay[] = safeFuel.map((item: any) => {
         const unit = safeUnits.find((u: Unit) => u.id === item.unit_id);
-
         const capacity =
           item.tipo_combustible === "diesel"
             ? unit?.capacidad_tanque_diesel || 800
@@ -117,13 +143,13 @@ const FuelLoads = () => {
           operador_nombre:
             item.operator?.name || item.operator?.nombre || "N/A",
           excede_tanque: Number(item.litros) > Number(capacity),
+          is_conciliated: Boolean(item.is_conciliated),
         };
       });
       setCargas(normalizedFuel);
     } catch (error) {
-      // 3. Imprimimos el error real en consola para saber qué falló en la API
-      console.error("  Error real en loadData:", error);
-      toast.error("Fallo de Sincronización de informacion. Intente de nuevo.");
+      console.error("Error real en loadData:", error);
+      toast.error("Fallo de sincronización. Intente de nuevo.");
     } finally {
       setIsLoading(false);
     }
@@ -133,11 +159,8 @@ const FuelLoads = () => {
     loadData();
   }, []);
 
-  //  NUEVA FUNCIÓN PARA GUARDAR EL TICKET
   const handleCreateTicket = async (data: any) => {
     const ticketsArray = data.tickets || [];
-
-    // Obtenemos los tramos seleccionados. Si no hay, dejamos un array con un null para que el loop corra 1 vez (Carga de patio general).
     const legIds =
       data.trip_leg_ids && data.trip_leg_ids.length > 0
         ? data.trip_leg_ids
@@ -150,57 +173,38 @@ const FuelLoads = () => {
     }
 
     const totalPeticiones = ticketsArray.length * divisor;
-    const toastId = toast.loading(
-      `Distribuyendo y guardando ${totalPeticiones} registro(s) en el Ledger...`,
-    );
+    const toastId = toast.loading(`Guardando ${totalPeticiones} vale(s)...`);
 
     try {
-      // 1. Recorremos el arreglo de tickets que mandó el Modal
       for (const ticket of ticketsArray) {
-        // 2. LÓGICA CORE: Dividimos los litros equitativamente entre los viajes/tramos seleccionados
         const litrosDistribuidos =
           (Number(ticket.litros_diesel) || 0) / divisor;
 
-        // 3. Iteramos por cada tramo (leg) seleccionado para crear un registro en BD por cada uno
         for (const legId of legIds) {
           const formData = new FormData();
-
           formData.append("unit_id", String(data.unit_id));
           formData.append("operator_id", String(data.operator_id));
           formData.append("odometro", String(data.odometro || 0));
           formData.append("fecha_hora", String(ticket.fecha_hora));
           formData.append("estacion", ticket.estacion || "No especificada");
-
-          // Enviamos los litros fraccionados
           formData.append("litros_diesel", String(litrosDistribuidos));
           formData.append("precio_diesel", String(ticket.precio_diesel || 0));
 
-          // Campos opcionales de vinculación
-          if (data.trip_id && data.trip_id !== "none") {
+          if (data.trip_id && data.trip_id !== "none")
             formData.append("trip_id", String(data.trip_id));
-          }
-
-          if (legId && legId !== "undefined") {
+          if (legId && legId !== "undefined")
             formData.append("trip_leg_id", String(legId));
-          }
+          if (ticket.evidencia) formData.append("file", ticket.evidencia);
 
-          if (ticket.evidencia) {
-            formData.append("file", ticket.evidencia);
-          }
-
-          // 4. Se lo mandamos a tu servicio
           await fuelService.create(formData);
         }
       }
 
-      // Si todo sale bien, cerramos el modal y recargamos la tabla
       setIsModalOpen(false);
       await loadData();
       toast.success(
-        `Éxito: Vales distribuidos correctamente en ${divisor} fase(s).`,
-        {
-          id: toastId,
-        },
+        `Éxito: Vales guardados correctamente en ${divisor} fase(s).`,
+        { id: toastId },
       );
     } catch (error) {
       console.error("Error al guardar tickets:", error);
@@ -211,16 +215,58 @@ const FuelLoads = () => {
     }
   };
 
-  // Solo filtramos por Unidad. La búsqueda global de texto se delega al EnhancedDataTable
+  const estacionesUnicas = useMemo(() => {
+    const ests = cargas.map((c) => c.estacion || "No especificada");
+    return Array.from(new Set(ests)).sort();
+  }, [cargas]);
+
   const filteredCargas = useMemo(() => {
-    if (selectedUnitId === "all") return cargas;
-    return cargas.filter((c) => String(c.unit_id) === selectedUnitId);
-  }, [cargas, selectedUnitId]);
+    let filtered = cargas;
+
+    if (selectedUnitId !== "all") {
+      filtered = filtered.filter((c) => String(c.unit_id) === selectedUnitId);
+    }
+
+    const hoyStr = new Date().toLocaleDateString("es-MX");
+
+    if (dateFilter === "hoy") {
+      filtered = filtered.filter(
+        (c) => new Date(c.fecha_hora).toLocaleDateString("es-MX") === hoyStr,
+      );
+    } else {
+      filtered = filtered.filter(
+        (c) => new Date(c.fecha_hora).toLocaleDateString("es-MX") !== hoyStr,
+      );
+
+      if (dateRange?.from) {
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter((c) => new Date(c.fecha_hora) >= fromDate);
+      }
+      if (dateRange?.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((c) => new Date(c.fecha_hora) <= toDate);
+      }
+      if (selectedStation !== "all") {
+        filtered = filtered.filter(
+          (c) => (c.estacion || "No especificada") === selectedStation,
+        );
+      }
+    }
+
+    return filtered;
+  }, [cargas, selectedUnitId, dateFilter, dateRange, selectedStation]);
 
   const statsAuditoria = useMemo(() => {
     const ahora = new Date();
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const cargasSemana = filteredCargas.filter(
+    const todasLasCargasUnidad =
+      selectedUnitId === "all"
+        ? cargas
+        : cargas.filter((c) => String(c.unit_id) === selectedUnitId);
+
+    const cargasSemana = todasLasCargasUnidad.filter(
       (c) => new Date(c.fecha_hora) >= hace7Dias,
     );
     const litros = cargasSemana.reduce((sum, c) => sum + (c.litros || 0), 0);
@@ -229,6 +275,7 @@ const FuelLoads = () => {
       (a, b) =>
         new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
     );
+
     const odoActual = sorted.length > 0 ? sorted[0].odometro : 0;
     const odoAnterior =
       sorted.length > 1 ? sorted[sorted.length - 1].odometro : odoActual;
@@ -237,8 +284,9 @@ const FuelLoads = () => {
       kmRecorridos > 0 && litros > 0
         ? (kmRecorridos / litros).toFixed(2)
         : "0.00";
+
     return { litros, inversion, odoActual, kmRecorridos, rendimiento };
-  }, [filteredCargas]);
+  }, [cargas, selectedUnitId]);
 
   const selectedUnitObj = useMemo(
     () => units.find((u) => String(u.id) === selectedUnitId),
@@ -247,23 +295,45 @@ const FuelLoads = () => {
 
   const handleDelete = async () => {
     if (!idParaEliminar) return;
-    const toastId = toast.loading("Eliminando del Ledger...");
+    const toastId = toast.loading("Eliminando vale...");
     try {
       await fuelService.delete(idParaEliminar);
       setCargas((prev) => prev.filter((c) => c.id !== idParaEliminar));
-      toast.success("Activo Eliminado", { id: toastId });
+      toast.success("Vale eliminado correctamente", { id: toastId });
     } catch (error) {
-      toast.error("Error en Eliminación", { id: toastId });
+      toast.error("Error al eliminar", { id: toastId });
     } finally {
       setIdParaEliminar(null);
     }
   };
 
+  const ticketToDelete = useMemo(
+    () => cargas.find((c) => c.id === idParaEliminar),
+    [cargas, idParaEliminar],
+  );
+
+  //  LÓGICA DE BLINDAJE
+  const getTicketTripStatus = useCallback(
+    (tripId: number | string | null | undefined) => {
+      if (!tripId) return { isLiquidado: false };
+      const trip = trips.find((t) => String(t.id) === String(tripId));
+      if (!trip) return { isLiquidado: false };
+
+      const isLiquidado =
+        trip.status === "liquidado" ||
+        trip.legs?.some((l) => l.status === "liquidado");
+
+      return { isLiquidado: !!isLiquidado };
+    },
+    [trips],
+  );
+
   const columns: ColumnDef<FuelLoadDisplay>[] = useMemo(
     () => [
       {
         key: "fecha_hora",
-        header: "Timestamp",
+        header: "Fecha",
+        type: "date",
         render: (v) => (
           <div className="flex flex-col font-mono">
             <span className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-[11px]">
@@ -285,7 +355,9 @@ const FuelLoads = () => {
       },
       {
         key: "tipo_combustible",
-        header: "Vector",
+        header: "Tipo",
+        type: "status",
+        statusOptions: ["diesel", "urea"],
         render: (v) => (
           <div
             className={cn(
@@ -306,19 +378,44 @@ const FuelLoads = () => {
       },
       {
         key: "unidad_numero",
-        header: "ID",
-        render: (v) => {
-          // El string 'v' ya viene formateado correctamente desde nuestra función loadData
-          return (
-            <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
-              {v} {/*  Antes decía ECO-{v}, ahora lo dejamos limpio */}
+        header: "ECO",
+        render: (v) => (
+          <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
+            {v}
+          </span>
+        ),
+      },
+      {
+        key: "estacion",
+        header: "Estación",
+        render: (v) => (
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase truncate max-w-[120px] block">
+            {v || "No Especificada"}
+          </span>
+        ),
+      },
+      {
+        key: "trip_id",
+        header: "Viaje / Conciliación",
+        render: (v, row) =>
+          v ? (
+            <div className="flex items-center gap-2">
+              <Badge className="bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/30 shadow-none text-[10px] font-mono">
+                TRP-{v}
+              </Badge>
+              {row.is_conciliated && (
+                <Lock className="h-3 w-3 text-emerald-500" />
+              )}
+            </div>
+          ) : (
+            <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
+              Patio / Sin Viaje
             </span>
-          );
-        },
+          ),
       },
       {
         key: "litros",
-        header: "Volumen",
+        header: "Litros",
         render: (v, row) => (
           <div className="flex items-center gap-2">
             <span
@@ -340,7 +437,7 @@ const FuelLoads = () => {
       },
       {
         key: "total",
-        header: "Inversión",
+        header: "Costo Total",
         render: (v) => (
           <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm tracking-tighter">
             ${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2 })}
@@ -349,7 +446,7 @@ const FuelLoads = () => {
       },
       {
         key: "odometro",
-        header: "Métrica Km",
+        header: "Odómetro",
         render: (v) => (
           <span className="font-mono text-[11px] font-bold text-slate-500">
             {Number(v).toLocaleString()} KM
@@ -357,21 +454,16 @@ const FuelLoads = () => {
         ),
       },
       {
-        key: "evidencia_url",
-        header: "Status Ticket",
-        render: (v) =>
-          v ? (
-            <Badge className="bg-emerald-500 dark:bg-emerald-600 text-white border-none text-[8px] font-black tracking-widest px-2 shadow-sm">
-              VALIDATED
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="text-rose-400 border-rose-400/30 text-[8px] font-black tracking-widest px-2 uppercase bg-rose-50 dark:bg-rose-500/10 shadow-sm"
-            >
-              Missing Evidence
-            </Badge>
-          ),
+        key: "operador_nombre",
+        header: "Operador",
+        render: (v) => (
+          <span
+            className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase truncate max-w-[180px] block"
+            title={String(v)}
+          >
+            {v !== "N/A" ? v : "Sin Operador"}
+          </span>
+        ),
       },
       {
         key: "acciones",
@@ -396,27 +488,58 @@ const FuelLoads = () => {
                 onClick={() => setCargaToView(row)}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" /> Consultar
+                <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                Detalles
               </DropdownMenuItem>
               <DropdownMenuItem
-                onClick={() => setCargaToEdit(row)}
+                onClick={() => {
+                  const { isLiquidado } = getTicketTripStatus(row.trip_id);
+                  if (isLiquidado) {
+                    toast.error("Bloqueo de Seguridad", {
+                      description:
+                        "No se puede editar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación.",
+                      duration: 6000,
+                    });
+                    return;
+                  }
+                  if (row.is_conciliated) {
+                    toast.warning("⚠️ Vale Previamente Conciliado", {
+                      description:
+                        "Al editar este vale, los cálculos de dinero y odómetro quedarán desfasados. Deberás ir a la pestaña de Auditoría y hacer el recalculo.",
+                      duration: 8000,
+                    });
+                  }
+                  setCargaToEdit(row);
+                }}
                 className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
               >
-                <Pencil className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Refactorizar
+                <Pencil className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+                Editar
               </DropdownMenuItem>
               <DropdownMenuSeparator className="dark:bg-white/10" />
               <DropdownMenuItem
                 className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-                onClick={() => setIdParaEliminar(row.id)}
+                onClick={() => {
+                  const { isLiquidado } = getTicketTripStatus(row.trip_id);
+                  if (isLiquidado) {
+                    toast.error("Bloqueo de Seguridad", {
+                      description:
+                        "No se puede eliminar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación para poder eliminarlo.",
+                      duration: 6000,
+                    });
+                    return;
+                  }
+                  setIdParaEliminar(row.id);
+                }}
               >
-                <Trash2 className="h-4 w-4" /> Purgar Registro
+                <Trash2 className="h-4 w-4" /> Eliminar
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ),
       },
     ],
-    [],
+    [getTicketTripStatus],
   );
 
   if (isLoading)
@@ -425,7 +548,7 @@ const FuelLoads = () => {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="animate-spin h-12 w-12 text-brand-red" />
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-            Iniciando Consola Industrial...
+            Cargando vales...
           </p>
         </div>
       </div>
@@ -433,38 +556,100 @@ const FuelLoads = () => {
 
   return (
     <div className="p-6 md:p-8 space-y-8 bg-white/80 dark:bg-brand-navy/95 backdrop-blur-2xl min-h-screen animate-in fade-in duration-700">
-      {/* CAPA 2: HEADER TAHOE CON CONTROLES MAESTROS */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 pb-4 border-b border-slate-200/60 dark:border-white/10">
         <PageHeader
-          title="Consola de Combustible"
+          title="Vales de Combustible"
           description="Monitoreo de rendimientos técnicos y flujo energético de flota"
           className="heading-crisp mb-0"
         />
 
-        {/* BARRA DE ACCIÓN MAESTRA (Filtro + Botón) */}
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedUnitId} onValueChange={setSelectedUnitId}>
-            <SelectTrigger className="w-[200px] h-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-white shadow-inner rounded-xl haptic-press">
-              <SelectValue placeholder="FILTRO DE FLOTA" />
-            </SelectTrigger>
-            <SelectContent className="rounded-2xl border-none shadow-3xl bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl">
-              <SelectItem
-                value="all"
-                className="font-black text-[10px] uppercase"
+          <Popover open={openUnitSearch} onOpenChange={setOpenUnitSearch}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={openUnitSearch}
+                className="w-[280px] h-11 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 font-black uppercase text-[10px] tracking-widest text-slate-700 dark:text-white shadow-inner rounded-xl justify-between haptic-press"
               >
-                Flota Completa
-              </SelectItem>
-              {units.map((u) => (
-                <SelectItem
-                  key={u.id}
-                  value={String(u.id)}
-                  className="font-mono text-[10px] font-bold"
-                >
-                  ECO-{u.numero_economico}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                {selectedUnitId === "all"
+                  ? "FLOTA COMPLETA"
+                  : units.find((u) => String(u.id) === selectedUnitId)
+                    ? `ECO-${units.find((u) => String(u.id) === selectedUnitId)?.numero_economico}`
+                    : "SELECCIONAR UNIDAD..."}
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0 rounded-2xl border-none shadow-2xl bg-white/95 dark:bg-brand-navy/95 backdrop-blur-xl">
+              <Command>
+                <CommandInput
+                  placeholder="Buscar por ECO u Operador..."
+                  className="h-11 text-xs font-bold"
+                />
+                <CommandList className="custom-scrollbar max-h-[300px]">
+                  <CommandEmpty className="py-6 text-center text-xs font-bold text-slate-500">
+                    No se encontraron coincidencias.
+                  </CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem
+                      value="flota completa todos"
+                      onSelect={() => {
+                        setSelectedUnitId("all");
+                        setOpenUnitSearch(false);
+                      }}
+                      className="font-black text-[10px] uppercase cursor-pointer"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 text-brand-red",
+                          selectedUnitId === "all"
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      FLOTA COMPLETA
+                    </CommandItem>
+
+                    {units.map((u) => {
+                      const cargaAsociada = cargas.find(
+                        (c) => String(c.unit_id) === String(u.id),
+                      );
+                      const operador = cargaAsociada
+                        ? cargaAsociada.operador_nombre
+                        : "Sin Operador";
+
+                      return (
+                        <CommandItem
+                          key={u.id}
+                          value={`eco-${u.numero_economico} ${operador}`}
+                          onSelect={() => {
+                            setSelectedUnitId(String(u.id));
+                            setOpenUnitSearch(false);
+                          }}
+                          className="font-mono text-[10px] font-bold cursor-pointer flex items-center"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 text-brand-red",
+                              selectedUnitId === String(u.id)
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <div className="flex flex-col">
+                            <span>ECO-{u.numero_economico}</span>
+                            <span className="text-[8px] text-slate-500 tracking-widest uppercase font-sans mt-0.5">
+                              {operador}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
 
           <Button
             onClick={() => setIsModalOpen(true)}
@@ -475,7 +660,6 @@ const FuelLoads = () => {
         </div>
       </div>
 
-      {/* CAPA 3: CUERPO (KPI GRID - VERDADEROS INDICADORES TAHOE) */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
@@ -487,7 +671,7 @@ const FuelLoads = () => {
             metric: "Consumo 7d",
           },
           {
-            label: "Inversión Ledger",
+            label: "Gasto Total",
             val: `$${statsAuditoria.inversion.toLocaleString()}`,
             icon: TrendingUp,
             color: "text-emerald-500",
@@ -495,7 +679,7 @@ const FuelLoads = () => {
             metric: "Capital 7d",
           },
           {
-            label: "Performance Real",
+            label: "Rendimiento Real",
             val: `${statsAuditoria.rendimiento} KM/L`,
             icon: BarChart3,
             color: "text-blue-500",
@@ -513,14 +697,12 @@ const FuelLoads = () => {
                 : "bg-white/90 dark:bg-slate-900/95",
             )}
           >
-            {/* Glow reflectante decorativo */}
             <div
               className={cn(
                 "absolute -top-10 -right-10 w-32 h-32 blur-3xl opacity-20 rounded-full pointer-events-none",
                 kpi.bg.replace("/10", ""),
               )}
             />
-
             <CardContent className="p-6 relative z-10 flex flex-col justify-between h-full">
               <div className="flex justify-between items-start">
                 <div className="space-y-2">
@@ -536,7 +718,6 @@ const FuelLoads = () => {
                     {kpi.val}
                   </p>
                 </div>
-                {/* ICON PLATE TAHOE */}
                 <div
                   className={cn(
                     "w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner",
@@ -565,7 +746,6 @@ const FuelLoads = () => {
         ))}
       </div>
 
-      {/* ALERTAS OPERATIVAS (Capa 3 Continúa) */}
       {selectedUnitId !== "all" &&
         selectedUnitObj?.tipo_1?.toLowerCase().includes("patio") && (
           <Alert className="bg-indigo-500/10 border-indigo-500/20 rounded-2xl shadow-sm animate-in zoom-in-95">
@@ -582,31 +762,101 @@ const FuelLoads = () => {
           </Alert>
         )}
 
-      {/* SECCIÓN DE DATOS: Liquid Glass Table */}
+      {/* SECCIÓN DE DATOS Y PESTAÑAS */}
       <div className="space-y-4 pt-4">
-        {/* LA TABLA: Liquid Glass con Garantía de Header Gris */}
+        <div className="flex items-center">
+          <Tabs
+            value={dateFilter}
+            onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
+            className="w-[300px]"
+          >
+            <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
+              <TabsTrigger value="hoy" className="rounded-lg font-bold text-xs">
+                Hoy
+              </TabsTrigger>
+              <TabsTrigger
+                value="historico"
+                className="rounded-lg font-bold text-xs"
+              >
+                Histórico
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
         <Card className="border-none shadow-3xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2.5rem] overflow-hidden border border-white/20 dark:border-white/5 ring-1 ring-slate-200/50 dark:ring-white/5">
           <CardContent className="p-0">
-            {/* Inyectamos la clase que fuerza el thead gris para la tabla */}
             <div className="[&_thead_tr]:bg-slate-100/90 [&_thead_tr]:dark:bg-slate-900/95">
               <EnhancedDataTable
                 data={filteredCargas}
                 columns={columns as any}
                 onRowClick={(row) => setCargaToView(row)}
                 className="liquid-glass-standard"
-                searchPlaceholder="BUSCAR UNIDAD O TERMINAL..."
+                searchPlaceholder="Búsqueda rápida..."
+                customFilters={
+                  dateFilter === "historico" && (
+                    <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
+                      <Select
+                        value={selectedStation}
+                        onValueChange={setSelectedStation}
+                      >
+                        <SelectTrigger className="w-[180px] h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-xs font-bold shadow-sm rounded-xl">
+                          <SelectValue placeholder="Estación..." />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-none shadow-xl bg-white dark:bg-slate-900">
+                          <SelectItem value="all" className="font-bold text-xs">
+                            Todas las estaciones
+                          </SelectItem>
+                          {estacionesUnicas.map((est) => (
+                            <SelectItem
+                              key={est}
+                              value={est}
+                              className="text-xs uppercase"
+                            >
+                              {est}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <DateRangePicker
+                        dateRange={dateRange}
+                        onDateRangeChange={setDateRange}
+                        placeholder="Rango de fechas"
+                        className="w-[280px]"
+                      />
+
+                      {(dateRange?.from ||
+                        dateRange?.to ||
+                        selectedStation !== "all") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setDateRange(undefined);
+                            setSelectedStation("all");
+                          }}
+                          className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
+                          title="Limpiar filtros"
+                        >
+                          <FilterX size={18} />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                }
               />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* COMPONENTES DE DIÁLOGO */}
       <AddTicketModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSubmit={handleCreateTicket}
       />
+
       {cargaToView && (
         <ViewFuelModal
           open={!!cargaToView}
@@ -614,6 +864,7 @@ const FuelLoads = () => {
           carga={cargaToView as any}
         />
       )}
+
       {cargaToEdit && (
         <EditFuelModal
           open={!!cargaToEdit}
@@ -638,10 +889,10 @@ const FuelLoads = () => {
               </div>
               <div className="flex flex-col gap-1 text-left">
                 <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
-                  Purgar Registro
+                  Eliminar Vale
                 </AlertDialogTitle>
                 <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mt-1">
-                  Acción Irreversible • Bitácora Combustible
+                  Acción Permanente
                 </p>
               </div>
             </div>
@@ -649,22 +900,47 @@ const FuelLoads = () => {
 
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Esta acción es irreversible y afectará el historial de rendimiento
-                de la unidad ECO-
-                <span className="text-slate-900 dark:text-white font-black ml-1">
-                  {cargas.find((c) => c.id === idParaEliminar)?.unidad_numero}
-                </span>.
-              </p>
+              {/*  ALERTA DE REVERSIÓN DE CONCILIACIÓN */}
+              {ticketToDelete?.is_conciliated ? (
+                <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                      Atención: Vale Auditado
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                    Este vale ya fue procesado en la mesa de control{" "}
+                    <b>(Conciliación)</b>. Al eliminarlo, los cálculos
+                    financieros y de odómetro del viaje quedarán desfasados.
+                    <br />
+                    <br />
+                    Deberás ir a la pestaña de Auditoría, <b>Revertir</b> la
+                    fase del viaje afectado y hacer el recálculo completo de
+                    nuevo.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Esta acción es irreversible y afectará el historial de
+                  rendimiento de la unidad ECO-
+                  <span className="text-slate-900 dark:text-white font-black ml-1">
+                    {ticketToDelete?.unidad_numero}
+                  </span>
+                  .
+                </p>
+              )}
+
               <div className="p-5 sm:p-6 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                   <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Pérdida de Datos
+                    Confirmación de Eliminación
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  El registro será eliminado permanentemente del activo digital. <b className="font-black">¿Desea proceder?</b>
+                  El vale será borrado permanentemente del sistema.{" "}
+                  <b className="font-black">¿Deseas continuar?</b>
                 </p>
               </div>
             </AlertDialogDescription>
@@ -677,7 +953,7 @@ const FuelLoads = () => {
                 size="lg"
                 className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
               >
-                Abortar Operación
+                Cancelar
               </AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
@@ -685,7 +961,7 @@ const FuelLoads = () => {
                 onClick={handleDelete}
                 className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Confirmar Purga
+                <Trash2 className="h-4 w-4 mr-2" /> Eliminar Vale
               </AlertDialogAction>
             </div>
           </AlertDialogFooter>

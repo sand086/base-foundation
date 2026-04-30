@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,14 +52,15 @@ export function ConciliarViajeModal({
   }, [fuelLoads]);
 
   const odometroInicial = trip?.legs?.[0]?.odometro_inicial || 0;
+  const [cobrarOperador, setCobrarOperador] = useState(true);
 
   const kmSM = Number(lecturaSM.kilometrosSM) || 0;
   const ltsSM = Number(lecturaSM.litrosSM) || 0;
   const odoFinal = Number(lecturaSM.odometroFinal) || 0;
 
   const rendimientoSM = ltsSM > 0 ? (kmSM / ltsSM).toFixed(2) : "0.00";
-  const diferenciaLitros = ltsSM - litrosDelVale;
-  const hayFaltante = diferenciaLitros > 0;
+  const diferenciaLitros = litrosDelVale - ltsSM;
+  const hayExcesoConsumo = diferenciaLitros > 0; // <- Solo dejamos esta
   const rendimientoReal =
     litrosDelVale > 0 ? (kmSM / litrosDelVale).toFixed(2) : "0.00";
 
@@ -83,6 +85,7 @@ export function ConciliarViajeModal({
       litros_ecm: ltsSM,
       diferencia: diferenciaLitros,
       rendimiento: rendimientoReal,
+      cobrar_al_operador: hayExcesoConsumo ? cobrarOperador : false,
     });
 
     toast.success("Viaje Conciliado", {
@@ -114,7 +117,8 @@ export function ConciliarViajeModal({
                   Conciliación SM
                 </DialogTitle>
                 <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                  TRP-{trip.public_id || trip.id} • {trip.origin} ➔ {trip.destination}
+                  TRP-{trip.public_id || trip.id} • {trip.origin} ➔{" "}
+                  {trip.destination}
                 </p>
               </div>
             </div>
@@ -193,7 +197,10 @@ export function ConciliarViajeModal({
                   placeholder="Ej. 1200"
                   value={lecturaSM.kilometrosSM}
                   onChange={(e) =>
-                    setLecturaSM((p) => ({ ...p, kilometrosSM: e.target.value }))
+                    setLecturaSM((p) => ({
+                      ...p,
+                      kilometrosSM: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -240,13 +247,16 @@ export function ConciliarViajeModal({
                   placeholder="Ej. 256000"
                   value={lecturaSM.odometroFinal}
                   onChange={(e) =>
-                    setLecturaSM((p) => ({ ...p, odometroFinal: e.target.value }))
+                    setLecturaSM((p) => ({
+                      ...p,
+                      odometroFinal: e.target.value,
+                    }))
                   }
                 />
                 {odoFinal > 0 && odoFinal <= odometroInicial ? (
                   <p className="text-[9px] text-rose-600 font-bold uppercase tracking-tighter flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> Error: El odómetro debe
-                    ser mayor al inicial.
+                    <AlertTriangle className="h-3 w-3" /> Error: El odómetro
+                    debe ser mayor al inicial.
                   </p>
                 ) : (
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-widest ml-1">
@@ -284,19 +294,19 @@ export function ConciliarViajeModal({
                 <div className="pt-4 mt-2 border-t border-dashed border-border">
                   <div className="mb-2 flex justify-between items-center px-1">
                     <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      Diferencia (SM - Vales)
+                      Diferencia (Vales - SM)
                     </span>
                   </div>
                   <div
                     className={cn(
                       "p-4 rounded-xl flex items-center justify-between shadow-inner transition-colors border",
-                      hayFaltante
+                      hayExcesoConsumo
                         ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800"
                         : "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800",
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      {hayFaltante ? (
+                      {hayExcesoConsumo ? (
                         <AlertTriangle className="text-rose-500 h-5 w-5" />
                       ) : (
                         <CheckCircle2 className="text-emerald-500 h-5 w-5" />
@@ -304,29 +314,44 @@ export function ConciliarViajeModal({
                       <span
                         className={cn(
                           "text-[11px] font-black uppercase tracking-widest",
-                          hayFaltante ? "text-rose-700 dark:text-rose-400" : "text-emerald-700 dark:text-emerald-400",
+                          hayExcesoConsumo
+                            ? "text-rose-700 dark:text-rose-400"
+                            : "text-emerald-700 dark:text-emerald-400",
                         )}
                       >
-                        {hayFaltante
-                          ? "Desviación Detectada"
+                        {hayExcesoConsumo
+                          ? "Exceso de Consumo Detectado"
                           : "Conciliación Exacta"}
                       </span>
                     </div>
                     <span
                       className={cn(
                         "font-mono font-black text-xl",
-                        hayFaltante ? "text-rose-600" : "text-emerald-600",
+                        hayExcesoConsumo ? "text-rose-600" : "text-emerald-600",
                       )}
                     >
                       {diferenciaLitros > 0 ? "+" : ""}
                       {diferenciaLitros.toFixed(1)} L
                     </span>
                   </div>
-                  {hayFaltante && (
-                    <p className="text-[9px] text-rose-500 font-bold uppercase tracking-widest mt-2 text-center">
-                      El monto del faltante se calculará en la liquidación si
-                      supera el 3%.
-                    </p>
+
+                  {/* NUEVO SWITCH DE COBRO */}
+                  {hayExcesoConsumo && (
+                    <div className="flex items-center justify-between p-3 mt-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800 rounded-xl">
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-black text-rose-800 dark:text-rose-300 uppercase tracking-widest">
+                          ¿Cobrar excedente?
+                        </span>
+                        <span className="text-[9px] text-muted-foreground font-medium mt-0.5">
+                          Se descontará en la próxima liquidación.
+                        </span>
+                      </div>
+                      <Switch
+                        checked={cobrarOperador}
+                        onCheckedChange={setCobrarOperador}
+                        className="data-[state=checked]:bg-rose-600"
+                      />
+                    </div>
                   )}
                 </div>
               </div>

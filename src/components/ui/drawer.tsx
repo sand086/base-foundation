@@ -66,7 +66,7 @@ const DrawerContent = React.forwardRef<
       )}
       {...props}
     >
-      {/* 🛠 HANDLE: El tirador mecánico */}
+      {/*   HANDLE: El tirador mecánico */}
       <div className="mx-auto mt-4 h-1.5 w-14 rounded-full bg-slate-300 dark:bg-white/10 shadow-inner" />
       {children}
     </DrawerPrimitive.Content>
@@ -104,7 +104,7 @@ const DrawerTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "text-brand-red",
-      // 🛠 TIPOGRAFÍA INDUSTRIAL
+      //   TIPOGRAFÍA INDUSTRIAL
       "text-[11px] font-black uppercase tracking-[0.25em] leading-none",
       className,
     )}

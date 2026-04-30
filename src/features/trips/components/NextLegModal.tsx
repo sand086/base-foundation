@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +41,6 @@ import {
   ChevronDown,
   Check,
   ChevronsUpDown,
-  Lock,
 } from "lucide-react";
 import {
   Command,
@@ -111,7 +110,12 @@ const formatCurrency = (val: number) =>
     minimumFractionDigits: 2,
   }).format(val || 0);
 
-const UNIT_STATUSES_AVAILABLE = ["disponible", "bloqueado"] as const;
+const UNIT_STATUSES_AVAILABLE = [
+  "disponible",
+  "bloqueado",
+  "en_ruta",
+  "en ruta",
+] as const;
 
 const normalizeStr = (str?: string | null) =>
   str
@@ -207,12 +211,14 @@ export function NextLegModal({
   onSubmit,
   onSuccessRefresh,
 }: NextLegModalProps) {
-  const { unidades, updateLoadStatus } = useUnits();
+  //  INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
+  const { unidades, updateLoadStatus, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { products: satProducts } = useSatCatalogs();
 
   const [loading, setLoading] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
+  const [odoInicial, setOdoInicial] = useState(0); //  ESTADO DEL ODÓMETRO
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
@@ -227,6 +233,15 @@ export function NextLegModal({
     otros_anticipos: 0,
     destino_vacio: "",
   });
+
+  //  EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
+  useEffect(() => {
+    if (formData.unit_id) {
+      fetchLastOdometer(formData.unit_id).then(setOdoInicial);
+    } else {
+      setOdoInicial(0);
+    }
+  }, [formData.unit_id, fetchLastOdometer]);
 
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
@@ -251,26 +266,24 @@ export function NextLegModal({
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
-      //  FIX LEAD: Casteo estricto a Number para asegurar que los comparadores === funcionen en los filtros.
-      const inheritedR1 = tripPadre.remolque_1_id
-        ? Number(tripPadre.remolque_1_id)
+      const inheritedR1 = (tripPadre as any).remolque_1_id
+        ? Number((tripPadre as any).remolque_1_id)
         : (lastLeg as any)?.remolque_1_id
           ? Number((lastLeg as any).remolque_1_id)
           : null;
-      const inheritedDolly = tripPadre.dolly_id
-        ? Number(tripPadre.dolly_id)
+      const inheritedDolly = (tripPadre as any).dolly_id
+        ? Number((tripPadre as any).dolly_id)
         : (lastLeg as any)?.dolly_id
           ? Number((lastLeg as any).dolly_id)
           : null;
-      const inheritedR2 = tripPadre.remolque_2_id
-        ? Number(tripPadre.remolque_2_id)
+      const inheritedR2 = (tripPadre as any).remolque_2_id
+        ? Number((tripPadre as any).remolque_2_id)
         : (lastLeg as any)?.remolque_2_id
           ? Number((lastLeg as any).remolque_2_id)
           : null;
 
       setFormData({
         leg_type: nextLegType,
-        // El tracto y operador los dejamos null (o heredados) para que despachen al nuevo relevo.
         unit_id: lastLeg?.unit_id ? Number(lastLeg.unit_id) : null,
         operator_id: lastLeg?.operator_id ? Number(lastLeg.operator_id) : null,
 
@@ -278,24 +291,40 @@ export function NextLegModal({
         dolly_id: inheritedDolly,
         remolque_2_id: inheritedR2,
 
-        anticipo_casetas: tripPadre.costo_casetas ?? 0,
+        anticipo_casetas: (tripPadre as any).costo_casetas ?? 0,
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
         otros_anticipos: 0,
         destino_vacio: "",
       });
 
+      // --- 🛡️ INICIO PARCHE DEFENSIVO SAT (SEGURO CONTRA TYPESCRIPT) ---
+      const rawDescription =
+        (tripPadre as any).descripcion_mercancia || "Carga General";
+      const matchSatCode = rawDescription.match(/^(\d{8})\b/);
+
+      const realSatCode = matchSatCode
+        ? matchSatCode[1]
+        : (tripPadre as any).sat_clave_producto || "01010101";
+
+      const cleanDescription = matchSatCode
+        ? rawDescription
+            .substring(matchSatCode[0].length)
+            .replace(/^[\s-]+/, "")
+        : rawDescription;
+      // --- 🛡️ FIN PARCHE DEFENSIVO SAT ---
+
       setTripFiscalData({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
         referencia: (tripPadre as any).referencia || "",
-        peso_toneladas: tripPadre.peso_toneladas || 0,
-        descripcion_mercancia:
-          tripPadre.descripcion_mercancia || "Carga General",
-        sat_clave_producto: tripPadre.sat_clave_producto || "01010101",
-        sat_clave_unidad: tripPadre.sat_clave_unidad || "E48",
-        es_material_peligroso: tripPadre.es_material_peligroso || false,
-        clase_imo: tripPadre.clase_imo || "",
+        peso_toneladas: (tripPadre as any).peso_toneladas || 0,
+        descripcion_mercancia: cleanDescription,
+        sat_clave_producto: realSatCode,
+        sat_clave_unidad: (tripPadre as any).sat_clave_unidad || "E48",
+        es_material_peligroso:
+          (tripPadre as any).es_material_peligroso || false,
+        clase_imo: (tripPadre as any).clase_imo || "",
       });
 
       setShowFiscalData(false);
@@ -335,8 +364,9 @@ export function NextLegModal({
         retencion: 0,
         total: 0,
       };
-    const base = tripPadre.tarifa_base ?? 0;
-    const casetas = tripPadre.costo_casetas ?? 0;
+    // Casteo seguro de TypeScript para evitar bloqueos
+    const base = (tripPadre as any).tarifa_base ?? 0;
+    const casetas = (tripPadre as any).costo_casetas ?? 0;
     const subtotal = base + casetas;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
@@ -438,6 +468,8 @@ export function NextLegModal({
       (o) =>
         o.status === "activo" ||
         o.status === "disponible" ||
+        o.status === "en_ruta" ||
+        o.status === "en ruta" ||
         Number(o.id) === Number(formData.operator_id),
     );
   }, [operadores, formData.operator_id]);
@@ -497,9 +529,15 @@ export function NextLegModal({
         remolque_2_id: formData.remolque_2_id,
       });
 
+      //  QUIRÚRGICO: Enviamos el odómetro inyectado en el payload al backend
+      const payloadConOdometro = {
+        ...formData,
+        odometro_inicial: odoInicial,
+      };
+
       const success = await onSubmit(
         String(tripPadre.id),
-        formData as TripLegCreatePayload,
+        payloadConOdometro as TripLegCreatePayload,
       );
 
       if (success) {
@@ -528,6 +566,7 @@ export function NextLegModal({
   }, [
     tripPadre,
     formData,
+    odoInicial, //  Dependencia para asegurar la sincronía de React
     validateForm,
     onSubmit,
     updateLoadStatus,
@@ -1003,9 +1042,17 @@ export function NextLegModal({
             )}
 
             <div className="space-y-3">
-              <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
-                Unidad (Tractocamión)
-              </Label>
+              <div className="flex justify-between items-end">
+                <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
+                  Unidad (Tractocamión)
+                </Label>
+                {/*  INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
+                {odoInicial > 0 && (
+                  <span className="text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded shadow-sm border border-emerald-200 dark:border-emerald-800/50">
+                    ODÓMETRO ACTUAL: {odoInicial.toLocaleString()} KM
+                  </span>
+                )}
+              </div>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
                 onValueChange={(v) =>
@@ -1163,92 +1210,6 @@ export function NextLegModal({
                 )}
               </div>
             </div>
-
-            {isRoadLeg && (
-              <div
-                className={cn(
-                  "p-8 rounded-3xl space-y-6 shadow-inner relative overflow-hidden",
-                  "bg-amber-500/5 dark:bg-amber-500/10",
-                  "border border-amber-500/10 dark:border-amber-500/20",
-                )}
-              >
-                <div className="absolute top-0 left-0 w-1 bg-amber-400 dark:bg-amber-500 h-full rounded-l-3xl" />
-                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Registro de Anticipos y
-                  Vales
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                  {(
-                    [
-                      {
-                        key: "anticipo_casetas",
-                        label: "Casetas",
-                        accent: "amber",
-                      },
-                      {
-                        key: "anticipo_combustible",
-                        label: "Diesel",
-                        accent: "amber",
-                      },
-                      {
-                        key: "anticipo_viaticos",
-                        label: "Viáticos",
-                        accent: "amber",
-                      },
-                      {
-                        key: "otros_anticipos",
-                        label: "Vale / Otros",
-                        accent: "blue",
-                      },
-                    ] as const
-                  ).map(({ key, label, accent }) => (
-                    <div key={key} className="space-y-2.5">
-                      <Label
-                        className={cn(
-                          "text-[9px] font-bold uppercase ml-1 flex items-center gap-1",
-                          accent === "blue"
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-slate-600 dark:text-slate-400",
-                        )}
-                      >
-                        {key === "otros_anticipos" && (
-                          <Ticket className="h-3 w-3" />
-                        )}
-                        {label}
-                      </Label>
-                      <div className="relative">
-                        <DollarSign
-                          className={cn(
-                            "absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5",
-                            accent === "blue"
-                              ? "text-blue-400"
-                              : "text-slate-400 dark:text-slate-500",
-                          )}
-                        />
-                        <Input
-                          type="number"
-                          className={cn(
-                            "pl-9 h-11 font-mono text-sm",
-                            "bg-card",
-                            "text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500",
-                            accent === "blue"
-                              ? "border-blue-200 dark:border-blue-700/50 bg-blue-50/50 dark:bg-blue-900/20"
-                              : "border-amber-200/50 dark:border-amber-700/30",
-                          )}
-                          value={formData[key] || ""}
-                          onChange={(e) =>
-                            setFormData((p) => ({
-                              ...p,
-                              [key]: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

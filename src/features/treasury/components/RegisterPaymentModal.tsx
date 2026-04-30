@@ -1,4 +1,5 @@
-// src/features/cxp/RegisterPaymentModal.tsx
+// src/features/payables/components/RegisterPaymentModal.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -17,7 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CreditCard, DollarSign, AlertCircle, Check } from "lucide-react";
+import {
+  CreditCard,
+  DollarSign,
+  AlertCircle,
+  Check,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -56,7 +63,7 @@ export function RegisterPaymentModal({
   invoice,
   bankAccounts,
   onSubmit,
-  defaultMethod = "Transferencia",
+  defaultMethod = "03", // "03" es Transferencia en el SAT
 }: RegisterPaymentModalProps) {
   const [formData, setFormData] = useState<{
     fecha_pago: string;
@@ -73,6 +80,7 @@ export function RegisterPaymentModal({
   });
 
   const [error, setError] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const invoiceId = useMemo(() => {
     return invoice ? toInt(invoice.id) : 0;
@@ -98,10 +106,11 @@ export function RegisterPaymentModal({
       fecha_pago: today(),
       monto: saldoPendiente,
       metodo_pago: defaultMethod,
-      cuenta_retiro: "", // Obliga al usuario a seleccionar una cuenta consciente
-      referencia: "",
+      cuenta_retiro: "",
+      referencia: invoice.folio_interno || "",
     });
     setError("");
+    setIsSubmitting(false);
   }, [invoice, open, saldoPendiente, defaultMethod]);
 
   if (!invoice) return null;
@@ -119,6 +128,8 @@ export function RegisterPaymentModal({
     }
     if (!formData.cuenta_retiro)
       errors.push("Debes seleccionar una cuenta de retiro o Caja General");
+    if (!formData.metodo_pago)
+      errors.push("Debes seleccionar un método de pago");
 
     const msg = errors[0] ?? "";
     setError(msg);
@@ -137,22 +148,15 @@ export function RegisterPaymentModal({
       return;
     }
 
-    // Determinamos si es un banco real o la caja general virtual
+    setIsSubmitting(true);
     const isVirtualCash = formData.cuenta_retiro === "virtual";
 
-    //  PAYLOAD EXACTO PARA Pydantic + Tesorería
     const payload = {
       fecha_pago: formData.fecha_pago,
       monto: toNumber(formData.monto),
       metodo_pago: formData.metodo_pago,
-
-      // Siempre un string, así evitamos validación fallida en FastAPI
       referencia: formData.referencia.trim() || "",
-
-      // Enviamos el bank_account_id explícitamente (o null para forzar Caja General en backend)
       bank_account_id: isVirtualCash ? null : toInt(formData.cuenta_retiro),
-
-      // Pydantic requiere un string válido
       cuenta_retiro: isVirtualCash ? "Caja General" : formData.cuenta_retiro,
     };
 
@@ -160,12 +164,16 @@ export function RegisterPaymentModal({
       await onSubmit(invoiceId, payload);
       onOpenChange(false);
     } catch (e: any) {
-      toast.error("No se pudo registrar el pago");
+      console.error(e);
+      // El Toast ya se debe manejar en la función padre (onSubmit),
+      // pero por si acaso falla la llamada, lo atrapamos.
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => !isSubmitting && onOpenChange(o)}>
       <DialogContent className="w-[95vw] sm:max-w-lg flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
         {/* HEADER */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
@@ -187,7 +195,6 @@ export function RegisterPaymentModal({
 
         {/* BODY */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-5 mt-4">
-          {/* Resumen */}
           <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -228,23 +235,49 @@ export function RegisterPaymentModal({
             </div>
           </div>
 
-          {/* Fecha pago */}
-          <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
-              Fecha de Pago <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              type="date"
-              value={formData.fecha_pago}
-              onChange={(e) => {
-                setFormData((p) => ({ ...p, fecha_pago: e.target.value }));
-                setError("");
-              }}
-              className="h-11 shadow-sm font-mono font-bold bg-muted border-slate-200 dark:border-white/5"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                Fecha de Pago <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={formData.fecha_pago}
+                onChange={(e) => {
+                  setFormData((p) => ({ ...p, fecha_pago: e.target.value }));
+                  setError("");
+                }}
+                className="h-11 shadow-sm font-mono font-bold bg-muted border-slate-200 dark:border-white/5"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                Método de Pago <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={formData.metodo_pago}
+                onValueChange={(value) => {
+                  setFormData((p) => ({ ...p, metodo_pago: value }));
+                  setError("");
+                }}
+              >
+                <SelectTrigger className="h-11 shadow-sm font-bold bg-card border-slate-200 dark:border-white/10">
+                  <SelectValue placeholder="Seleccionar..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="01">01 - Efectivo</SelectItem>
+                  <SelectItem value="02">02 - Cheque nominativo</SelectItem>
+                  <SelectItem value="03">
+                    03 - Transferencia electrónica
+                  </SelectItem>
+                  <SelectItem value="04">04 - Tarjeta de crédito</SelectItem>
+                  <SelectItem value="99">99 - Por definir</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Monto */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               <DollarSign className="h-3 w-3 inline mr-1" />
@@ -277,7 +310,6 @@ export function RegisterPaymentModal({
             </div>
           </div>
 
-          {/* Cuenta retiro (Selector) */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               Cuenta de Retiro (Afecta Tesorería){" "}
@@ -294,7 +326,6 @@ export function RegisterPaymentModal({
                 <SelectValue placeholder="Seleccionar cuenta de origen" />
               </SelectTrigger>
               <SelectContent>
-                {/* Opción Virtual: Efectivo/Caja General */}
                 <SelectItem value="virtual" className="cursor-pointer">
                   <div className="flex items-center gap-2">
                     <span className="text-lg leading-none">💵</span>
@@ -303,8 +334,6 @@ export function RegisterPaymentModal({
                     </span>
                   </div>
                 </SelectItem>
-
-                {/* Cuentas Reales */}
                 {bankAccounts.map((acc) => (
                   <SelectItem
                     key={acc.id}
@@ -328,7 +357,6 @@ export function RegisterPaymentModal({
             </Select>
           </div>
 
-          {/* Referencia */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               Referencia / Número de Operación
@@ -343,7 +371,6 @@ export function RegisterPaymentModal({
             />
           </div>
 
-          {/* Preview saldo */}
           {formData.monto > 0 && (
             <div
               className={`p-3 rounded-lg border ${
@@ -380,7 +407,6 @@ export function RegisterPaymentModal({
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="flex items-center gap-2 text-destructive text-sm p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800/50 font-bold">
               <AlertCircle className="h-4 w-4" />
@@ -396,16 +422,23 @@ export function RegisterPaymentModal({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
               className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSubmit}
+              disabled={
+                isSubmitting || formData.monto <= 0 || !formData.cuenta_retiro
+              }
               className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
-              disabled={formData.monto <= 0 || !formData.cuenta_retiro}
             >
-              <Check className="h-4 w-4 mr-2" />
+              {isSubmitting ? (
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
               Confirmar Pago
             </Button>
           </div>

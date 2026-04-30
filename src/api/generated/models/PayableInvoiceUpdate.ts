@@ -7,6 +7,7 @@ import type { InvoiceStatus } from './InvoiceStatus';
 export type PayableInvoiceUpdate = {
     uuid?: (string | null);
     folio_interno?: (string | null);
+    cost_center_id?: (number | null);
     monto_total?: (number | null);
     saldo_pendiente?: (number | null);
     moneda?: (Currency | null);

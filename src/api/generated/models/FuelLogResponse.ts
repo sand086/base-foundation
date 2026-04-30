@@ -27,6 +27,7 @@ export type FuelLogResponse = {
     updated_at?: (string | null);
     created_by_id?: (number | null);
     updated_by_id?: (number | null);
+    trip_id?: (number | null);
     unit?: (UnitFuelInfo | null);
     operator?: (OperatorFuelInfo | null);
     created_by?: (UserFuelInfo | null);

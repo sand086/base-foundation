@@ -1,5 +1,4 @@
 // src/features/settlements/components/SettlementReceiptModal.tsx
-
 import {
   Receipt,
   CheckCircle,
@@ -10,6 +9,7 @@ import {
   MapPin,
   Calendar,
   DollarSign,
+  Info,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,7 +40,6 @@ export function SettlementReceiptModal({
   authorizationDate,
   authorizationUser,
 }: SettlementReceiptModalProps) {
-  // Helper para formato de moneda
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -48,7 +47,6 @@ export function SettlementReceiptModal({
     }).format(amount);
   };
 
-  // Separar ingresos y deducciones del arreglo de conceptos
   const ingresos =
     settlement.conceptos?.filter((c) => c.tipo === "ingreso") || [];
   const deducciones =
@@ -56,9 +54,7 @@ export function SettlementReceiptModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      {/* CAPA 1: CASCARÓN TAHOE */}
       <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
-        {/* CAPA 2: HEADER TAHOE */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -76,15 +72,12 @@ export function SettlementReceiptModal({
           </div>
         </DialogHeader>
 
-        {/* CAPA 3: BODY (Scroll) */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
-          {/* Receipt Content - Estilo "Ticket" */}
           <div className="p-5 border-2 border-dashed border-border rounded-2xl bg-card shadow-sm space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
               <Receipt className="h-32 w-32 rotate-12" />
             </div>
 
-            {/* Header del Recibo */}
             <div className="text-center border-b border-border pb-6">
               <div className="bg-foreground inline-block p-2 rounded-lg mb-3">
                 <img
@@ -102,15 +95,15 @@ export function SettlementReceiptModal({
               </Badge>
             </div>
 
-            {/* Información del Viaje */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm p-5 rounded-2xl bg-muted/50 border border-border">
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
-                    Folio Viaje
+                    Lote de Liquidación
                   </span>
                   <span className="font-mono font-bold text-primary text-base">
-                    #{settlement.trip_id}
+                    {/* Si liquida a un patiero, mostrará el Batch ID */}#
+                    {settlement.trip_id || settlement.id}
                   </span>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -128,7 +121,7 @@ export function SettlementReceiptModal({
                   </span>
                   <div className="flex items-center gap-2 font-mono font-bold text-foreground">
                     <Truck className="h-3.5 w-3.5 text-muted-foreground" />
-                    ECO-{settlement.unidad_numero}
+                    ECO-{settlement.unidad_numero || "VARIAS"}
                   </div>
                 </div>
               </div>
@@ -136,20 +129,20 @@ export function SettlementReceiptModal({
               <div className="space-y-4">
                 <div className="flex flex-col gap-1">
                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
-                    Ruta Operativa
+                    Ruta Principal
                   </span>
                   <div className="flex items-center gap-2 font-bold text-foreground truncate">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                    {settlement.ruta}
+                    {settlement.ruta || "Múltiples Tramos Locales"}
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">
-                    Fecha de Viaje
+                    Fecha
                   </span>
                   <div className="flex items-center gap-2 font-bold text-foreground">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    {settlement.fecha_viaje}
+                    {settlement.fecha_viaje || authorizationDate}
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
@@ -165,24 +158,34 @@ export function SettlementReceiptModal({
 
             <Separator className="bg-border" />
 
-            {/* Sección de Ingresos */}
+            {/* SECCIÓN DESGLOSADA: TICKET 1 PATIEROS */}
             <div>
               <h3 className="font-black text-emerald-600 dark:text-emerald-400 mb-4 flex items-center gap-2 uppercase tracking-widest text-[11px]">
-                <DollarSign className="h-4 w-4" /> Percepciones / Ingresos
+                <DollarSign className="h-4 w-4" /> Percepciones / Movimientos
+                Realizados
               </h3>
+
+              <div className="bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-lg mb-4 flex items-start gap-2 border border-blue-100 dark:border-blue-900/30">
+                <Info className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                <p className="text-[10px] text-blue-800 dark:text-blue-300 font-medium">
+                  El operador recibirá la suma del detalle operativo listado a
+                  continuación.
+                </p>
+              </div>
+
               <div className="space-y-3 px-2">
                 {ingresos.map((concepto) => (
                   <div
                     key={concepto.id}
-                    className="flex justify-between text-sm items-center group"
+                    className="flex justify-between text-sm items-center group py-1.5 border-b border-dashed border-slate-100 dark:border-white/5 last:border-0"
                   >
                     <div className="flex flex-col">
                       <span className="font-bold text-foreground uppercase text-xs">
                         {concepto.descripcion}
                       </span>
                       {concepto.referencia && (
-                        <span className="text-muted-foreground text-[10px] italic">
-                          Ref: {concepto.referencia}
+                        <span className="text-muted-foreground text-[10px] font-mono">
+                          Ref / Viaje: {concepto.referencia}
                         </span>
                       )}
                     </div>
@@ -191,8 +194,9 @@ export function SettlementReceiptModal({
                     </span>
                   </div>
                 ))}
-                <div className="flex justify-between font-black pt-4 border-t border-border mt-4">
-                  <span className="text-muted-foreground uppercase text-[10px] tracking-widest">
+
+                <div className="flex justify-between font-black pt-4 border-t-2 border-border mt-4">
+                  <span className="text-muted-foreground uppercase text-[10px] tracking-widest mt-1">
                     SUBTOTAL INGRESOS
                   </span>
                   <span className="font-mono text-emerald-600 dark:text-emerald-400 text-lg">
@@ -204,7 +208,6 @@ export function SettlementReceiptModal({
 
             <Separator className="bg-border" />
 
-            {/* Sección de Deducciones */}
             <div>
               <h3 className="font-black text-rose-600 dark:text-rose-400 mb-4 flex items-center gap-2 uppercase tracking-widest text-[11px]">
                 <DollarSign className="h-4 w-4" /> Deducciones / Retenciones
@@ -213,7 +216,7 @@ export function SettlementReceiptModal({
                 {deducciones.map((concepto) => (
                   <div
                     key={concepto.id}
-                    className="flex justify-between text-sm items-center"
+                    className="flex justify-between text-sm items-center py-1"
                   >
                     <div className="flex flex-col">
                       <span
@@ -237,8 +240,8 @@ export function SettlementReceiptModal({
                     </span>
                   </div>
                 ))}
-                <div className="flex justify-between font-black pt-4 border-t border-border mt-4">
-                  <span className="text-muted-foreground uppercase text-[10px] tracking-widest">
+                <div className="flex justify-between font-black pt-4 border-t-2 border-border mt-4">
+                  <span className="text-muted-foreground uppercase text-[10px] tracking-widest mt-1">
                     SUBTOTAL DEDUCCIONES
                   </span>
                   <span className="font-mono text-rose-600 dark:text-rose-400 text-lg">
@@ -266,7 +269,6 @@ export function SettlementReceiptModal({
               </div>
             </div>
 
-            {/* Footer del recibo */}
             <div className="text-center text-[10px] text-muted-foreground pt-8 border-t border-dashed border-border space-y-2">
               <p className="font-medium">
                 Este documento es un comprobante interno de liquidación. La
@@ -279,12 +281,12 @@ export function SettlementReceiptModal({
           </div>
         </div>
 
-        {/* CAPA 5: FOOTER */}
         <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
             <Button
               variant="outline"
               className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2"
+              onClick={() => window.print()}
             >
               <Printer className="h-4 w-4" />
               Imprimir

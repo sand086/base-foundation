@@ -171,7 +171,9 @@ export function AccountStatementModal({
               </Select>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Fecha de Corte</p>
+              <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
+                Fecha de Corte
+              </p>
               <p className="font-bold text-foreground">{currentDate}</p>
             </div>
           </div>
@@ -182,14 +184,16 @@ export function AccountStatementModal({
             <div className="flex justify-between items-start border-b border-border pb-4">
               <div>
                 <h2 className="text-xl font-bold text-primary flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
+                  <Building2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   {companyBankData.razonSocial}
                 </h2>
                 <p className="text-sm text-muted-foreground font-mono">
                   RFC: {companyBankData.rfc}
                 </p>
               </div>
-              <Badge className="bg-primary text-primary-foreground font-black text-[10px]">ESTADO DE CUENTA</Badge>
+              <Badge className="bg-primary text-primary-foreground font-black text-[10px]">
+                ESTADO DE CUENTA
+              </Badge>
             </div>
 
             {/* Client Info (if filtered) */}
@@ -198,7 +202,9 @@ export function AccountStatementModal({
                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                   Cliente
                 </p>
-                <p className="font-black text-lg text-foreground">{selectedClient}</p>
+                <p className="font-black text-lg text-foreground">
+                  {selectedClient}
+                </p>
               </div>
             )}
 
@@ -324,7 +330,10 @@ export function AccountStatementModal({
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {companyBankData.cuentas.map((cuenta, idx) => (
-                  <div key={idx} className="p-4 bg-muted/50 border border-border rounded-lg">
+                  <div
+                    key={idx}
+                    className="p-4 bg-muted/50 border border-border rounded-lg"
+                  >
                     <p className="font-black text-primary mb-2">
                       {cuenta.banco}
                     </p>
@@ -337,7 +346,9 @@ export function AccountStatementModal({
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Cuenta:</span>
-                        <span className="font-mono font-bold text-foreground">{cuenta.cuenta}</span>
+                        <span className="font-mono font-bold text-foreground">
+                          {cuenta.cuenta}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Titular:</span>
@@ -364,15 +375,26 @@ export function AccountStatementModal({
         {/* CAPA 5: FOOTER */}
         <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
-            <Button variant="outline" className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2" onClick={handlePrint}>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2"
+              onClick={handlePrint}
+            >
               <Printer className="h-4 w-4" />
               Imprimir
             </Button>
-            <Button variant="outline" className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2" onClick={handleDownload}>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2"
+              onClick={handleDownload}
+            >
               <Download className="h-4 w-4" />
               Descargar PDF
             </Button>
-            <Button onClick={onClose} className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]">
+            <Button
+              onClick={onClose}
+              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
+            >
               Cerrar
             </Button>
           </div>

@@ -134,7 +134,7 @@ export function useAdminActions() {
 
   /**
    * ACTUALIZACIÓN MASIVA (Bulk)
-   * 🛠️ Solución al error ts(2345):
+   *  ️ Solución al error ts(2345):
    * Definimos que TVariables es ConfigUpdateItem[]
    */
   const updateBulkConfigMutation = useMutation<any, Error, ConfigUpdateItem[]>({

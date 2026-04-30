@@ -96,7 +96,6 @@ export function SatStampsConfig({
     if (!files.cer || !files.key || !password)
       return toast.error("Faltan datos obligatorios.");
 
-
     setLoading(true);
     try {
       await DefaultService.uploadCsdFilesApiSatCsdPost({
@@ -124,11 +123,12 @@ export function SatStampsConfig({
     setIsDownloading(true);
 
     try {
-      const response = await DefaultService.downloadCsdSecureApiSatCsdDownloadPost({
-        password: downloadPassword,
-        file_type: downloadModal.type,
-        environment,
-      } as any);
+      const response =
+        await DefaultService.downloadCsdSecureApiSatCsdDownloadPost({
+          password: downloadPassword,
+          file_type: downloadModal.type,
+          environment,
+        } as any);
 
       // Crear el link de descarga
       const url = window.URL.createObjectURL(new Blob([response]));
@@ -227,7 +227,7 @@ export function SatStampsConfig({
                   className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-brand-navy hover:shadow-md transition-all group text-left w-full"
                 >
                   <div className="bg-slate-100 p-2 rounded-lg text-brand-navy group-hover:bg-brand-navy/10">
-                    <FileCheck className="h-5 w-5" />
+                    <FileCheck className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </div>
                   <div className="overflow-hidden">
                     <p className="text-[9px] uppercase font-black text-slate-600">
@@ -245,7 +245,7 @@ export function SatStampsConfig({
                   className="flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-brand-navy hover:shadow-md transition-all group text-left w-full"
                 >
                   <div className="bg-slate-100 p-2 rounded-lg text-brand-navy group-hover:bg-brand-navy/10">
-                    <Key className="h-5 w-5" />
+                    <Key className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </div>
                   <div className="overflow-hidden">
                     <p className="text-[9px] uppercase font-black text-slate-600">

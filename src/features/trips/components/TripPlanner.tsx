@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useMemo, useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   format,
   isToday,
@@ -36,6 +36,7 @@ import {
   ShieldAlert,
   Route as RouteIcon,
   Container,
+  RefreshCw,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -176,7 +177,16 @@ const legTypeShort: Record<string, string> = {
 
 export const TripPlanner = () => {
   const navigate = useNavigate();
-  // FIX: Destructuramos unhookTrip desde el useTrips
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewMode =
+    searchParams.get("view") === "calendar" ? "standby" : "table";
+
+  const setViewMode = (v: "table" | "standby") => {
+    searchParams.set("view", v === "standby" ? "calendar" : "table");
+    setSearchParams(searchParams);
+  };
+
   const {
     trips,
     loading,
@@ -187,7 +197,6 @@ export const TripPlanner = () => {
     unhookTrip,
   } = useTrips();
 
-  const [viewMode, setViewMode] = useState<"table" | "standby">("table");
   const [tripToView, setTripToView] = useState<Trip | null>(null);
   const { updateLoadStatus } = useUnits();
   const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
@@ -206,16 +215,29 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  //   ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
+  const [tableKey, setTableKey] = useState(Date.now());
+
+  useEffect(() => {
+    fetchTrips();
+
+    const interval = setInterval(() => {
+      fetchTrips();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [fetchTrips]);
+
   const handleNextLegSubmit = async (tripId: string, payload: any) => {
     const res = await createNextLeg(tripId, payload);
-    // FIX: Refrescamos la tabla global al pasar a la siguiente fase
     if (res) {
       await fetchTrips();
+      setTableKey(Date.now()); // Forzamos a la tabla a dibujarse de nuevo
     }
     return !!res;
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (tripToView) {
       const updatedTrip = trips.find((t) => t.id === tripToView.id);
       if (updatedTrip) {
@@ -275,19 +297,29 @@ export const TripPlanner = () => {
         notifyClient: data.notifyClient,
       },
     );
+
     if (ok) {
       setUpdateModalOpen(false);
-      // FIX: Refrescamos la tabla global al guardar novedad
       await fetchTrips();
+      setTableKey(Date.now()); //   Destruye y recrea la tabla internamente
 
+      //   CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
+
         if (activeLeg.leg_type === "entrega_vacio") {
           if (selectedTripPadre.remolque_1_id)
             await updateLoadStatus(selectedTripPadre.remolque_1_id, false);
           if (selectedTripPadre.remolque_2_id)
             await updateLoadStatus(selectedTripPadre.remolque_2_id, false);
         }
+
+        // Ejecutamos el reload brutal de la ventana SOLO al finalizar/liberar
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        toast.success("Novedad registrada correctamente.");
       }
     }
   };
@@ -329,7 +361,7 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
-  if (loading)
+  if (loading && trips.length === 0)
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
@@ -349,7 +381,27 @@ export const TripPlanner = () => {
           Centro de Operaciones
         </h2>
 
-        <div className="w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">
+        <div className="flex items-center w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={async () => {
+              toast.info("Sincronizando datos...");
+              await fetchTrips();
+              setTableKey(Date.now()); //   Forzar destrucción y recreación de tabla sin recargar página
+            }}
+            disabled={loading}
+            className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+            title="Sincronizar base de datos"
+          >
+            <RefreshCw
+              className={cn(
+                "h-4 w-4 text-slate-500",
+                loading && "animate-spin text-blue-500",
+              )}
+            />
+          </Button>
+
           <Tabs
             value={viewMode}
             onValueChange={(v) => setViewMode(v as any)}
@@ -364,7 +416,7 @@ export const TripPlanner = () => {
               </TabsTrigger>
               <TabsTrigger
                 value="standby"
-                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
+                className=" font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
               >
                 <CalendarDays className="h-3.5 w-3.5 mr-2" /> Planeador{" "}
                 {standbyTrips.length > 0 && (
@@ -385,25 +437,26 @@ export const TripPlanner = () => {
         <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <DataTable className="min-w-[800px]">
+              {/*   EL KEY MÁGICO: Al cambiar tableKey, esta tabla muere y renace */}
+              <DataTable key={tableKey} className="min-w-[800px]">
                 <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
                   <DataTableRow className="hover:bg-transparent border-none">
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12">
                       Folio / Cliente
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12">
                       Fase del Servicio
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden lg:table-cell">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12 hidden lg:table-cell">
                       Ruta Registrada
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden md:table-cell">
+                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12 hidden md:table-cell">
                       Asignación Física
                     </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em]  h-12">
                       Estatus Operativo
                     </DataTableHead>
-                    <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em] text-[10px] h-12">
+                    <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em]  h-12">
                       Acciones
                     </DataTableHead>
                   </DataTableRow>
@@ -445,47 +498,46 @@ export const TripPlanner = () => {
                         >
                           <DataTableCell className="py-4 pl-4">
                             <div className="flex flex-col gap-1">
-                              <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight text-sm">
+                              <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight ">
                                 {tripPadre.client?.razon_social ||
                                   "CLIENTE GENERAL"}
                               </span>
-                              <Badge
-                                variant="outline"
-                                className="w-fit font-mono font-bold text-[9px] bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400"
-                              >
-                                #{tripPadre.public_id || tripPadre.id}
-                              </Badge>
+                              <span className="text-[13px] font-black text-muted-foreground uppercase tracking-widest">
+                                TRP-{tripPadre.public_id || tripPadre.id}
+                              </span>
                             </div>
                           </DataTableCell>
 
                           <DataTableCell className="py-4">
-                            <Badge
-                              variant="outline"
-                              className="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-black uppercase tracking-widest text-[9px] shadow-sm border-slate-200 dark:border-white/10 px-2 py-0.5"
-                            >
+                            <Badge variant="info" className="text-[11px]">
                               {legTypeShort[leg.leg_type] || leg.leg_type}
                             </Badge>
                           </DataTableCell>
 
                           <DataTableCell className="py-4 hidden lg:table-cell">
                             <span
-                              className="text-[10px] font-black text-foreground uppercase tracking-tighter"
+                              className="text-[14px] font-black text-foreground uppercase tracking-tighter"
                               title={formattedRouteName}
                             >
-                              <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-blue-500" />
                               {formattedRouteName}
                             </span>
                           </DataTableCell>
 
                           <DataTableCell className="py-4 hidden md:table-cell">
                             <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
-                                <Truck className="h-3 w-3 text-slate-400 shrink-0" />{" "}
+                              <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
+                                <Truck className="h-5 w-5 shrink-0 text-red-500" />{" "}
                                 ECO-{leg.unit?.numero_economico || "N/A"}
                               </div>
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
-                                <User className="h-3 w-3 shrink-0" />{" "}
-                                {leg.operator?.name?.split(" ")[0] || "S/A"}
+                              <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
+                                <User className="h-5 w-5 shrink-0 text-blue-500" />{" "}
+                                {(() => {
+                                  const parts =
+                                    leg.operator?.name?.split(" ") || [];
+                                  return parts.length
+                                    ? `${parts[0]} ${parts.slice(1).join(" ")}`
+                                    : "S/A";
+                                })()}
                               </div>
                             </div>
                           </DataTableCell>
@@ -511,46 +563,16 @@ export const TripPlanner = () => {
                               >
                                 <DropdownMenuItem
                                   onClick={() => setTripToView(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
+                                  className="rounded-lg cursor-pointer py-2.5 font-bold  uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
                                 >
                                   <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
                                   Abrir Centro de Mando
                                 </DropdownMenuItem>
 
-                                {/* FIX: Agregamos el botón de Desenganchar directamente en el menú de la tabla */}
-                                {leg.leg_type === "carga_muelle" &&
-                                  ["creado", "en_transito"].includes(
-                                    leg.status,
-                                  ) && (
-                                    <DropdownMenuItem
-                                      onClick={async () => {
-                                        const ok = await unhookTrip(
-                                          String(tripPadre.id),
-                                        );
-                                        if (ok) await fetchTrips();
-                                      }}
-                                      className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-purple-700 dark:text-purple-400 focus:bg-purple-50 dark:focus:bg-purple-950/30"
-                                    >
-                                      <Container className="h-4 w-4 mr-3 text-purple-600" />{" "}
-                                      Desenganchar en Patio
-                                    </DropdownMenuItem>
-                                  )}
-
-                                {leg.status === "entregado" && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      setLegToSettle({ leg, tripPadre })
-                                    }
-                                    className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-emerald-700 dark:text-emerald-400 focus:bg-emerald-50 dark:focus:bg-emerald-950/30"
-                                  >
-                                    <Banknote className="h-4 w-4 mr-3" />{" "}
-                                    Liquidar Fase
-                                  </DropdownMenuItem>
-                                )}
                                 <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
                                 <DropdownMenuItem
                                   onClick={() => setTripToDelete(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                                  className="rounded-lg cursor-pointer py-2.5 font-bold  uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
                                 >
                                   <Trash2 className="h-4 w-4 mr-3" /> Eliminar
                                   Viaje

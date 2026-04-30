@@ -1,3 +1,5 @@
+// src/features/treasury/Treasury.tsx
+
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,8 +9,8 @@ import {
   TrendingUp,
   Wallet,
   AlertTriangle,
-  CheckCircle2,
   Plus,
+  Coins,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -21,19 +23,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-
-import axiosClient from "@/api/axiosClient";
 import { toast } from "sonner";
+
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
-import { BankMovement, BankAccount } from "@/features/treasury/types";
+//  IMPORTAMOS LOS TIPOS Y SERVICIOS DE OPENAPI
+import { FinanceService } from "@/api/generated/services/FinanceService";
+import type { BankMovementResponse } from "@/api/generated/models/BankMovementResponse";
+import type { BankAccountResponse } from "@/api/generated/models/BankAccountResponse";
 
-// IMPORTAMOS NUESTROS COMPONENTES MODULARES
 import { BankAccountsTab } from "@/features/treasury/components/BankAccountsTab";
 import { TreasuryFlowTab } from "@/features/treasury/components/TreasuryFlowTab";
 import { BankAccountModal } from "@/features/treasury/components/BankAccountModal";
 import { MovementDetailModal } from "@/features/treasury/components/MovementDetailModal";
 import { ManualMovementModal } from "@/features/treasury/components/ManualMovementModal";
+import { PettyCashModal } from "@/features/treasury/components/PettyCashModal";
 
 export default function Treasury() {
   const { value: monedaBase } = useSystemConfig("moneda_base");
@@ -50,43 +54,39 @@ export default function Treasury() {
     deleteAccount,
   } = useBankAccounts();
 
-  const [movimientos, setMovimientos] = useState<BankMovement[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("tesoreria");
+
+  const [movimientos, setMovimientos] = useState<BankMovementResponse[]>([]);
   const [isMovementsLoading, setIsMovementsLoading] = useState(true);
   const [showBalances, setShowBalances] = useState(true);
 
-  // States Tab Movimientos
   const [searchTerm, setSearchTerm] = useState("");
   const [movementFilter, setMovementFilter] = useState<
-    "all" | "operativa" | "cobranza"
+    "all" | "egreso" | "ingreso"
   >("all");
 
-  // States Modales Movimientos
-  const [selectedMovement, setSelectedMovement] = useState<BankMovement | null>(
-    null,
-  );
+  const [selectedMovement, setSelectedMovement] =
+    useState<BankMovementResponse | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isDeleteMovementOpen, setIsDeleteMovementOpen] = useState(false);
-  const [movementToDelete, setMovementToDelete] = useState<BankMovement | null>(
-    null,
-  );
+  const [movementToDelete, setMovementToDelete] =
+    useState<BankMovementResponse | null>(null);
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [isManualMovementOpen, setIsManualMovementOpen] = useState(false);
+  const [isPettyCashOpen, setIsPettyCashOpen] = useState(false);
 
-  // States Modales Cuentas
-  const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(
-    null,
-  );
+  const [selectedAccount, setSelectedAccount] =
+    useState<BankAccountResponse | null>(null);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [isAccountDetailOpen, setIsAccountDetailOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
 
+  //  FETCH DE MOVIMIENTOS CON OPENAPI
   const fetchMovements = async () => {
     setIsMovementsLoading(true);
     try {
-      const movRes = await axiosClient.get<BankMovement[]>(
-        "/api/finance/movements",
-      );
-      setMovimientos(movRes.data || []);
+      const data = await FinanceService.readMovementsApiFinanceMovementsGet();
+      setMovimientos(data || []);
     } catch (error) {
       toast.error("Error al cargar los movimientos financieros");
     } finally {
@@ -98,20 +98,28 @@ export default function Treasury() {
     fetchMovements();
   }, []);
 
-  // Helpers de Cuentas
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value === "tesoreria") {
+      fetchMovements();
+    } else if (value === "cuentas") {
+      refreshAccounts();
+    }
+  };
+
   const handleCreateAccountClick = () => {
     setSelectedAccount(null);
     setIsAccountModalOpen(true);
   };
-  const handleEditAccountClick = (acc: BankAccount) => {
+  const handleEditAccountClick = (acc: any) => {
     setSelectedAccount(acc);
     setIsAccountModalOpen(true);
   };
-  const handleViewAccountClick = (acc: BankAccount) => {
+  const handleViewAccountClick = (acc: any) => {
     setSelectedAccount(acc);
     setIsAccountDetailOpen(true);
   };
-  const handleDeleteAccountClick = (acc: BankAccount) => {
+  const handleDeleteAccountClick = (acc: any) => {
     setSelectedAccount(acc);
     setIsDeleteAccountOpen(true);
   };
@@ -130,15 +138,10 @@ export default function Treasury() {
     if (!movement) return;
     const newConciliado = !movement.conciliado;
     try {
-      await axiosClient.patch(
-        `/api/finance/movements/${movementId}/conciliation`,
-        {
-          conciliado: newConciliado,
-          fecha_conciliacion: newConciliado
-            ? new Date().toISOString().split("T")[0]
-            : null,
-        },
+      await FinanceService.conciliateMovementApiFinanceMovementsMovementIdConciliationPatch(
+        movementId,
       );
+
       setMovimientos(
         movimientos.map((m) =>
           m.id === movementId ? { ...m, conciliado: newConciliado } : m,
@@ -153,32 +156,13 @@ export default function Treasury() {
     }
   };
 
-  const operativaAccounts = useMemo(
-    () =>
-      bankAccounts.filter(
-        (a) => a.tipo_cuenta === "operativa" && a.estatus === "activo",
-      ),
-    [bankAccounts],
-  );
-  const cobranzaAccounts = useMemo(
-    () =>
-      bankAccounts.filter(
-        (a) => a.tipo_cuenta === "cobranza" && a.estatus === "activo",
-      ),
-    [bankAccounts],
-  );
-
   const filteredMovimientos = useMemo(() => {
     let filtered = movimientos;
+
     if (movementFilter !== "all") {
-      const accountNumbers =
-        movementFilter === "operativa"
-          ? operativaAccounts.map((a) => a.numero_cuenta)
-          : cobranzaAccounts.map((a) => a.numero_cuenta);
-      filtered = filtered.filter((m) =>
-        accountNumbers.includes(m.cuenta_bancaria || ""),
-      );
+      filtered = filtered.filter((m) => m.tipo === movementFilter);
     }
+
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -190,25 +174,18 @@ export default function Treasury() {
       );
     }
     return filtered;
-  }, [
-    movimientos,
-    movementFilter,
-    searchTerm,
-    operativaAccounts,
-    cobranzaAccounts,
-  ]);
+  }, [movimientos, movementFilter, searchTerm]);
 
-  const stats = useMemo(() => {
-    const conciliados = movimientos.filter((m) => m.conciliado).length;
-    const pendientes = movimientos.filter((m) => !m.conciliado).length;
-    const total_ingresos = movimientos
+  const stats = {
+    total_ingresos: movimientos
       .filter((m) => m.tipo === "ingreso")
-      .reduce((sum, m) => sum + m.monto, 0);
-    const total_egresos = movimientos
+      .reduce((acc, curr) => acc + curr.monto, 0),
+    total_egresos: movimientos
       .filter((m) => m.tipo === "egreso")
-      .reduce((sum, m) => sum + m.monto, 0);
-    return { conciliados, pendientes, total_ingresos, total_egresos };
-  }, [movimientos]);
+      .reduce((acc, curr) => acc + curr.monto, 0),
+    conciliados: movimientos.filter((m) => m.conciliado).length,
+    pendientes: movimientos.filter((m) => !m.conciliado).length,
+  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
@@ -218,9 +195,13 @@ export default function Treasury() {
         icon={<Landmark className="h-8 w-8" />}
       />
 
-      <Tabs defaultValue="tesoreria" className="w-full">
-        <div className="flex justify-between items-center mb-6 w-full">
-          <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="w-full"
+      >
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6 w-full">
+          <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 w-full sm:w-auto inline-flex overflow-x-auto">
             <TabsTrigger
               value="tesoreria"
               className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy data-[state=active]:shadow-sm h-full px-6 transition-all"
@@ -236,19 +217,27 @@ export default function Treasury() {
             </TabsTrigger>
           </TabsList>
 
-          <Button
-            onClick={() => setIsManualMovementOpen(true)}
-            className="rounded-xl shadow-md h-12 px-6 bg-brand-navy hover:bg-brand-navy/90 text-white font-bold tracking-wide"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Nuevo Movimiento
-          </Button>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button
+              onClick={() => setIsPettyCashOpen(true)}
+              variant="outline"
+              className="rounded-xl shadow-sm h-12 px-5 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold tracking-wide w-full sm:w-auto"
+            >
+              <Coins className="w-4 h-4 mr-2" /> Caja Chica
+            </Button>
+            <Button
+              onClick={() => setIsManualMovementOpen(true)}
+              className="rounded-xl shadow-md h-12 px-5 bg-brand-navy hover:bg-brand-navy/90 text-white font-bold tracking-wide w-full sm:w-auto"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Mov. Manual
+            </Button>
+          </div>
         </div>
 
         <TabsContent value="tesoreria" className="m-0">
           <TreasuryFlowTab
             stats={stats}
-            movimientos={filteredMovimientos}
+            movimientos={filteredMovimientos as any}
             isMovementsLoading={isMovementsLoading}
             showBalances={showBalances}
             formatCurrency={formatCurrency}
@@ -258,11 +247,11 @@ export default function Treasury() {
             setMovementFilter={setMovementFilter}
             fetchMovements={fetchMovements}
             handleToggleConciliacion={handleToggleConciliacion}
-            onViewMovement={(mov) => {
+            onViewMovement={(mov: any) => {
               setSelectedMovement(mov);
               setIsDetailModalOpen(true);
             }}
-            onDeleteMovement={(mov) => {
+            onDeleteMovement={(mov: any) => {
               setMovementToDelete(mov);
               setDeleteStep(mov.conciliado ? 1 : 2);
               setIsDeleteMovementOpen(true);
@@ -272,7 +261,7 @@ export default function Treasury() {
 
         <TabsContent value="cuentas" className="m-0">
           <BankAccountsTab
-            bankAccounts={bankAccounts}
+            bankAccounts={bankAccounts as any}
             isAccountsLoading={isAccountsLoading}
             showBalances={showBalances}
             setShowBalances={setShowBalances}
@@ -285,34 +274,43 @@ export default function Treasury() {
         </TabsContent>
       </Tabs>
 
-      {/* MODALES ORQUESTADOS */}
       <BankAccountModal
         open={isAccountModalOpen}
         onOpenChange={setIsAccountModalOpen}
-        account={selectedAccount}
+        account={selectedAccount as any}
       />
 
       <MovementDetailModal
         open={isDetailModalOpen}
         onOpenChange={setIsDetailModalOpen}
-        movement={selectedMovement}
+        movement={selectedMovement as any}
       />
 
       <ManualMovementModal
         open={isManualMovementOpen}
         onOpenChange={setIsManualMovementOpen}
-        bankAccounts={bankAccounts}
+        bankAccounts={bankAccounts as any}
         onSuccess={() => {
           fetchMovements();
           refreshAccounts();
         }}
       />
 
-      {/* ALERT DIALOG ELIMINAR CUENTA */}
+      <PettyCashModal
+        open={isPettyCashOpen}
+        onOpenChange={setIsPettyCashOpen}
+        bankAccounts={bankAccounts as any}
+        onSuccess={() => {
+          fetchMovements();
+          refreshAccounts();
+        }}
+      />
+
       <AlertDialog
         open={isDeleteAccountOpen}
         onOpenChange={setIsDeleteAccountOpen}
       >
+        {/* ... Resto del Modal de Delete Account (no cambió) ... */}
         <AlertDialogContent className="w-[95vw] sm:max-w-lg p-0 flex flex-col bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
           <AlertDialogHeader className="p-6 sm:p-8 bg-card border-b border-border shrink-0">
             <div className="flex items-center gap-4">
@@ -324,12 +322,11 @@ export default function Treasury() {
                   Desactivar Cuenta Bancaria
                 </AlertDialogTitle>
                 <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
-                  Soft Delete • Registro de detalles Intacta
+                  Soft Delete • Registros Intactos
                 </p>
               </div>
             </div>
           </AlertDialogHeader>
-
           <div className="p-6 sm:p-8 space-y-5">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed block">
               Estás a punto de archivar y desactivar la cuenta{" "}
@@ -338,56 +335,21 @@ export default function Treasury() {
               </strong>
               .
             </AlertDialogDescription>
-
-            <div className="p-4 sm:p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-xl shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <h4 className="text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
-                  Pagos en Tránsito (Limbo)
-                </h4>
-              </div>
-              <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200/80">
-                Si existen pagos, facturas o liquidaciones de operadores
-                programados hacia esta cuenta, quedarán{" "}
-                <b>"en el limbo" (pausados)</b> hasta que el equipo de finanzas
-                les asigne una nueva cuenta operativa.
-              </p>
-            </div>
-
-            <div className="p-4 sm:p-5 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl shadow-sm">
-              <div className="flex items-start gap-3">
-                <div className="bg-emerald-500 rounded-full p-1 mt-0.5 shadow-lg shadow-emerald-500/20 shrink-0">
-                  <CheckCircle2 className="h-3 w-3 text-white" />
-                </div>
-                <div>
-                  <h4 className="text-[11px] font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-widest mb-1">
-                    Protección Histórica
-                  </h4>
-                  <p className="text-[11px] font-medium text-emerald-700/80 dark:text-emerald-400/80 leading-relaxed">
-                    Los reportes financieros, despachos, y cobros ya cerrados{" "}
-                    <b>no se verán afectados</b>. La cuenta simplemente se
-                    ocultará para futuras operaciones.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
-
           <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
             <AlertDialogCancel className="rounded-xl font-bold h-11 px-6">
-              Cancelar Operación
+              Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteAccount}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold h-11 px-8 shadow-lg shadow-rose-500/20"
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold h-11 px-8"
             >
-              Entendido, Desactivar Cuenta
+              Desactivar Cuenta
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ALERT DIALOG ELIMINAR MOVIMIENTO */}
       <AlertDialog
         open={isDeleteMovementOpen}
         onOpenChange={(open) => {
@@ -428,11 +390,23 @@ export default function Treasury() {
               ) : (
                 <>
                   Se eliminará permanentemente la transacción y se devolverá el
-                  dinero a la cuenta bancaria para mantener el saldo cuadrado:
-                  <br />
+                  dinero a la cuenta bancaria para mantener el saldo cuadrado.
                   <strong className="text-slate-900 mt-2 block p-3 bg-muted rounded-lg border">
                     {movementToDelete?.concepto}
                   </strong>
+                  {movementToDelete?.origen_modulo === "CxC" && (
+                    <div className="mt-4 p-4 bg-rose-50 dark:bg-rose-950/30 border-l-4 border-rose-500 rounded-r-lg text-rose-800 font-bold text-[11px] leading-relaxed shadow-sm">
+                      <AlertTriangle className="inline h-4 w-4 mr-1.5 mb-0.5 text-rose-600" />
+                      ALERTA FISCAL: La Cuenta por Cobrar volverá a abrirse.
+                    </div>
+                  )}
+                  {movementToDelete?.origen_modulo === "CxP" && (
+                    <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 border-l-4 border-amber-500 rounded-r-lg text-amber-800 font-bold text-[11px] leading-relaxed shadow-sm">
+                      <AlertTriangle className="inline h-4 w-4 mr-1.5 mb-0.5 text-amber-600" />
+                      ALERTA: Al eliminar este pago, la Cuenta por Pagar
+                      vinculada volverá a abrirse (regresando su deuda).
+                    </div>
+                  )}
                 </>
               )}
             </AlertDialogDescription>
@@ -448,16 +422,15 @@ export default function Treasury() {
                   return;
                 }
                 try {
-                  await axiosClient.delete(
-                    `/api/finance/movements/${movementToDelete?.id}`,
+                  //  LLAMADA SEGURA AL BACKEND AUTOGENERADO
+                  await FinanceService.deleteBankMovementApiFinanceMovementsMovementIdDelete(
+                    movementToDelete!.id,
                   );
                   setMovimientos(
                     movimientos.filter((m) => m.id !== movementToDelete?.id),
                   );
                   refreshAccounts();
-                  toast.success(
-                    "Movimiento eliminado y saldo restaurado correctamente",
-                  );
+                  toast.success("Movimiento eliminado y saldo restaurado.");
                 } catch (error) {
                   toast.error("Error al eliminar el movimiento");
                 } finally {

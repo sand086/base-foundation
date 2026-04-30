@@ -46,7 +46,7 @@ export function StatusBadge({ status, children, className }: StatusBadgeProps) {
     <span
       className={cn(
         "inline-flex items-center px-2.5 py-1 rounded-full border backdrop-blur-md transition-all duration-300",
-        // 🛠 TIPOGRAFÍA INDUSTRIAL
+        //   TIPOGRAFÍA INDUSTRIAL
         "text-[9px] font-black uppercase tracking-[0.15em]",
         statusStyles[status],
         className,

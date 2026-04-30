@@ -34,6 +34,7 @@ export interface ReceivableInvoice {
   fecha_emision: string;
   fecha_vencimiento: string;
   estatus: "pendiente" | "pago_parcial" | "pagado" | "cancelado" | string;
+  referencia?: string;
   payments?: InvoicePayment[];
   conceptos?: InvoiceConcept[];
   servicios_relacionados?: string[];

@@ -118,7 +118,7 @@ def receive_purchase_order(
         moneda=order.moneda,
         fecha_emision=date.today(),
         fecha_vencimiento=date.today() + timedelta(days=dias_credito),
-        # 🚀 CAMPOS CLAVE PARA EL EXCEL DEL SAT 🚀
+        #   CAMPOS CLAVE PARA EL EXCEL DEL SAT
         estatus=models.InvoiceStatus.PENDIENTE,
         metodo_pago="PPD",  # Nace como PPD para que sea CxP Real
         tipo_comprobante="I",  # Ingreso

@@ -32,7 +32,6 @@ import { cn } from "@/lib/utils";
 
 import {
   PayableInvoice,
-  Supplier,
   IndirectCategory,
   FinancialClassification,
   RegisterExpensePayload,
@@ -40,6 +39,7 @@ import {
 } from "@/features/payables/types";
 import { PurchaseOrder, getOrderTypeLabel } from "@/features/purchases/types";
 import { Trip } from "@/features/trips/types";
+import { Supplier } from "@/features/suppliers/types";
 import { Unit } from "@/features/units/types";
 
 // Extensión para que acepte los campos del XML

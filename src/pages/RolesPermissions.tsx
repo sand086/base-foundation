@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-// 👉 1. IMPORTAMOS TODOS LOS ICONOS DEL SIDEBAR
+//  1. IMPORTAMOS TODOS LOS ICONOS DEL SIDEBAR
 import {
   Shield,
   Plus,
@@ -64,9 +64,10 @@ import { CreatePermissionModal } from "@/features/users/components/CreatePermiss
 import { ManageModulesModal } from "@/features/users/components/ManageModulesModal";
 import { AuditLogPanel } from "@/features/audit/components/AuditLogPanel";
 import { useRoles } from "@/features/users/hooks/useRoles";
+import { ca } from "date-fns/locale";
 
 /**
- * 👉 2. TIPOS ACTUALIZADOS AL INGLÉS (Homologado con BD)
+ *  2. TIPOS ACTUALIZADOS AL INGLÉS (Homologado con BD)
  */
 type Permiso = {
   read: boolean;
@@ -100,7 +101,7 @@ type MeUser = {
   avatar_url?: string | null;
 };
 
-// 👉 3. MAPA DE ICONOS DINÁMICOS PARA EMPATAR CON EL SIDEBAR
+//  3. MAPA DE ICONOS DINÁMICOS PARA EMPATAR CON EL SIDEBAR
 const iconMap: Record<string, React.ElementType> = {
   dashboard: LayoutDashboard,
   clients: Users,
@@ -111,18 +112,15 @@ const iconMap: Record<string, React.ElementType> = {
   dispatch: CalendarPlus,
   fuel: Fuel,
   settlements: FileCheck,
-  payables: Briefcase,
+  suppliers: Briefcase,
+  payables: CreditCard,
   receivables: DollarSign,
   treasury: Landmark,
-  admin: Settings,
+  reports: BarChart3,
   users: Users,
-  // Fallbacks de la versión anterior
-  Shield,
-  Radio,
-  FileText,
-  Receipt,
-  CreditCard,
-  BarChart3,
+  roles: Shield,
+  settings: Settings,
+  admin: Settings, // Fallback
 };
 
 const EMPTY_PERMISO: Permiso = {
@@ -322,15 +320,17 @@ const RolesPermissions: React.FC = () => {
         return "bg-green-100 text-green-700 border-green-200";
       case "supervisor":
         return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      case "auditor":
+        return "bg-purple-100 text-purple-700 border-purple-200";
+      case "logistica":
+        return "bg-teal-100 text-teal-700 border-teal-200";
+      case "despacho":
+        return "bg-orange-100 text-orange-700 border-orange-200";
       default:
         return "bg-gray-100 text-gray-700";
     }
   };
   const normalizePerms = (raw: any, modules: Module[]): PermisosMap => {
-    // console.log("=== 🔍 INICIANDO DEBUG DE PERMISOS ===");
-    // console.log("1️⃣ Permisos crudos recibidos del Rol:", raw);
-    // console.log( "2️⃣ Módulos disponibles en la BD:",modules.map((m) => m.id),);
-
     const out: PermisosMap = {};
 
     // Inicializamos todo en falso para que no haya undefined
@@ -350,14 +350,12 @@ const RolesPermissions: React.FC = () => {
       console.error("Error al parsear permisos:", raw);
     }
 
-    // console.log("3️⃣ Permisos parseados como Objeto:", permsData);
+    // console.log("  Permisos parseados como Objeto:", permsData);
 
     if (typeof permsData === "object" && permsData !== null) {
       const isAll = permsData.all === true;
 
-      // 🛠 MAPA DE TRADUCCIÓN:
-      // Si la BD de módulos sigue teniendo IDs en español, esto los traduce
-      // al vuelo para buscar la llave correcta en el JSON en inglés.
+      //   MAPA DE TRADUCCIÓN:
       const translationMap: Record<string, string> = {
         monitoreo: "monitoring",
         flota: "fleet",
@@ -366,7 +364,7 @@ const RolesPermissions: React.FC = () => {
         despacho: "dispatch",
         cxc: "receivables",
         cxp: "payables",
-        configuracion: "admin",
+        configuracion: "settings",
         usuarios: "users",
         trackingop: "traffic",
         reportes: "reports",
@@ -379,7 +377,7 @@ const RolesPermissions: React.FC = () => {
         // Buscamos el permiso usando el ID original o su traducción al inglés
         const val = permsData[id] || permsData[englishKey];
 
-        // console.log( `   🔸 Evaluando módulo: [${id}] -> Buscando llave en JSON: [${englishKey}] -> Encontró:`,  val,);
+        // console.log( `     Evaluando módulo: [${id}] -> Buscando llave en JSON: [${englishKey}] -> Encontró:`,  val,);
 
         if (isAll) {
           out[id] = { read: true, update: true, delete: true, export: true };
@@ -402,7 +400,7 @@ const RolesPermissions: React.FC = () => {
     return out;
   };
 
-  // 👉 4. TOGGLES REFACTORIZADOS AL INGLÉS
+  //  4. TOGGLES REFACTORIZADOS AL INGLÉS
 
   const handleTogglePermiso = (
     moduloId: string,
@@ -496,7 +494,7 @@ const RolesPermissions: React.FC = () => {
     setNewRoleName(role?.nombre || "");
     setNewRoleDescription(role?.descripcion || "");
 
-    // 👉 AQUÍ CARGAMOS EL BORRADOR LIMPIO
+    //  AQUÍ CARGAMOS EL BORRADOR LIMPIO
     setDraftPermisos(normalizePerms(role?.permisos, availableModules));
     setShowRoleEditor(true);
   };
@@ -534,7 +532,7 @@ const RolesPermissions: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-[50vh]">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-brand-primary" />
           <p className="text-muted-foreground">Cargando roles y permisos...</p>
         </div>
       </div>
@@ -557,7 +555,7 @@ const RolesPermissions: React.FC = () => {
         </Button>
         <Button
           onClick={openNewRoleEditor}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+          className="bg-primary text-brand-primary-foreground hover:bg-primary/90 gap-2"
         >
           <Plus className="h-4 w-4" /> Nuevo Rol
         </Button>
@@ -642,7 +640,7 @@ const RolesPermissions: React.FC = () => {
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Shield className="h-6 w-6 text-primary" />
+                        <Shield className="h-6 w-6 text-brand-primary" />
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -755,7 +753,7 @@ const RolesPermissions: React.FC = () => {
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader className="space-y-3">
             <SheetTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
+              <Shield className="h-5 w-5 text-slate-500 dark:text-white/70" />
               {isCreatingRole
                 ? "Crear Nuevo Rol"
                 : `Editar Rol: ${currentRole?.nombre ?? ""}`}
@@ -801,7 +799,7 @@ const RolesPermissions: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleColumnPermiso("read")}
-                            className="hover:text-primary"
+                            className="hover:text-brand-primary"
                           >
                             <Eye className="h-4 w-4 text-blue-500 mx-auto" />
                           </button>
@@ -811,7 +809,7 @@ const RolesPermissions: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleColumnPermiso("update")}
-                            className="hover:text-primary"
+                            className="hover:text-brand-primary"
                           >
                             <Pencil className="h-4 w-4 text-amber-500 mx-auto" />
                           </button>
@@ -821,7 +819,7 @@ const RolesPermissions: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleColumnPermiso("delete")}
-                            className="hover:text-primary"
+                            className="hover:text-brand-primary"
                           >
                             <Trash2 className="h-4 w-4 text-red-500 mx-auto" />
                           </button>
@@ -831,7 +829,7 @@ const RolesPermissions: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleColumnPermiso("export")}
-                            className="hover:text-primary"
+                            className="hover:text-brand-primary"
                           >
                             <Download className="h-4 w-4 text-green-500 mx-auto" />
                           </button>
@@ -840,7 +838,7 @@ const RolesPermissions: React.FC = () => {
                     </thead>
 
                     <tbody className="divide-y">
-                      {/* 👉 5. ITERAMOS LOS MÓDULOS DE LA BD */}
+                      {/*  5. ITERAMOS LOS MÓDULOS DE LA BD */}
                       {availableModules.map((modulo) => {
                         const permiso =
                           draftPermisos[modulo.id.toLowerCase()] ||
@@ -957,7 +955,7 @@ const RolesPermissions: React.FC = () => {
             <Button
               onClick={handleSavePermisos}
               disabled={isSaving || !newRoleName.trim()}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              className="bg-primary hover:bg-primary/90 text-brand-primary-foreground gap-2"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -975,7 +973,8 @@ const RolesPermissions: React.FC = () => {
         <AlertDialogContent className="border-destructive/50">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" /> Eliminar Rol Crítico
+              <AlertTriangle className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+              Eliminar Rol Crítico
             </AlertDialogTitle>
 
             <AlertDialogDescription className="text-base text-foreground mt-4">

@@ -763,7 +763,8 @@ const Profile: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Key className="h-5 w-5" /> Cambiar Contraseña
+                <Key className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                Cambiar Contraseña
               </CardTitle>
               <CardDescription>
                 Actualiza tu contraseña de acceso o genera una nueva ultra
@@ -963,8 +964,8 @@ const Profile: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Smartphone className="h-5 w-5" /> Autenticación de Dos Factores
-                (2FA)
+                <Smartphone className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                Autenticación de Dos Factores (2FA)
               </CardTitle>
               <CardDescription>
                 Añade una capa extra de seguridad a tu cuenta
@@ -1083,7 +1084,8 @@ const Profile: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5" /> Notificaciones por Email
+                <Mail className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+                Notificaciones por Email
               </CardTitle>
               <CardDescription>
                 Configura qué notificaciones deseas recibir
@@ -1160,7 +1162,8 @@ const Profile: React.FC = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" /> Configurar Autenticación 2FA
+              <Shield className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+              Configurar Autenticación 2FA
             </DialogTitle>
             <DialogDescription>
               {twoFAStep === "init" &&
@@ -1274,7 +1277,8 @@ const Profile: React.FC = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-destructive flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> Desactivar 2FA
+              <AlertTriangle className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
+              Desactivar 2FA
             </DialogTitle>
             <DialogDescription>
               Ingresa tu contraseña para confirmar.

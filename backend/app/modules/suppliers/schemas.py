@@ -1,6 +1,5 @@
 # --- Fuente: schemas_suppliers.py ---
 
-
 from datetime import date, datetime
 from typing import List, Optional
 
@@ -19,6 +18,22 @@ from app.modules.logistics.schemas import RateTemplateResponse
 
 class ORMBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+
+# =========================================================
+# NUEVO: CENTROS DE COSTOS (Añadido para relación)
+# =========================================================
+
+
+class CostCenterResponse(ORMBase):
+    id: int
+    codigo: str
+    nombre: str
+    activo: bool
+
+    model_config = ConfigDict(
+        from_attributes=True, json_schema_extra={"title": "CostCenterResponse"}
+    )
 
 
 # =========================================================
@@ -75,6 +90,7 @@ class InvoicePaymentResponse(ORMBase):
 
 class PayableInvoiceBase(ORMBase):
     supplier_id: Optional[int] = None
+    cost_center_id: Optional[int] = None  #  Ajuste: CECO en la base
     uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
 
@@ -99,6 +115,7 @@ class PayableInvoiceBase(ORMBase):
 
 class PayableInvoiceCreate(ORMBase):
     supplier_id: Optional[int] = None
+    cost_center_id: Optional[int] = None  #  Ajuste: Permitir enviar CECO al crear
 
     uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
@@ -125,9 +142,10 @@ class PayableInvoiceCreate(ORMBase):
 class PayableInvoiceUpdate(ORMBase):
     uuid: Optional[str] = Field(default=None, max_length=36)
     folio_interno: Optional[str] = Field(default=None, max_length=50)
+    cost_center_id: Optional[int] = None  #  Ajuste: Permitir cambiar CECO
 
     monto_total: Optional[float] = None
-    saldo_pendiente: Optional[float] = None  # si NO lo permites manualmente, elimínalo
+    saldo_pendiente: Optional[float] = None
     moneda: Optional[Currency] = None
 
     fecha_emision: Optional[date] = None
@@ -149,6 +167,7 @@ class PayableInvoiceUpdate(ORMBase):
 class PayableInvoiceResponse(ORMBase):
     id: int
     supplier_id: Optional[int] = None
+    cost_center_id: Optional[int] = None
 
     uuid: Optional[str] = None
     folio_interno: Optional[str] = None
@@ -173,6 +192,7 @@ class PayableInvoiceResponse(ORMBase):
     orden_compra_id: Optional[str] = None
 
     payments: List[InvoicePaymentResponse] = Field(default_factory=list)
+    cost_center: Optional[CostCenterResponse] = None  #  Ajuste: Ver detalle del CECO
 
     record_status: RecordStatus
     created_at: Optional[datetime] = None
@@ -182,7 +202,7 @@ class PayableInvoiceResponse(ORMBase):
 
 
 # =========================================================
-# PROVEEDORES (Supplier)
+# TARIFAS (SupplierTariff)
 # =========================================================
 
 
@@ -261,9 +281,8 @@ class SupplierBase(ORMBase):
     dias_credito: int = 0
     limite_credito: float = 0.0
     contacto_principal: Optional[str] = Field(default=None, max_length=100)
-    categoria: Optional[str] = Field(default=None, max_length=50)
 
-    # Nuevos campos
+    # Nuevos campos de banco y tipo
     tipo_proveedor: Optional[str] = Field(default=None, max_length=50)
     zonas_cobertura: Optional[str] = Field(default=None, max_length=255)
     banco: Optional[str] = Field(default=None, max_length=100)
@@ -271,6 +290,7 @@ class SupplierBase(ORMBase):
     clabe: Optional[str] = Field(default=None, max_length=18)
 
     estatus: SupplierStatus = SupplierStatus.ACTIVO
+    cost_center_id: Optional[int] = None
 
 
 class SupplierCreate(SupplierBase):
@@ -287,14 +307,13 @@ class SupplierUpdate(ORMBase):
     dias_credito: Optional[int] = None
     limite_credito: Optional[float] = None
     contacto_principal: Optional[str] = Field(default=None, max_length=100)
-    categoria: Optional[str] = Field(default=None, max_length=50)
 
     tipo_proveedor: Optional[str] = Field(default=None, max_length=50)
     zonas_cobertura: Optional[str] = Field(default=None, max_length=255)
     banco: Optional[str] = Field(default=None, max_length=100)
     cuenta_bancaria: Optional[str] = Field(default=None, max_length=50)
     clabe: Optional[str] = Field(default=None, max_length=18)
-
+    cost_center_id: Optional[int] = None
     estatus: Optional[SupplierStatus] = None
     tariffs: Optional[List[SupplierTariffUpdate]] = None
 
@@ -303,6 +322,9 @@ class SupplierUpdate(ORMBase):
 
 class SupplierResponse(SupplierBase):
     id: int
+
+    #  AJUSTE CRÍTICO: Incluir el objeto CECO para que React lo vea
+    cost_center: Optional[CostCenterResponse] = None
 
     invoices: List[PayableInvoiceResponse] = Field(default_factory=list)
     tariffs: List[SupplierTariffResponse] = Field(default_factory=list)

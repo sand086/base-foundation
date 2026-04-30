@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
 
 from app.models.models import RecordStatus, TollUnitType, PaymentMethod
 
@@ -292,10 +292,13 @@ class TripTimelineEventCreatePayload(BaseModel):
     lng: Optional[str] = None
     notifyClient: Optional[bool] = False
     odometro: Optional[int] = None
+    odometro_final: Optional[float] = None
     combustible_porcentaje: Optional[float] = None
     combustible_litros: Optional[float] = None
     terminal_entrega_vacio: Optional[str] = None
     trip_leg_id: Optional[int] = None
+    penalizacion_monto: Optional[float] = None
+    penalizacion_motivo: Optional[str] = None
 
 
 class TripTimelineEventResponse(TripTimelineEventBase):
@@ -420,6 +423,13 @@ class TripCreate(TripBase):
     """
 
     initial_leg: Optional[TripLegCreate] = None
+
+    #   NUEVOS CAMPOS DEL MOTOR DUAL
+    final_leg: Optional[TripLegCreate] = None
+    conoce_ruta_completa: Optional[bool] = False
+    ocultar_montos_pdf: Optional[bool] = False
+    is_dummy_stamping: Optional[bool] = False
+
     model_config = ConfigDict(extra="ignore")
 
 
@@ -585,6 +595,10 @@ class ReceivableInvoiceCreate(BaseModel):
         default=False,
         description="Si es True, genera factura por $1 Peso para Bypass Aduanal",
     )
+
+    #   NUEVOS CAMPOS DEL MOTOR DUAL
+    use_dummy: Optional[bool] = False
+    ocultar_montos: Optional[bool] = False
 
     tipo_relacion: Optional[str] = Field(
         default=None, description="Ej: 04 - Sustitución de CFDI previos"

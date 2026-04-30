@@ -127,7 +127,7 @@ export function ImageUpload({
 
         {!disabled && (
           <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground h-9 w-9 rounded-full shadow-lg flex items-center justify-center border-2 border-card hover:scale-110 transition-transform">
-            <Camera className="h-5 w-5" />
+            <Camera className="h-5 w-5 text-slate-500 dark:text-white/70" />
           </div>
         )}
       </div>

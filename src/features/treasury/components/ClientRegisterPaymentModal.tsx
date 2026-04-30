@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   Loader2,
   Landmark,
+  Wallet,
 } from "lucide-react";
 import { ReceivableInvoice } from "@/features/receivables/types";
 import { cn } from "@/lib/utils";
@@ -66,7 +67,9 @@ export function ClientRegisterPaymentModal({
     fecha: new Date().toISOString().split("T")[0],
     metodoPago: "03",
     referencia: "",
-    cuenta_deposito: "", // Aquí guardaremos el ID de la cuenta bancaria
+    cuenta_deposito: "",
+    banco_ordenante: "",
+    cuenta_ordenante: "",
   });
 
   const [abonos, setAbonos] = useState<Record<number, number>>({});
@@ -79,11 +82,20 @@ export function ClientRegisterPaymentModal({
         initialAbonos[inv.id] = inv.saldo_pendiente;
       });
       setAbonos(initialAbonos);
+
+      //   FIX: Extraemos la Referencia Operativa (Booking/Pedimento) del viaje en lugar del folio
+      const defaultReferencia = invoices
+        .map((inv: any) => inv.referencia || inv.referencia_cliente || "")
+        .filter(Boolean)
+        .join(", ");
+
       setFormData((prev) => ({
         ...prev,
         fecha: new Date().toISOString().split("T")[0],
-        referencia: "",
-        cuenta_deposito: "", // Limpiamos la cuenta al abrir
+        referencia: defaultReferencia,
+        cuenta_deposito: "",
+        banco_ordenante: "",
+        cuenta_ordenante: "",
       }));
       setError("");
     }
@@ -105,9 +117,16 @@ export function ClientRegisterPaymentModal({
       return;
     }
 
-    // VALIDACIÓN CRÍTICA: Exigir cuenta bancaria
     if (!formData.cuenta_deposito) {
       setError("Debes seleccionar una Cuenta Bancaria de depósito.");
+      return;
+    }
+
+    //   VALIDACIÓN SAT: Si escriben cuenta, debe ser mayor a 10 dígitos (Regla del SAT)
+    if (formData.cuenta_ordenante && formData.cuenta_ordenante.length < 10) {
+      setError(
+        "La cuenta ordenante del cliente debe tener al menos 10 dígitos.",
+      );
       return;
     }
 
@@ -143,7 +162,9 @@ export function ClientRegisterPaymentModal({
       forma_pago: formData.metodoPago,
       fecha_pago: formData.fecha,
       referencia: formData.referencia,
-      cuenta_deposito: Number(formData.cuenta_deposito), // Enviamos el ID numérico al backend
+      cuenta_deposito: String(formData.cuenta_deposito),
+      banco_ordenante: formData.banco_ordenante,
+      cuenta_ordenante: formData.cuenta_ordenante,
     };
 
     await onSubmit(payloadBackend);
@@ -190,10 +211,11 @@ export function ClientRegisterPaymentModal({
 
         <ScrollArea className="flex-1 px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar mt-4">
           <div className="space-y-6">
+            {/*   SECCIÓN 1: DATOS GENERALES DEL PAGO */}
             <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
               <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-1.5">
                 <Building2 className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />{" "}
-                Datos de la Transacción
+                Datos Generales del Pago
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-1.5">
@@ -235,7 +257,7 @@ export function ClientRegisterPaymentModal({
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <Landmark className="inline h-3 w-3 mr-1" /> Cuenta Destino
-                    *
+                    (Tu Banco) *
                   </Label>
                   <Select
                     value={formData.cuenta_deposito}
@@ -264,7 +286,7 @@ export function ClientRegisterPaymentModal({
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Ref. / Operación
+                    N° de Referencia
                   </Label>
                   <Input
                     placeholder="Opcional..."
@@ -279,6 +301,52 @@ export function ClientRegisterPaymentModal({
               </div>
             </div>
 
+            {/*   SECCIÓN 2: DATOS DEL CLIENTE (OPCIONAL) */}
+            <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-1.5">
+                <Wallet className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />{" "}
+                Datos Bancarios del Cliente (Opcional)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    Banco Ordenante (Ej. BANAMEX)
+                  </Label>
+                  <Input
+                    placeholder="Nombre del Banco..."
+                    value={formData.banco_ordenante}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        banco_ordenante: e.target.value,
+                      })
+                    }
+                    className="h-11 shadow-sm text-sm uppercase bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    Cuenta Ordenante (Min. 10 dígitos)
+                  </Label>
+                  <Input
+                    placeholder="012180001055598982"
+                    value={formData.cuenta_ordenante}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        cuenta_ordenante: e.target.value.replace(/\D/g, ""),
+                      })
+                    }
+                    maxLength={18}
+                    className="h-11 shadow-sm text-sm font-mono bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/*   SECCIÓN 3: DESGLOSE DE FACTURAS */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">

@@ -1,9 +1,21 @@
 import logging
+import os
+import shutil
+import json
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Any
 
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Body, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    UploadFile,
+    File,
+    Body,
+    status,
+    Form,
+)
 from sqlalchemy.orm import Session, joinedload
 from lxml import etree
 
@@ -26,33 +38,18 @@ class BulkUploadPayload(BaseModel):
 
 
 # =====================================================================
-# PAYABLES (Cuentas por Pagar) & PROVIDERS
+# CATEGORIES & COST CENTERS
 # =====================================================================
 
 
-@router.get("/providers", response_model=List[schemas.ProviderResponse])
-def read_providers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_providers(db, skip, limit)
-
-
-@router.post("/providers", response_model=schemas.ProviderResponse)
-def create_provider(provider: schemas.ProviderCreate, db: Session = Depends(get_db)):
-    if db.query(models.Supplier).filter(models.Supplier.rfc == provider.rfc).first():
-        raise HTTPException(status_code=400, detail="RFC ya registrado")
-    return crud.create_provider(db, provider)
-
-
-@router.delete("/providers/{provider_id}")
-def delete_provider(provider_id: str, db: Session = Depends(get_db)):
-    if not crud.delete_provider(db, provider_id):
-        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
-    return {"message": "Proveedor eliminado"}
-
-
-@router.get("/indirect-categories")
-def read_indirect_categories(db: Session = Depends(get_db)):
-    """Obtiene las categorías de gastos indirectos (Fijos/Variables)"""
-    return crud.get_indirect_categories(db)
+#   NUEVO ENDPOINT: CENTROS DE COSTO (CECOS)
+@router.get("/cost-centers", response_model=List[schemas.CostCenterResponse])
+def read_cost_centers(db: Session = Depends(get_db)):
+    """
+    Obtiene los Centros de Costos creados por la importación masiva del SAT
+    o creados manualmente, para mostrarlos en el frontend.
+    """
+    return db.query(models.CostCenter).filter(models.CostCenter.activo == True).all()
 
 
 # =====================================================================
@@ -149,23 +146,43 @@ def create_manual_movement(
 
 
 # =====================================================================
-# INVOICES (Carga Masiva CxP)
+# INVOICES (Carga Masiva CxP y Conciliación SAT)
 # =====================================================================
 
 
 @router.post("/invoices/bulk-upload")
-def bulk_upload_invoices(
-    payload: BulkUploadPayload,
+async def bulk_upload_invoices(
+    file: UploadFile = File(...),
+    json_data: str = Form(...),  # Recibimos los datos parseados como string
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """Endpoint para procesar la carga masiva de facturas del SAT (CXP)."""
+    """
+    Endpoint robusto para procesar el reporte SAT.
+    1. Guarda el archivo original en el servidor para auditoría.
+    2. Procesa los registros evitando duplicados por UUID.
+    """
     try:
-        resultado = crud.process_bulk_payables(db=db, payload_data=payload.data)
-        return resultado
+        # A. GUARDAR ARCHIVO ORIGINAL
+        upload_dir = "app/storage/bulk_uploads"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = os.path.join(upload_dir, f"{timestamp}_{file.filename}")
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # B. PROCESAR DATOS (AQUÍ ES DONDE SUCEDE LA MAGIA DEL NUEVO CRUD)
+        data = json.loads(json_data)
+        resultado = crud.process_sat_master_report(
+            db=db, payload_data=data, original_file_name=file.filename
+        )
+
+        return {**resultado, "file_stored": file_path}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error procesando facturas: {str(e)}"
+            status_code=500, detail=f"Error en la carga masiva: {str(e)}"
         )
 
 
@@ -178,20 +195,16 @@ def bulk_upload_invoices(
 def get_receivable_invoices(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
-    """
-    Obtiene todas las facturas de clientes (Cuentas por Cobrar)
-    con la información del cliente adjunta, ignorando las que no tienen folio.
-    """
     invoices = (
         db.query(models.ReceivableInvoice)
         .options(
             joinedload(models.ReceivableInvoice.client),
             joinedload(models.ReceivableInvoice.payments),
+            joinedload(models.ReceivableInvoice.trip),
         )
         .filter(
-            models.ReceivableInvoice.record_status == models.RecordStatus.ACTIVO.value,
-            models.ReceivableInvoice.folio_interno.isnot(None),
-            models.ReceivableInvoice.folio_interno != "",
+            models.ReceivableInvoice.record_status
+            != models.RecordStatus.ELIMINADO.value
         )
         .order_by(models.ReceivableInvoice.id.desc())
         .offset(skip)
@@ -201,26 +214,55 @@ def get_receivable_invoices(
 
     response = []
     for inv in invoices:
-        pagos_list = []
-        for p in inv.payments:
-            pagos_list.append(
-                {
-                    "id": p.id,
-                    "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
-                    "monto": p.monto,
-                    "metodo_pago": p.metodo_pago,
-                    "referencia": p.referencia or "S/R",
-                    "cuenta_deposito": p.cuenta_deposito,
-                    "complemento_uuid": p.complemento_uuid,
-                }
-            )
+        if inv.monto_total and float(inv.monto_total) == 1.12:
+            continue
+
+        pagos_list = [
+            {
+                "id": p.id,
+                "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+                "monto": p.monto,
+                "metodo_pago": p.metodo_pago,
+                "referencia": p.referencia or "S/R",
+                "cuenta_deposito": p.cuenta_deposito,
+                "complemento_uuid": p.complemento_uuid,
+            }
+            for p in inv.payments
+        ]
+
+        folio_display = inv.folio_interno or (
+            f"CXC-TRP-{inv.viaje_id}"
+            if inv.viaje_id
+            else (f"SAT-{str(inv.uuid)[:8]}" if inv.uuid else f"PROVISIONAL-{inv.id}")
+        )
+
+        trip_data = None
+        if inv.trip:
+            conts = []
+            if inv.trip.contenedor_1 and inv.trip.contenedor_1 not in ["N/A", ""]:
+                conts.append(inv.trip.contenedor_1)
+            if inv.trip.contenedor_2 and inv.trip.contenedor_2 not in ["N/A", ""]:
+                conts.append(inv.trip.contenedor_2)
+            contenedores_str = " / ".join(conts) if conts else "Sin contenedor"
+
+            trip_data = {
+                "origen": inv.trip.origin,
+                "destino": inv.trip.destination,
+                "peso_toneladas": inv.trip.peso_toneladas,
+                "contenedores": contenedores_str,
+                "producto_sat": f"[{inv.trip.sat_clave_producto or '01010101'}] {inv.trip.descripcion_mercancia or 'Carga General'}",
+            }
 
         response.append(
             {
                 "id": inv.id,
                 "uuid": inv.uuid,
-                "folio_interno": inv.folio_interno,
+                "uuid_relacionado": inv.uuid_relacionado,
+                "folio_interno": folio_display,
                 "concepto": inv.concepto or "Servicio de Flete",
+                "subtotal": inv.subtotal,
+                "iva": inv.iva,
+                "retenciones": inv.retenciones,
                 "monto_total": inv.monto_total,
                 "saldo_pendiente": inv.saldo_pendiente,
                 "fecha_emision": (
@@ -230,7 +272,9 @@ def get_receivable_invoices(
                     inv.fecha_vencimiento.isoformat() if inv.fecha_vencimiento else None
                 ),
                 "estatus": inv.estatus,
-                "moneda": inv.moneda,
+                "moneda": inv.moneda or "MXN",
+                "referencia": getattr(inv.trip, "referencia", "") if inv.trip else "",
+                "trip_info": trip_data,
                 "pdf_url": inv.pdf_url,
                 "xml_url": inv.xml_url,
                 "payments": pagos_list,
@@ -265,9 +309,11 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
             detail="No se puede eliminar una factura con pagos registrados",
         )
 
-    db.delete(invoice)
+    #  FIX CRÍTICO: Usar Soft Delete para no romper la relación con el Viaje
+    invoice.record_status = models.RecordStatus.ELIMINADO
+    invoice.estatus = "cancelado"
     db.commit()
-    return {"message": "Factura eliminada"}
+    return {"message": "Factura eliminada (Soft Delete)"}
 
 
 @router.post("/receivables/{invoice_id}/payments")
@@ -326,6 +372,7 @@ def register_receivable_payment(
         monto=monto_pago,
         concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]}",
         referencia=payment.get("referencia", ""),
+        origen_modulo="CxC",  #   FIX FASE 1: Aseguramos el origen para la UI de Tesorería
     )
     crud.create_bank_movement(db, movimiento_schema, current_user.id)
 
@@ -337,6 +384,22 @@ def register_receivable_payment(
         "nuevo_saldo_factura": invoice.saldo_pendiente,
         "estatus": invoice.estatus,
     }
+
+
+@router.post("/receivables")
+def create_manual_receivable(
+    invoice_data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Endpoint para crear una factura manual (CxC) generada por el usuario.
+    """
+    try:
+        nueva_factura = crud.create_manual_receivable(db, invoice_data, current_user.id)
+        return nueva_factura
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/payments/upload-xml")
@@ -421,6 +484,7 @@ async def upload_payment_xml(
                     monto=monto_pagado,
                     concepto=f"Cobro XML Fra. {factura.folio_interno}",
                     referencia="Carga XML REP",
+                    origen_modulo="CxC",  #   FIX FASE 1: Aseguramos el origen para la UI
                 )
                 crud.create_bank_movement(db, mov_schema, current_user.id)
 
@@ -484,6 +548,7 @@ def fix_orphan_payments(
                 referencia=(
                     pago.referencia if pago.referencia else "Sincronización Histórica"
                 ),
+                origen_modulo="CxC",  #   FIX FASE 1: Aseguramos el origen para la UI
             )
 
             crud.create_bank_movement(db, mov_schema, current_user.id)
@@ -497,7 +562,6 @@ def fix_orphan_payments(
         }
 
     except Exception as e:
-        # ATRAMPAMOS EL ERROR Y LO DEVOLVEMOS AL NAVEGADOR
         db.rollback()
         import traceback
 
@@ -511,32 +575,6 @@ def fix_orphan_payments(
 # =====================================================================
 # PAGOS A PROVEEDORES Y CAJA CHICA
 # =====================================================================
-
-
-@router.post("/payables/{invoice_id}/payments")
-def register_provider_payment(
-    invoice_id: int,
-    payment: dict = Body(...),
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
-):
-    """Aplica un pago a una factura de proveedor (CXP) y descuenta del banco."""
-    try:
-        invoice = crud.register_payable_payment(
-            db, invoice_id, payment, current_user.id
-        )
-        if not invoice:
-            raise HTTPException(
-                status_code=404, detail="Factura de proveedor no encontrada"
-            )
-
-        return {
-            "message": "Pago a proveedor registrado exitosamente. Se descontó del banco.",
-            "nuevo_saldo_factura": invoice.saldo_pendiente,
-            "estatus": invoice.estatus,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/petty-cash")
@@ -554,3 +592,132 @@ def register_petty_cash(
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/receivables/{invoice_id}/reopen")
+def reopen_receivable_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Restaura una cuenta por cobrar a su estado financiero original (Pendiente).
+    Respeta la verdad absoluta del SAT sin hacer "trampas" en los estatus.
+    """
+    invoice = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.id == invoice_id)
+        .first()
+    )
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    # 1. Respetar la verdad del SAT (Cero engaños)
+    if invoice.status_sat == "CANCELADO":
+        raise HTTPException(
+            status_code=400,
+            detail="Operación denegada: Esta factura está oficialmente CANCELADA ante el SAT. No puedes reabrirla para cobro, debes emitir una nueva.",
+        )
+
+    # 2. Borrar cualquier intento de pago atascado financieramente
+    db.query(models.ReceivableInvoicePayment).filter(
+        models.ReceivableInvoicePayment.invoice_id == invoice.id
+    ).delete()
+
+    # 3. Restaurar saldo y estatus general (Lógica de tu empresa)
+    invoice.saldo_pendiente = invoice.monto_total
+    invoice.estatus = "pendiente"
+
+    # 4. Manejo honesto de Errores
+    # Si la factura se quedó en ERROR por falla del PAC/Internet,
+    # la pasamos a PROVISIONAL para que el sistema sepa que debe reintentar la conexión,
+    # pero NUNCA fingimos que ya está "TIMBRADA".
+    if invoice.status_sat == "ERROR":
+        invoice.status_sat = "PROVISIONAL"
+
+    db.commit()
+    db.refresh(invoice)
+
+    return {
+        "message": "Factura reabierta financieramente. Saldo restaurado y lista para procesarse."
+    }
+
+
+# =====================================================================
+# OPERATOR SETTLEMENTS (Liquidaciones Operativas)
+# =====================================================================
+
+
+@router.post("/settlements/operator")
+def process_settlement_for_operator(
+    payload: schemas.OperatorSettlementPayload = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Procesa la liquidación de un Operador específico dentro de un Lote (Batch).
+    Respeta la inmutabilidad de datos y dispara la creación de CxC automáticamente.
+    """
+    try:
+        resultado = crud.process_operator_settlement(db, payload, current_user.id)
+        return resultado
+    except ValueError as e:
+        # Error de regla de negocio (Ej. Falta de auditoría de diésel)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error interno al liquidar: {str(e)}"
+        )
+
+
+# =========================================================
+# RUTAS DE CATEGORÍAS INDIRECTAS
+# =========================================================
+
+
+@router.get(
+    "/indirect-categories", response_model=List[schemas.IndirectCategoryResponse]
+)
+def read_indirect_categories(db: Session = Depends(get_db)):
+    """Obtiene el listado de categorías para gastos indirectos"""
+    return crud.get_indirect_categories(db)
+
+
+@router.post("/indirect-categories", response_model=schemas.IndirectCategoryResponse)
+def create_indirect_category(
+    payload: schemas.IndirectCategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Crea una nueva categoría de gasto indirecto"""
+    return crud.create_indirect_category(db, payload, current_user.id)
+
+
+@router.put(
+    "/indirect-categories/{cat_id}", response_model=schemas.IndirectCategoryResponse
+)
+def update_indirect_category(
+    cat_id: int,
+    payload: schemas.IndirectCategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Actualiza una categoría existente"""
+    cat = crud.update_indirect_category(db, cat_id, payload, current_user.id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    return cat
+
+
+@router.delete("/indirect-categories/{cat_id}")
+def delete_indirect_category(
+    cat_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Realiza un borrado lógico de la categoría"""
+    success = crud.delete_indirect_category(db, cat_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Categoría no encontrada")
+    return {"message": "Categoría eliminada exitosamente"}

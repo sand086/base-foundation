@@ -2,11 +2,10 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SettlementConceptCreate = {
-    id?: (number | null);
+export type app__modules__suppliers__schemas__CostCenterResponse = {
+    id: number;
+    codigo: string;
     nombre: string;
-    tipo: string;
-    descripcion?: (string | null);
-    activo?: boolean;
+    activo: boolean;
 };
 

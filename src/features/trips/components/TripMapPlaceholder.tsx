@@ -41,7 +41,7 @@ export function TripMapPlaceholder({
               <div className="relative flex h-10 w-10 items-center justify-center">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-30"></span>
                 <div className="relative inline-flex rounded-full h-10 w-10 bg-blue-100 items-center justify-center text-blue-600 border border-blue-200">
-                  <MapPin className="h-5 w-5" />
+                  <MapPin className="h-5 w-5 text-slate-500 dark:text-white/70" />
                 </div>
               </div>
 

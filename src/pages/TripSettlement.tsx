@@ -19,6 +19,7 @@ import {
   Trash2,
   Receipt,
   AlertTriangle,
+  Lock,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Dialog,
@@ -64,6 +64,10 @@ import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
 import { OperatorSettlementDetailModal } from "@/features/receivables/components/OperatorSettlementDetailModal";
+import {
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table"; // <-- IMPORTACIÓN DEL DATATABLE
 
 interface ConceptoExtra {
   id: string;
@@ -72,6 +76,12 @@ interface ConceptoExtra {
   tipo: "ingreso" | "deduccion";
   categoria: string;
 }
+
+const legTypeLabels: Record<string, string> = {
+  carga_muelle: "Muelle / Patio",
+  ruta_carretera: "Ruta Carretera",
+  entrega_vacio: "Retorno Vacío",
+};
 
 export default function TripSettlement() {
   const {
@@ -92,13 +102,23 @@ export default function TripSettlement() {
   const [activeTab, setActiveTab] = useState<"pendientes" | "historico">(
     "pendientes",
   );
-  const [filterOperator, setFilterOperator] = useState("ALL");
-  const [globalSearch, setGlobalSearch] = useState("");
+
+  // ESTADOS DE FILTROS ADICIONALES
+  const [filterUnit, setFilterUnit] = useState("");
+  const [filterOperatorName, setFilterOperatorName] = useState("");
+
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
-  const [sueldoRutaPactado, setSueldoRutaPactado] = useState<number>(0);
+  // ESTADO OPTIMISTA: Para ocultar al instante los liquidados
+  const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
+    [],
+  );
+
+  // ESTADOS FINANCIEROS
+  const [sueldoBasePactado, setSueldoBasePactado] = useState<number>(0);
+  const [auditDetails, setAuditDetails] = useState<any>(null);
   const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -118,6 +138,7 @@ export default function TripSettlement() {
   const [newConceptoAmount, setNewConceptoAmount] = useState("");
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // 1. CONSOLIDAR TODOS LOS DATOS PARA LA TABLA
   const allLegs = useMemo(() => {
     const legs: any[] = [];
     if (!Array.isArray(trips)) return legs;
@@ -128,7 +149,14 @@ export default function TripSettlement() {
       const clientName =
         clientObj?.razon_social || clientObj?.rfc || "Sin Cliente";
       t.legs?.forEach((l: any) => {
-        legs.push({ ...l, trip: { ...t, clientName } });
+        legs.push({
+          ...l,
+          trip: { ...t, clientName },
+          // Campos virtuales para el buscador de EnhancedDataTable
+          _search_ref: `TRP-${t.public_id || t.id} ${l.operator?.name || ""}`,
+          _unit_eco: l.unit?.numero_economico || "",
+          _operator_name: l.operator?.name || "",
+        });
       });
     });
     return legs.sort(
@@ -140,20 +168,23 @@ export default function TripSettlement() {
 
   const pendingLegs = useMemo(
     () =>
-      allLegs.filter((l) =>
-        ["entregado", "cerrado"].includes(String(l.status).toLowerCase()),
+      allLegs.filter(
+        (l) =>
+          ["entregado", "cerrado"].includes(String(l.status).toLowerCase()) &&
+          !locallyLiquidatedIds.includes(String(l.id)),
       ),
-    [allLegs],
+    [allLegs, locallyLiquidatedIds],
   );
 
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
         (l) =>
-          String(l.status).toLowerCase() === "liquidado" &&
+          (String(l.status).toLowerCase() === "liquidado" ||
+            locallyLiquidatedIds.includes(String(l.id))) &&
           !hiddenHistoryIds.includes(String(l.id)),
       ),
-    [allLegs, hiddenHistoryIds],
+    [allLegs, hiddenHistoryIds, locallyLiquidatedIds],
   );
 
   const operatorsWithPending = useMemo(() => {
@@ -171,11 +202,233 @@ export default function TripSettlement() {
     );
   }, [pendingLegs, selectedOperatorId]);
 
+  // 2. APLICAR FILTROS ADICIONALES ANTES DE ENVIAR A DATATABLE
+  const tableData = useMemo(() => {
+    const baseData =
+      activeTab === "pendientes" ? legsForSelectedOperator : historyLegs;
+    return baseData.filter((leg) => {
+      let matches = true;
+      if (filterUnit) {
+        matches =
+          matches &&
+          leg._unit_eco.toLowerCase().includes(filterUnit.toLowerCase());
+      }
+      if (filterOperatorName && activeTab === "historico") {
+        matches =
+          matches &&
+          leg._operator_name
+            .toLowerCase()
+            .includes(filterOperatorName.toLowerCase());
+      }
+      return matches;
+    });
+  }, [
+    activeTab,
+    legsForSelectedOperator,
+    historyLegs,
+    filterUnit,
+    filterOperatorName,
+  ]);
+
   const selectedLegsData = useMemo(() => {
     return allLegs.filter((l) => selectedLegIds.includes(String(l.id)));
   }, [allLegs, selectedLegIds]);
 
-  const isAuditPending = previewData?.legs_sin_ticket?.length > 0;
+  // 3. DEFINIR COLUMNAS DEL DATATABLE
+  const columns = useMemo<ColumnDef<any>[]>(() => {
+    const cols: ColumnDef<any>[] = [
+      {
+        key: "_search_ref", // Usado para el buscador global por Referencia y Operador
+        header: "Referencia",
+        render: (value, leg) => (
+          <div>
+            <div className="text-sm font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
+              <span className="text-slate-400">TRP-</span>
+              {leg.trip?.public_id || leg.trip?.id || "N/A"}
+            </div>
+            <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold flex items-center gap-1 mt-1">
+              <User className="h-3 w-3 shrink-0" />
+              <span className="truncate max-w-[140px]">
+                {leg.operator?.name || "Sin Operador"}
+              </span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "trip.route_name",
+        header: "Ruta",
+        render: (value, leg) => (
+          <div
+            className="text-xs font-bold text-slate-700 dark:text-slate-300 max-w-[250px] line-clamp-2"
+            title={leg.trip?.route_name}
+          >
+            {leg.trip?.route_name || "Sin ruta asignada"}
+          </div>
+        ),
+      },
+      {
+        key: "leg_type",
+        header: "Fase Operativa",
+        type: "status",
+        statusOptions: ["Muelle / Patio", "Ruta Carretera", "Retorno Vacío"],
+        statusNormalizer: (val) => legTypeLabels[val] || val, // Traduce los id base para el dropdown del datatable
+        render: (value, leg) => (
+          <div>
+            <Badge
+              variant="outline"
+              className="bg-slate-50 dark:bg-slate-800 font-black text-[9px] uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-1 border-slate-200 dark:border-white/10"
+            >
+              {legTypeLabels[leg.leg_type] || leg.leg_type}
+            </Badge>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold flex items-center gap-1 mt-1">
+              <Truck className="h-3 w-3 text-slate-600 dark:text-slate-400 shrink-0" />
+              Eco: {leg.unit?.numero_economico || "S/A"}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "monto_neto_pagado",
+        header: "Estatus / Base",
+        render: (value, leg) => {
+          const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+          if (activeTab === "pendientes") {
+            return (
+              <div className="flex flex-col items-end">
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-0 text-[10px] uppercase tracking-wider mb-1">
+                  Pendiente
+                </Badge>
+                <div className="text-[10px] text-brand-navy dark:text-blue-300 font-bold bg-blue-50 dark:bg-blue-500/10 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-500/20">
+                  {leg.leg_type === "ruta_carretera"
+                    ? "Base Fija"
+                    : isFull
+                      ? "$300"
+                      : "$200"}
+                </div>
+              </div>
+            );
+          } else {
+            return (
+              <div className="flex flex-col items-end">
+                <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                  {new Intl.NumberFormat("es-MX", {
+                    style: "currency",
+                    currency: "MXN",
+                  }).format(value || 0)}
+                </span>
+                <div className="text-[9px] text-slate-600 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1 mt-0.5">
+                  <CheckCircle className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />{" "}
+                  Liquidado
+                </div>
+              </div>
+            );
+          }
+        },
+      },
+    ];
+
+    if (activeTab === "historico") {
+      cols.push({
+        key: "acciones",
+        header: "Acciones",
+        sortable: false,
+        render: (_, leg) => {
+          const isPaidOrHasAbonos =
+            leg.trip?.cxc_pagada === true ||
+            leg.is_paid === true ||
+            leg.estatus_pago === "pagado";
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewReceipt(leg);
+                }}
+                title="Ver Recibo"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isPaidOrHasAbonos}
+                className={cn(
+                  "h-8 w-8 transition-all",
+                  isPaidOrHasAbonos
+                    ? "text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50"
+                    : "text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/20",
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isPaidOrHasAbonos)
+                    setActionModal({ type: "reopen", leg });
+                }}
+                title={
+                  isPaidOrHasAbonos
+                    ? "BLOQUEADO: CXC Pagada"
+                    : "Anular y Reabrir (Opción A)"
+                }
+              >
+                {isPaidOrHasAbonos ? (
+                  <Lock className="h-4 w-4" />
+                ) : (
+                  <Undo className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActionModal({ type: "hide", leg });
+                }}
+                title="Ocultar de la lista (Opción B)"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
+      });
+    }
+
+    return cols;
+  }, [activeTab]);
+
+  // REEMPLAZA ESTO EN TripSettlement.tsx
+  const isAuditPending = useMemo(() => {
+    if (!selectedLegsData || selectedLegsData.length === 0) return false;
+
+    return selectedLegsData.some((leg) => {
+      // Solo obligamos la auditoría en carretera (si quieres que aplique a patio, quita este if)
+      if (leg.leg_type !== "ruta_carretera") return false;
+
+      // 1. Buscar si existe el evento de "Conciliación" en su bitácora
+      const auditEvent = leg.timeline_events?.find(
+        (e: any) =>
+          e.location === "Conciliación de Combustible" ||
+          e.comments?.includes("Detalles Fase"),
+      );
+
+      // Si no hay evento de conciliación, BLOQUEAMOS
+      if (!auditEvent) return true;
+
+      // 2. Verificar que tenga Vales registrados > 0
+      const cleanText = auditEvent.comments?.replace(/\n/g, " ") || "";
+      const valesMatch = cleanText.match(/Vales:\s*([\d.,]+)/);
+      const vales = valesMatch ? Number(valesMatch[1].replace(/,/g, "")) : 0;
+
+      // Si tiene 0 vales de combustible, BLOQUEAMOS
+      if (vales <= 0) return true;
+
+      return false; // Todo en orden, permitimos liquidar
+    });
+  }, [selectedLegsData]);
 
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
@@ -208,7 +461,6 @@ export default function TripSettlement() {
       };
     }
 
-    let pagoBaseBruto = 0;
     let deduccionViaticos = 0;
     let otrosAnticipos = 0;
     let hasRoadMove = false;
@@ -216,26 +468,20 @@ export default function TripSettlement() {
     selectedLegsData.forEach((leg) => {
       if (leg.leg_type === "ruta_carretera") {
         hasRoadMove = true;
-      } else {
-        const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
-        const bonoFijo = isFull ? 300 : 200;
-        pagoBaseBruto += bonoFijo;
       }
       deduccionViaticos += leg.anticipo_viaticos || 0;
       otrosAnticipos +=
         (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0);
     });
 
-    if (hasRoadMove) {
-      pagoBaseBruto += sueldoRutaPactado;
-    }
-
+    const pagoBaseBruto = sueldoBasePactado;
     const bonosAdicionales = conceptosExtra
       .filter((c) => c.tipo === "ingreso")
       .reduce((s, c) => s + c.monto, 0);
     const deduccionesManuales = conceptosExtra
       .filter((c) => c.tipo === "deduccion")
       .reduce((s, c) => s + c.monto, 0);
+
     const total_ingresos = pagoBaseBruto + bonosAdicionales;
     const total_deducciones =
       deduccionViaticos +
@@ -257,97 +503,96 @@ export default function TripSettlement() {
     };
   }, [
     selectedLegsData,
-    sueldoRutaPactado,
+    sueldoBasePactado,
     conceptosExtra,
     combustibleFaltante,
     activeTab,
   ]);
 
-  // =========================================================================
-  //  LÓGICA CORREGIDA PARA EXTRAER EL SUELDO SIN BUCLES INFINITOS
-  // =========================================================================
   useEffect(() => {
     if (activeTab === "historico") return;
 
     if (selectedLegIds.length === 0) {
       setPreviewData(null);
       setCombustibleFaltante(0);
-      setSueldoRutaPactado(0);
+      setSueldoBasePactado(0);
       return;
     }
+
+    let penalizacionLocal = 0;
+    let sueldoLocalCalculado = 0;
+
+    selectedLegsData.forEach((leg) => {
+      penalizacionLocal += Number(leg.monto_penalizaciones) || 0;
+
+      if (leg.leg_type === "ruta_carretera") {
+        let sueldoTarifa = 0;
+        const trip = leg.trip;
+
+        if (trip?.client?.sub_clients) {
+          const subClient =
+            trip.client.sub_clients.find(
+              (sc: any) => sc.id === trip.sub_client_id,
+            ) || trip.client.sub_clients[0];
+
+          if (subClient?.tariffs) {
+            const tariff =
+              subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
+              subClient.tariffs[0];
+
+            if (tariff?.sueldo_operador) {
+              sueldoTarifa = tariff.sueldo_operador;
+            }
+          }
+        }
+
+        sueldoLocalCalculado +=
+          leg.monto_sueldo ||
+          sueldoTarifa ||
+          trip?.sueldo_operador ||
+          trip?.monto_sueldo ||
+          trip?.pago_operador ||
+          0;
+      } else {
+        const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+        sueldoLocalCalculado += isFull ? 300 : 200;
+      }
+    });
 
     const roadLeg = selectedLegsData.find(
       (l) => l.leg_type === "ruta_carretera",
     );
 
-    if (roadLeg) {
-      // 1. Extraemos el sueldo navegando por la estructura real del JSON
-      let sueldoTarifa = 0;
-      const trip = roadLeg.trip;
+    if (roadLeg && typeof getSettlementPreview === "function") {
+      setIsLoadingPreview(true);
+      getSettlementPreview(selectedLegIds)
+        .then((data: any) => {
+          setPreviewData(data);
+          setCombustibleFaltante(
+            data?.deduccion_combustible ||
+              data?.penalizacion_combustible ||
+              penalizacionLocal,
+          );
 
-      if (trip?.client?.sub_clients) {
-        // Buscamos el subcliente que coincida con el sub_client_id del viaje
-        const subClient =
-          trip.client.sub_clients.find(
-            (sc: any) => sc.id === trip.sub_client_id,
-          ) || trip.client.sub_clients[0];
-
-        if (subClient?.tariffs) {
-          // Buscamos la tarifa que coincida con el tariff_id del viaje
-          const tariff =
-            subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
-            subClient.tariffs[0];
-
-          if (tariff?.sueldo_operador) {
-            sueldoTarifa = tariff.sueldo_operador; // 👈 ¡Aquí atrapa los 1600.0!
-          }
-        }
-      }
-
-      // 2. Evaluamos el sueldo con la prioridad correcta
-      const sueldoLocal =
-        roadLeg.monto_sueldo ||
-        sueldoTarifa || // <-- Insertamos el valor extraído de la tarifa
-        trip?.sueldo_operador ||
-        trip?.monto_sueldo ||
-        trip?.pago_operador ||
-        0;
-
-      if (typeof getSettlementPreview === "function") {
-        setIsLoadingPreview(true);
-        getSettlementPreview(selectedLegIds)
-          .then((data: any) => {
-            setPreviewData(data);
-            setCombustibleFaltante(
-              data?.deduccion_combustible ||
-                data?.penalizacion_combustible ||
-                0,
-            );
-
-            // 3. Si el API devuelve un sueldo mayor a 0, usamos ese. Si no, usamos el Local.
-            const sueldoAPI =
-              data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
-            setSueldoRutaPactado(sueldoAPI > 0 ? sueldoAPI : sueldoLocal);
-          })
-          .catch(() => {
-            toast.error("Error de conexión al verificar telemetría del viaje.");
-            setPreviewData(null);
-            setCombustibleFaltante(0);
-            setSueldoRutaPactado(sueldoLocal); // Fallback si falla el API
-          })
-          .finally(() => setIsLoadingPreview(false));
-      } else {
-        setSueldoRutaPactado(sueldoLocal);
-      }
+          const sueldoAPI =
+            data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
+          setSueldoBasePactado(
+            sueldoAPI > 0 ? sueldoAPI : sueldoLocalCalculado,
+          );
+        })
+        .catch(() => {
+          toast.error("Error de conexión al verificar telemetría del viaje.");
+          setPreviewData(null);
+          setCombustibleFaltante(penalizacionLocal);
+          setSueldoBasePactado(sueldoLocalCalculado);
+        })
+        .finally(() => setIsLoadingPreview(false));
     } else {
       setPreviewData(null);
-      setCombustibleFaltante(0);
-      setSueldoRutaPactado(0);
+      setCombustibleFaltante(penalizacionLocal);
+      setSueldoBasePactado(sueldoLocalCalculado);
     }
-    // 🛑 ROMPEMOS EL BUCLE: No ponemos getSettlementPreview ni selectedLegsData en este arreglo.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLegIds, activeTab]);
-  // =========================================================================
 
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -356,15 +601,36 @@ export default function TripSettlement() {
       minimumFractionDigits: 2,
     }).format(amount || 0);
 
-  const toggleLegSelection = (id: string) =>
-    setSelectedLegIds((prev) =>
-      prev.includes(id) ? prev.filter((legId) => legId !== id) : [...prev, id],
-    );
+  const toggleLegSelection = (id: string) => {
+    const targetLeg = allLegs.find((l) => String(l.id) === id);
+    if (!targetLeg) return;
 
-  const toggleAllLegs = () => {
-    if (selectedLegIds.length === legsForSelectedOperator.length)
-      setSelectedLegIds([]);
-    else setSelectedLegIds(legsForSelectedOperator.map((l) => String(l.id)));
+    setSelectedLegIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((legId) => legId !== id); // Si ya estaba, lo quita
+      } else {
+        // Validamos si ya hay tramos seleccionados
+        if (prev.length > 0) {
+          const firstSelectedId = prev[0];
+          const firstSelectedLeg = allLegs.find(
+            (l) => String(l.id) === firstSelectedId,
+          );
+
+          // Si el viaje del nuevo tramo no coincide con el que ya tenemos seleccionado, BLOQUEAMOS
+          if (
+            firstSelectedLeg &&
+            firstSelectedLeg.trip_id !== targetLeg.trip_id
+          ) {
+            toast.error("Selección Inválida", {
+              description:
+                "Solo puedes liquidar tramos que pertenezcan al mismo número de viaje.",
+            });
+            return prev;
+          }
+        }
+        return [...prev, id];
+      }
+    });
   };
 
   const handleAddConcepto = () => {
@@ -388,6 +654,16 @@ export default function TripSettlement() {
     setNewConceptoAmount("");
   };
 
+  const removeConcepto = (id: string) => {
+    setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
+    toast.info("Concepto eliminado exitosamente.");
+  };
+
+  const removeCombustibleFaltante = () => {
+    setCombustibleFaltante(0);
+    toast.success("Cargo por combustible anulado para esta liquidación.");
+  };
+
   const handleLiquidate = async () => {
     setIsAnimating(true);
     try {
@@ -400,31 +676,99 @@ export default function TripSettlement() {
         monto_maniobras: liquidacion.deduccionesManuales,
         monto_penalizaciones: liquidacion.combustibleFaltante,
         neto_a_pagar: liquidacion.neto_a_pagar,
-        // 👇 PARCHE DE SEGURIDAD AQUÍ 👇
         conceptos_extra: conceptosExtra.map((c) => ({
           ...c,
           categoria: c.categoria || (c.tipo === "ingreso" ? "bono" : "cargo"),
         })),
       };
 
+      setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
+
       await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
 
       toast.success("Liquidación Emitida Exitosamente", {
-        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose.`,
+        description: `Se registró el pago de ${formatCurrencyLocal(liquidacion.neto_a_pagar)} con su desglose. Cuenta por cobrar y Factura generadas.`,
       });
 
       if (refresh) refresh();
       setShowReceiptModal(true);
     } catch (error) {
-      toast.error("Error al guardar la liquidación en el servidor.");
+      setLocallyLiquidatedIds((prev) =>
+        prev.filter((id) => !selectedLegIds.includes(id)),
+      );
+
+      toast.error("Error al emitir Liquidación y CxC", {
+        description:
+          "El servidor rechazó la operación (Probable error de timbrado SAT). Revisa la consola.",
+      });
     } finally {
       setIsAnimating(false);
     }
   };
 
-  const handleViewReceipt = (leg: any) => {
-    setSelectedLegIds([String(leg.id)]);
-    setShowReceiptModal(true);
+  const handleViewReceipt = async (leg: any) => {
+    try {
+      setIsLoadingPreview(true);
+      const response = await axiosClient.get(
+        `/api/logistics/trips/leg/${leg.id}/settlement`,
+      );
+
+      const auditEvent = leg.timeline_events?.find(
+        (e: any) =>
+          e.location === "Conciliación de Combustible" ||
+          e.comments?.includes("Detalles Fase"),
+      );
+
+      let km = Number(response.data?.kmsRecorridos) || 0;
+      let ltEcm = Number(response.data?.consumoEsperadoLitros) || 0;
+      let vales = Number(response.data?.consumoRealLitros) || 0;
+      let rend = vales > 0 ? (km / vales).toFixed(2) : "0.00";
+      let veredicto =
+        Number(response.data?.deduccionCombustible) > 0
+          ? "COBRO_OPERADOR"
+          : "CONCILIADO";
+      let texto = "Datos recuperados de la liquidación oficial.";
+
+      if (vales === 0 && auditEvent && auditEvent.comments) {
+        const text = auditEvent.comments;
+
+        const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
+        const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
+        const valesMatch = text.match(/Vales:\s*([\d.]+)/);
+        const rendMatch = text.match(/Rend Real:\s*([\d.]+)/);
+        const verMatch = text.match(/Ver:\s*([A-Z_]+)/);
+
+        km = kmMatch ? Number(kmMatch[1].replace(/,/g, "")) : km;
+        ltEcm = ltEcmMatch ? Number(ltEcmMatch[1]) : ltEcm;
+        vales = valesMatch ? Number(valesMatch[1]) : vales;
+        rend = rendMatch ? rendMatch[1] : rend;
+        veredicto = verMatch ? verMatch[1] : veredicto;
+        texto = text;
+      }
+
+      if (response.data || vales > 0) {
+        setAuditDetails({
+          km: String(km),
+          ltEcm: String(ltEcm),
+          vales: String(vales),
+          rend: String(rend),
+          veredicto: veredicto,
+          textOriginal: texto,
+          fechaAudit: response.data?.fechaViaje || "N/A",
+          hasData: true,
+        });
+      }
+
+      setSelectedLegIds([String(leg.id)]);
+      setShowReceiptModal(true);
+    } catch (error) {
+      toast.error("Aviso: Se abrirá el recibo básico sin detalle de diésel.");
+
+      setSelectedLegIds([String(leg.id)]);
+      setShowReceiptModal(true);
+    } finally {
+      setIsLoadingPreview(false);
+    }
   };
 
   const handleConfirmAction = async () => {
@@ -435,33 +779,41 @@ export default function TripSettlement() {
       toast.success("Viaje ocultado del histórico localmente.");
     } else if (actionModal.type === "reopen") {
       try {
-        await axiosClient.post(`/api/trips/legs/${actionModal.leg.id}/reopen`);
+        await axiosClient.post(
+          `/api/logistics/trips/legs/${actionModal.leg.id}/reopen`,
+        );
+
+        setLocallyLiquidatedIds((prev) =>
+          prev.filter((id) => id !== String(actionModal.leg.id)),
+        );
+
         toast.success("Liquidación anulada y reabierta.", {
           description:
             "La CxC ha sido cancelada y el viaje regresó a 'Por Liquidar'.",
         });
         if (refresh) refresh();
-      } catch (error) {
-        toast.error("Error al reabrir la liquidación.");
+      } catch (error: any) {
+        // Extraemos el mensaje de error específico que manda FastAPI
+        const backendMessage =
+          error.response?.data?.detail ||
+          "Error interno al reabrir la liquidación.";
+
+        // Mostramos el mensaje exacto en la alerta (Toast)
+        toast.error("Operación bloqueada", {
+          description: backendMessage,
+        });
       }
     }
     setActionModal(null);
-  };
-
-  const currentList = activeTab === "pendientes" ? pendingLegs : historyLegs;
-  const legTypeLabels: Record<string, string> = {
-    carga_muelle: "Muelle / Patio",
-    ruta_carretera: "Ruta Carretera",
-    entrega_vacio: "Retorno Vacío",
   };
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-brand-navy flex items-center gap-2">
-            <FileCheck className="h-7 w-7 text-emerald-600" /> Liquidaciones
-            Operativas
+          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2">
+            <FileCheck className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />{" "}
+            Liquidaciones Operativas
           </h1>
           <p className="text-muted-foreground mt-1 font-medium">
             Módulo de Tesorería. Selecciona los movimientos y emite el recibo de
@@ -480,11 +832,11 @@ export default function TripSettlement() {
           )}
         >
           {activeTab === "pendientes" && (
-            <Card className="border-slate-200 shadow-sm mb-6">
-              <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
-                <CardTitle className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2">
-                  <User className="h-4 w-4 text-blue-600" /> 1. Seleccionar
-                  Operador a Liquidar
+            <Card className="border-slate-200 dark:border-white/10 shadow-sm mb-6 bg-white dark:bg-slate-900">
+              <CardHeader className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-white/5 pb-4">
+                <CardTitle className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600 dark:text-blue-400" />{" "}
+                  1. Seleccionar Operador a Liquidar
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
@@ -495,24 +847,24 @@ export default function TripSettlement() {
                     setSelectedLegIds([]);
                     setConceptosExtra([]);
                     setCombustibleFaltante(0);
-                    setSueldoRutaPactado(0);
+                    setSueldoBasePactado(0);
                   }}
                 >
-                  <SelectTrigger className="h-12 text-base font-medium bg-white">
+                  <SelectTrigger className="h-12 text-base font-medium bg-white dark:bg-slate-950 dark:border-white/10 dark:text-white">
                     <SelectValue placeholder="Busca al operador con viajes pendientes..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="dark:bg-slate-950 dark:border-white/10">
                     {operatorsWithPending.map((op: any) => (
                       <SelectItem
                         key={op.id}
                         value={String(op.id)}
-                        className="font-medium py-3"
+                        className="font-medium py-3 dark:text-slate-200 dark:focus:bg-slate-800"
                       >
                         {op.name}
                       </SelectItem>
                     ))}
                     {operatorsWithPending.length === 0 && (
-                      <div className="p-4 text-center text-sm text-slate-500">
+                      <div className="p-4 text-center text-sm text-slate-500 dark:text-slate-400">
                         No hay operadores con viajes pendientes de pago.
                       </div>
                     )}
@@ -530,269 +882,111 @@ export default function TripSettlement() {
             }}
             className="w-full"
           >
-            <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6">
+            <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6 dark:bg-slate-900">
               <TabsTrigger
                 value="pendientes"
-                className="font-bold flex items-center gap-2"
+                className="font-bold flex items-center gap-2 dark:data-[state=active]:bg-slate-800 dark:text-slate-400 dark:data-[state=active]:text-white"
               >
                 <Clock className="h-4 w-4" /> Por Liquidar
                 <Badge
                   variant="secondary"
-                  className="ml-1 bg-blue-100 text-blue-700"
+                  className="ml-1 bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-none"
                 >
                   {pendingLegs.length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger
                 value="historico"
-                className="font-bold flex items-center gap-2"
+                className="font-bold flex items-center gap-2 dark:data-[state=active]:bg-slate-800 dark:text-slate-400 dark:data-[state=active]:text-white"
               >
                 <History className="h-4 w-4" /> Histórico
               </TabsTrigger>
             </TabsList>
 
-            <Card className="border-slate-200 shadow-sm overflow-hidden flex flex-col h-full max-h-[600px]">
-              <div className="bg-slate-50 border-b px-4 py-3 flex justify-between items-center shrink-0">
-                <h3 className="font-bold text-sm text-slate-600 flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  {activeTab === "pendientes"
-                    ? "2. Selecciona los tramos a pagar"
-                    : "Historial de Liquidaciones"}
-                </h3>
-                {activeTab === "pendientes" && selectedOperatorId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={toggleAllLegs}
-                    className="h-8 text-xs font-bold transition-all hover:bg-slate-100"
-                  >
-                    {selectedLegIds.length === legsForSelectedOperator.length
-                      ? "Deseleccionar Todos"
-                      : "Seleccionar Todos"}
-                  </Button>
-                )}
-              </div>
-              <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-[10px] text-slate-600 font-bold uppercase tracking-widest bg-slate-50/80 border-b sticky top-0 z-10 backdrop-blur-sm">
-                    <tr>
-                      {activeTab === "pendientes" && (
-                        <th
-                          scope="col"
-                          className="px-4 py-3 w-[50px] text-center"
-                        ></th>
-                      )}
-                      <th scope="col" className="px-6 py-3">
-                        Referencia
-                      </th>
-                      <th scope="col" className="px-6 py-3">
-                        Ruta
-                      </th>
-                      <th scope="col" className="px-6 py-3">
-                        Unidad
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-right">
-                        Estatus / Base
-                      </th>
-                      {activeTab === "historico" && (
-                        <th scope="col" className="px-6 py-3 text-center">
-                          Acciones
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentList.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={activeTab === "historico" ? 6 : 5}
-                          className="px-6 py-16 text-center bg-white"
-                        >
-                          <div className="flex flex-col items-center justify-center text-slate-600">
-                            <History className="h-10 w-10 mb-3 opacity-20" />
-                            <p className="text-base font-semibold text-slate-600 mb-1">
-                              {activeTab === "pendientes"
-                                ? "Sin movimientos pendientes"
-                                : "Historial vacío"}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      currentList.map((leg) => {
-                        const isSelected = selectedLegIds.includes(
-                          String(leg.id),
-                        );
-                        const isFull = !!(
-                          leg.trip?.dolly_id || leg.trip?.remolque_2_id
-                        );
+            {/* TABLA PRINCIPAL */}
+            <div className="mb-4 flex justify-between items-center px-2">
+              <h3 className="font-bold text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                {activeTab === "pendientes"
+                  ? "2. Selecciona los tramos a pagar"
+                  : "Historial de Liquidaciones"}
+              </h3>
+            </div>
 
-                        return (
-                          <tr
-                            key={leg.id}
-                            className={cn(
-                              "border-b last:border-0 transition-colors group cursor-pointer",
-                              isSelected
-                                ? "bg-blue-50/60 hover:bg-blue-50/80"
-                                : "bg-white hover:bg-slate-50/60",
-                            )}
-                            onClick={() => {
-                              if (activeTab === "pendientes")
-                                toggleLegSelection(String(leg.id));
-                            }}
-                          >
-                            {activeTab === "pendientes" && (
-                              <td
-                                className="px-4 py-3"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={() =>
-                                    toggleLegSelection(String(leg.id))
-                                  }
-                                  className={cn(
-                                    "transition-all",
-                                    isSelected
-                                      ? "border-brand-navy bg-brand-navy"
-                                      : "border-slate-300",
-                                  )}
-                                />
-                              </td>
-                            )}
-                            <td className="px-6 py-3">
-                              <div className="font-bold text-brand-navy text-sm">
-                                {leg.trip?.public_id || `TRP-${leg.trip_id}`}
-                              </div>
-                              <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-                                {leg.trip?.clientName}
-                              </div>
-                            </td>
-                            <td className="px-6 py-3">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></div>
-                                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
-                                    {leg.trip?.origin}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"></div>
-                                  <span className="text-xs font-semibold text-slate-700 truncate max-w-[150px]">
-                                    {leg.trip?.destination}
-                                  </span>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-3">
-                              <Badge
-                                variant="outline"
-                                className="bg-slate-50 font-semibold text-slate-600 mb-1 border-slate-200"
-                              >
-                                {legTypeLabels[leg.leg_type] || leg.leg_type}
-                              </Badge>
-                              <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
-                                <Truck className="h-3 w-3 text-slate-600" />{" "}
-                                Eco: {leg.unit?.numero_economico}
-                              </div>
-                            </td>
-                            <td className="px-6 py-3 text-right">
-                              {activeTab === "pendientes" ? (
-                                <div className="flex flex-col items-end">
-                                  <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px] uppercase tracking-wider mb-1">
-                                    Pendiente
-                                  </Badge>
-                                  <div className="text-[10px] text-brand-navy font-bold bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                                    {leg.leg_type === "ruta_carretera"
-                                      ? "Base Fija"
-                                      : isFull
-                                        ? "$300"
-                                        : "$200"}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="flex flex-col items-end">
-                                  <span className="font-mono font-black text-emerald-600 text-sm">
-                                    $
-                                    {(
-                                      leg.monto_neto_pagado || 0
-                                    ).toLocaleString("es-MX", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </span>
-                                  <div className="text-[9px] text-slate-600 uppercase tracking-widest flex items-center gap-1 mt-0.5">
-                                    <CheckCircle className="h-3 w-3 text-emerald-500" />{" "}
-                                    Liquidado
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            {activeTab === "historico" && (
-                              <td
-                                className="px-6 py-3 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <div className="flex items-center justify-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-blue-600 hover:bg-blue-50"
-                                    onClick={() => handleViewReceipt(leg)}
-                                    title="Ver Recibo"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-amber-600 hover:bg-amber-50"
-                                    onClick={() =>
-                                      setActionModal({ type: "reopen", leg })
-                                    }
-                                    title="Anular y Reabrir (Opción A)"
-                                  >
-                                    <Undo className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-rose-600 hover:bg-rose-50"
-                                    onClick={() =>
-                                      setActionModal({ type: "hide", leg })
-                                    }
-                                    title="Ocultar de la lista (Opción B)"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+            <EnhancedDataTable
+              data={tableData}
+              columns={columns}
+              rowKey="id"
+              enableRowSelection={activeTab === "pendientes"}
+              selectedRows={selectedLegsData}
+              onSelectedRowsChange={(rows) => {
+                // Si deseleccionan todo
+                if (rows.length === 0) {
+                  setSelectedLegIds([]);
+                  return;
+                }
+
+                // Forzamos a que todos sean del mismo viaje que el primero que seleccionaron
+                const firstTripId = rows[0].trip_id;
+                const validRows = rows.filter((r) => r.trip_id === firstTripId);
+
+                if (validRows.length !== rows.length) {
+                  toast.warning("Filtro aplicado", {
+                    description:
+                      "Se omitieron tramos de otros viajes. Se liquidará por viaje completo.",
+                  });
+                }
+
+                setSelectedLegIds(validRows.map((r) => String(r.id)));
+              }}
+              onRowClick={(row) => {
+                if (activeTab === "pendientes") {
+                  toggleLegSelection(String(row.id));
+                }
+              }}
+              searchPlaceholder="BUSCAR TRP O RUTA..."
+              customFilters={
+                <>
+                  <div className="w-[130px]">
+                    <Input
+                      placeholder="Eco Unidad..."
+                      value={filterUnit}
+                      onChange={(e) => setFilterUnit(e.target.value)}
+                      className="h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-bold"
+                    />
+                  </div>
+                  {activeTab === "historico" && (
+                    <div className="w-[180px]">
+                      <Input
+                        placeholder="Operador..."
+                        value={filterOperatorName}
+                        onChange={(e) => setFilterOperatorName(e.target.value)}
+                        className="h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-bold"
+                      />
+                    </div>
+                  )}
+                </>
+              }
+            />
           </Tabs>
         </div>
 
+        {/* ========== PANEL DERECHO DE CÁLCULOS ========== */}
         {selectedLegIds.length > 0 &&
           liquidacion &&
           activeTab === "pendientes" && (
-            <div className="xl:col-span-5 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+            <div className="xl:col-span-5 space-y-6 animate-in slide-in-from-right-4 duration-500">
               {liquidacion.hasRoadMove && isAuditPending && (
                 <Alert
                   variant="destructive"
-                  className="bg-rose-50 border-rose-300 text-rose-900 shadow-md"
+                  className="bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-900/50 text-rose-900 dark:text-rose-200 shadow-md"
                 >
-                  <ShieldAlert className="h-5 w-5 !text-rose-600" />
-                  <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700">
+                  <ShieldAlert className="h-5 w-5 !text-rose-600 dark:!text-rose-400" />
+                  <AlertTitle className="font-black uppercase tracking-widest text-[11px] ml-2 text-rose-700 dark:text-rose-400">
                     Conciliacion Pendiente
                   </AlertTitle>
                   <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
-                    El sistema detecta {previewData.legs_sin_ticket.length}{" "}
+                    El sistema detecta {previewData?.legs_sin_ticket?.length}{" "}
                     tramo(s) de carretera que{" "}
                     <span className="underline">no han sido conciliados</span>{" "}
                     en Diésel.
@@ -806,49 +1000,47 @@ export default function TripSettlement() {
 
               <Card
                 className={cn(
-                  "border-slate-200 shadow-xl overflow-hidden border-t-4",
+                  "border-slate-200 dark:border-white/10 shadow-xl overflow-hidden border-t-4 bg-white dark:bg-slate-900",
                   liquidacion.hasRoadMove
-                    ? "border-t-brand-navy"
-                    : "border-t-emerald-500",
+                    ? "border-t-brand-navy dark:border-t-blue-500"
+                    : "border-t-emerald-500 dark:border-t-emerald-400",
                 )}
               >
-                <CardHeader className="bg-slate-50 border-b pb-4">
-                  <CardTitle className="text-sm font-bold text-slate-800 uppercase flex items-center gap-2">
+                <CardHeader className="bg-slate-50 dark:bg-slate-900/50 border-b dark:border-white/10 pb-4">
+                  <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase flex items-center gap-2">
                     <Receipt className="h-4 w-4" /> Configurar Recibo de Pago
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="p-6 space-y-6">
-                    {liquidacion.hasRoadMove && (
-                      <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex items-center justify-between">
-                        <div>
-                          <Label className="text-blue-800 font-bold text-[10px] uppercase tracking-widest">
-                            Sueldo Pactado (Ruta)
-                          </Label>
-                        </div>
-                        <div className="relative w-32">
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400" />
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center text-sm bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 mb-4">
+                        <span className="text-blue-800 dark:text-blue-400 font-bold text-[11px] uppercase tracking-widest">
+                          Sueldo Base (Ruta/Maniobras)
+                        </span>
+                        <div className="relative w-36">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400 dark:text-blue-300" />
                           <Input
                             type="number"
-                            value={sueldoRutaPactado || ""}
-                            onChange={(e) =>
-                              setSueldoRutaPactado(Number(e.target.value))
+                            value={
+                              sueldoBasePactado === 0 ? "" : sueldoBasePactado
                             }
-                            className="pl-8 font-bold text-right font-mono"
+                            onChange={(e) =>
+                              setSueldoBasePactado(Number(e.target.value))
+                            }
+                            className="pl-8 font-bold text-right font-mono h-9 text-emerald-700 dark:text-emerald-400 bg-white dark:bg-slate-950 dark:border-white/10"
                             placeholder="0.00"
                           />
                         </div>
                       </div>
-                    )}
 
-                    <div className="space-y-4">
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest border-b dark:border-white/10 pb-1">
                           <span>Ingresos / Abonos</span>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-emerald-600 font-black text-[9px]"
+                            className="h-5 text-emerald-600 dark:text-emerald-400 font-black text-[9px]"
                             onClick={() => {
                               setNewConceptoType("ingreso");
                               setShowAddConceptoDialog(true);
@@ -857,25 +1049,28 @@ export default function TripSettlement() {
                             + BONO EXTRA
                           </Button>
                         </div>
-                        <div className="flex justify-between items-center text-sm">
-                          <span className="text-slate-600">
-                            Sueldo Base (Ruta/Maniobras)
-                          </span>
-                          <span className="font-mono font-bold text-emerald-600">
-                            +{formatCurrencyLocal(liquidacion.pagoBaseBruto)}
-                          </span>
-                        </div>
+
                         {conceptosExtra
                           .filter((c) => c.tipo === "ingreso")
                           .map((c) => (
                             <div
                               key={c.id}
-                              className="flex justify-between items-center text-sm bg-emerald-50/50 px-2 py-1 rounded"
+                              className="flex justify-between items-center text-sm bg-emerald-50/50 dark:bg-emerald-500/10 px-2 py-1 rounded group transition-colors"
                             >
-                              <span className="text-emerald-700 text-xs font-medium">
-                                {c.descripcion}
-                              </span>
-                              <span className="font-mono font-bold text-emerald-600">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-emerald-200/50 dark:hover:bg-emerald-500/20"
+                                  onClick={() => removeConcepto(c.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 text-rose-500 dark:text-rose-400" />
+                                </Button>
+                                <span className="text-emerald-700 dark:text-emerald-400 text-xs font-medium">
+                                  {c.descripcion}
+                                </span>
+                              </div>
+                              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                                 +{formatCurrencyLocal(c.monto)}
                               </span>
                             </div>
@@ -883,12 +1078,12 @@ export default function TripSettlement() {
                       </div>
 
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 uppercase tracking-widest border-b pb-1">
+                        <div className="flex justify-between items-center text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest border-b dark:border-white/10 pb-1">
                           <span>Cargos / Descuentos</span>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-rose-600 font-black text-[9px]"
+                            className="h-5 text-rose-600 dark:text-rose-400 font-black text-[9px]"
                             onClick={() => {
                               setNewConceptoType("deduccion");
                               setShowAddConceptoDialog(true);
@@ -900,10 +1095,10 @@ export default function TripSettlement() {
                         {(liquidacion.deduccionViaticos > 0 ||
                           liquidacion.otrosAnticipos > 0) && (
                           <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-600">
+                            <span className="text-slate-600 dark:text-slate-400">
                               Anticipos Operativos
                             </span>
-                            <span className="font-mono font-bold text-rose-600">
+                            <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                               -
                               {formatCurrencyLocal(
                                 liquidacion.deduccionViaticos +
@@ -912,13 +1107,25 @@ export default function TripSettlement() {
                             </span>
                           </div>
                         )}
+
                         {liquidacion.combustibleFaltante > 0 && (
-                          <div className="flex justify-between items-center text-sm bg-rose-50/80 border border-rose-200 px-2 py-1 rounded">
-                            <span className="text-rose-800 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-                              <ShieldAlert className="h-3 w-3 text-rose-600" />{" "}
-                              Faltante Diésel
-                            </span>
-                            <span className="font-mono font-black text-rose-600">
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1 rounded group transition-colors">
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/30"
+                                onClick={removeCombustibleFaltante}
+                                title="Perdonar Cobro"
+                              >
+                                <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                              </Button>
+                              <span className="text-rose-800 dark:text-rose-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                <ShieldAlert className="h-3 w-3 text-rose-600 dark:text-rose-400" />{" "}
+                                Faltante Diésel
+                              </span>
+                            </div>
+                            <span className="font-mono font-black text-rose-600 dark:text-rose-400">
                               -
                               {formatCurrencyLocal(
                                 liquidacion.combustibleFaltante,
@@ -926,17 +1133,28 @@ export default function TripSettlement() {
                             </span>
                           </div>
                         )}
+
                         {conceptosExtra
                           .filter((c) => c.tipo === "deduccion")
                           .map((c) => (
                             <div
                               key={c.id}
-                              className="flex justify-between items-center text-sm bg-rose-50/50 px-2 py-1 rounded"
+                              className="flex justify-between items-center text-sm bg-rose-50/50 dark:bg-rose-500/10 px-2 py-1 rounded group transition-colors"
                             >
-                              <span className="text-rose-700 text-xs font-medium">
-                                {c.descripcion}
-                              </span>
-                              <span className="font-mono font-bold text-rose-600">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/20"
+                                  onClick={() => removeConcepto(c.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                                </Button>
+                                <span className="text-rose-700 dark:text-rose-400 text-xs font-medium">
+                                  {c.descripcion}
+                                </span>
+                              </div>
+                              <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                                 -{formatCurrencyLocal(c.monto)}
                               </span>
                             </div>
@@ -945,7 +1163,7 @@ export default function TripSettlement() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 p-6">
+                  <div className="bg-slate-900 dark:bg-slate-950 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                         Neto a Depositar
@@ -955,7 +1173,7 @@ export default function TripSettlement() {
                       </span>
                     </div>
                     <Button
-                      className="w-full bg-brand-navy hover:bg-brand-navy/90 text-white font-black h-12 shadow-lg gap-2"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 shadow-lg gap-2 uppercase tracking-widest text-xs border-none"
                       disabled={
                         isAnimating || isLoadingPreview || isAuditPending
                       }
@@ -975,7 +1193,6 @@ export default function TripSettlement() {
           )}
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN (DISEÑO TAHOE) */}
       <AlertDialog
         open={!!actionModal}
         onOpenChange={(open) => !open && setActionModal(null)}
@@ -1072,7 +1289,7 @@ export default function TripSettlement() {
               <AlertDialogCancel
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+                className="w-full sm:w-auto flex-shrink-0 font-black uppercase tracking-widest text-[10px] dark:border-white/10 dark:bg-slate-900 dark:text-white"
                 onClick={() => setActionModal(null)}
               >
                 Cancelar
@@ -1084,7 +1301,7 @@ export default function TripSettlement() {
                   "w-full sm:w-auto shadow-lg flex-shrink-0 border-none text-white font-black uppercase tracking-widest text-[10px]",
                   actionModal?.type === "reopen"
                     ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20"
-                    : "bg-slate-800 hover:bg-slate-900",
+                    : "bg-slate-800 hover:bg-slate-900 dark:bg-brand-navy dark:hover:bg-blue-900",
                 )}
               >
                 {actionModal?.type === "reopen"
@@ -1096,7 +1313,6 @@ export default function TripSettlement() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL DE CONCEPTOS MANUALES (DISEÑO TAHOE) */}
       <Dialog
         open={showAddConceptoDialog}
         onOpenChange={setShowAddConceptoDialog}
@@ -1135,11 +1351,11 @@ export default function TripSettlement() {
 
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent custom-scrollbar space-y-6">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Concepto / Motivo
               </Label>
               <Input
-                className="h-11 font-bold bg-white dark:bg-slate-900"
+                className="h-11 font-bold bg-white dark:bg-slate-900 dark:border-white/10 dark:text-white"
                 placeholder={
                   newConceptoType === "ingreso"
                     ? "Ej: Bono puntualidad..."
@@ -1150,11 +1366,11 @@ export default function TripSettlement() {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Monto (MXN) *
               </Label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 dark:text-slate-500">
                   $
                 </span>
                 <Input
@@ -1162,7 +1378,7 @@ export default function TripSettlement() {
                   placeholder="0.00"
                   value={newConceptoAmount}
                   onChange={(e) => setNewConceptoAmount(e.target.value)}
-                  className="h-12 pl-8 text-lg font-mono font-black bg-white dark:bg-slate-900"
+                  className="h-12 pl-8 text-lg font-mono font-black bg-white dark:bg-slate-900 dark:border-white/10 dark:text-emerald-400"
                 />
               </div>
             </div>
@@ -1173,7 +1389,7 @@ export default function TripSettlement() {
               <Button
                 variant="outline"
                 size="lg"
-                className="w-full sm:w-auto font-black uppercase tracking-widest text-[10px]"
+                className="w-full sm:w-auto font-black uppercase tracking-widest text-[10px] dark:border-white/10 dark:bg-slate-900 dark:text-white"
                 onClick={() => setShowAddConceptoDialog(false)}
               >
                 Cancelar
@@ -1182,7 +1398,7 @@ export default function TripSettlement() {
                 size="lg"
                 onClick={handleAddConcepto}
                 className={cn(
-                  "w-full sm:w-auto text-white font-black uppercase tracking-widest text-[10px]",
+                  "w-full sm:w-auto text-white font-black uppercase tracking-widest text-[10px] border-none",
                   newConceptoType === "ingreso"
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-rose-600 hover:bg-rose-700",
@@ -1195,7 +1411,6 @@ export default function TripSettlement() {
         </DialogContent>
       </Dialog>
 
-      {/* Renderizamos el nuevo componente aislado */}
       <OperatorSettlementDetailModal
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -1205,8 +1420,9 @@ export default function TripSettlement() {
             setSelectedLegIds([]);
             setConceptosExtra([]);
             setCombustibleFaltante(0);
-            setSueldoRutaPactado(0);
+            setSueldoBasePactado(0);
             setPreviewData(null);
+            setAuditDetails(null);
           }
         }}
         selectedLegsData={selectedLegsData}
@@ -1219,6 +1435,7 @@ export default function TripSettlement() {
         empresaDireccion={empresaDireccion}
         empresaTelefono={empresaTelefono}
         empresaLogo={empresaLogo}
+        auditDetails={auditDetails}
       />
     </div>
   );

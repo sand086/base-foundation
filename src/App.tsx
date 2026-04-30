@@ -144,9 +144,8 @@ const App = () => (
                   {/*  MÓDULO: PROVEEDORES (Y COMPRAS) */}
                   <Route element={<ProtectedRoute requiredModule="payables" />}>
                     <Route path="suppliers" element={<SuppliersCatalog />} />{" "}
-                    {/* <-- NUEVA RUTA */}
                     <Route path="payables" element={<Payables />} />
-                    <Route path="purchases" element={<Purchases />} />
+                    {/*  <Route path="purchases" element={<Purchases />} /> */}
                   </Route>
 
                   {/*  MÓDULO: TARIFAS */}

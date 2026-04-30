@@ -107,7 +107,7 @@ const SheetHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-2 text-center sm:text-left mb-8",
+      "flex flex-col space-y-2 text-center sm:text-left",
       className,
     )}
     {...props}
@@ -137,7 +137,7 @@ const SheetTitle = React.forwardRef<
     ref={ref}
     className={cn(
       "text-brand-red",
-      // 🛠 TIPOGRAFÍA INDUSTRIAL
+      //   TIPOGRAFÍA INDUSTRIAL
       "text-[11px] font-black uppercase tracking-[0.25em]",
       className,
     )}

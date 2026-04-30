@@ -14,11 +14,12 @@ import {
   Package,
   Trash2,
   Edit,
-  Receipt,
+  Landmark,
   AlertTriangle,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -59,7 +60,7 @@ import { es } from "date-fns/locale";
 import { cn, formatCurrency } from "@/lib/utils";
 
 export const WorkOrdersTable = () => {
-  // 1. Usar Hook Real (Asegúrate de exponer deleteWorkOrder y updateWorkOrder en tu hook)
+  // 1. Usar Hook Real
   const {
     workOrders,
     createWorkOrder,
@@ -181,6 +182,7 @@ export const WorkOrdersTable = () => {
   const handleDelete = async () => {
     if (!orderToDelete) return;
     setIsProcessing(true);
+    // El backend de Python se encarga de regresar el dinero al banco y las piezas al inventario
     await deleteWorkOrder(orderToDelete);
     setIsProcessing(false);
     setOrderToDelete(null);
@@ -189,10 +191,26 @@ export const WorkOrdersTable = () => {
   const handleCloseOrder = async () => {
     if (!orderToClose) return;
     setIsProcessing(true);
-    await updateOrderStatus(orderToClose.id, "cerrada");
-    setIsProcessing(false);
-    setOrderToClose(null);
-    // Nota: Aquí el backend o tu hook disparará la integración con CxP Proveedores
+
+    try {
+      // Al mandar a cerrar, el Backend (Python) automáticamente:
+      // 1. Cobra de la cuenta Banamex (ID 1) y crea el registro de tesorería
+      // 2. Cierra la orden
+      await updateOrderStatus(orderToClose.id, "cerrada");
+
+      toast.success("¡Orden Finalizada!", {
+        description:
+          "El mantenimiento se registró y se generó el cargo en Tesorería (Banamex).",
+      });
+    } catch (error: any) {
+      console.error("Error al cerrar orden:", error);
+      toast.error("Error al finalizar", {
+        description: "Asegúrate de tener saldo en la cuenta principal.",
+      });
+    } finally {
+      setIsProcessing(false);
+      setOrderToClose(null);
+    }
   };
 
   const handleCancelOrder = async (orderId: number) => {
@@ -301,15 +319,12 @@ export const WorkOrdersTable = () => {
         header: "Costo Total",
         sortable: true,
         render: (_, order) => {
-          // Calculamos el costo sumando cantidad * snapshot de cada parte
-          const total =
-            order.parts?.reduce(
-              (acc, p) => acc + p.cantidad * p.costo_unitario_snapshot,
-              0,
-            ) || 0;
+          // Ahora usamos el total exacto que ya calculó el backend (Piezas + Mano Obra + IVA)
+          const totalExacto = order.total || 0;
+
           return (
             <span className="font-mono font-black text-xs text-slate-700 dark:text-slate-300">
-              {formatCurrency(total, "MXN")}
+              {formatCurrency(totalExacto, "MXN")}
             </span>
           );
         },
@@ -364,11 +379,12 @@ export const WorkOrdersTable = () => {
                       setIsModalOpen(true);
                     }}
                   >
-                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" /> Editar Orden
+                    <Edit className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+                    Editar Orden
                   </DropdownMenuItem>
                 )}
 
-                {/* FINALIZAR / ENVIAR A CXP */}
+                {/* FINALIZAR / ENVIAR A TESORERIA */}
                 {order.status !== "cerrada" && order.status !== "cancelada" && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -376,19 +392,9 @@ export const WorkOrdersTable = () => {
                       className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 focus:text-emerald-700 focus:bg-emerald-50 dark:focus:bg-emerald-900/30"
                       onClick={() => setOrderToClose(order)}
                     >
-                      <Receipt className="h-4 w-4" /> Cerrar y Facturar (CxP)
+                      <CheckCircle className="h-4 w-4" /> Cerrar y Pagar
                     </DropdownMenuItem>
                   </>
-                )}
-
-                {/* CANCELAR */}
-                {order.status !== "cerrada" && order.status !== "cancelada" && (
-                  <DropdownMenuItem
-                    className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/30"
-                    onClick={() => handleCancelOrder(order.id)}
-                  >
-                    <XCircle className="h-4 w-4" /> Cancelar
-                  </DropdownMenuItem>
                 )}
 
                 {/* ELIMINAR (Solo si está cancelada o es administrador) */}
@@ -581,7 +587,7 @@ export const WorkOrdersTable = () => {
         </DialogContent>
       </Dialog>
 
-      {/* --- ALERT DIALOG PARA FINALIZAR Y ENVIAR A CXP --- */}
+      {/* --- ALERT DIALOG PARA FINALIZAR Y ENVIAR A TESORERIA --- */}
       <AlertDialog
         open={!!orderToClose}
         onOpenChange={(open) => !open && setOrderToClose(null)}
@@ -591,14 +597,14 @@ export const WorkOrdersTable = () => {
             <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 dark:from-emerald-500/10 to-transparent pointer-events-none" />
             <div className="relative z-10 flex items-center gap-4 sm:gap-5">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-emerald-200 dark:border-emerald-500/20">
-                <Receipt className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400" />
+                <Landmark className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div className="flex flex-col gap-1 text-left">
                 <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-700 dark:text-emerald-400 heading-crisp leading-none">
                   Cerrar Orden
                 </AlertDialogTitle>
                 <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
-                  Integración con Cuentas por Pagar
+                  Integración con Tesorería
                 </p>
               </div>
             </div>
@@ -608,12 +614,11 @@ export const WorkOrdersTable = () => {
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
                 Al finalizar esta orden de trabajo, los costos asociados a
-                refacciones externas y mano de obra de terceros{" "}
+                refacciones{" "}
                 <b className="font-black">
-                  se enviarán automáticamente al módulo de Cuentas por Pagar
-                  (Proveedores)
-                </b>{" "}
-                para su liquidación.
+                  se descontarán directamente de la cuenta bancaria principal
+                  (Banamex) en Tesorería.
+                </b>
               </p>
 
               <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
@@ -656,7 +661,7 @@ export const WorkOrdersTable = () => {
                 ) : (
                   <CheckCircle className="h-4 w-4 mr-2" />
                 )}
-                Confirmar y Enviar a CxP
+                Confirmar y Pagar (Tesorería)
               </AlertDialogAction>
             </div>
           </AlertDialogFooter>
@@ -696,12 +701,15 @@ export const WorkOrdersTable = () => {
                 <div className="flex items-center gap-2 mb-3">
                   <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
                   <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Pérdida de Datos
+                    Pérdida de Datos y Reverso Financiero
                   </h4>
                 </div>
                 <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Se borrará todo su historial y registro de sistema de forma permanente.{" "}
-                  <b className="font-black">Esta acción no se puede deshacer</b>.
+                  Se borrará todo su historial y registro de sistema de forma
+                  permanente. Adicionalmente, el inventario y tesorería se
+                  revertirán automáticamente a sus estados anteriores.{" "}
+                  <b className="font-black">Esta acción no se puede deshacer</b>
+                  .
                 </p>
               </div>
             </AlertDialogDescription>

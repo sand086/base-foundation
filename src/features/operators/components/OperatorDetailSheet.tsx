@@ -401,7 +401,7 @@ export function OperatorDetailSheet({
                     className="h-10 w-10 haptic-press rounded-xl text-slate-500"
                     title="Cancelar"
                   >
-                    <X className="h-5 w-5" />
+                    <X className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </Button>
                   <Button
                     size="icon"
@@ -409,7 +409,7 @@ export function OperatorDetailSheet({
                     className="h-10 w-10 bg-emerald-600 hover:bg-emerald-700 text-white haptic-press border-none rounded-xl shadow-emerald-500/20"
                     title="Guardar Cambios"
                   >
-                    <Save className="h-5 w-5" />
+                    <Save className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </Button>
                 </>
               ) : (

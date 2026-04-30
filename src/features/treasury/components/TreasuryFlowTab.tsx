@@ -1,8 +1,9 @@
-import { Card } from "@/components/ui/card";
+// src/features/treasury/components/TreasuryFlowTab.tsx
+import { useMemo } from "react";
+import { Card, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -22,8 +23,6 @@ import {
   Landmark,
   TrendingUp,
   TrendingDown,
-  CheckCircle2,
-  Clock,
   Search,
   RefreshCw,
   MoreHorizontal,
@@ -32,18 +31,13 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Loader2,
+  Calculator,
+  CheckCircle2,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
-
-const bankLogos: Record<string, string> = {
-  Banamex: "🏛️",
-  Santander: "🏦",
-  Banorte: "💳",
-  BBVA: "🏧",
-  HSBC: "🦁",
-  Scotiabank: "🍁",
-};
+import { getBankLogo } from "../utils/bankUtils";
 
 interface TreasuryFlowTabProps {
   stats: any;
@@ -53,8 +47,8 @@ interface TreasuryFlowTabProps {
   formatCurrency: (amount: number) => string;
   searchTerm: string;
   setSearchTerm: (val: string) => void;
-  movementFilter: "all" | "operativa" | "cobranza";
-  setMovementFilter: (val: "all" | "operativa" | "cobranza") => void;
+  movementFilter: "all" | "egreso" | "ingreso";
+  setMovementFilter: (val: "all" | "egreso" | "ingreso") => void;
   fetchMovements: () => void;
   handleToggleConciliacion: (id: number) => void;
   onViewMovement: (mov: BankMovement) => void;
@@ -76,73 +70,92 @@ export function TreasuryFlowTab({
   onViewMovement,
   onDeleteMovement,
 }: TreasuryFlowTabProps) {
+  // Cálculo rápido del Flujo Neto para las Cards
+  const flujoNeto = (stats.total_ingresos || 0) - (stats.total_egresos || 0);
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default">
-          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+      {/* ========================================================= */}
+      {/* CARDS KPI: RESUMEN FINANCIERO                             */}
+      {/* ========================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 relative overflow-hidden group hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-all cursor-default bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-sm hover:shadow-md">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <TrendingUp className="w-24 h-24 text-emerald-600" />
           </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Total Ingresos
-            </p>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tighter leading-none">
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-500 mb-2">
+              <ArrowUpRight className="w-4 h-4" />
+              <p className="text-[11px] font-black uppercase tracking-widest">
+                Total Abonos (+)
+              </p>
+            </div>
+            <p className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tighter">
               {showBalances ? formatCurrency(stats.total_ingresos) : "••••••••"}
             </p>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              Ingresos reales en cuentas
+            </p>
           </div>
         </Card>
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-rose-300 dark:hover:border-rose-500/50 transition-all cursor-default">
-          <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <TrendingDown className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+
+        <Card className="p-6 relative overflow-hidden group hover:border-rose-200 dark:hover:border-rose-900/50 transition-all cursor-default bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-sm hover:shadow-md">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <TrendingDown className="w-24 h-24 text-rose-600" />
           </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Total Egresos
-            </p>
-            <p className="text-2xl font-black text-rose-600 dark:text-rose-400 font-mono tracking-tighter leading-none">
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-500 mb-2">
+              <ArrowDownLeft className="w-4 h-4" />
+              <p className="text-[11px] font-black uppercase tracking-widest">
+                Total Cargos (-)
+              </p>
+            </div>
+            <p className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tighter">
               {showBalances ? formatCurrency(stats.total_egresos) : "••••••••"}
             </p>
-          </div>
-        </Card>
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-cyan-300 dark:hover:border-cyan-500/50 transition-all cursor-default">
-          <div className="p-3.5 bg-cyan-50 dark:bg-cyan-950/30 rounded-2xl border border-cyan-100 dark:border-cyan-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <CheckCircle2 className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
-          </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Conciliados
-            </p>
-            <p className="text-3xl font-black text-cyan-600 dark:text-cyan-400 leading-none tracking-tighter">
-              {stats.conciliados}
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              Pagos y salidas operativas
             </p>
           </div>
         </Card>
-        <Card variant="default" className="p-6 flex items-center gap-5 group hover:border-amber-300 dark:hover:border-amber-500/50 transition-all cursor-default">
-          <div className="p-3.5 bg-amber-50 dark:bg-amber-950/30 rounded-2xl border border-amber-100 dark:border-amber-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-            <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+
+        <Card className="p-6 relative overflow-hidden group transition-all cursor-default shadow-sm hover:shadow-md border-brand-navy/20 dark:border-blue-900/50 bg-brand-navy dark:bg-slate-900">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Wallet className="w-24 h-24 text-white" />
           </div>
-          <div className="flex flex-col justify-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Pendientes
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-blue-200 mb-2">
+              <Calculator className="w-4 h-4" />
+              <p className="text-[11px] font-black uppercase tracking-widest">
+                Flujo Neto
+              </p>
+            </div>
+            <p
+              className={cn(
+                "text-3xl font-black font-mono tracking-tighter",
+                flujoNeto >= 0 ? "text-white" : "text-rose-400",
+              )}
+            >
+              {showBalances ? formatCurrency(flujoNeto) : "••••••••"}
             </p>
-            <p className="text-3xl font-black text-amber-600 dark:text-amber-400 leading-none tracking-tighter">
-              {stats.pendientes}
+            <p className="text-[11px] font-bold text-blue-200/90 uppercase tracking-widest mt-1">
+              {flujoNeto >= 0 ? "Flujo Positivo" : "Flujo Negativo"}
             </p>
           </div>
         </Card>
       </div>
 
-      {/* TOOLBAR */}
+      {/* ========================================================= */}
+      {/* TOOLBAR DEL ESTADO DE CUENTA                              */}
+      {/* ========================================================= */}
       <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
         <div className="relative flex-1 w-full lg:w-1/3 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
           <Input
-            placeholder="Buscar concepto, banco..."
+            placeholder="Buscar concepto, banco, referencia..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-11 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm"
+            className="pl-10 h-11 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-mono text-sm"
           />
         </div>
         <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
@@ -155,29 +168,29 @@ export function TreasuryFlowTab({
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
           >
-            Libro Total
+            Estado de Cuenta
           </button>
           <button
-            onClick={() => setMovementFilter("operativa")}
+            onClick={() => setMovementFilter("egreso")}
             className={cn(
               "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex gap-2 transition-all",
-              movementFilter === "operativa"
+              movementFilter === "egreso"
                 ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
           >
-            <ArrowDownLeft className="h-3.5 w-3.5" /> Salidas
+            Solo Cargos (-)
           </button>
           <button
-            onClick={() => setMovementFilter("cobranza")}
+            onClick={() => setMovementFilter("ingreso")}
             className={cn(
               "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex gap-2 transition-all",
-              movementFilter === "cobranza"
+              movementFilter === "ingreso"
                 ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
           >
-            <ArrowUpRight className="h-3.5 w-3.5" /> Ingresos
+            Solo Abonos (+)
           </button>
         </div>
         <Button
@@ -192,31 +205,46 @@ export function TreasuryFlowTab({
         </Button>
       </div>
 
-      {/* TABLA */}
-      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200/50 dark:border-white/10 bg-white/30 dark:bg-slate-950/30 backdrop-blur-sm shadow-xl liquid-glass-table">
-        <div className="overflow-auto max-h-[60vh] custom-scrollbar">
+      {/* ========================================================= */}
+      {/* TABLA PRINCIPAL ESTILO "ESTADO DE CUENTA BANCARIO"        */}
+      {/* ========================================================= */}
+      <div className="relative w-full overflow-hidden rounded-2xl border border-slate-300/60 dark:border-white/10 bg-white dark:bg-slate-950 shadow-xl">
+        <div className="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200/60 dark:border-white/10 px-6 py-4 flex items-center gap-3">
+          <Landmark className="w-5 h-5 text-slate-500" />
+          <div>
+            <h3 className="font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight text-sm">
+              Libro Mayor de Tesorería
+            </h3>
+            <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">
+              Registro contable detallado
+            </p>
+          </div>
+        </div>
+
+        <div className="overflow-auto max-h-[65vh] custom-scrollbar">
           <Table className="w-full text-sm">
-            <TableHeader className="sticky top-0 z-20 backdrop-blur-xl bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-white/10">
+            <TableHeader className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-900 border-b-2 border-slate-300 dark:border-white/20 shadow-sm">
               <TableRow className="hover:bg-transparent border-none">
-                <TableHead className="w-14 pl-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
-                  Conc.
+                <TableHead className="w-14 pl-6 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300 h-12">
+                  <CheckCircle2 className="w-4 h-4 opacity-50" />
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
+                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300 h-12 w-[120px]">
                   Fecha
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
-                  Concepto / Ref
+                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300 h-12">
+                  Descripción / Referencia
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
-                  Origen
+                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300 h-12 w-[180px]">
+                  Cuenta
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 h-12">
-                  Banco
+                {/* COLUMNAS SEPARADAS TIPO ESTADO DE CUENTA */}
+                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 text-right h-12 w-[140px] bg-rose-50/50 dark:bg-rose-950/20">
+                  Cargos (-)
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 text-right h-12">
-                  Monto
+                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400 text-right h-12 w-[140px] bg-emerald-50/50 dark:bg-emerald-950/20">
+                  Abonos (+)
                 </TableHead>
-                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 text-center pr-6 h-12">
+                <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300 text-center pr-6 h-12 w-[80px]">
                   Acciones
                 </TableHead>
               </TableRow>
@@ -224,8 +252,8 @@ export function TreasuryFlowTab({
             <TableBody>
               {isMovementsLoading ? (
                 <TableRow>
-                    <TableCell colSpan={7} className="p-16 text-center">
-                    <Loader2 className="h-8 w-8 mx-auto animate-spin text-brand-red/50 dark:text-brand-red" />
+                  <TableCell colSpan={7} className="p-16 text-center">
+                    <Loader2 className="h-8 w-8 mx-auto animate-spin text-brand-navy/50 dark:text-blue-400" />
                   </TableCell>
                 </TableRow>
               ) : movimientos.length === 0 ? (
@@ -235,105 +263,132 @@ export function TreasuryFlowTab({
                     className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                   >
                     <Landmark className="h-10 w-10 mx-auto opacity-20 mb-2" />
-                    No hay movimientos.
+                    El estado de cuenta está vacío.
                   </TableCell>
                 </TableRow>
               ) : (
-                movimientos.map((mov) => (
-                  <TableRow
-                    key={mov.id}
-                    className={cn(
-                      "border-b border-slate-100 dark:border-white/5 interactive-row transition-colors duration-200",
-                      mov.conciliado && "bg-emerald-50/30 dark:bg-emerald-950/20",
-                    )}
-                  >
-                    <TableCell className="w-14 pl-6">
-                      <Checkbox
-                        checked={mov.conciliado}
-                        onCheckedChange={() => handleToggleConciliacion(mov.id)}
-                        className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                      />
-                    </TableCell>
-                    <TableCell className="py-4 font-mono text-sm font-medium text-slate-500 dark:text-slate-400">
-                      {mov.fecha}
-                    </TableCell>
-                    <TableCell className="py-4 max-w-[250px]">
-                      <p className="font-black text-slate-700 dark:text-slate-200 truncate uppercase tracking-tight text-sm">
-                        {mov.concepto}
-                      </p>
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 uppercase tracking-wider">
-                        REF: {mov.referencia_bancaria || "N/A"}
-                      </p>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <StatusBadge
-                        status={
-                          mov.origen_modulo === "CxC"
-                            ? "success"
-                            : mov.origen_modulo === "CxP"
-                              ? "danger"
-                              : "info"
-                        }
-                      >
-                        {mov.origen_modulo}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">
-                          {bankLogos[mov.banco] || "🏦"}
-                        </span>
-                        <span className="text-sm font-bold text-slate-600 dark:text-slate-300">
-                          {mov.banco}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 text-right">
-                      <span
-                        className={cn(
-                          "font-black font-mono text-sm",
-                          mov.tipo === "ingreso"
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-rose-600 dark:text-rose-400",
+                movimientos.map((mov) => {
+                  const logoSvg = getBankLogo(mov.banco);
+                  const bankNameClean = mov.banco
+                    ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
+                    : "Banco";
+                  const esCargo = mov.tipo === "egreso";
+                  const esAbono = mov.tipo === "ingreso";
+
+                  return (
+                    <TableRow
+                      key={mov.id}
+                      className={cn(
+                        "border-b border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150",
+                        mov.conciliado &&
+                          "bg-slate-50/50 dark:bg-slate-900/30 opacity-70", // Lo conciliado se ve más "apagado" como ya revisado
+                      )}
+                    >
+                      <TableCell className="w-14 pl-6 align-top pt-4">
+                        <Checkbox
+                          checked={mov.conciliado}
+                          onCheckedChange={() =>
+                            handleToggleConciliacion(mov.id)
+                          }
+                          className="data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                      </TableCell>
+                      <TableCell className="align-top pt-4 font-mono text-xs font-bold text-slate-600 dark:text-slate-400">
+                        {mov.fecha ? mov.fecha.split("T")[0] : ""}
+                      </TableCell>
+                      <TableCell className="align-top pt-4 max-w-[300px]">
+                        <p className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight text-xs leading-snug">
+                          {mov.concepto}
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-1 uppercase tracking-wider">
+                          Ref:{" "}
+                          <span className="font-bold text-slate-600 dark:text-slate-300">
+                            {mov.referencia_bancaria || "N/A"}
+                          </span>
+                          <span className="mx-2 opacity-30">|</span>
+                          Origen: {mov.origen_modulo || "CXC"}
+                        </p>
+                      </TableCell>
+                      <TableCell className="align-top pt-4">
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center justify-center w-5 h-5 shrink-0 grayscale opacity-80">
+                            {logoSvg ? (
+                              <img
+                                src={logoSvg}
+                                alt={bankNameClean}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <Landmark className="h-4 w-4 text-slate-400" />
+                            )}
+                          </span>
+                          <span className="text-xs font-bold uppercase tracking-tight text-slate-600 dark:text-slate-300 truncate">
+                            {bankNameClean}
+                          </span>
+                        </div>
+                      </TableCell>
+
+                      {/* COLUMNA DE CARGOS (EGRESOS) */}
+                      <TableCell className="align-top pt-4 text-right bg-rose-50/20 dark:bg-rose-950/10 border-l border-r border-slate-100 dark:border-white/5">
+                        {esCargo ? (
+                          <span className="font-black font-mono text-sm text-slate-800 dark:text-white">
+                            {formatCurrency(Number(mov.monto))}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700 font-mono">
+                            -
+                          </span>
                         )}
-                      >
-                        {mov.tipo === "ingreso" ? "+" : "-"}
-                        {formatCurrency(mov.monto)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-4 text-center pr-6">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
+                      </TableCell>
+
+                      {/* COLUMNA DE ABONOS (INGRESOS) */}
+                      <TableCell className="align-top pt-4 text-right bg-emerald-50/20 dark:bg-emerald-950/10 border-r border-slate-100 dark:border-white/5">
+                        {esAbono ? (
+                          <span className="font-black font-mono text-sm text-slate-800 dark:text-white">
+                            {formatCurrency(Number(mov.monto))}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-700 font-mono">
+                            -
+                          </span>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="align-top pt-3 text-center pr-6">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                            >
+                              <MoreHorizontal className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="glass-panel border-white/20 min-w-[160px] rounded-xl z-50 dark:bg-slate-900/90"
                           >
-                            <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="glass-panel border-white/20 min-w-[160px] rounded-xl z-50 dark:bg-slate-900/90"
-                        >
-                          <DropdownMenuItem
-                            onClick={() => onViewMovement(mov)}
-                            className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer rounded-lg dark:text-slate-300 dark:focus:bg-slate-800"
-                          >
-                            <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" /> Ver Detalle
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="dark:bg-white/10" />
-                          <DropdownMenuItem
-                            onClick={() => onDeleteMovement(mov)}
-                            className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer rounded-lg dark:focus:bg-rose-950/30"
-                          >
-                            <Trash2 className="h-4 w-4" /> Eliminar
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
+                            <DropdownMenuItem
+                              onClick={() => onViewMovement(mov)}
+                              className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer rounded-lg dark:text-slate-300 dark:focus:bg-slate-800"
+                            >
+                              <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                              Ver Detalle
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="dark:bg-white/10" />
+                            <DropdownMenuItem
+                              onClick={() => onDeleteMovement(mov)}
+                              className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer rounded-lg dark:focus:bg-rose-950/30"
+                            >
+                              <Trash2 className="h-4 w-4" /> Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

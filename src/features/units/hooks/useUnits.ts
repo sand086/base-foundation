@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { FleetUnitsService } from "@/api/generated";
+import { FleetUnitsService, DefaultService } from "@/api/generated";
 import { ApiError } from "@/api/generated/core/ApiError";
 import { Unit } from "@/features/units/types";
 import { toast } from "sonner";
@@ -117,6 +117,27 @@ export const useUnits = () => {
     }
   };
 
+  //  FIX: Usando el servicio oficial generado por OpenAPI
+  const fetchLastOdometer = async (
+    unitId: string | number,
+  ): Promise<number> => {
+    try {
+      if (!unitId) return 0;
+
+      // Llamada directa al API client generado
+      const res =
+        await DefaultService.getUnitLastOdometerApiFleetUnitsUnitIdLastOdometerGet(
+          Number(unitId),
+        );
+
+      // En los clientes generados, la data suele venir en la raíz del objeto de respuesta
+      return Number(res?.last_odometer || 0);
+    } catch (error) {
+      console.error("Error obteniendo último odómetro:", error);
+      return 0; // Si falla, retorna 0 por seguridad para no bloquear el sistema
+    }
+  };
+
   return {
     unidades,
     isLoading,
@@ -126,6 +147,7 @@ export const useUnits = () => {
     deleteUnit,
     importBulkUnits,
     updateLoadStatus,
+    fetchLastOdometer, // Exportamos la función conectada
     refreshUnits: fetchUnits,
   };
 };
