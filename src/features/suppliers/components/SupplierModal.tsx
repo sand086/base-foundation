@@ -182,7 +182,7 @@ export function SupplierModal({
           rfc: supplier.rfc || "",
           estatus: (supplier.estatus as any) || "activo",
           tipo_proveedor: supplier.tipo_proveedor || "",
-          categoria: supplier.categoria || "",
+          categoria: supplier.cost_center.nombre || "",
           dias_credito: supplier.dias_credito || 0,
           limite_credito: supplier.limite_credito || 0,
           contacto_principal: supplier.contacto_principal || "",
@@ -460,11 +460,9 @@ export function SupplierModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="activo">🟢 Activo</SelectItem>
-                          <SelectItem value="inactivo">⚪ Inactivo</SelectItem>
-                          <SelectItem value="suspendido">
-                            🔴 Suspendido
-                          </SelectItem>
+                          <SelectItem value="activo">Activo</SelectItem>
+                          <SelectItem value="inactivo">Inactivo</SelectItem>
+                          <SelectItem value="suspendido">Suspendido</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

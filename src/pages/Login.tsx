@@ -178,10 +178,10 @@ export default function Login() {
         <div
           className="absolute inset-0 bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]"
           style={{
-            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpg"})`,
+            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpeg"})`,
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/50" />
+        <div className="absolute inset-0 bg-gradient-to-b  " />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-red/20 via-transparent to-transparent" />
       </div>
 
@@ -190,7 +190,7 @@ export default function Login() {
         <img
           src={logos_3t?.logo_white_3t || "/assets/img/logo-white.svg"}
           alt="TMS Logo"
-          className="h-20 drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]"
+          className="h-20"
         />
       </div>
 
@@ -339,7 +339,7 @@ export default function Login() {
                 <div className="pt-4 text-center text-[10px] font-bold uppercase tracking-widest text-white/50">
                   Soporte Técnico:{" "}
                   <span className="text-white/80 tracking-normal normal-case">
-                    admin@transportes.com
+                    desarrolloSoft@asicomsystems.com.mx
                   </span>
                 </div>
               </form>

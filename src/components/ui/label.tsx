@@ -60,7 +60,7 @@ const Label = React.forwardRef<
     {/* 2. La Magia del Asterisco Tahoe (IDENTIDAD DE MARCA) */}
     {required && (
       <span
-        className="text-brand-red dark:text-brand-red ml-1.5 text-[14px] leading-none select-none animate-pulse-slow font-black"
+        className="text-brand-red dark:text-brand-red ml-1.5 text-[15px] leading-none select-none animate-pulse-slow font-black"
         title="Este campo es obligatorio"
       >
         *

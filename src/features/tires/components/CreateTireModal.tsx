@@ -238,7 +238,7 @@ export function CreateTireModal({
           >
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/50 custom-scrollbar">
               <div className="space-y-8">
-                {/* 🏷️ SECCIÓN 1: Identificación */}
+                {/*  SECCIÓN 1: Identificación */}
                 <div className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Barcode className="h-3.5 w-3.5 text-blue-500" />
@@ -340,7 +340,7 @@ export function CreateTireModal({
                   </div>
                 </div>
 
-                {/* ⚙️ SECCIÓN 2: Especificaciones Técnicas */}
+                {/*  SECCIÓN 2: Especificaciones Técnicas */}
                 <div className="space-y-6 pt-2">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Settings className="h-3.5 w-3.5 text-amber-500" />
@@ -392,7 +392,7 @@ export function CreateTireModal({
                   </div>
                 </div>
 
-                {/* 💰 SECCIÓN 3: Adquisición */}
+                {/*  SECCIÓN 3: Adquisición */}
                 <div className="space-y-6 pt-2">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
