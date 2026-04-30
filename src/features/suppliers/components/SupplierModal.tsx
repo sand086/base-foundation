@@ -34,8 +34,7 @@ import {
 import { toast } from "sonner";
 import { Supplier } from "../types";
 import { cn } from "@/lib/utils";
-import { BankIcon } from "@/components/ui/bank-icon";
-
+import { BankIcon, SUPPORTED_BANKS } from "@/components/ui/bank-icon";
 import {
   Form,
   FormControl,
@@ -45,19 +44,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-//  AGREGA ESTE ARREGLO PARA QUE EL MAP FUNCIONE
-const bancos = [
-  "Banamex",
-  "Santander",
-  "Banorte",
-  "BBVA",
-  "HSBC",
-  "Scotiabank",
-  "Inbursa",
-  "Banregio",
-  "Afirme",
-  "Bancoppel",
-];
+const bancos = SUPPORTED_BANKS;
 
 // ==========================================
 // ESQUEMA DE VALIDACIÓN ZOD (COMPLETO)
