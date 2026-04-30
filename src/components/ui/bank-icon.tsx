@@ -9,6 +9,10 @@ import BbvaLogo from "@/assets/img/icons/banks/bbva.svg?react";
 import HsbcLogo from "@/assets/img/icons/banks/hsbc.svg?react";
 import SantanderLogo from "@/assets/img/icons/banks/santander.svg?react";
 import ScotiaLogo from "@/assets/img/icons/banks/scotia.svg?react";
+import Bancoppel from "@/assets/img/icons/banks/coppel.svg?react";
+import Inbursa from "@/assets/img/icons/banks/inbursa.svg?react";
+import Banregio from "@/assets/img/icons/banks/banregio.svg?react";
+import Bansefi from "@/assets/img/icons/banks/bansefi.svg?react";
 
 export type BankIconName =
   | "Banamex"

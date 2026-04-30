@@ -34,6 +34,7 @@ import {
 import { toast } from "sonner";
 import { Supplier } from "../types";
 import { cn } from "@/lib/utils";
+import { BankIcon } from "@/components/ui/bank-icon";
 
 import {
   Form,
@@ -44,9 +45,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// ==========================================
-// CONFIGURACIÓN DE BANCOS HOMOLOGADA
-// ==========================================
+//  AGREGA ESTE ARREGLO PARA QUE EL MAP FUNCIONE
 const bancos = [
   "Banamex",
   "Santander",
@@ -54,16 +53,11 @@ const bancos = [
   "BBVA",
   "HSBC",
   "Scotiabank",
+  "Inbursa",
+  "Banregio",
+  "Afirme",
+  "Bancoppel",
 ];
-
-const bankLogos: Record<string, string> = {
-  Banamex: "🏛️",
-  Santander: "🏦",
-  Banorte: "💳",
-  BBVA: "🏧",
-  HSBC: "🦁",
-  Scotiabank: "🍁",
-};
 
 // ==========================================
 // ESQUEMA DE VALIDACIÓN ZOD (COMPLETO)
@@ -648,8 +642,16 @@ export function SupplierModal({
                         </FormControl>
                         <SelectContent>
                           {bancos.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {bankLogos[b]} {b}
+                            <SelectItem
+                              key={b}
+                              value={b}
+                              textValue={b}
+                              className="flex items-center gap-2 cursor-pointer font-bold"
+                            >
+                              <div className="flex items-center gap-2">
+                                <BankIcon bankName={b} className="w-5 h-5" />
+                                <span>{b}</span>
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>

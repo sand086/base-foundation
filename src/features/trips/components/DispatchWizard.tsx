@@ -845,8 +845,8 @@ export const DispatchWizard = ({
             <div>
               <CardTitle className="text-xl text-foreground">
                 {tripId || initialData?.id
-                  ? "PLANEAR / EDITAR Dispatch"
-                  : "Dispatch WIZARD"}
+                  ? "PLANEAR / EDITAR SERVICIO"
+                  : "CENTRO DE ASIGNACIÓN Y SALIDAS"}
               </CardTitle>
             </div>
           </div>
@@ -855,19 +855,19 @@ export const DispatchWizard = ({
               variant={currentStep >= 1 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              1. Ruta
+              1. Ruta y Cliente
             </Badge>
             <Badge
               variant={currentStep >= 2 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              2. Operación
+              2. Operación y asignación
             </Badge>
             <Badge
               variant={currentStep === 3 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              3. Resumen
+              3. Resumen de servicio
             </Badge>
           </div>
         </div>
