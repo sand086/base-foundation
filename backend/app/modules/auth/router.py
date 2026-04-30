@@ -8,21 +8,26 @@ from fastapi import (
     status,
     Body,
     Request,
+    UploadFile,
+    File,
 )
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from jose import JWTError, jwt, ExpiredSignatureError
 from app.core.security import verify_password
+import requests  # <-- NUEVO: Para hacer la petición a Google reCAPTCHA
 
 from app.db.database import get_db
 from app.models import models
 from app.core import security
 from app.core.config import settings
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from . import schemas
+from . import crud
 
+from app.integrations.storage.storage import StorageService
 from app.modules.monitoring.crud import log_audit
 
 router = APIRouter(tags=["Authentication"])
@@ -91,7 +96,41 @@ async def get_current_active_user(
 def login(
     request_data: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)
 ):
+    cliente_ip = request.client.host if request.client else "Desconocida"
+
+    # ==========================================
+    # 0. VALIDACIÓN DE reCAPTCHA V3
+    # ==========================================
+    if (
+        settings.GOOGLE_RECAPTCHA_V3_SECRET_KEY
+    ):  # Solo validamos si la key existe en el .env
+        recaptcha_url = "https://www.google.com/recaptcha/api/siteverify"
+        recaptcha_payload = {
+            "secret": settings.GOOGLE_RECAPTCHA_V3_SECRET_KEY,
+            "response": request_data.recaptcha_token,
+        }
+
+        try:
+            r = requests.post(recaptcha_url, data=recaptcha_payload, timeout=5)
+            result = r.json()
+
+            # Score de 0.0 a 1.0 (1.0 es muy seguro que es humano)
+            if not result.get("success") or result.get("score", 0) < 0.5:
+                print(
+                    f"Bloqueo por Bot detectado en IP: {cliente_ip} - Score: {result.get('score')}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Validación de seguridad fallida. Nuestro sistema detectó actividad sospechosa (Bot).",
+                )
+        except requests.exceptions.RequestException:
+            # Si Google falla en responder, permitimos el login por fallback o lo denegamos según tu preferencia.
+            # Por ahora, si Google se cae, mejor dejar entrar al usuario (fail-open)
+            print("Advertencia: No se pudo contactar al servidor de Google reCAPTCHA.")
+
+    # ==========================================
     # 1. Buscar usuario
+    # ==========================================
     user = db.query(models.User).filter(models.User.email == request_data.email).first()
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
@@ -138,7 +177,6 @@ def login(
     user.refresh_token = refresh_token
     db.commit()
 
-    cliente_ip = request.client.host if request.client else "Desconocida"
     log_audit(
         db=db,
         user_id=user.id,
@@ -360,20 +398,6 @@ def enable_2fa(
 
     return {"message": "2FA Activado correctamente"}
 
-
-import json
-from typing import List, Dict, Any
-
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from app.integrations.storage.storage import StorageService
-from sqlalchemy.orm import Session
-
-
-from app.db.database import get_db
-from . import crud
-from app.models import models
-from . import schemas
-from app.modules.auth.router import get_current_active_user
 
 # =========================================================
 # ROLES (Deben ir primero para evitar conflicto con {user_id})
