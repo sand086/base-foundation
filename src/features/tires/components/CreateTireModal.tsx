@@ -20,6 +20,7 @@ import {
   Barcode,
   Settings,
   DollarSign,
+  Info,
 } from "lucide-react";
 import { Tire } from "@/features/tires/types";
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ const tireSchema = z.object({
     .max(4, "El DOT no puede tener más de 4 caracteres")
     .optional(),
   profundidad_original: z.string().min(1, "Requerido"),
+  profundidad_actual: z.string().optional(),
   precio_compra: z.string().optional(),
   fecha_compra: z.date({ required_error: "La fecha de compra es requerida" }),
   proveedor: z.string().optional(),
@@ -91,6 +93,7 @@ export function CreateTireModal({
       medida: "295/80R22.5",
       dot: "",
       profundidad_original: "",
+      profundidad_actual: "",
       precio_compra: "",
       fecha_compra: new Date(),
       proveedor: "",
@@ -108,13 +111,18 @@ export function CreateTireModal({
           modelo: tireToEdit.modelo || "",
           medida: tireToEdit.medida || "",
           dot: tireToEdit.dot || "",
-          // Forzamos el string para asegurar que se pinte en el Input
-          profundidad_original: tireToEdit.profundidad_original
-            ? String(tireToEdit.profundidad_original)
-            : "",
-          precio_compra: tireToEdit.precio_compra
-            ? String(tireToEdit.precio_compra)
-            : "",
+          profundidad_original:
+            tireToEdit.profundidad_original != null
+              ? String(tireToEdit.profundidad_original)
+              : "",
+          profundidad_actual:
+            tireToEdit.profundidad_actual != null
+              ? String(tireToEdit.profundidad_actual)
+              : "",
+          precio_compra:
+            tireToEdit.precio_compra != null
+              ? String(tireToEdit.precio_compra)
+              : "",
           fecha_compra: tireToEdit.fecha_compra
             ? new Date(`${tireToEdit.fecha_compra}T12:00:00`)
             : new Date(),
@@ -128,6 +136,7 @@ export function CreateTireModal({
           medida: "295/80R22.5",
           dot: "",
           profundidad_original: "",
+          profundidad_actual: "",
           precio_compra: "",
           fecha_compra: new Date(),
           proveedor: "",
@@ -140,12 +149,16 @@ export function CreateTireModal({
     setLoading(true);
 
     try {
-      const prof = parseFloat(data.profundidad_original || "0") || 0;
+      const prof_orig = parseFloat(data.profundidad_original || "0") || 0;
+      const prof_act =
+        parseFloat(
+          data.profundidad_actual || data.profundidad_original || "0",
+        ) || prof_orig;
       const precio = parseFloat(data.precio_compra || "0") || 0;
 
       let payload: any = {
         ...data,
-        profundidad_original: prof,
+        profundidad_original: prof_orig,
         precio_compra: precio,
         fecha_compra: format(data.fecha_compra, "yyyy-MM-dd"),
       };
@@ -153,11 +166,12 @@ export function CreateTireModal({
       if (!isEditing) {
         payload = {
           ...payload,
-          profundidad_actual: prof,
+          profundidad_actual: prof_orig,
           estado: "nuevo",
           estado_fisico: "buena",
         };
       } else {
+        payload.profundidad_actual = prof_act;
         delete payload.codigo_interno;
       }
 
@@ -208,7 +222,7 @@ export function CreateTireModal({
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1 tracking-normal normal-case">
                 {isEditing
-                  ? "Modifica los datos generales del neumático."
+                  ? "Modifica los datos generales y vida de la llanta."
                   : "Registra un neumático nuevo en el inventario (Stock)."}
               </p>
             </div>
@@ -340,7 +354,7 @@ export function CreateTireModal({
                       control={form.control}
                       name="medida"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className={!isEditing ? "sm:col-span-2" : ""}>
                           <FormLabel variant="brand" required>
                             Medida
                           </FormLabel>
@@ -357,33 +371,84 @@ export function CreateTireModal({
                       )}
                     />
 
+                    {/* 👇 CAMBIO PRINCIPAL: Bloqueo y advertencia en Profundidad Original 👇 */}
                     <FormField
                       control={form.control}
                       name="profundidad_original"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Profundidad Original
+                            {isEditing
+                              ? "Profundidad Original"
+                              : "Profundidad Inicial (mm)"}
                           </FormLabel>
                           <FormControl>
-                            <div className="relative">
+                            <div className="relative flex items-center">
                               <Input
                                 type="number"
-                                step="0.1"
+                                step="any"
                                 {...field}
+                                disabled={isEditing} // 🔒 BLOQUEADO AL EDITAR
                                 value={field.value ?? ""}
                                 placeholder="Ej: 18.5"
-                                className="h-11 pr-10 font-mono font-bold glass-card bg-card border-border shadow-sm"
+                                className={cn(
+                                  "h-11 pr-12 font-mono font-bold shadow-sm border-border",
+                                  isEditing
+                                    ? "bg-slate-100 dark:bg-slate-800 text-slate-500 cursor-not-allowed"
+                                    : "glass-card bg-card",
+                                )}
                               />
-                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-[10px] uppercase">
+                              <span className="absolute right-4 text-slate-400 font-black text-[10px] uppercase pointer-events-none select-none">
                                 mm
                               </span>
                             </div>
                           </FormControl>
+                          {isEditing && (
+                            <p className="text-[9px] font-bold text-amber-600 dark:text-amber-500 mt-1 leading-tight flex gap-1">
+                              <Info className="h-3 w-3 shrink-0" />
+                              Dato inmutable. Si hubo un error de captura, da de
+                              baja la llanta y regístrala de nuevo.
+                            </p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+
+                    {/* ACTUAL */}
+                    {isEditing && (
+                      <FormField
+                        control={form.control}
+                        name="profundidad_actual"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel
+                              variant="brand"
+                              required
+                              className="text-blue-600 dark:text-blue-400"
+                            >
+                              Profundidad Actual (Desgaste)
+                            </FormLabel>
+                            <FormControl>
+                              <div className="relative flex items-center">
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder="Ej: 10.5"
+                                  className="h-11 pr-12 font-mono font-black text-blue-700 bg-blue-50/30 border-blue-200 dark:border-blue-900 shadow-inner"
+                                />
+                                <span className="absolute right-4 text-blue-400 font-black text-[10px] uppercase pointer-events-none select-none">
+                                  mm
+                                </span>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -404,17 +469,17 @@ export function CreateTireModal({
                             Precio de Compra
                           </FormLabel>
                           <FormControl>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-black">
+                            <div className="relative flex items-center">
+                              <span className="absolute left-4 text-slate-400 font-black pointer-events-none select-none">
                                 $
                               </span>
                               <Input
                                 type="number"
-                                step="0.01"
+                                step="any"
                                 {...field}
                                 value={field.value ?? ""}
                                 placeholder="0.00"
-                                className="h-11 pl-7 font-mono font-bold glass-card bg-card border-border shadow-sm"
+                                className="h-11 pl-8 font-mono font-bold glass-card bg-card border-border shadow-sm"
                               />
                             </div>
                           </FormControl>
