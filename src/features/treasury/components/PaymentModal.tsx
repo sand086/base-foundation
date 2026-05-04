@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +63,19 @@ export function PaymentModal({
     [activeAccounts, formData.cuenta_id],
   );
 
+  // EFECTO PARA ESTABLECER LA CUENTA 2 POR DEFECTO
+  useEffect(() => {
+    if (!loadingAccounts && activeAccounts.length > 0 && !formData.cuenta_id) {
+      // Buscamos si existe la cuenta con ID 1 (Banamex)
+      const existeCuentaBanamex = activeAccounts.some(
+        (acc) => acc.id.toString() === "1",
+      );
+      if (existeCuentaBanamex) {
+        setFormData((prev) => ({ ...prev, cuenta_id: "1" }));
+      }
+    }
+  }, [loadingAccounts, activeAccounts, formData.cuenta_id]);
+
   const handleSubmit = () => {
     if (!formData.cuenta_id) {
       setShowAccountWarning(true);
@@ -81,7 +94,8 @@ export function PaymentModal({
       folio_factura: "",
       monto: 0,
       metodo_pago: "",
-      cuenta_id: "",
+      // Al resetear, volvemos a poner la cuenta Banamex (ID 1) por defecto
+      cuenta_id: "1",
       referencia: "",
     });
     onOpenChange(false);
