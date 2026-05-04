@@ -51,7 +51,7 @@ export function BankAccountsTab({
   // NUEVO FASE 3.1: CÁLCULO DE LIQUIDEZ TOTAL DE LA EMPRESA
   // =====================================================================
   const liquidezTotal = bankAccounts.reduce(
-    // ✅ FIX: Usamos Math.abs() para sumar los saldos siempre en positivo
+    //  FIX: Usamos Math.abs() para sumar los saldos siempre en positivo
     (acc, curr) => acc + Math.abs(Number(curr.saldo) || 0),
     0,
   );
@@ -198,7 +198,7 @@ export function BankAccountsTab({
                       Saldo Disponible
                     </p>
                     <p className="text-3xl font-mono font-black text-slate-800 dark:text-white tracking-tighter">
-                      {/* ✅ FIX: Aplicamos Math.abs() antes de formatear para que no imprima el signo de menos */}
+                      {/*  FIX: Aplicamos Math.abs() antes de formatear para que no imprima el signo de menos */}
                       {showBalances
                         ? formatCurrency(Math.abs(account.saldo || 0))
                         : "••••••••"}

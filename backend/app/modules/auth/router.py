@@ -678,7 +678,7 @@ def verify_user_password(
     """
     Verifica la contraseña del usuario en sesión para operaciones críticas.
     """
-    # ✅ FIX: Cambiado a current_user.password_hash
+    #  FIX: Cambiado a current_user.password_hash
     if not security.verify_password(request.password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

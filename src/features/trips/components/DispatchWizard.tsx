@@ -669,7 +669,7 @@ export const DispatchWizard = ({
         conoce_ruta_completa: data.conoceRutaCompleta,
         ocultar_montos_pdf: true, // Siempre ocultamos el monto en el PDF operativo
 
-        // ✅ FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
+        //  FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
         remolque_1_id: cleanId(data.remolque1Id) || null,
         dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
