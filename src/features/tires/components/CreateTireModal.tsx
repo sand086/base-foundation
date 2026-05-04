@@ -1,9 +1,8 @@
-// src/features/flota/CreateTireModal.tsx
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { format } from "date-fns"; //  Importante para formatear la fecha al guardar
+import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -13,13 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   CirclePlus,
   Pencil,
@@ -32,7 +24,6 @@ import {
 import { Tire } from "@/features/tires/types";
 import { cn } from "@/lib/utils";
 
-// Form Components (Tahoe UI)
 import {
   Form,
   FormControl,
@@ -41,7 +32,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { DatePicker } from "@/components/ui/date-picker"; //  Nuestro nuevo componente
+import { DatePicker } from "@/components/ui/date-picker";
 
 const MARCAS_COMUNES = [
   "Michelin",
@@ -76,7 +67,6 @@ const tireSchema = z.object({
     .optional(),
   profundidad_original: z.string().min(1, "Requerido"),
   precio_compra: z.string().optional(),
-  //  Ahora exigimos un objeto Date en lugar de un string
   fecha_compra: z.date({ required_error: "La fecha de compra es requerida" }),
   proveedor: z.string().optional(),
 });
@@ -92,7 +82,6 @@ export function CreateTireModal({
   const [loading, setLoading] = useState(false);
   const isEditing = !!tireToEdit;
 
-  //  REACT HOOK FORM
   const form = useForm<TireFormData>({
     resolver: zodResolver(tireSchema),
     defaultValues: {
@@ -103,27 +92,29 @@ export function CreateTireModal({
       dot: "",
       profundidad_original: "",
       precio_compra: "",
-      fecha_compra: new Date(), //  Objeto Date en lugar de string
+      fecha_compra: new Date(),
       proveedor: "",
     },
   });
 
   const { reset, handleSubmit } = form;
 
-  // EFECTO: Rellenar formulario si es edición
   useEffect(() => {
     if (open) {
       if (tireToEdit) {
         reset({
-          codigo_interno: tireToEdit.codigo_interno,
-          marca: tireToEdit.marca,
+          codigo_interno: tireToEdit.codigo_interno || "",
+          marca: tireToEdit.marca || "",
           modelo: tireToEdit.modelo || "",
           medida: tireToEdit.medida || "",
           dot: tireToEdit.dot || "",
-          profundidad_original:
-            tireToEdit.profundidad_original?.toString() || "",
-          precio_compra: tireToEdit.precio_compra?.toString() || "",
-          //  Convertimos el string YYYY-MM-DD del backend a Date (añadimos T12:00:00 para evitar saltos de zona horaria)
+          // Forzamos el string para asegurar que se pinte en el Input
+          profundidad_original: tireToEdit.profundidad_original
+            ? String(tireToEdit.profundidad_original)
+            : "",
+          precio_compra: tireToEdit.precio_compra
+            ? String(tireToEdit.precio_compra)
+            : "",
           fecha_compra: tireToEdit.fecha_compra
             ? new Date(`${tireToEdit.fecha_compra}T12:00:00`)
             : new Date(),
@@ -138,28 +129,24 @@ export function CreateTireModal({
           dot: "",
           profundidad_original: "",
           precio_compra: "",
-          fecha_compra: new Date(), //  Objeto Date
+          fecha_compra: new Date(),
           proveedor: "",
         });
       }
     }
   }, [open, tireToEdit, reset]);
 
-  // =====================
-  // SUBMIT
-  // =====================
   const onFormSubmit = async (data: TireFormData) => {
     setLoading(true);
 
     try {
-      const prof = parseFloat(data.profundidad_original);
+      const prof = parseFloat(data.profundidad_original || "0") || 0;
       const precio = parseFloat(data.precio_compra || "0") || 0;
 
       let payload: any = {
         ...data,
         profundidad_original: prof,
         precio_compra: precio,
-        //  Volvemos a convertir el Date al formato de string que espera el backend
         fecha_compra: format(data.fecha_compra, "yyyy-MM-dd"),
       };
 
@@ -197,9 +184,7 @@ export function CreateTireModal({
         if (!isOpen && !loading) handleClose();
       }}
     >
-      {/*  CAPA 1: CASCARÓN */}
       <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
-        {/*  CAPA 2: CABECERA */}
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -230,7 +215,6 @@ export function CreateTireModal({
           </div>
         </DialogHeader>
 
-        {/*  CAPA 3: CUERPO (Fondo slate-50 para resaltar inputs) */}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onFormSubmit)}
@@ -238,7 +222,7 @@ export function CreateTireModal({
           >
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-muted/50 custom-scrollbar">
               <div className="space-y-8">
-                {/*  SECCIÓN 1: Identificación */}
+                {/* IDENTIFICACIÓN */}
                 <div className="space-y-6">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Barcode className="h-3.5 w-3.5 text-blue-500" />
@@ -258,6 +242,7 @@ export function CreateTireModal({
                             <Input
                               {...field}
                               disabled={isEditing}
+                              value={field.value ?? ""}
                               placeholder="Ej: LL-001"
                               className={cn(
                                 "h-11 font-mono font-bold uppercase shadow-sm bg-card border-border",
@@ -282,6 +267,7 @@ export function CreateTireModal({
                           <FormControl>
                             <Input
                               {...field}
+                              value={field.value ?? ""}
                               maxLength={4}
                               placeholder="Ej: 4223"
                               className="h-11 font-mono font-bold uppercase glass-card bg-card border-border shadow-sm"
@@ -304,6 +290,7 @@ export function CreateTireModal({
                             <>
                               <Input
                                 {...field}
+                                value={field.value ?? ""}
                                 list="marcas-comunes"
                                 placeholder="Ej: Michelin o marca propia..."
                                 className="h-11 font-bold uppercase glass-card bg-card border-border shadow-sm"
@@ -329,6 +316,7 @@ export function CreateTireModal({
                           <FormControl>
                             <Input
                               {...field}
+                              value={field.value ?? ""}
                               placeholder="Ej: X Multi Z"
                               className="h-11 font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
@@ -340,7 +328,7 @@ export function CreateTireModal({
                   </div>
                 </div>
 
-                {/*  SECCIÓN 2: Especificaciones Técnicas */}
+                {/* ESPECIFICACIONES TÉCNICAS */}
                 <div className="space-y-6 pt-2">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <Settings className="h-3.5 w-3.5 text-amber-500" />
@@ -359,6 +347,7 @@ export function CreateTireModal({
                           <FormControl>
                             <Input
                               {...field}
+                              value={field.value ?? ""}
                               placeholder="Ej: 295/80R22.5"
                               className="h-11 font-mono font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
@@ -374,16 +363,22 @@ export function CreateTireModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel variant="brand" required>
-                            Profundidad Original (mm)
+                            Profundidad Original
                           </FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              {...field}
-                              placeholder="Ej: 18.5"
-                              className="h-11 font-mono font-bold glass-card bg-card border-border shadow-sm"
-                            />
+                            <div className="relative">
+                              <Input
+                                type="number"
+                                step="0.1"
+                                {...field}
+                                value={field.value ?? ""}
+                                placeholder="Ej: 18.5"
+                                className="h-11 pr-10 font-mono font-bold glass-card bg-card border-border shadow-sm"
+                              />
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-[10px] uppercase">
+                                mm
+                              </span>
+                            </div>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -392,7 +387,7 @@ export function CreateTireModal({
                   </div>
                 </div>
 
-                {/*  SECCIÓN 3: Adquisición */}
+                {/* ADQUISICIÓN */}
                 <div className="space-y-6 pt-2">
                   <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/80 flex items-center gap-2 border-b border-border pb-2">
                     <DollarSign className="h-3.5 w-3.5 text-emerald-500" />
@@ -417,6 +412,7 @@ export function CreateTireModal({
                                 type="number"
                                 step="0.01"
                                 {...field}
+                                value={field.value ?? ""}
                                 placeholder="0.00"
                                 className="h-11 pl-7 font-mono font-bold glass-card bg-card border-border shadow-sm"
                               />
@@ -436,6 +432,7 @@ export function CreateTireModal({
                           <FormControl>
                             <Input
                               {...field}
+                              value={field.value ?? ""}
                               placeholder="Nombre de la llantera..."
                               className="h-11 font-bold uppercase glass-card bg-card border-border shadow-sm"
                             />
@@ -445,7 +442,6 @@ export function CreateTireModal({
                       )}
                     />
 
-                    {/*  Fecha de Compra usando DatePicker Tahoe */}
                     <FormField
                       control={form.control}
                       name="fecha_compra"
@@ -472,7 +468,6 @@ export function CreateTireModal({
               </div>
             </div>
 
-            {/*  CAPA 4: FOOTER TAHOE (Con nueva regla de color) */}
             <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button
@@ -486,7 +481,6 @@ export function CreateTireModal({
                   Cancelar
                 </Button>
 
-                {/*  REGLA APLICADA: brand-green para Editar, brand-red para Crear */}
                 <Button
                   type="submit"
                   variant="default"
