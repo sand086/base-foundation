@@ -406,6 +406,20 @@ class TripBase(ORMBase):
     )
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
 
+    is_refrigerated_1: Optional[bool] = Field(
+        default=False, description="¿Remolque 1 es refrigerado?"
+    )
+    motogenerator_1: Optional[str] = Field(
+        default=None, max_length=50, description="ID/Serie del motogenerador 1"
+    )
+
+    is_refrigerated_2: Optional[bool] = Field(
+        default=False, description="¿Remolque 2 es refrigerado?"
+    )
+    motogenerator_2: Optional[str] = Field(
+        default=None, max_length=50, description="ID/Serie del motogenerador 2"
+    )
+
     status: TripStatus = TripStatus.CREADO
 
     tarifa_base: float
@@ -494,6 +508,11 @@ class TripUpdate(ORMBase):
 
     start_date: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+    is_refrigerated_1: Optional[bool] = None
+    motogenerator_1: Optional[str] = Field(default=None, max_length=50)
+
+    is_refrigerated_2: Optional[bool] = None
+    motogenerator_2: Optional[str] = Field(default=None, max_length=50)
 
     unit_id: Optional[int] = None
     operator_id: Optional[int] = None

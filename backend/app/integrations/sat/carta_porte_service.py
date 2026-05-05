@@ -461,7 +461,9 @@ class CartaPorteService:
             logger.error(f"Fallo en motor criptográfico blindado: {e}")
             raise HTTPException(status_code=500, detail=f"Error en Sello SAT: {str(e)}")
 
-    def _obtener_datos_completos(self, viaje_id: int, usar_tramo_final: bool = False):
+    def _obtener_datos_completos(
+        self, viaje_id: int, buscar_tramo_carretera: bool = False
+    ):
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
@@ -474,11 +476,22 @@ class CartaPorteService:
                 status_code=400, detail="El viaje no tiene tramos (TripLeg)."
             )
 
-        tramo_seleccionado = (
-            viaje.legs[-1]
-            if usar_tramo_final and len(viaje.legs) > 1
-            else viaje.legs[0]
-        )
+        # Por defecto tomamos el tramo 0 (patio)
+        tramo_seleccionado = viaje.legs[0]
+
+        # 👇 FIX: BUSCADOR INTELIGENTE DEL TRAMO DE CARRETERA 👇
+        if buscar_tramo_carretera and len(viaje.legs) > 1:
+            # Buscamos el tramo que sea de ruta/carretera
+            tramo_ruta = next(
+                (leg for leg in viaje.legs if "ruta" in str(leg.leg_type).lower()), None
+            )
+            if tramo_ruta:
+                tramo_seleccionado = tramo_ruta
+            else:
+                # Fallback de seguridad: si no halla la palabra 'ruta', toma el penúltimo o último
+                tramo_seleccionado = viaje.legs[-1]
+        # 👆 ------------------------------------------------ 👆
+
         unidad = (
             self.db.query(Unit).filter(Unit.id == tramo_seleccionado.unit_id).first()
         )
@@ -935,7 +948,7 @@ class CartaPorteService:
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=False
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         data = self._build_dict_from_models(
             viaje,
@@ -986,7 +999,7 @@ class CartaPorteService:
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         data = self._build_dict_from_models(
             viaje,

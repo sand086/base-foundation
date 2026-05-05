@@ -1318,22 +1318,70 @@ def undo_last_leg(db: Session, trip_id: str):
     if not trip or not trip.legs:
         return False
 
-    current_leg = trip.legs[-1]
+    # Filtramos para ver los tramos reales activos
+    active_legs = [
+        leg for leg in trip.legs if leg.record_status != RecordStatus.ELIMINADO
+    ]
 
-    current_leg.record_status = RecordStatus.ELIMINADO
-    db.add(current_leg)
+    if not active_legs:
+        return False
 
-    if len(trip.legs) > 1:
-        previous_leg = trip.legs[-2]
-        previous_leg.status = models.TripStatus.EN_TRANSITO
-        previous_leg.actual_arrival = None
+    current_leg = active_legs[-1]
+
+    # REGLA 1: Si ya está Entregado o Cerrado, simplemente lo degradamos a En Tránsito.
+    if current_leg.status in [
+        models.TripStatus.ENTREGADO,
+        models.TripStatus.CERRADO,
+        "liquidado",
+    ]:
+        current_leg.status = models.TripStatus.EN_TRANSITO
+        current_leg.actual_arrival = None
         trip.status = models.TripStatus.EN_TRANSITO
+        trip.closed_at = None
+
+        db_event = models.TripTimelineEvent(
+            trip_leg_id=current_leg.id,
+            time=dt_utcnow.utcnow(),
+            event="Reverso Operativo: Se deshizo la Entrega. El tramo regresa a En Tránsito.",
+            event_type="warning",
+        )
+        db.add(db_event)
+        db.add(current_leg)
+
+    # REGLA 2: Si está En Tránsito o Creado, DESTRUIMOS la fase para no dejar fantasmas.
     else:
-        trip.status = models.TripStatus.CREADO
+        if len(active_legs) > 1:
+            # Hay una fase anterior. Reactivamos la anterior limpia.
+            previous_leg = active_legs[-2]
+            previous_leg.status = models.TripStatus.EN_TRANSITO
+            previous_leg.actual_arrival = None
+            trip.status = models.TripStatus.EN_TRANSITO
+            trip.closed_at = None
 
-    trip.closed_at = None
+            db_event = models.TripTimelineEvent(
+                trip_leg_id=previous_leg.id,
+                time=dt_utcnow.utcnow(),
+                event=f"Reverso Operativo: Se canceló la fase de {current_leg.leg_type}. Retorno a la fase anterior.",
+                event_type="warning",
+            )
+            db.add(db_event)
+            db.add(previous_leg)
+
+            # 🔥 Elimina el tramo fantasma secundario 🔥
+            trip.legs.remove(current_leg)
+            db.delete(current_leg)
+
+        else:
+            # 🔥 ES LA PRIMERA FASE: DESTRUIMOS EL TRAMO POR COMPLETO 🔥
+            trip.legs.remove(current_leg)
+            db.delete(current_leg)
+
+            # El viaje regresa a ser "Planeado" (Stand-By)
+            trip.status = models.TripStatus.CREADO
+            trip.closed_at = None
+
+    db.add(trip)
     db.commit()
-
     db.refresh(trip)
     return trip
 

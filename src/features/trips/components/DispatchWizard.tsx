@@ -17,6 +17,7 @@ import {
   MapPin,
   ClipboardList,
   Award,
+  Snowflake,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +90,10 @@ export type WizardData = {
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
+  is_refrigerated_1: boolean;
+  motogenerator_1: string;
+  is_refrigerated_2: boolean;
+  motogenerator_2: string;
 
   unitId: string;
   remolque1Id: string;
@@ -291,10 +296,14 @@ export const DispatchWizard = ({
         remolque1Id: tripFromState.remolque_1_id
           ? String(tripFromState.remolque_1_id)
           : "",
+        is_refrigerated_1: tripFromState.is_refrigerated_1 || false,
+        motogenerator_1: tripFromState.motogenerator_1 || "",
         dollyId: tripFromState.dolly_id ? String(tripFromState.dolly_id) : "",
         remolque2Id: tripFromState.remolque_2_id
           ? String(tripFromState.remolque_2_id)
           : "",
+        is_refrigerated_2: tripFromState.is_refrigerated_2 || false,
+        motogenerator_2: tripFromState.motogenerator_2 || "",
         driverId: tripFromState.legs?.[0]?.operator_id
           ? String(tripFromState.legs[0].operator_id)
           : "",
@@ -343,6 +352,23 @@ export const DispatchWizard = ({
   const [odoTramo1, setOdoTramo1] = useState(0);
   const [odoTramo2, setOdoTramo2] = useState(0);
 
+  // 👇 CATÁLOGO DE MOTOGENERADORES
+  const availableMotogenerators = useMemo(
+    () => [
+      { label: "M10", value: "M10" },
+      { label: "M12", value: "M12" },
+      { label: "M14", value: "M14" },
+      { label: "M16", value: "M16" },
+      { label: "M18", value: "M18" },
+      { label: "M20", value: "M20" },
+      { label: "M22", value: "M22" },
+      { label: "M24", value: "M24" },
+      { label: "M26", value: "M26" },
+      { label: "M28", value: "M28" },
+    ],
+    [],
+  );
+
   const availableSatProducts = useMemo(
     () =>
       satProducts.map((p) => ({
@@ -372,6 +398,12 @@ export const DispatchWizard = ({
     referencia_cliente: initialData?.referencia_cliente || "",
     unitId: initialData?.unitId || "",
     remolque1Id: initialData?.remolque1Id || "",
+
+    is_refrigerated_1: initialData?.is_refrigerated_1 || false,
+    motogenerator_1: initialData?.motogenerator_1 || "",
+    is_refrigerated_2: initialData?.is_refrigerated_2 || false,
+    motogenerator_2: initialData?.motogenerator_2 || "",
+
     dollyId: initialData?.dollyId || "",
     remolque2Id: initialData?.remolque2Id || "",
     driverId: initialData?.driverId || "",
@@ -434,10 +466,14 @@ export const DispatchWizard = ({
           remolque1Id: foundTrip.remolque_1_id
             ? String(foundTrip.remolque_1_id)
             : "",
+          is_refrigerated_1: foundTrip.is_refrigerated_1 || false,
+          motogenerator_1: foundTrip.motogenerator_1 || "",
           dollyId: foundTrip.dolly_id ? String(foundTrip.dolly_id) : "",
           remolque2Id: foundTrip.remolque_2_id
             ? String(foundTrip.remolque_2_id)
             : "",
+          is_refrigerated_2: foundTrip.is_refrigerated_2 || false,
+          motogenerator_2: foundTrip.motogenerator_2 || "",
           driverId: foundTrip.legs?.[0]?.operator_id
             ? String(foundTrip.legs[0].operator_id)
             : "",
@@ -668,6 +704,12 @@ export const DispatchWizard = ({
         is_dummy_stamping: false, // Ya no usamos el bypass desde UI directa
         conoce_ruta_completa: data.conoceRutaCompleta,
         ocultar_montos_pdf: true, // Siempre ocultamos el monto en el PDF operativo
+
+        is_refrigerated_1: data.is_refrigerated_1,
+        motogenerator_1: data.is_refrigerated_1 ? data.motogenerator_1 : null,
+        is_refrigerated_2: isFullTrip ? data.is_refrigerated_2 : false,
+        motogenerator_2:
+          isFullTrip && data.is_refrigerated_2 ? data.motogenerator_2 : null,
 
         //  FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
         remolque_1_id: cleanId(data.remolque1Id) || null,
@@ -1326,7 +1368,6 @@ export const DispatchWizard = ({
                         setData((p) => ({
                           ...p,
                           remolque1Id: v,
-                          // Sincronización automática con el Tramo 2 (Magia UX)
                           remolque1Id_2:
                             p.remolque1Id_2 === p.remolque1Id
                               ? v
@@ -1335,6 +1376,46 @@ export const DispatchWizard = ({
                       }
                       placeholder="Buscar..."
                     />
+                    {/* 👇 SWITCH Y SELECT MOTOGENERADOR 1 👇 */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <Switch
+                        checked={data.is_refrigerated_1}
+                        onCheckedChange={(c) =>
+                          setData((p) => ({ ...p, is_refrigerated_1: c }))
+                        }
+                      />
+                      <Label
+                        className="text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer"
+                        onClick={() =>
+                          setData((p) => ({
+                            ...p,
+                            is_refrigerated_1: !p.is_refrigerated_1,
+                          }))
+                        }
+                      >
+                        ¿Es Refrigerado?
+                      </Label>
+                    </div>
+                    {data.is_refrigerated_1 && (
+                      <div className="animate-in fade-in slide-in-from-left-2 mt-2 border-l-2 border-brand-red pl-3 space-y-1.5">
+                        <Label
+                          variant="brand"
+                          className="text-brand-red text-[10px]"
+                          required
+                        >
+                          MOTOGENERADOR 1
+                        </Label>
+                        <SearchableSelect
+                          items={availableMotogenerators}
+                          value={data.motogenerator_1}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, motogenerator_1: v }))
+                          }
+                          placeholder="Seleccionar equipo..."
+                        />
+                      </div>
+                    )}
+                    {/* 👆 FIN MOTOGENERADOR 1 👆 */}
                   </div>
                   {isFullTrip && (
                     <>
@@ -1375,6 +1456,46 @@ export const DispatchWizard = ({
                           }
                           placeholder="Buscar..."
                         />
+                        {/* 👇 SWITCH Y SELECT MOTOGENERADOR 2 👇 */}
+                        <div className="flex items-center gap-2 pt-2">
+                          <Switch
+                            checked={data.is_refrigerated_2}
+                            onCheckedChange={(c) =>
+                              setData((p) => ({ ...p, is_refrigerated_2: c }))
+                            }
+                          />
+                          <Label
+                            className="text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer"
+                            onClick={() =>
+                              setData((p) => ({
+                                ...p,
+                                is_refrigerated_2: !p.is_refrigerated_2,
+                              }))
+                            }
+                          >
+                            ¿Es Refrigerado?
+                          </Label>
+                        </div>
+                        {data.is_refrigerated_2 && (
+                          <div className="animate-in fade-in slide-in-from-left-2 mt-2 border-l-2 border-brand-red pl-3 space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="text-brand-red text-[10px]"
+                              required
+                            >
+                              MOTOGENERADOR 2
+                            </Label>
+                            <SearchableSelect
+                              items={availableMotogenerators}
+                              value={data.motogenerator_2}
+                              onSelect={(v) =>
+                                setData((p) => ({ ...p, motogenerator_2: v }))
+                              }
+                              placeholder="Seleccionar equipo..."
+                            />
+                          </div>
+                        )}
+                        {/* 👆 FIN MOTOGENERADOR 2 👆 */}
                       </div>
                     </>
                   )}
@@ -1711,6 +1832,7 @@ export const DispatchWizard = ({
                 </CardContent>
               </Card>
               {/* Tarjeta de Operación (RESUMEN ENRIQUECIDO) */}
+              {/* Tarjeta de Operación (RESUMEN ENRIQUECIDO) */}
               <Card
                 className={cn(
                   shellClass,
@@ -1760,10 +1882,19 @@ export const DispatchWizard = ({
                         <span className="text-muted-foreground font-bold">
                           Remolque 1:
                         </span>
-                        <span className="font-black text-right">
+                        <span className="font-black text-right flex items-center justify-end gap-1.5">
                           {availableRemolques
                             .find((r) => r.value === data.remolque1Id)
                             ?.label?.split(" ")[0] || "N/A"}
+                          {data.is_refrigerated_1 && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                            >
+                              <Snowflake className="h-2.5 w-2.5" />
+                              {data.motogenerator_1 || "REF"}
+                            </Badge>
+                          )}
                         </span>
                       </div>
                       <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
@@ -1791,10 +1922,19 @@ export const DispatchWizard = ({
                             <span className="text-muted-foreground font-bold">
                               Remolque 2:
                             </span>
-                            <span className="font-black text-right">
+                            <span className="font-black text-right flex items-center justify-end gap-1.5">
                               {availableRemolques
                                 .find((r) => r.value === data.remolque2Id)
                                 ?.label?.split(" ")[0] || "N/A"}
+                              {data.is_refrigerated_2 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                                >
+                                  <Snowflake className="h-2.5 w-2.5" />
+                                  {data.motogenerator_2 || "REF"}
+                                </Badge>
+                              )}
                             </span>
                           </div>
                           <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
@@ -1841,10 +1981,19 @@ export const DispatchWizard = ({
                           <span className="text-muted-foreground font-bold">
                             Remolque 1:
                           </span>
-                          <span className="font-black text-right">
+                          <span className="font-black text-right flex items-center justify-end gap-1.5">
                             {availableRemolques
                               .find((r) => r.value === data.remolque1Id_2)
                               ?.label?.split(" ")[0] || "N/A"}
+                            {data.is_refrigerated_1 && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                              >
+                                <Snowflake className="h-2.5 w-2.5" />
+                                {data.motogenerator_1 || "REF"}
+                              </Badge>
+                            )}
                           </span>
                         </div>
 
@@ -1864,10 +2013,19 @@ export const DispatchWizard = ({
                               <span className="text-muted-foreground font-bold">
                                 Remolque 2:
                               </span>
-                              <span className="font-black text-right">
+                              <span className="font-black text-right flex items-center justify-end gap-1.5">
                                 {availableRemolques
                                   .find((r) => r.value === data.remolque2Id_2)
                                   ?.label?.split(" ")[0] || "N/A"}
+                                {data.is_refrigerated_2 && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                                  >
+                                    <Snowflake className="h-2.5 w-2.5" />
+                                    {data.motogenerator_2 || "REF"}
+                                  </Badge>
+                                )}
                               </span>
                             </div>
                           </>

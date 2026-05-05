@@ -636,6 +636,11 @@ class Trip(AuditMixin, Base):
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
 
+    is_refrigerated_1 = Column(Boolean, default=False, server_default="false")
+    motogenerator_1 = Column(String(50), nullable=True)
+    is_refrigerated_2 = Column(Boolean, default=False, server_default="false")
+    motogenerator_2 = Column(String(50), nullable=True)
+
     origin = Column(String(200), nullable=False)
     destination = Column(String(200), nullable=False)
     route_name = Column(String(200))
