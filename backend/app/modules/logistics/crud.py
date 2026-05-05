@@ -1011,7 +1011,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                             invoice_data
                         )
                         logger.info(
-                            f"✅ Factura 4.0 Batch generada. UUID: {factura_real.uuid}"
+                            f" Factura 4.0 Batch generada. UUID: {factura_real.uuid}"
                         )
                         cxc_creadas += 1
 

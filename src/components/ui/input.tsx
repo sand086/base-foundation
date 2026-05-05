@@ -1,14 +1,43 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+// 1. NUEVO: Extendemos las propiedades nativas para aceptar nuestro prop personalizado
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+  preserveCase?: boolean; // Si le pasamos true, respetará minúsculas y mayúsculas
+}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, onChange, preserveCase, ...props }, ref) => {
+    // 2. LÓGICA MEJORADA: Identificamos si NO debemos hacer mayúsculas
+    const excludedTypes = ["password", "email", "url", "number"];
+
+    const isExcludedType =
+      preserveCase || // Si pasamos preserveCase={true} manualmente
+      excludedTypes.includes(type || "text") || // Si el tipo es password, email, etc.
+      props.name?.toLowerCase().includes("password"); // Si el 'name' (react-hook-form) es password
+
+    // 3. Nuestro "middleware" interno que intercepta la escritura
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!isExcludedType) {
+        // Convertimos el valor en tiempo real para que react-hook-form lo reciba en mayúscula
+        e.target.value = e.target.value.toUpperCase();
+      }
+
+      // Ejecutamos el evento original
+      if (onChange) {
+        onChange(e);
+      }
+    };
+
     return (
       <input
         type={type}
         className={cn(
           // BASE: Altura base estándar (h-10) que puede ser sobreescrita a h-11 desde el Form
           "flex h-10 w-full px-3 py-2 text-sm",
+
+          // AÑADIDO: Fuerza visualmente las mayúsculas al instante (sólo en inputs permitidos)
+          !isExcludedType && "uppercase",
 
           // REGLA 1: Glassmorphism Líquido y Reactividad Total (Dark Mode)
           "bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl",
@@ -34,6 +63,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className,
         )}
         ref={ref}
+        onChange={handleChange}
         {...props}
       />
     );

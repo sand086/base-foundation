@@ -12,6 +12,12 @@ export type WorkOrderResponse = {
     mechanic_id?: (number | null);
     descripcion_problema: string;
     status: WorkOrderStatus;
+    tipo_mantenimiento?: (string | null);
+    trip_id?: (number | null);
+    porcentaje_iva?: number;
+    subtotal?: number;
+    total?: number;
+    costo_mano_obra?: (number | null);
     fecha_apertura?: (string | null);
     fecha_cierre?: (string | null);
     unit_numero?: (string | null);

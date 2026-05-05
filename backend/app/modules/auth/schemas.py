@@ -1,7 +1,9 @@
-# --- Fuente: schemas_auth.py ---
 from pydantic import BaseModel, EmailStr, ConfigDict, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
+from app.models.models import RecordStatus
+
+# --- Fuente: schemas_auth.py ---
 
 
 # Esquema básico de Usuario para respuestas de Auth
@@ -29,6 +31,7 @@ class UserAuthSchema(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    recaptcha_token: str  # <-- CAMBIO CORRECTO: Token de Google reCAPTCHA
 
 
 # Lo que responde el servidor (Token o Solicitud de 2FA)
@@ -103,14 +106,6 @@ class UserInfoResponse(BaseModel):
 
 
 # --- Fuente: schemas_users.py ---
-
-
-from datetime import datetime
-from typing import Any, Dict, Optional
-
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
-from app.models.models import RecordStatus
 
 # =========================================================
 # Base helper

@@ -7,8 +7,12 @@ export type WorkOrderCreate = {
     unit_id: number;
     mechanic_id?: (number | null);
     descripcion_problema: string;
+    porcentaje_iva?: number;
+    subtotal?: number;
+    total?: number;
     parts?: Array<WorkOrderPartCreate>;
     tipo_mantenimiento?: string;
     trip_id?: (number | null);
+    costo_mano_obra?: number;
 };
 

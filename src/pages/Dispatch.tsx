@@ -22,7 +22,7 @@ const Dispatch = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 min-h-[calc(100vh-4rem)] flex flex-col animate-page-enter pb-20 bg-slate-50/30 dark:bg-transparent">
       <PageHeader
-        title="Centro de Dispatch"
+        title="Centro de Despacho 3T"
         description="Gestión de salida, asignación de unidades y monitoreo de equipos en stand-by."
         icon={
           <Route className="h-8 w-8 text-brand-navy dark:text-white drop-shadow-sm" />
@@ -40,17 +40,16 @@ const Dispatch = () => {
               value="planner"
               className="gap-2 text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-4 transition-all"
             >
-              <LayoutDashboard className="h-3.5 w-3.5" /> Planeador
+              <LayoutDashboard className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />{" "}
+              Planeador
             </TabsTrigger>
 
             <TabsTrigger
               value="standby"
               className="gap-2 text-[10px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-4 transition-all"
             >
-              <Clock className="h-3.5 w-3.5" /> Stand-By
-              <Badge className="ml-1 h-4 px-1.5 bg-amber-500 text-white border-none shadow-sm text-[8px] font-black uppercase tracking-widest leading-none flex items-center justify-center">
-                New
-              </Badge>
+              <Clock className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />{" "}
+              En espera
             </TabsTrigger>
 
             <TabsTrigger

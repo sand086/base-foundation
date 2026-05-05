@@ -378,7 +378,7 @@ export const TripPlanner = () => {
           <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
             <LayoutGrid className="h-5 w-5 text-white" />
           </div>
-          Centro de Operaciones
+          Asistente de Despacho
         </h2>
 
         <div className="flex items-center w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">

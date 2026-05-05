@@ -1,4 +1,3 @@
-// src/features/treasury/components/BankAccountsTab.tsx
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +51,8 @@ export function BankAccountsTab({
   // NUEVO FASE 3.1: CÁLCULO DE LIQUIDEZ TOTAL DE LA EMPRESA
   // =====================================================================
   const liquidezTotal = bankAccounts.reduce(
-    (acc, curr) => acc + (Number(curr.saldo) || 0),
+    //  FIX: Usamos Math.abs() para sumar los saldos siempre en positivo
+    (acc, curr) => acc + Math.abs(Number(curr.saldo) || 0),
     0,
   );
 
@@ -198,8 +198,9 @@ export function BankAccountsTab({
                       Saldo Disponible
                     </p>
                     <p className="text-3xl font-mono font-black text-slate-800 dark:text-white tracking-tighter">
+                      {/*  FIX: Aplicamos Math.abs() antes de formatear para que no imprima el signo de menos */}
                       {showBalances
-                        ? formatCurrency(account.saldo || 0)
+                        ? formatCurrency(Math.abs(account.saldo || 0))
                         : "••••••••"}
                     </p>
                   </div>

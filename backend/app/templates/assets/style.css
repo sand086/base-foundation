@@ -23,6 +23,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  text-transform: uppercase;
 }
 
 /* El bloque principal de datos que fluye. Para pegarlo más al header, usa margen negativo */

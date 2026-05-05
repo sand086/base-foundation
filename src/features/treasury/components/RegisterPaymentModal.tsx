@@ -102,16 +102,20 @@ export function RegisterPaymentModal({
   useEffect(() => {
     if (!invoice || !open) return;
 
+    // VERIFICAMOS SI EXISTE LA CUENTA BANAMEX (ID 1)
+    const hasBanamex = bankAccounts.some((acc) => acc.id.toString() === "1");
+
     setFormData({
       fecha_pago: today(),
       monto: saldoPendiente,
       metodo_pago: defaultMethod,
-      cuenta_retiro: "",
+      // SI EXISTE, LA PONEMOS POR DEFECTO, DE LO CONTRARIO SE QUEDA VACÍO
+      cuenta_retiro: hasBanamex ? "1" : "",
       referencia: invoice.folio_interno || "",
     });
     setError("");
     setIsSubmitting(false);
-  }, [invoice, open, saldoPendiente, defaultMethod]);
+  }, [invoice, open, saldoPendiente, defaultMethod, bankAccounts]);
 
   if (!invoice) return null;
 

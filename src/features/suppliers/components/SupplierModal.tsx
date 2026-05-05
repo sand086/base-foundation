@@ -34,7 +34,7 @@ import {
 import { toast } from "sonner";
 import { Supplier } from "../types";
 import { cn } from "@/lib/utils";
-
+import { BankIcon, SUPPORTED_BANKS } from "@/components/ui/bank-icon";
 import {
   Form,
   FormControl,
@@ -44,26 +44,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-// ==========================================
-// CONFIGURACIÓN DE BANCOS HOMOLOGADA
-// ==========================================
-const bancos = [
-  "Banamex",
-  "Santander",
-  "Banorte",
-  "BBVA",
-  "HSBC",
-  "Scotiabank",
-];
-
-const bankLogos: Record<string, string> = {
-  Banamex: "🏛️",
-  Santander: "🏦",
-  Banorte: "💳",
-  BBVA: "🏧",
-  HSBC: "🦁",
-  Scotiabank: "🍁",
-};
+const bancos = SUPPORTED_BANKS;
 
 // ==========================================
 // ESQUEMA DE VALIDACIÓN ZOD (COMPLETO)
@@ -182,7 +163,7 @@ export function SupplierModal({
           rfc: supplier.rfc || "",
           estatus: (supplier.estatus as any) || "activo",
           tipo_proveedor: supplier.tipo_proveedor || "",
-          categoria: supplier.categoria || "",
+          categoria: supplier.cost_center.nombre || "",
           dias_credito: supplier.dias_credito || 0,
           limite_credito: supplier.limite_credito || 0,
           contacto_principal: supplier.contacto_principal || "",
@@ -460,11 +441,9 @@ export function SupplierModal({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="activo">🟢 Activo</SelectItem>
-                          <SelectItem value="inactivo">⚪ Inactivo</SelectItem>
-                          <SelectItem value="suspendido">
-                            🔴 Suspendido
-                          </SelectItem>
+                          <SelectItem value="activo">Activo</SelectItem>
+                          <SelectItem value="inactivo">Inactivo</SelectItem>
+                          <SelectItem value="suspendido">Suspendido</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -650,8 +629,16 @@ export function SupplierModal({
                         </FormControl>
                         <SelectContent>
                           {bancos.map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {bankLogos[b]} {b}
+                            <SelectItem
+                              key={b}
+                              value={b}
+                              textValue={b}
+                              className="flex items-center gap-2 cursor-pointer font-bold"
+                            >
+                              <div className="flex items-center gap-2">
+                                <BankIcon bankName={b} className="w-5 h-5" />
+                                <span>{b}</span>
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>

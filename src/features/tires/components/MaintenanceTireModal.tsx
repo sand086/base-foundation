@@ -203,7 +203,7 @@ export function MaintenanceTireModal({
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
-                  {/* ⚙️ Tipo Maintenance */}
+                  {/*  Tipo Maintenance */}
                   <FormField
                     control={form.control}
                     name="tipo"

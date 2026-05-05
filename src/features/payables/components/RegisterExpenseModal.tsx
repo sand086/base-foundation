@@ -945,7 +945,7 @@ export function RegisterExpenseModal({
 
           {!onUploadPdf || !onUploadXml ? (
             <div className="text-xs text-muted-foreground">
-              ℹ️ Los archivos se adjuntarán al envío del formulario.
+              Los archivos se adjuntarán al envío del formulario.
             </div>
           ) : null}
         </div>

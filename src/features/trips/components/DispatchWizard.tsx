@@ -669,7 +669,7 @@ export const DispatchWizard = ({
         conoce_ruta_completa: data.conoceRutaCompleta,
         ocultar_montos_pdf: true, // Siempre ocultamos el monto en el PDF operativo
 
-        // ✅ FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
+        //  FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
         remolque_1_id: cleanId(data.remolque1Id) || null,
         dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
@@ -845,8 +845,8 @@ export const DispatchWizard = ({
             <div>
               <CardTitle className="text-xl text-foreground">
                 {tripId || initialData?.id
-                  ? "PLANEAR / EDITAR Dispatch"
-                  : "Dispatch WIZARD"}
+                  ? "PLANEAR / EDITAR SERVICIO"
+                  : "CENTRO DE ASIGNACIÓN Y SALIDAS"}
               </CardTitle>
             </div>
           </div>
@@ -855,19 +855,19 @@ export const DispatchWizard = ({
               variant={currentStep >= 1 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              1. Ruta
+              1. Ruta y Cliente
             </Badge>
             <Badge
               variant={currentStep >= 2 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              2. Operación
+              2. Operación y asignación
             </Badge>
             <Badge
               variant={currentStep === 3 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              3. Resumen
+              3. Resumen de servicio
             </Badge>
           </div>
         </div>
@@ -881,7 +881,7 @@ export const DispatchWizard = ({
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
             <div className={cn(sunkPanelClass, "space-y-5")}>
               {/* Bloque Superior: Fecha */}
-              <div className="flex flex-col gap-4 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-4 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-4 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-4 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between dark:border-blue-800/70 dark:bg-blue-900/20 dark:shadow-blue-900/40  ">
                 <div className="flex items-center gap-3">
                   <TahoeIconPlate tone="blue" className="h-12 w-12">
                     <CalendarDays className="h-6 w-6" />
@@ -906,7 +906,7 @@ export const DispatchWizard = ({
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
-                    CLIENTE *
+                    CLIENTE
                   </Label>
                   <Select
                     value={data.clienteId}
@@ -936,7 +936,7 @@ export const DispatchWizard = ({
 
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
-                    DESTINO (SUBCLIENTE) *
+                    DESTINO (SUBCLIENTE)
                   </Label>
                   <Select
                     disabled={!data.clienteId}
@@ -974,7 +974,7 @@ export const DispatchWizard = ({
               <div className="grid grid-cols-1 gap-5 mt-5">
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
-                    TARIFA / RUTA *
+                    TARIFA / RUTA
                   </Label>
                   <Select
                     disabled={!data.subClienteId}
@@ -1020,7 +1020,7 @@ export const DispatchWizard = ({
                             >
                               <div className="flex flex-col gap-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-black text-slate-900">
+                                  <span className="font-black text-slate-900 dark:text-slate-200">
                                     {t.nombre_ruta}
                                   </span>
                                   <Badge
@@ -1097,7 +1097,7 @@ export const DispatchWizard = ({
                     variant={isFullTrip ? "destructive" : "success"}
                     className="w-fit rounded-xl px-3 py-1.5 text-xs uppercase font-black"
                   >
-                    {isFullTrip ? "🚛 FULL / DOBLE" : "🚚 SENCILLO"}
+                    {isFullTrip ? "FULL" : "SENCILLO"}
                   </Badge>
                   <div className="flex items-center gap-2 border-l border-slate-300 pl-3">
                     <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
@@ -1692,12 +1692,12 @@ export const DispatchWizard = ({
                     <span className="font-bold text-muted-foreground">
                       Ruta Asignada:
                     </span>
-                    <span className="font-black text-blue-700 dark:text-blue-400 text-right">
+                    <span className="font-black text-blue-700 dark:text-blue-600 text-right">
                       {data.routeNombre || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between pb-1">
-                    <span className="font-bold text-muted-foreground">
+                    <span className="font-bold text-muted-foreground dark:text-slate-800">
                       Fecha Salida:
                     </span>
                     <span className="font-black text-foreground text-right">

@@ -84,7 +84,7 @@ DEFAULT_MODULES = [
     {"id": "reports", "nombre": "Reportes", "icono": "BarChart3"},
     {"id": "users", "nombre": "Usuarios", "icono": "Users"},
     {"id": "roles", "nombre": "Roles y Permisos", "icono": "Shield"},
-    {"id": "settings", "nombre": "Configuración", "icono": "Settings"}
+    {"id": "settings", "nombre": "Configuración", "icono": "Settings"},
 ]
 
 # =========================================================

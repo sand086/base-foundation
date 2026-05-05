@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,6 @@ interface EnhancedDataTableProps<T> {
   rowKey?: keyof T;
   customFilters?: React.ReactNode;
   onCustomExport?: () => void;
-  //  NUEVA PROP: Permite decidir qué filas tienen el checkbox habilitado
   isRowSelectable?: (row: T) => boolean;
 }
 
@@ -90,13 +89,32 @@ interface ColumnFilters {
   };
 }
 
+// 👇 MAGIA 1: Función que extrae TODOS los textos y números de un objeto (Deep Search)
+const extractAllValues = (obj: any): string => {
+  if (obj === null || obj === undefined) return "";
+  if (
+    typeof obj === "string" ||
+    typeof obj === "number" ||
+    typeof obj === "boolean"
+  ) {
+    return String(obj).toLowerCase();
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(extractAllValues).join(" ");
+  }
+  if (typeof obj === "object") {
+    return Object.values(obj).map(extractAllValues).join(" ");
+  }
+  return "";
+};
+
 export function EnhancedDataTable<T extends Record<string, any>>({
   data,
   columns,
   className,
   onRowClick,
   exportFileName = "export",
-  searchPlaceholder = "BUSCAR REGISTROS...",
+  searchPlaceholder = "BUSCAR EN CUALQUIER COLUMNA...",
   isLoading = false,
   enableRowSelection = false,
   selectedRows = [],
@@ -104,7 +122,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   rowKey = "id" as keyof T,
   customFilters,
   onCustomExport,
-  isRowSelectable, //  RECIBIMOS LA REGLA
+  isRowSelectable,
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
@@ -120,30 +138,39 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     let result = [...data];
 
+    // 👇 MAGIA 2: El nuevo buscador global inteligente
     if (globalSearch) {
-      const searchLower = globalSearch.toLowerCase();
-      result = result.filter((row) =>
-        columns.some((col) => {
-          const value = getValue(row, col.key as string);
-          return String(value).toLowerCase().includes(searchLower);
-        }),
-      );
+      // Soporte para buscar varias palabras (Ej: "TRP-10 Juan Patio")
+      const searchTerms = globalSearch
+        .toLowerCase()
+        .split(" ")
+        .filter((t) => t.trim() !== "");
+
+      result = result.filter((row) => {
+        // 1. Extrae TODO el contenido de la fila como un texto gigante
+        let rowText = extractAllValues(row);
+
+        // 2. Suma las traducciones visuales (Ej. si dice "carga_muelle", añade "Muelle / Patio")
+        columns.forEach((col) => {
+          if (col.statusNormalizer) {
+            const rawValue = getValue(row, col.key as string);
+            if (rawValue) {
+              rowText +=
+                " " + String(col.statusNormalizer(rawValue)).toLowerCase();
+            }
+          }
+        });
+
+        // 3. Verifica que TODAS las palabras que el usuario escribió existan en la fila
+        return searchTerms.every((term) => rowText.includes(term));
+      });
     }
 
+    // --- Filtros Internos Específicos (Mantenemos los DatePickers y Checkboxes) ---
     Object.entries(columnFilters).forEach(([key, filter]) => {
       if (!filter.value) return;
 
       if (
-        filter.type === "text" &&
-        typeof filter.value === "string" &&
-        filter.value
-      ) {
-        result = result.filter((row) =>
-          String(getValue(row, key))
-            .toLowerCase()
-            .includes(filter.value.toString().toLowerCase()),
-        );
-      } else if (
         filter.type === "date" &&
         typeof filter.value === "object" &&
         "from" in filter.value
@@ -274,19 +301,29 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return <ChevronDown className="h-3.5 w-3.5 text-brand-red ml-2" />;
   };
 
-  //  LÓGICA INTELIGENTE PARA EL CHECKBOX MAESTRO
   const selectablePaginatedData = useMemo(() => {
     return paginatedData.filter((row) =>
       isRowSelectable ? isRowSelectable(row) : true,
     );
   }, [paginatedData, isRowSelectable]);
 
+  // Evaluamos si vale la pena mostrar el botón de Filtros Avanzados (Fechas o Selects Múltiples)
+  const hasAdvancedFilters = useMemo(() => {
+    return columns.some(
+      (col) =>
+        col.type === "date" ||
+        (col.type === "status" &&
+          col.statusOptions &&
+          col.statusOptions.length > 0),
+    );
+  }, [columns]);
+
   return (
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
       <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
-        {/* Left Side: Global Search + Custom Filters (Si existen) */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-1 min-w-[250px] max-w-sm group">
+          {/* El Buscador Global Súper Inteligente */}
+          <div className="relative flex-1 min-w-[250px] max-w-md group">
             <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
             <Input
               placeholder={searchPlaceholder}
@@ -295,11 +332,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 setGlobalSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
+              className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
             />
           </div>
 
-          {/* AQUI SE INYECTA LA ESTACIÓN Y FECHAS DE FuelLoads.tsx */}
           {customFilters && (
             <div className="flex flex-wrap items-center gap-2">
               {customFilters}
@@ -308,197 +344,207 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          <Popover open={showFilters} onOpenChange={setShowFilters}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "h-11 px-5 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm rounded-xl haptic-press",
-                  hasActiveFilters
-                    ? "bg-brand-red text-white border-brand-red shadow-lg shadow-brand-red/20 hover:bg-red-700 hover:text-white"
-                    : "bg-white dark:bg-slate-900 text-slate-600 dark:text-white/70 hover:text-brand-navy dark:hover:text-white",
-                )}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros Int.
-                {hasActiveFilters && (
-                  <Badge className="ml-2 h-5 px-1.5 bg-white/20 text-white border-none shadow-sm font-mono text-[10px]">
-                    {Object.keys(columnFilters).length + (globalSearch ? 1 : 0)}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-80 glass-panel bg-white/95 dark:bg-brand-navy/95 border-slate-200 dark:border-white/10 shadow-2xl p-6 backdrop-blur-2xl rounded-2xl"
-              align="end"
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-4">
-                  <h4 className="text-[11px] font-black text-brand-navy dark:text-white uppercase tracking-[0.2em]">
-                    Filtros Internos
-                  </h4>
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="h-7 text-[9px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 haptic-press rounded-lg"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Limpiar
-                    </Button>
+          {/* El botón de Filtros Internos ahora SOLO sale si configuraste calendarios o checks */}
+          {hasAdvancedFilters && (
+            <Popover open={showFilters} onOpenChange={setShowFilters}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-11 px-5 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm rounded-xl haptic-press",
+                    Object.keys(columnFilters).length > 0
+                      ? "bg-brand-red text-white border-brand-red shadow-lg shadow-brand-red/20 hover:bg-red-700 hover:text-white"
+                      : "bg-white dark:bg-slate-900 text-slate-600 dark:text-white/70 hover:text-brand-navy dark:hover:text-white",
                   )}
-                </div>
-
-                <ScrollArea className="max-h-[300px] pr-4 custom-scrollbar">
-                  <div className="space-y-6">
-                    {columns.map((col) => {
-                      const key = col.key as string;
-                      const colType = col.type || "text";
-
-                      if (colType === "date") {
-                        const dateFilter = (columnFilters[key]
-                          ?.value as DateRange) || {
-                          from: undefined,
-                          to: undefined,
-                        };
-                        return (
-                          <div key={key} className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
-                              {col.header}
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
-                                  >
-                                    <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
-                                    {dateFilter.from
-                                      ? format(dateFilter.from, "dd/MM/yy")
-                                      : "Desde"}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
-                                  align="start"
-                                >
-                                  <Calendar
-                                    mode="single"
-                                    selected={dateFilter.from}
-                                    onSelect={(date) => {
-                                      setColumnFilters((prev) => ({
-                                        ...prev,
-                                        [key]: {
-                                          type: "date",
-                                          value: { ...dateFilter, from: date },
-                                        },
-                                      }));
-                                      setCurrentPage(1);
-                                    }}
-                                    locale={es}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
-                                  >
-                                    <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
-                                    {dateFilter.to
-                                      ? format(dateFilter.to, "dd/MM/yy")
-                                      : "Hasta"}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
-                                  align="start"
-                                >
-                                  <Calendar
-                                    mode="single"
-                                    selected={dateFilter.to}
-                                    onSelect={(date) => {
-                                      setColumnFilters((prev) => ({
-                                        ...prev,
-                                        [key]: {
-                                          type: "date",
-                                          value: { ...dateFilter, to: date },
-                                        },
-                                      }));
-                                      setCurrentPage(1);
-                                    }}
-                                    locale={es}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (colType === "status" && col.statusOptions) {
-                        const selectedStatuses =
-                          (columnFilters[key]?.value as string[]) || [];
-                        return (
-                          <div key={key} className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
-                              {col.header}
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              {col.statusOptions.map((status) => (
-                                <div
-                                  key={status}
-                                  className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all haptic-press select-none",
-                                    selectedStatuses.includes(status)
-                                      ? "bg-brand-navy dark:bg-white text-white dark:text-brand-navy border-brand-navy dark:border-white shadow-md"
-                                      : "bg-white dark:bg-white/5 text-slate-500 dark:text-white/50 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10",
-                                  )}
-                                  onClick={() => {
-                                    const newSelected =
-                                      selectedStatuses.includes(status)
-                                        ? selectedStatuses.filter(
-                                            (s) => s !== status,
-                                          )
-                                        : [...selectedStatuses, status];
-
-                                    if (newSelected.length === 0) {
-                                      const { [key]: _, ...rest } =
-                                        columnFilters;
-                                      setColumnFilters(rest);
-                                    } else {
-                                      setColumnFilters((prev) => ({
-                                        ...prev,
-                                        [key]: {
-                                          type: "status",
-                                          value: newSelected,
-                                        },
-                                      }));
-                                    }
-                                    setCurrentPage(1);
-                                  }}
-                                >
-                                  <Checkbox
-                                    checked={selectedStatuses.includes(status)}
-                                    className="h-3 w-3 border-current rounded-sm"
-                                  />
-                                  {status}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filtros Int.
+                  {Object.keys(columnFilters).length > 0 && (
+                    <Badge className="ml-2 h-5 px-1.5 bg-white/20 text-white border-none shadow-sm font-mono text-[10px]">
+                      {Object.keys(columnFilters).length}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-80 glass-panel bg-white/95 dark:bg-brand-navy/95 border-slate-200 dark:border-white/10 shadow-2xl p-6 backdrop-blur-2xl rounded-2xl"
+                align="end"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-4">
+                    <h4 className="text-[11px] font-black text-brand-navy dark:text-white uppercase tracking-[0.2em]">
+                      Filtros Avanzados
+                    </h4>
+                    {Object.keys(columnFilters).length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setColumnFilters({})}
+                        className="h-7 text-[9px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 haptic-press rounded-lg"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Limpiar
+                      </Button>
+                    )}
                   </div>
-                </ScrollArea>
-              </div>
-            </PopoverContent>
-          </Popover>
+
+                  <ScrollArea className="max-h-[300px] pr-4 custom-scrollbar">
+                    <div className="space-y-6">
+                      {columns.map((col) => {
+                        const key = col.key as string;
+                        const colType = col.type || "text";
+
+                        // RENDEREA CALENDARIOS
+                        if (colType === "date") {
+                          const dateFilter = (columnFilters[key]
+                            ?.value as DateRange) || {
+                            from: undefined,
+                            to: undefined,
+                          };
+                          return (
+                            <div key={key} className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
+                                {col.header}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
+                                    >
+                                      <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
+                                      {dateFilter.from
+                                        ? format(dateFilter.from, "dd/MM/yy")
+                                        : "Desde"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
+                                    align="start"
+                                  >
+                                    <Calendar
+                                      mode="single"
+                                      selected={dateFilter.from}
+                                      onSelect={(date) => {
+                                        setColumnFilters((prev) => ({
+                                          ...prev,
+                                          [key]: {
+                                            type: "date",
+                                            value: {
+                                              ...dateFilter,
+                                              from: date,
+                                            },
+                                          },
+                                        }));
+                                        setCurrentPage(1);
+                                      }}
+                                      locale={es}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
+                                    >
+                                      <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
+                                      {dateFilter.to
+                                        ? format(dateFilter.to, "dd/MM/yy")
+                                        : "Hasta"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
+                                    align="start"
+                                  >
+                                    <Calendar
+                                      mode="single"
+                                      selected={dateFilter.to}
+                                      onSelect={(date) => {
+                                        setColumnFilters((prev) => ({
+                                          ...prev,
+                                          [key]: {
+                                            type: "date",
+                                            value: { ...dateFilter, to: date },
+                                          },
+                                        }));
+                                        setCurrentPage(1);
+                                      }}
+                                      locale={es}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // RENDEREA CHECKBOXES DE STATUS
+                        if (colType === "status" && col.statusOptions) {
+                          const selectedStatuses =
+                            (columnFilters[key]?.value as string[]) || [];
+                          return (
+                            <div key={key} className="space-y-3">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
+                                {col.header}
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                {col.statusOptions.map((status) => (
+                                  <div
+                                    key={status}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all haptic-press select-none",
+                                      selectedStatuses.includes(status)
+                                        ? "bg-brand-navy dark:bg-white text-white dark:text-brand-navy border-brand-navy dark:border-white shadow-md"
+                                        : "bg-white dark:bg-white/5 text-slate-500 dark:text-white/50 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10",
+                                    )}
+                                    onClick={() => {
+                                      const newSelected =
+                                        selectedStatuses.includes(status)
+                                          ? selectedStatuses.filter(
+                                              (s) => s !== status,
+                                            )
+                                          : [...selectedStatuses, status];
+
+                                      if (newSelected.length === 0) {
+                                        const { [key]: _, ...rest } =
+                                          columnFilters;
+                                        setColumnFilters(rest);
+                                      } else {
+                                        setColumnFilters((prev) => ({
+                                          ...prev,
+                                          [key]: {
+                                            type: "status",
+                                            value: newSelected,
+                                          },
+                                        }));
+                                      }
+                                      setCurrentPage(1);
+                                    }}
+                                  >
+                                    <Checkbox
+                                      checked={selectedStatuses.includes(
+                                        status,
+                                      )}
+                                      className="h-3 w-3 border-current rounded-sm"
+                                    />
+                                    {status}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           <Button
             variant="outline"
@@ -525,7 +571,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
               <tr className="bg-slate-100/90 dark:bg-slate-900/95 border-b border-slate-200 dark:border-white/10 backdrop-blur-md shadow-sm">
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
-                    {/*  CHECKBOX HEADER: Solo reacciona a las filas seleccionables */}
                     <Checkbox
                       disabled={selectablePaginatedData.length === 0}
                       checked={
@@ -593,7 +638,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     <div className="flex flex-col items-center justify-center gap-4">
                       <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
                       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-white/40">
-                        Cargando Registros de Flota...
+                        Cargando Registros...
                       </span>
                     </div>
                   </td>
@@ -614,7 +659,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 </tr>
               ) : (
                 paginatedData.map((row, idx) => {
-                  //  VALIDACIÓN INDIVIDUAL DE FILA
                   const isSelectable = isRowSelectable
                     ? isRowSelectable(row)
                     : true;
@@ -638,13 +682,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Checkbox
-                            disabled={!isSelectable} //  BLOQUEAMOS CHECKBOX
+                            disabled={!isSelectable}
                             checked={selectedRows?.some(
                               (sr) => sr[rowKey] === row[rowKey],
                             )}
                             onCheckedChange={(checked) => {
                               if (!onSelectedRowsChange || !isSelectable)
-                                return; //  PREVENIMOS ONCHANGE
+                                return;
                               if (checked) {
                                 onSelectedRowsChange([...selectedRows, row]);
                               } else {

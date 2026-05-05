@@ -129,7 +129,7 @@ export default function TwoFactorAuth() {
         <div
           className="absolute inset-0 bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]"
           style={{
-            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpg"})`,
+            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpeg"})`,
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/60" />
