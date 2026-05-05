@@ -334,7 +334,6 @@ export function TripDetailsModal({
     toast.success("Datos sincronizados.");
   };
 
-  // 👇 LÓGICA DE REVERSIÓN INTERACTIVA ELEGANTE Y CORRECTA 👇
   const executeUndoLeg = async () => {
     setIsUndoing(true);
     try {
