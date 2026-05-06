@@ -192,31 +192,35 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
+  // 🚀 LÓGICA BLINDADA DE EXTRACCIÓN DE UUIDS
+  const processUuids = (tripData: any) => {
+    if (!tripData) return;
+    const facturas = tripData.receivable_invoices || tripData.invoices || [];
+    const cp = facturas.find((f: any) => f.is_nominal === true && f.uuid);
+    const ff = facturas.find((f: any) => f.is_nominal === false && f.uuid);
+
+    const cachedFinalUuid = localStorage.getItem(`final_uuid_${tripData.id}`);
+    const cachedCpUuid = localStorage.getItem(`cp_uuid_${tripData.id}`);
+
+    const finalId =
+      ff?.uuid || tripData.uuid_factura_final || cachedFinalUuid || null;
+    let cpId = cp?.uuid || cachedCpUuid || null;
+
+    if (!cpId && tripData.uuid_fiscal && tripData.uuid_fiscal !== finalId) {
+      cpId = tripData.uuid_fiscal;
+    }
+
+    setUuidCartaPorte(cpId);
+    setUuidFacturaFinal(finalId);
+
+    if (cpId) localStorage.setItem(`cp_uuid_${tripData.id}`, cpId);
+    if (finalId) localStorage.setItem(`final_uuid_${tripData.id}`, finalId);
+  };
+
   useEffect(() => {
     if (open && initialTrip) {
       setLocalTrip(initialTrip);
-
-      // 🚀 BUSCADOR ESTRICTO DE UUIDS AL ABRIR
-      const facturas =
-        (initialTrip as any).receivable_invoices ||
-        (initialTrip as any).invoices ||
-        [];
-
-      const cartaPorte = facturas.find(
-        (f: any) => f.is_nominal === true && f.uuid,
-      );
-      const facturaFinal = facturas.find(
-        (f: any) => f.is_nominal === false && f.uuid,
-      );
-
-      // El uuid_fiscal directo del trip suele ser la Carta Porte
-      setUuidCartaPorte(cartaPorte?.uuid || initialTrip.uuid_fiscal || null);
-
-      // La factura comercial la sacamos del arreglo o del localstorage si acaba de timbrar
-      const cachedFinalUuid = localStorage.getItem(
-        `final_uuid_${initialTrip.id}`,
-      );
-      setUuidFacturaFinal(facturaFinal?.uuid || cachedFinalUuid || null);
+      processUuids(initialTrip);
 
       setTarifaBase(initialTrip.tarifa_base || 0);
       setCostoCasetas(initialTrip.costo_casetas || 0);
@@ -237,28 +241,7 @@ export function TripDetailsModal({
     try {
       const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
-
-      // 🚀 BUSCADOR ESTRICTO DE UUIDS AL REFRESCAR
-      const facturas = res.data.receivable_invoices || res.data.invoices || [];
-      const cartaPorte = facturas.find(
-        (f: any) => f.is_nominal === true && f.uuid,
-      );
-      const facturaFinal = facturas.find(
-        (f: any) => f.is_nominal === false && f.uuid,
-      );
-
-      setUuidCartaPorte(cartaPorte?.uuid || res.data.uuid_fiscal || null);
-
-      const cachedFinalUuid = localStorage.getItem(
-        `final_uuid_${localTrip.id}`,
-      );
-      setUuidFacturaFinal(
-        facturaFinal?.uuid ||
-          res.data.uuid_factura_final ||
-          cachedFinalUuid ||
-          null,
-      );
-
+      processUuids(res.data);
       await fetchTrips();
     } catch (e) {
       console.error("Error recargando viaje local", e);
@@ -269,7 +252,6 @@ export function TripDetailsModal({
     return checkIsFullTrip(localTrip);
   }, [localTrip]);
 
-  // 👇 FILTRO ANTI-FANTASMAS 👇
   const activeLegs = useMemo(() => {
     if (!localTrip) return [];
     return (
@@ -319,6 +301,8 @@ export function TripDetailsModal({
   const finanzasComercial = useMemo(() => {
     const base = isEditing ? tarifaBase : localTrip?.tarifa_base || 0;
     const casetas = isEditing ? costoCasetas : localTrip?.costo_casetas || 0;
+
+    // 🚀 FIX: El subtotal es solo la base
     const subtotal = base;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
@@ -364,9 +348,7 @@ export function TripDetailsModal({
       setShowUndoDialog(false);
       if (isFirstLeg) {
         onOpenChange(false);
-
         await fetchTrips();
-
         toast("Viaje devuelto al Planeador (Stand-By)", {
           description:
             "¿Deseas reasignar los equipos ahora o dejarlo pendiente?",
@@ -475,7 +457,7 @@ export function TripDetailsModal({
     handleDownloadPDF(uuidToDownload);
     setTimeout(() => {
       handleDownloadXML(uuidToDownload);
-    }, 500);
+    }, 1500);
   };
 
   const handlePrintNOM087 = async () => {
@@ -547,7 +529,6 @@ export function TripDetailsModal({
       <Dialog
         open={open}
         onOpenChange={(isOpen) => {
-          // Si el usuario está cerrando el modal (isOpen = false), actualizamos la tabla del fondo
           if (!isOpen) {
             fetchTrips();
           }
@@ -719,6 +700,10 @@ export function TripDetailsModal({
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
                           setUuidCartaPorte(generatedUuid);
+                          localStorage.setItem(
+                            `cp_uuid_${localTrip.id}`,
+                            generatedUuid,
+                          );
                           handleDownloadBothFiles(generatedUuid, false);
                           toast.success(
                             "¡CARTA PORTE BYPASS GENERADA Y DESCARGADA!",
@@ -1139,7 +1124,7 @@ export function TripDetailsModal({
                           </CardTitle>
                           {!isEditing ? (
                             <div className="flex gap-3">
-                              <Button
+                              {/*  <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={handleManualSync}
@@ -1155,7 +1140,7 @@ export function TripDetailsModal({
                                 className="h-9 font-black uppercase tracking-widest text-[9px] shadow-md bg-brand-navy hover:bg-slate-800 text-white"
                               >
                                 <Edit2 className="h-3.5 w-3.5 mr-1.5" /> Editar
-                              </Button>
+                              </Button> */}
                             </div>
                           ) : (
                             <div className="flex gap-3">
@@ -1343,9 +1328,10 @@ export function TripDetailsModal({
                                               response.data?.data ||
                                               response.data;
 
-                                            // 🚀 FIX: Atrapamos explícitamente el UUID de la factura que acaba de regresar
+                                            // 🚀 FIX: Extraemos correctamente el UUID de la factura que acaba de regresar
                                             const generatedFinalUuid =
-                                              tripData.uuid;
+                                              tripData.uuid ||
+                                              tripData.uuid_fiscal;
 
                                             if (generatedFinalUuid) {
                                               setUuidFacturaFinal(
@@ -1356,17 +1342,26 @@ export function TripDetailsModal({
                                                 generatedFinalUuid,
                                               );
 
+                                              toast.success(
+                                                "FACTURA TIMBRADA EXITOSAMENTE",
+                                                {
+                                                  id: toastId,
+                                                  description:
+                                                    "El documento ha sido certificado por el SAT.",
+                                                },
+                                              );
+
+                                              // 🚀 DESCARGA AUTOMÁTICA DEL PDF/XML CON ESPERA ANTI-BLOQUEO
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
                                               );
+                                            } else {
+                                              toast.error(
+                                                "Se timbró pero no se recuperó el UUID.",
+                                                { id: toastId },
+                                              );
                                             }
-
-                                            toast.success("FACTURA TIMBRADA", {
-                                              id: toastId,
-                                              description:
-                                                "El documento ha sido certificado por el SAT exitosamente.",
-                                            });
 
                                             await refreshLocalTrip();
                                           } catch (error: any) {
