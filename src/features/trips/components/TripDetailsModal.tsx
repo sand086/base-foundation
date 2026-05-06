@@ -161,8 +161,23 @@ export function TripDetailsModal({
   onUpdateStatusClick,
 }: TripDetailsModalProps) {
   const { editTrip, fetchTrips, addTimelineEvent } = useTrips();
-  const { updateLoadStatus } = useUnits();
+  const { updateLoadStatus, unidades } = useUnits(); // <-- FASE 2: Inyectamos unidades
   const { isStamping, handleStampNominal } = useBilling();
+
+  // --- FASE 2: RESOLUCIÓN INTELIGENTE DE MOTOGENERADORES ---
+  const arrUnidades = useMemo(
+    () => (Array.isArray(unidades) ? unidades : []),
+    [unidades],
+  );
+
+  const getMgName = (id: any, fallbackStr: any) => {
+    if (id) {
+      const mg = arrUnidades.find((u: any) => String(u.id) === String(id));
+      if (mg) return mg.numero_economico;
+    }
+    return fallbackStr || "REF";
+  };
+  // ---------------------------------------------------------
 
   const [localTrip, setLocalTrip] = useState<Trip | null>(null);
   const [activeTab, setActiveTab] = useState("fases");
@@ -639,7 +654,10 @@ export function TripDetailsModal({
                         className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[10px] flex items-center gap-1 shadow-sm px-1.5"
                       >
                         <Snowflake className="h-3 w-3" />
-                        {(localTrip as any).motogenerator_1 || "REF"}
+                        {getMgName(
+                          (localTrip as any).motogenerator_1_id,
+                          (localTrip as any).motogenerator_1,
+                        )}
                       </Badge>
                     )}
                   </div>
@@ -660,7 +678,10 @@ export function TripDetailsModal({
                         className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[10px] flex items-center gap-1 shadow-sm px-1.5"
                       >
                         <Snowflake className="h-3 w-3" />
-                        {(localTrip as any).motogenerator_2 || "REF"}
+                        {getMgName(
+                          (localTrip as any).motogenerator_2_id,
+                          (localTrip as any).motogenerator_2,
+                        )}
                       </Badge>
                     )}
                   </div>
@@ -1124,7 +1145,7 @@ export function TripDetailsModal({
                           </CardTitle>
                           {!isEditing ? (
                             <div className="flex gap-3">
-                              {/*  <Button
+                              {/* <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={handleManualSync}
