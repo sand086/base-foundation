@@ -179,8 +179,9 @@ export function TripDetailsModal({
 
   const [isStampingFinal, setIsStampingFinal] = useState(false);
 
-  const [localUuid, setLocalUuid] = useState<string | null>(null);
-  const [finalUuid, setFinalUuid] = useState<string | null>(null);
+  // 🚀 VARIABLES SEPARADAS PARA NO CONFUNDIR EL $1 CON LA FACTURA REAL
+  const [uuidCartaPorte, setUuidCartaPorte] = useState<string | null>(null);
+  const [uuidFacturaFinal, setUuidFacturaFinal] = useState<string | null>(null);
 
   const [showUndoDialog, setShowUndoDialog] = useState(false);
 
@@ -195,30 +196,36 @@ export function TripDetailsModal({
     if (open && initialTrip) {
       setLocalTrip(initialTrip);
 
-      setLocalUuid(initialTrip.uuid_fiscal || null);
-
+      // 🚀 BUSCADOR ESTRICTO DE UUIDS AL ABRIR
       const facturas =
         (initialTrip as any).receivable_invoices ||
         (initialTrip as any).invoices ||
         [];
+
+      const cartaPorte = facturas.find(
+        (f: any) => f.is_nominal === true && f.uuid,
+      );
       const facturaFinal = facturas.find(
         (f: any) => f.is_nominal === false && f.uuid,
       );
 
+      // El uuid_fiscal directo del trip suele ser la Carta Porte
+      setUuidCartaPorte(cartaPorte?.uuid || initialTrip.uuid_fiscal || null);
+
+      // La factura comercial la sacamos del arreglo o del localstorage si acaba de timbrar
       const cachedFinalUuid = localStorage.getItem(
         `final_uuid_${initialTrip.id}`,
       );
-      const incomingFinalUuid = (initialTrip as any).uuid_fiscal;
+      setUuidFacturaFinal(facturaFinal?.uuid || cachedFinalUuid || null);
 
-      setFinalUuid(cachedFinalUuid || incomingFinalUuid || null);
       setTarifaBase(initialTrip.tarifa_base || 0);
       setCostoCasetas(initialTrip.costo_casetas || 0);
       setIsEditing(false);
       setActiveTab("fases");
     } else if (!open) {
       setLocalTrip(null);
-      setLocalUuid(null);
-      setFinalUuid(null);
+      setUuidCartaPorte(null);
+      setUuidFacturaFinal(null);
       setTarifaBase(0);
       setCostoCasetas(0);
       setIsEditing(false);
@@ -231,21 +238,26 @@ export function TripDetailsModal({
       const res = await axiosClient.get(`/api/logistics/trips/${localTrip.id}`);
       setLocalTrip(res.data);
 
-      if (res.data.uuid_fiscal) {
-        setLocalUuid(res.data.uuid_fiscal);
-      }
-
+      // 🚀 BUSCADOR ESTRICTO DE UUIDS AL REFRESCAR
       const facturas = res.data.receivable_invoices || res.data.invoices || [];
+      const cartaPorte = facturas.find(
+        (f: any) => f.is_nominal === true && f.uuid,
+      );
       const facturaFinal = facturas.find(
         (f: any) => f.is_nominal === false && f.uuid,
       );
-      const incomingFinalUuid =
-        res.data.uuid_factura_final || facturaFinal?.uuid;
+
+      setUuidCartaPorte(cartaPorte?.uuid || res.data.uuid_fiscal || null);
+
       const cachedFinalUuid = localStorage.getItem(
         `final_uuid_${localTrip.id}`,
       );
-
-      setFinalUuid(incomingFinalUuid || cachedFinalUuid || null);
+      setUuidFacturaFinal(
+        facturaFinal?.uuid ||
+          res.data.uuid_factura_final ||
+          cachedFinalUuid ||
+          null,
+      );
 
       await fetchTrips();
     } catch (e) {
@@ -286,7 +298,14 @@ export function TripDetailsModal({
           (leg.timeline_events || []).map((ev) => ({
             ...ev,
             legName: leg.leg_type.replace("_", " ").toUpperCase(),
-            operatorName: leg.operator?.name?.split(" ")[0] || "S/A",
+            operatorName: (() => {
+              const parts = leg.operator?.name?.trim().split(" ") || [];
+              if (parts.length === 0) return "S/A";
+              if (parts.length === 1) return parts[0];
+              if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
+              if (parts.length === 3) return `${parts[0]} ${parts[1]}`;
+              return `${parts[0]} ${parts[2]}`;
+            })(),
             unitEco: leg.unit?.numero_economico || "S/A",
             unitPlacas: leg.unit?.placas || "S/P",
           })),
@@ -300,9 +319,10 @@ export function TripDetailsModal({
   const finanzasComercial = useMemo(() => {
     const base = isEditing ? tarifaBase : localTrip?.tarifa_base || 0;
     const casetas = isEditing ? costoCasetas : localTrip?.costo_casetas || 0;
-    const subtotal = base + casetas;
+    const subtotal = base;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
+
     return {
       base,
       casetas,
@@ -339,33 +359,26 @@ export function TripDetailsModal({
     try {
       const isFirstLeg = activeLegs.length === 1;
 
-      // 1. Mandamos la orden al backend para que destruya la fase
       await axiosClient.post(`/api/logistics/trips/${localTrip?.id}/undo-leg`);
 
-      // 2. Cerramos solo el cuadrito de confirmación pequeño
       setShowUndoDialog(false);
-
       if (isFirstLeg) {
-        // 🔥 FIX: Si es la primera fase, cerramos el modal GRANDE INMEDIATAMENTE 🔥
         onOpenChange(false);
 
-        // 🔄 Actualizamos las tablas silenciosamente (El viaje se irá a Stand-By)
         await fetchTrips();
 
-        // 🪄 Magia interactiva para Gustavo
         toast("Viaje devuelto al Planeador (Stand-By)", {
           description:
             "¿Deseas reasignar los equipos ahora o dejarlo pendiente?",
           action: {
             label: "Ir al Wizard",
             onClick: () => {
-              window.location.href = `/dispatch?tripId=${localTrip?.id}`;
+              window.location.href = `/dispatch/new?tripId=${localTrip?.id}`;
             },
           },
           duration: 10000,
         });
       } else {
-        // Si NO es la primera fase (ej. carretera), el modal se queda abierto y actualizamos su tarjeta
         toast.success(
           "Fase cancelada. El viaje retornó a la fase anterior limpia.",
         );
@@ -694,18 +707,18 @@ export function TripDetailsModal({
                   variant="outline"
                   className={cn(
                     "h-10 px-5 text-[10px] font-black shadow-sm transition-all uppercase tracking-widest border-none haptic-press",
-                    localUuid
+                    uuidCartaPorte
                       ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20"
                       : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/20",
                   )}
                   onClick={() => {
-                    if (localUuid) {
-                      handleDownloadPDF(localUuid);
+                    if (uuidCartaPorte) {
+                      handleDownloadPDF(uuidCartaPorte);
                     } else {
                       handleStampNominal(localTrip.id, async (responseData) => {
                         const generatedUuid = responseData?.data?.uuid;
                         if (generatedUuid) {
-                          setLocalUuid(generatedUuid);
+                          setUuidCartaPorte(generatedUuid);
                           handleDownloadBothFiles(generatedUuid, false);
                           toast.success(
                             "¡CARTA PORTE BYPASS GENERADA Y DESCARGADA!",
@@ -719,21 +732,21 @@ export function TripDetailsModal({
                 >
                   {isStamping ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : localUuid ? (
+                  ) : uuidCartaPorte ? (
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                   ) : (
                     <Activity className="h-4 w-4 mr-2" />
                   )}
-                  {localUuid
+                  {uuidCartaPorte
                     ? "Descargar Carta Porte (PDF)"
                     : "Timbrar CP Bypass ($1)"}
                 </Button>
 
-                {localUuid && (
+                {uuidCartaPorte && (
                   <Button
                     variant="outline"
                     className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-none shadow-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 haptic-press"
-                    onClick={() => handleDownloadXML(localUuid)}
+                    onClick={() => handleDownloadXML(uuidCartaPorte)}
                   >
                     <FileCode2 className="h-3.5 w-3.5 mr-2" />
                     Descargar XML
@@ -845,7 +858,20 @@ export function TripDetailsModal({
                                     <div className="flex items-center gap-4 text-xs font-bold text-slate-600 dark:text-slate-400 pt-2">
                                       <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
                                         <User className="h-3.5 w-3.5" />{" "}
-                                        {leg.operator?.name || "S/A"}
+                                        {(() => {
+                                          const parts =
+                                            leg.operator?.name
+                                              ?.trim()
+                                              .split(" ") || [];
+                                          if (parts.length === 0) return "S/A";
+                                          if (parts.length === 1)
+                                            return parts[0];
+                                          if (parts.length === 2)
+                                            return `${parts[0]} ${parts[1]}`;
+                                          if (parts.length === 3)
+                                            return `${parts[0]} ${parts[1]}`;
+                                          return `${parts[0]} ${parts[2]}`;
+                                        })()}
                                       </span>
                                       <span className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-white/5">
                                         <Truck className="h-3.5 w-3.5" /> ECO-
@@ -1109,7 +1135,7 @@ export function TripDetailsModal({
                         <CardHeader className="p-6 border-b border-slate-100 dark:border-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-50/50 dark:bg-slate-950/50 rounded-t-xl">
                           <CardTitle className="text-xs font-black uppercase tracking-widest text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
                             <FileText className="h-4 w-4 text-emerald-500" />{" "}
-                            Pre-Factura Comercial (Ingresos)
+                            Factura Comercial
                           </CardTitle>
                           {!isEditing ? (
                             <div className="flex gap-3">
@@ -1235,7 +1261,7 @@ export function TripDetailsModal({
                                     Total a Facturar:
                                   </span>
                                   <span className="text-3xl font-black font-mono tracking-tighter relative z-10 drop-shadow-md">
-                                    {formatCurrency(finanzasComercial.subtotal)}
+                                    {formatCurrency(finanzasComercial.total)}
                                   </span>
                                 </div>
                               </div>
@@ -1247,20 +1273,17 @@ export function TripDetailsModal({
                                     Emisión Factura Ingreso (CFDI 4.0)
                                   </h4>
                                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mt-2">
-                                    Genera la factura real del servicio
-                                    aplicando Sustitución (04) de la Carta Porte
-                                    Bypass.
-                                    <br />
                                     <span className="text-blue-500 font-medium lowercase">
                                       *Nota: El botón se habilitará para generar
                                       la factura solo si el viaje cuenta con un
-                                      UUID de Carta Porte.
+                                      UUID de Carta Porte y liquidacion del
+                                      operador en ruta.
                                     </span>
                                   </div>
                                 </div>
                                 <div className="flex flex-col gap-3 mt-4">
                                   {/* RENDERIZADO CONDICIONAL DECLARATIVO (ESTADO GENERADO VS POR GENERAR) */}
-                                  {finalUuid ? (
+                                  {uuidFacturaFinal ? (
                                     // ESTADO: FACTURA YA GENERADA
                                     <div className="flex flex-col items-start gap-4 w-full p-5 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-900/30">
                                       <div className="flex items-center gap-2">
@@ -1274,7 +1297,7 @@ export function TripDetailsModal({
                                           variant="outline"
                                           className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
                                           onClick={() =>
-                                            handleDownloadPDF(finalUuid)
+                                            handleDownloadPDF(uuidFacturaFinal)
                                           }
                                         >
                                           <FileText className="h-4 w-4 mr-2 text-rose-500" />
@@ -1284,7 +1307,7 @@ export function TripDetailsModal({
                                           variant="outline"
                                           className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
                                           onClick={() =>
-                                            handleDownloadXML(finalUuid)
+                                            handleDownloadXML(uuidFacturaFinal)
                                           }
                                         >
                                           <FileCode2 className="h-4 w-4 mr-2 text-blue-500" />
@@ -1298,8 +1321,7 @@ export function TripDetailsModal({
                                       variant="default"
                                       className="bg-emerald-600 hover:bg-emerald-700 font-black px-8 h-12 shadow-xl shadow-emerald-500/20 uppercase tracking-widest text-[10px] text-white transition-all w-full sm:w-auto haptic-press border-none"
                                       disabled={
-                                        isStampingFinal ||
-                                        (!localUuid && !localTrip.uuid_fiscal)
+                                        isStampingFinal || !uuidCartaPorte // Si no hay Carta Porte, no puede haber Factura Final
                                       }
                                       onClick={async () => {
                                         if (
@@ -1317,21 +1339,23 @@ export function TripDetailsModal({
                                                 `/api/logistics/trips/${localTrip.id}/stamp-real`,
                                               );
 
-                                            //  FIX: Leer el UUID directamente desde la raíz del objeto Trip que devuelve Python
                                             const tripData =
                                               response.data?.data ||
                                               response.data;
+
+                                            // 🚀 FIX: Atrapamos explícitamente el UUID de la factura que acaba de regresar
                                             const generatedFinalUuid =
-                                              tripData.uuid_fiscal; // <-- AQUÍ ESTÁ LA CLAVE
+                                              tripData.uuid;
 
                                             if (generatedFinalUuid) {
-                                              setFinalUuid(generatedFinalUuid); // Actualiza el estado para ocultar el botón
+                                              setUuidFacturaFinal(
+                                                generatedFinalUuid,
+                                              );
                                               localStorage.setItem(
                                                 `final_uuid_${localTrip.id}`,
                                                 generatedFinalUuid,
                                               );
 
-                                              // Esto llamará a tus endpoints GET de PDF y XML automáticamente
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,

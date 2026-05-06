@@ -3,15 +3,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-/**
- * Liquid Glass DataTable - macOS Tahoe / Industrial Edition
- * * Mejoras aplicadas:
- * 1. Theme Awareness: Reacciona dinámicamente al switch Light/Dark.
- * 2. Visual Depth: Header estilo "Instrument Panel" (Oscuro siempre para contraste).
- * 3. Haptic Feedback: Filas con sutil desplazamiento y cambio de color al hover.
- * 4. Ultra-Precision: Tipografía industrial con espaciado expansivo.
- */
-
 interface DataTableProps extends React.HTMLAttributes<HTMLTableElement> {
   children: React.ReactNode;
 }
@@ -31,7 +22,7 @@ const DataTable = React.forwardRef<HTMLTableElement, DataTableProps>(
             ref={ref}
             className={cn(
               "w-full caption-bottom text-sm border-collapse",
-              "table-staggered", // Activa animaciones de entrada de index.css
+              "table-staggered",
               className,
             )}
             {...props}
@@ -52,7 +43,6 @@ const DataTableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      // Mantenemos el Header oscuro tipo "Dashboard Industrial" en ambos modos
       "bg-brand-navy/95 dark:bg-black/60 backdrop-blur-md sticky top-0 z-20",
       "border-b border-white/10 shadow-sm",
       className,
@@ -85,9 +75,7 @@ const DataTableRow = React.forwardRef<
     ref={ref}
     className={cn(
       "interactive-row transition-all duration-300 group outline-none",
-      // Hover: Sutil elevación y cambio de fondo
       "hover:bg-slate-500/[0.05] dark:hover:bg-white/[0.03]",
-      // Selección: Glow sutil en el borde izquierdo (Muy Apple)
       "data-[state=selected]:bg-brand-red/[0.05] relative",
       "data-[state=selected]:before:absolute data-[state=selected]:before:left-0 data-[state=selected]:before:top-0 data-[state=selected]:before:h-full data-[state=selected]:before:w-1 data-[state=selected]:before:bg-brand-red",
       className,
@@ -105,7 +93,6 @@ const DataTableHead = React.forwardRef<
     ref={ref}
     className={cn(
       "h-12 px-5 py-4 text-left align-middle transition-colors",
-      // Tipografía de Control Industrial
       "text-[10px] font-black uppercase tracking-[0.25em]",
       "text-white/60 hover:text-white group/head",
       className,
@@ -123,9 +110,8 @@ const DataTableCell = React.forwardRef<
     ref={ref}
     className={cn(
       "px-5 py-4 align-middle transition-all duration-300",
-      // Tipografía Tahoe: Legibilidad Máxima
       "text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight",
-      "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
+      // 🚀 SOLUCIÓN: Eliminado el color forzado en hover que te blanqueaba las letras
       className,
     )}
     {...props}

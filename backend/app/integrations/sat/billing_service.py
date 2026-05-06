@@ -952,6 +952,27 @@ class BillingService:
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
             invoice_data.viaje_id, usar_tramo_final=True
         )
+
+        # 🚀 BLINDAJE: Buscamos la Carta Porte (is_nominal=True) directamente en la BD
+        # Esto evita que se pierda si el router o Pydantic no lo envían bien.
+        carta_porte = (
+            self.db.query(ReceivableInvoice)
+            .filter(
+                ReceivableInvoice.viaje_id == viaje.id,
+                ReceivableInvoice.is_nominal == True,
+                ReceivableInvoice.record_status != "E",
+            )
+            .order_by(ReceivableInvoice.id.desc())
+            .first()
+        )
+
+        # Obtenemos el UUID de la Carta Porte
+        uuid_relacionado_real = (
+            carta_porte.uuid
+            if carta_porte
+            else getattr(invoice_data, "uuid_relacionado", None)
+        )
+
         data = self._build_dict_from_models(
             viaje,
             cliente,
@@ -962,14 +983,16 @@ class BillingService:
             is_nominal=False,
             ocultar_montos=False,
         )
+
+        # Le pasamos el UUID detectado al motor del SAT
         resultado_pac = self._importar_comprobante_ws(
-            data, relacion_uuid=invoice_data.uuid_relacionado
+            data, relacion_uuid=uuid_relacionado_real
         )
 
         monto_total = Decimal(str(_clean_float(data["total"])))
 
         try:
-            #  FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
+            # FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS
             factura = (
                 self.db.query(ReceivableInvoice)
                 .filter(
@@ -980,10 +1003,17 @@ class BillingService:
                 .first()
             )
 
+            from datetime import timedelta
+
+            dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
+            uuid_generado = getattr(resultado_pac, "uuid", None)
+
             if factura:
-                # Si existe, la reciclamos
-                factura.uuid = getattr(resultado_pac, "uuid", None)
-                factura.uuid_relacionado = invoice_data.uuid_relacionado
+                # Si existe, la reciclamos y le INYECTAMOS TODO
+                factura.uuid = uuid_generado
+                factura.uuid_relacionado = (
+                    uuid_relacionado_real  # 🚀 GUARDAMOS EL UUID REAL
+                )
                 factura.status_sat = "TIMBRADA"
                 factura.concepto = data["descripcion_concepto"]
                 factura.monto_total = monto_total
@@ -992,13 +1022,25 @@ class BillingService:
                 factura.iva = Decimal(str(_clean_float(data["iva"])))
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
+
+                # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                factura.sub_client_id = viaje.sub_client_id
+                factura.metodo_pago = data.get("metodo_pago", "PPD")
+                factura.forma_pago = data.get("forma_pago", "99")
+                factura.tipo_comprobante = "I"
+                factura.fecha_vencimiento = date.today() + timedelta(days=dias_credito)
+
+                if uuid_generado:
+                    factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
+                    factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
             else:
                 # Fallback por si algo falló y no existe provisional
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
+                    sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
                     viaje_id=viaje.id,
-                    uuid=getattr(resultado_pac, "uuid", None),
-                    uuid_relacionado=invoice_data.uuid_relacionado,
+                    uuid=uuid_generado,
+                    uuid_relacionado=uuid_relacionado_real,  # 🚀 GUARDAMOS EL UUID REAL
                     is_nominal=False,
                     status_sat="TIMBRADA",
                     estatus="pendiente",
@@ -1010,7 +1052,22 @@ class BillingService:
                     retenciones=Decimal(str(_clean_float(data["retenciones"]))),
                     moneda="MXN",
                     fecha_emision=date.today(),
-                    fecha_vencimiento=date.today(),
+                    fecha_vencimiento=date.today()
+                    + timedelta(days=dias_credito),  # 🚀 INYECTADO
+                    # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                    metodo_pago=data.get("metodo_pago", "PPD"),
+                    forma_pago=data.get("forma_pago", "99"),
+                    tipo_comprobante="I",
+                    pdf_url=(
+                        f"/api/sat/invoice/{uuid_generado}/pdf"
+                        if uuid_generado
+                        else None
+                    ),
+                    xml_url=(
+                        f"/api/sat/invoice/{uuid_generado}/xml"
+                        if uuid_generado
+                        else None
+                    ),
                 )
 
             self.db.add(factura)
@@ -1024,10 +1081,121 @@ class BillingService:
             self.db.refresh(factura)
             return factura
 
-        except Exception:
+        except Exception as e:
             self.db.rollback()
+            logger.error(f"Error guardando factura final: {str(e)}")
             raise HTTPException(
                 status_code=500, detail="Error al guardar factura final en BD."
+            )
+
+    def generar_carta_porte_one_shot(
+        self, invoice_data: ReceivableInvoiceCreate
+    ) -> ReceivableInvoice:
+        viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
+            invoice_data.viaje_id, usar_tramo_final=True
+        )
+        data = self._build_dict_from_models(
+            viaje,
+            cliente,
+            unidad,
+            operador,
+            r1,
+            r2,
+            is_nominal=False,
+            ocultar_montos=False,
+        )
+        resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
+
+        monto_total = Decimal(str(_clean_float(data["total"])))
+
+        try:
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.viaje_id == viaje.id,
+                    ReceivableInvoice.is_nominal == False,
+                    ReceivableInvoice.record_status != "E",
+                )
+                .first()
+            )
+
+            from datetime import timedelta
+
+            dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
+            uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            if factura:
+                factura.uuid = uuid_generado
+                factura.status_sat = "TIMBRADA"
+                factura.concepto = data["descripcion_concepto"]
+                factura.monto_total = monto_total
+                factura.saldo_pendiente = monto_total
+                factura.subtotal = Decimal(str(_clean_float(data["subtotal"])))
+                factura.iva = Decimal(str(_clean_float(data["iva"])))
+                factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
+                factura.fecha_emision = date.today()
+
+                # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                factura.sub_client_id = viaje.sub_client_id
+                factura.metodo_pago = data.get("metodo_pago", "PPD")
+                factura.forma_pago = data.get("forma_pago", "99")
+                factura.tipo_comprobante = "I"
+                factura.fecha_vencimiento = date.today() + timedelta(days=dias_credito)
+
+                if uuid_generado:
+                    factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
+                    factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
+            else:
+                factura = ReceivableInvoice(
+                    client_id=viaje.client_id,
+                    sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+                    viaje_id=viaje.id,
+                    uuid=uuid_generado,
+                    is_nominal=False,
+                    status_sat="TIMBRADA",
+                    estatus="pendiente",
+                    concepto=data["descripcion_concepto"],
+                    monto_total=monto_total,
+                    saldo_pendiente=monto_total,
+                    subtotal=Decimal(str(_clean_float(data["subtotal"]))),
+                    iva=Decimal(str(_clean_float(data["iva"]))),
+                    retenciones=Decimal(str(_clean_float(data["retenciones"]))),
+                    moneda="MXN",
+                    fecha_emision=date.today(),
+                    fecha_vencimiento=date.today()
+                    + timedelta(days=dias_credito),  # 🚀 INYECTADO
+                    # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                    metodo_pago=data.get("metodo_pago", "PPD"),
+                    forma_pago=data.get("forma_pago", "99"),
+                    tipo_comprobante="I",
+                    pdf_url=(
+                        f"/api/sat/invoice/{uuid_generado}/pdf"
+                        if uuid_generado
+                        else None
+                    ),
+                    xml_url=(
+                        f"/api/sat/invoice/{uuid_generado}/xml"
+                        if uuid_generado
+                        else None
+                    ),
+                )
+
+            self.db.add(factura)
+
+            if factura.uuid:
+                viaje.uuid_fiscal = factura.uuid
+                viaje.estatus = "facturado"
+                self.db.add(viaje)
+
+            self.db.commit()
+            self.db.refresh(factura)
+            return factura
+
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error guardando factura One-Shot: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail="Error al guardar factura One-Shot en BD."
             )
 
     def cancelar_factura_nominal(
@@ -1103,81 +1271,3 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
-
-    def generar_carta_porte_one_shot(
-        self, invoice_data: ReceivableInvoiceCreate
-    ) -> ReceivableInvoice:
-        viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
-        )
-        data = self._build_dict_from_models(
-            viaje,
-            cliente,
-            unidad,
-            operador,
-            r1,
-            r2,
-            is_nominal=False,
-            ocultar_montos=False,
-        )
-        resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
-
-        monto_total = Decimal(str(_clean_float(data["total"])))
-
-        try:
-            #  FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS en lugar de crear otra
-            factura = (
-                self.db.query(ReceivableInvoice)
-                .filter(
-                    ReceivableInvoice.viaje_id == viaje.id,
-                    ReceivableInvoice.is_nominal == False,
-                    ReceivableInvoice.record_status != "E",
-                )
-                .first()
-            )
-
-            if factura:
-                factura.uuid = getattr(resultado_pac, "uuid", None)
-                factura.status_sat = "TIMBRADA"
-                factura.concepto = data["descripcion_concepto"]
-                factura.monto_total = monto_total
-                factura.saldo_pendiente = monto_total
-                factura.subtotal = Decimal(str(_clean_float(data["subtotal"])))
-                factura.iva = Decimal(str(_clean_float(data["iva"])))
-                factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
-                factura.fecha_emision = date.today()
-            else:
-                factura = ReceivableInvoice(
-                    client_id=viaje.client_id,
-                    viaje_id=viaje.id,
-                    uuid=getattr(resultado_pac, "uuid", None),
-                    is_nominal=False,
-                    status_sat="TIMBRADA",
-                    estatus="pendiente",
-                    concepto=data["descripcion_concepto"],
-                    monto_total=monto_total,
-                    saldo_pendiente=monto_total,
-                    subtotal=Decimal(str(_clean_float(data["subtotal"]))),
-                    iva=Decimal(str(_clean_float(data["iva"]))),
-                    retenciones=Decimal(str(_clean_float(data["retenciones"]))),
-                    moneda="MXN",
-                    fecha_emision=date.today(),
-                    fecha_vencimiento=date.today(),
-                )
-
-            self.db.add(factura)
-
-            if factura.uuid:
-                viaje.uuid_fiscal = factura.uuid
-                viaje.estatus = "facturado"
-                self.db.add(viaje)
-
-            self.db.commit()
-            self.db.refresh(factura)
-            return factura
-
-        except Exception:
-            self.db.rollback()
-            raise HTTPException(
-                status_code=500, detail="Error al guardar factura One-Shot en BD."
-            )

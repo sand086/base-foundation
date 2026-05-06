@@ -60,14 +60,12 @@ import {
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
 
+// 🚀 IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
 import {
-  DataTable,
-  DataTableBody,
-  DataTableCell,
-  DataTableHead,
-  DataTableHeader,
-  DataTableRow,
-} from "@/components/ui/data-table";
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table";
+
 import {
   Dialog,
   DialogContent,
@@ -248,12 +246,20 @@ export const TripPlanner = () => {
 
   const standbyTrips = useMemo(
     () =>
-      trips.filter(
-        (t) => t.status === "creado" && (!t.legs || t.legs.length === 0),
-      ),
+      trips.filter((t) => {
+        if (t.status !== "creado") return false;
+
+        // Contamos cuántas piernas REALMENTE están activas
+        const activeLegsCount =
+          t.legs?.filter(
+            (l: any) =>
+              l.record_status !== "E" && l.record_status !== "ELIMINADO",
+          ).length || 0;
+
+        return activeLegsCount === 0;
+      }),
     [trips],
   );
-
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
     const items: { leg: TripLeg; tripPadre: Trip }[] = [];
@@ -361,6 +367,144 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
+  // 🚀 COLUMNAS DE LA TABLA INTELIGENTE
+  const tableColumns: ColumnDef<{ leg: TripLeg; tripPadre: Trip }>[] = useMemo(
+    () => [
+      {
+        key: "tripPadre.created_at",
+        header: "Fecha creación",
+        type: "date",
+        sortable: true,
+        render: (value, row) => {
+          const dateVal = row.tripPadre.start_date || row.tripPadre.created_at;
+          if (!dateVal) return <span className="text-slate-400">N/A</span>;
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="font-black text-brand-navy dark:text-white uppercase">
+                {format(new Date(dateVal), "dd MMM yyyy", { locale: es })}
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {format(new Date(dateVal), "HH:mm")} HRS
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        key: "tripPadre.client.razon_social",
+        header: "Cliente / Folio",
+        sortable: true,
+        render: (value, row) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight ">
+              {row.tripPadre.client?.razon_social || "CLIENTE GENERAL"}
+            </span>
+            <span className="text-[12px] font-black text-muted-foreground uppercase tracking-widest">
+              TRP-{row.tripPadre.public_id || row.tripPadre.id}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "leg.leg_type",
+        header: "Fase del Servicio",
+        type: "status",
+        statusOptions: ["carga_muelle", "ruta_carretera", "entrega_vacio"],
+        statusNormalizer: (val) => val,
+        render: (value) => (
+          <Badge
+            variant="info"
+            className="text-[11px] bg-blue-50 text-blue-700 border-blue-200 shadow-sm"
+          >
+            {legTypeShort[value as string] || value}
+          </Badge>
+        ),
+      },
+      {
+        key: "leg.unit.numero_economico",
+        header: "Asignación Física",
+        render: (value, row) => (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
+              <Truck className="h-4 w-4 shrink-0 text-red-500" /> ECO-
+              {row.leg.unit?.numero_economico || "N/A"}
+            </div>
+            <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
+              <User className="h-4 w-4 shrink-0 text-blue-500" />{" "}
+              {(() => {
+                const parts = row.leg.operator?.name?.trim().split(" ") || [];
+                if (parts.length === 0) return "S/A";
+                if (parts.length === 1) return parts[0];
+                if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
+                if (parts.length === 3) return `${parts[0]} ${parts[1]}`; // Ej: Abiel Quezada Azamar -> Abiel Quezada
+                return `${parts[0]} ${parts[2]}`; // Ej: Luis Enrique Garcia Martinez -> Luis Garcia
+              })()}
+            </div>
+          </div>
+        ),
+      },
+      {
+        key: "leg.status",
+        header: "Estatus Operativo",
+        type: "status",
+        statusOptions: [
+          "creado",
+          "en_transito",
+          "entregado",
+          "detenido",
+          "retraso",
+          "accidente",
+        ],
+        statusNormalizer: (val) => normalizeStatus(val),
+        render: (value, row) => (
+          <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[160px] mx-auto">
+            {getOperationalStatusBadge(row.leg)}
+          </div>
+        ),
+      },
+      {
+        key: "actions",
+        header: "Acciones",
+        sortable: false,
+        render: (value, { tripPadre }) => (
+          <div className="flex justify-end pr-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreVertical className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/90 shadow-2xl rounded-xl p-1"
+              >
+                <DropdownMenuItem
+                  onClick={() => setTripToView(tripPadre)}
+                  className="rounded-lg cursor-pointer py-2.5 font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300 hover:text-blue-500"
+                >
+                  <Eye className="h-4 w-4 mr-3 text-blue-500" /> Abrir Centro de
+                  Mando
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => setTripToDelete(tripPadre)}
+                  className="rounded-lg cursor-pointer py-2.5 font-bold uppercase tracking-widest text-rose-600 dark:text-rose-500"
+                >
+                  <Trash2 className="h-4 w-4 mr-3" /> Eliminar Viaje
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
   if (loading && trips.length === 0)
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -433,160 +577,17 @@ export const TripPlanner = () => {
         </div>
       </div>
 
+      {/* 🚀 AQUI REEMPLAZAMOS LA TABLA MANUAL POR LA ENHANCED DATATABLE */}
       {viewMode === "table" && (
-        <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
+        <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              {/*   EL KEY MÁGICO: Al cambiar tableKey, esta tabla muere y renace */}
-              <DataTable key={tableKey} className="min-w-[800px]">
-                <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
-                  <DataTableRow className="hover:bg-transparent border-none">
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12">
-                      Folio / Cliente
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12">
-                      Fase del Servicio
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12 hidden lg:table-cell">
-                      Ruta Registrada
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em]  h-12 hidden md:table-cell">
-                      Asignación Física
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em]  h-12">
-                      Estatus Operativo
-                    </DataTableHead>
-                    <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em]  h-12">
-                      Acciones
-                    </DataTableHead>
-                  </DataTableRow>
-                </DataTableHeader>
-                <DataTableBody className="table-staggered bg-card">
-                  {allActiveLegs.length === 0 ? (
-                    <DataTableRow>
-                      <DataTableCell
-                        colSpan={6}
-                        className="text-center py-20 text-slate-600 dark:text-slate-400"
-                      >
-                        <div className="flex flex-col items-center justify-center">
-                          <Truck className="h-12 w-12 mb-4 opacity-20" />
-                          <span className="font-black text-sm uppercase tracking-widest">
-                            No hay servicios en ruta activos
-                          </span>
-                        </div>
-                      </DataTableCell>
-                    </DataTableRow>
-                  ) : (
-                    allActiveLegs.map(({ leg, tripPadre }) => {
-                      const isIncident = isIncidentStatus(leg.status);
-
-                      const configText =
-                        tripPadre.dolly_id || tripPadre.remolque_2_id
-                          ? "FULL"
-                          : "SENCILLO";
-                      const formattedRouteName = tripPadre.route_name
-                        ? `${tripPadre.route_name} - ${configText}`
-                        : `${tripPadre.origin} - ${tripPadre.destination} - ${configText}`;
-
-                      return (
-                        <DataTableRow
-                          key={leg.id}
-                          className={cn(
-                            "border-b border-slate-100 dark:border-white/5 interactive-row transition-all hover:bg-slate-50/50 dark:hover:bg-white/5",
-                            isIncident && "bg-rose-50/40 dark:bg-rose-950/20",
-                          )}
-                        >
-                          <DataTableCell className="py-4 pl-4">
-                            <div className="flex flex-col gap-1">
-                              <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight ">
-                                {tripPadre.client?.razon_social ||
-                                  "CLIENTE GENERAL"}
-                              </span>
-                              <span className="text-[13px] font-black text-muted-foreground uppercase tracking-widest">
-                                TRP-{tripPadre.public_id || tripPadre.id}
-                              </span>
-                            </div>
-                          </DataTableCell>
-
-                          <DataTableCell className="py-4">
-                            <Badge variant="info" className="text-[11px]">
-                              {legTypeShort[leg.leg_type] || leg.leg_type}
-                            </Badge>
-                          </DataTableCell>
-
-                          <DataTableCell className="py-4 hidden lg:table-cell">
-                            <span
-                              className="text-[14px] font-black text-foreground uppercase tracking-tighter"
-                              title={formattedRouteName}
-                            >
-                              {formattedRouteName}
-                            </span>
-                          </DataTableCell>
-
-                          <DataTableCell className="py-4 hidden md:table-cell">
-                            <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
-                                <Truck className="h-5 w-5 shrink-0 text-red-500" />{" "}
-                                ECO-{leg.unit?.numero_economico || "N/A"}
-                              </div>
-                              <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
-                                <User className="h-5 w-5 shrink-0 text-blue-500" />{" "}
-                                {(() => {
-                                  const parts =
-                                    leg.operator?.name?.split(" ") || [];
-                                  return parts.length
-                                    ? `${parts[0]} ${parts.slice(1).join(" ")}`
-                                    : "S/A";
-                                })()}
-                              </div>
-                            </div>
-                          </DataTableCell>
-                          <DataTableCell className="text-center py-4">
-                            <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[160px] mx-auto">
-                              {getOperationalStatusBadge(leg)}
-                            </div>
-                          </DataTableCell>
-                          <DataTableCell className="text-right py-4 pr-6">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
-                                >
-                                  <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/90 shadow-2xl rounded-xl p-1"
-                              >
-                                <DropdownMenuItem
-                                  onClick={() => setTripToView(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold  uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
-                                >
-                                  <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
-                                  Abrir Centro de Mando
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
-                                <DropdownMenuItem
-                                  onClick={() => setTripToDelete(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold  uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-3" /> Eliminar
-                                  Viaje
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </DataTableCell>
-                        </DataTableRow>
-                      );
-                    })
-                  )}
-                </DataTableBody>
-              </DataTable>
-            </div>
+            <EnhancedDataTable
+              data={allActiveLegs}
+              columns={tableColumns}
+              searchPlaceholder="BUSCAR OPERADOR, UNIDAD, CLIENTE..."
+              exportFileName="Viajes_Operativos"
+              initialSort={{ key: "tripPadre.created_at", direction: "desc" }}
+            />
           </CardContent>
         </Card>
       )}
@@ -887,7 +888,18 @@ export const TripPlanner = () => {
       />
       <TripDetailsModal
         open={!!tripToView}
-        onOpenChange={(open) => !open && setTripToView(null)}
+        onOpenChange={async (open) => {
+          if (!open) {
+            // 🔥 1. Destruimos por completo la referencia al viaje actual para matar fantasmas
+            setTripToView(null);
+
+            // 🔥 2. Recargamos la info limpia del servidor
+            await fetchTrips();
+
+            // 🔥 3. Forzamos a que TODA la pantalla se refresque visualmente
+            setTableKey(Date.now());
+          }
+        }}
         trip={tripToView}
         onIncidentClick={(t) => openUpdateStatusModal(t)}
         onRelayClick={(l, t) => setLegToRelay({ leg: l, tripPadre: t })}

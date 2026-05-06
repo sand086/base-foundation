@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -53,6 +55,14 @@ export interface ColumnDef<T> {
   width?: string;
 }
 
+type SortDirection = "asc" | "desc" | null;
+
+interface SortConfig {
+  key: string;
+  direction: SortDirection;
+}
+
+// 🚀 AÑADIDO: initialSort para ordenar por fecha de más reciente a más viejo
 interface EnhancedDataTableProps<T> {
   data: T[];
   columns: ColumnDef<T>[];
@@ -68,13 +78,7 @@ interface EnhancedDataTableProps<T> {
   customFilters?: React.ReactNode;
   onCustomExport?: () => void;
   isRowSelectable?: (row: T) => boolean;
-}
-
-type SortDirection = "asc" | "desc" | null;
-
-interface SortConfig {
-  key: string;
-  direction: SortDirection;
+  initialSort?: SortConfig;
 }
 
 interface DateRange {
@@ -89,7 +93,7 @@ interface ColumnFilters {
   };
 }
 
-// 👇 MAGIA 1: Función que extrae TODOS los textos y números de un objeto (Deep Search)
+// 👇 Función que extrae TODOS los textos y números de un objeto (Deep Search)
 const extractAllValues = (obj: any): string => {
   if (obj === null || obj === undefined) return "";
   if (
@@ -123,9 +127,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   customFilters,
   onCustomExport,
   isRowSelectable,
+  initialSort,
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  // 🚀 INICIALIZA EL ORDEN CON LO QUE LE MANDEMOS DESDE EL PADRE
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(
+    initialSort || null,
+  );
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
@@ -138,19 +146,16 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    // 👇 MAGIA 2: El nuevo buscador global inteligente
+    // 👇 Buscador global inteligente
     if (globalSearch) {
-      // Soporte para buscar varias palabras (Ej: "TRP-10 Juan Patio")
       const searchTerms = globalSearch
         .toLowerCase()
         .split(" ")
         .filter((t) => t.trim() !== "");
 
       result = result.filter((row) => {
-        // 1. Extrae TODO el contenido de la fila como un texto gigante
         let rowText = extractAllValues(row);
 
-        // 2. Suma las traducciones visuales (Ej. si dice "carga_muelle", añade "Muelle / Patio")
         columns.forEach((col) => {
           if (col.statusNormalizer) {
             const rawValue = getValue(row, col.key as string);
@@ -161,12 +166,11 @@ export function EnhancedDataTable<T extends Record<string, any>>({
           }
         });
 
-        // 3. Verifica que TODAS las palabras que el usuario escribió existan en la fila
         return searchTerms.every((term) => rowText.includes(term));
       });
     }
 
-    // --- Filtros Internos Específicos (Mantenemos los DatePickers y Checkboxes) ---
+    // --- Filtros Internos Específicos ---
     Object.entries(columnFilters).forEach(([key, filter]) => {
       if (!filter.value) return;
 
@@ -178,7 +182,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         const range = filter.value as DateRange;
         if (range.from || range.to) {
           result = result.filter((row) => {
-            const dateValue = new Date(getValue(row, key));
+            const rowVal = getValue(row, key);
+            if (!rowVal) return false;
+
+            const dateValue = new Date(rowVal);
 
             if (range.from) {
               const fromDate = new Date(range.from);
@@ -307,7 +314,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     );
   }, [paginatedData, isRowSelectable]);
 
-  // Evaluamos si vale la pena mostrar el botón de Filtros Avanzados (Fechas o Selects Múltiples)
   const hasAdvancedFilters = useMemo(() => {
     return columns.some(
       (col) =>
@@ -322,7 +328,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
       <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* El Buscador Global Súper Inteligente */}
           <div className="relative flex-1 min-w-[250px] max-w-md group">
             <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
             <Input
@@ -344,7 +349,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          {/* El botón de Filtros Internos ahora SOLO sale si configuraste calendarios o checks */}
           {hasAdvancedFilters && (
             <Popover open={showFilters} onOpenChange={setShowFilters}>
               <PopoverTrigger asChild>
@@ -394,7 +398,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         const key = col.key as string;
                         const colType = col.type || "text";
 
-                        // RENDEREA CALENDARIOS
                         if (colType === "date") {
                           const dateFilter = (columnFilters[key]
                             ?.value as DateRange) || {
@@ -481,7 +484,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                           );
                         }
 
-                        // RENDEREA CHECKBOXES DE STATUS
                         if (colType === "status" && col.statusOptions) {
                           const selectedStatuses =
                             (columnFilters[key]?.value as string[]) || [];
@@ -563,7 +565,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* CAPA 1: TABLE CONTAINER */}
       <div className="relative w-full overflow-hidden rounded-[2rem] border border-slate-200 dark:border-white/10 bg-white/40 dark:bg-brand-navy/30 backdrop-blur-xl shadow-2xl transition-all">
         <div className="overflow-auto max-h-[65vh] custom-scrollbar">
           <table className="w-full caption-bottom text-sm border-collapse">
@@ -709,7 +710,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                           className={cn(
                             "px-6 py-4 align-middle transition-all duration-300",
                             "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
-                            "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
+                            // 🚀 MAGIA 3: AQUÍ ESTABA EL BUG DE LAS LETRAS BLANCAS. Lo hemos eliminado.
                           )}
                         >
                           {col.render

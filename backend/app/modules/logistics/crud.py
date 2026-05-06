@@ -1318,7 +1318,7 @@ def undo_last_leg(db: Session, trip_id: str):
     if not trip or not trip.legs:
         return False
 
-    # Filtramos para ver los tramos reales activos
+    # Filtramos para asegurar tramos limpios
     active_legs = [
         leg for leg in trip.legs if leg.record_status != RecordStatus.ELIMINADO
     ]
@@ -1328,7 +1328,7 @@ def undo_last_leg(db: Session, trip_id: str):
 
     current_leg = active_legs[-1]
 
-    # REGLA 1: Si ya está Entregado o Cerrado, simplemente lo degradamos a En Tránsito.
+    # REGLA 1: Si ya está Entregado o Cerrado, degradamos a En Tránsito.
     if current_leg.status in [
         models.TripStatus.ENTREGADO,
         models.TripStatus.CERRADO,
@@ -1346,9 +1346,8 @@ def undo_last_leg(db: Session, trip_id: str):
             event_type="warning",
         )
         db.add(db_event)
-        db.add(current_leg)
 
-    # REGLA 2: Si está En Tránsito o Creado, DESTRUIMOS la fase para no dejar fantasmas.
+    # REGLA 2: Si está En Tránsito o Creado, DESTRUIMOS el tramo.
     else:
         if len(active_legs) > 1:
             # Hay una fase anterior. Reactivamos la anterior limpia.
@@ -1358,29 +1357,28 @@ def undo_last_leg(db: Session, trip_id: str):
             trip.status = models.TripStatus.EN_TRANSITO
             trip.closed_at = None
 
+            # 🔥 FIX: Ponemos la bitácora en la fase ANTERIOR para que no de error
             db_event = models.TripTimelineEvent(
                 trip_leg_id=previous_leg.id,
                 time=dt_utcnow.utcnow(),
-                event=f"Reverso Operativo: Se canceló la fase de {current_leg.leg_type}. Retorno a la fase anterior.",
+                event=f"Reverso Operativo: Se eliminó la fase posterior ({current_leg.leg_type}). Retorno a esta fase.",
                 event_type="warning",
             )
             db.add(db_event)
-            db.add(previous_leg)
 
-            # 🔥 Elimina el tramo fantasma secundario 🔥
             trip.legs.remove(current_leg)
             db.delete(current_leg)
 
         else:
-            # 🔥 ES LA PRIMERA FASE: DESTRUIMOS EL TRAMO POR COMPLETO 🔥
+            # 🔥 ES LA PRIMERA FASE: Destruimos y regresamos a Planeador
             trip.legs.remove(current_leg)
             db.delete(current_leg)
 
             # El viaje regresa a ser "Planeado" (Stand-By)
             trip.status = models.TripStatus.CREADO
             trip.closed_at = None
+            # No agregamos bitácora porque ya no existen fases a donde amarrarla.
 
-    db.add(trip)
     db.commit()
     db.refresh(trip)
     return trip

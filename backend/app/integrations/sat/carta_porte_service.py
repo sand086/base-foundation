@@ -4,7 +4,7 @@ import logging
 import logging.config
 import uuid
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from io import BytesIO
@@ -600,7 +600,7 @@ class CartaPorteService:
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
             "descripcion_concepto": (
-                "FLETE NOMINAL"
+                "FLETE CARGA GENERAL"
                 if is_nominal
                 else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
             ),
@@ -963,14 +963,18 @@ class CartaPorteService:
         resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
 
         monto_total = Decimal("1.12")
+        uuid_generado = getattr(resultado_pac, "uuid", None)
+        dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
+
         nueva_factura = ReceivableInvoice(
             client_id=viaje.client_id,
+            sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
             viaje_id=viaje.id,
-            uuid=getattr(resultado_pac, "uuid", None),
+            uuid=uuid_generado,
             is_nominal=True,
             status_sat="TIMBRADA",
             estatus="pendiente",
-            concepto=data.get("descripcion_concepto", "FLETE NOMINAL"),
+            concepto=data.get("descripcion_concepto", "FLETE CARGA GENERAL"),
             monto_total=monto_total,
             saldo_pendiente=monto_total,
             subtotal=Decimal("1.00"),
@@ -978,7 +982,14 @@ class CartaPorteService:
             retenciones=Decimal("0.04"),
             moneda="MXN",
             fecha_emision=date.today(),
-            fecha_vencimiento=date.today(),
+            fecha_vencimiento=date.today()
+            + timedelta(days=dias_credito),  # 🚀 INYECTADO
+            # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+            metodo_pago=data.get("metodo_pago", "PUE"),
+            forma_pago=data.get("forma_pago", "99"),
+            tipo_comprobante="I",
+            pdf_url=f"/api/sat/invoice/{uuid_generado}/pdf" if uuid_generado else None,
+            xml_url=f"/api/sat/invoice/{uuid_generado}/xml" if uuid_generado else None,
         )
         try:
             self.db.add(nueva_factura)
@@ -1014,34 +1025,91 @@ class CartaPorteService:
         resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
 
         monto_total = Decimal(str(_clean_float(data["total"])))
-        nueva_factura = ReceivableInvoice(
-            client_id=viaje.client_id,
-            viaje_id=viaje.id,
-            uuid=getattr(resultado_pac, "uuid", None),
-            is_nominal=False,
-            status_sat="TIMBRADA",
-            estatus="pendiente",
-            concepto=data["descripcion_concepto"],
-            monto_total=monto_total,
-            saldo_pendiente=monto_total,
-            subtotal=Decimal(str(_clean_float(data["subtotal"]))),
-            iva=Decimal(str(_clean_float(data["iva"]))),
-            retenciones=Decimal(str(_clean_float(data["retenciones"]))),
-            moneda="MXN",
-            fecha_emision=date.today(),
-            fecha_vencimiento=date.today(),
-        )
+
         try:
-            self.db.add(nueva_factura)
-            if nueva_factura.uuid:
-                viaje.uuid_fiscal = nueva_factura.uuid
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.viaje_id == viaje.id,
+                    ReceivableInvoice.is_nominal == False,
+                    ReceivableInvoice.record_status != "E",
+                )
+                .first()
+            )
+
+            dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
+            uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            if factura:
+                factura.uuid = uuid_generado
+                factura.status_sat = "TIMBRADA"
+                factura.concepto = data["descripcion_concepto"]
+                factura.monto_total = monto_total
+                factura.saldo_pendiente = monto_total
+                factura.subtotal = Decimal(str(_clean_float(data["subtotal"])))
+                factura.iva = Decimal(str(_clean_float(data["iva"])))
+                factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
+                factura.fecha_emision = date.today()
+
+                # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                factura.sub_client_id = viaje.sub_client_id
+                factura.metodo_pago = data.get("metodo_pago", "PPD")
+                factura.forma_pago = data.get("forma_pago", "99")
+                factura.tipo_comprobante = "I"
+                factura.fecha_vencimiento = date.today() + timedelta(days=dias_credito)
+
+                if uuid_generado:
+                    factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
+                    factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
+            else:
+                factura = ReceivableInvoice(
+                    client_id=viaje.client_id,
+                    sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+                    viaje_id=viaje.id,
+                    uuid=uuid_generado,
+                    is_nominal=False,
+                    status_sat="TIMBRADA",
+                    estatus="pendiente",
+                    concepto=data["descripcion_concepto"],
+                    monto_total=monto_total,
+                    saldo_pendiente=monto_total,
+                    subtotal=Decimal(str(_clean_float(data["subtotal"]))),
+                    iva=Decimal(str(_clean_float(data["iva"]))),
+                    retenciones=Decimal(str(_clean_float(data["retenciones"]))),
+                    moneda="MXN",
+                    fecha_emision=date.today(),
+                    fecha_vencimiento=date.today()
+                    + timedelta(days=dias_credito),  # 🚀 INYECTADO
+                    # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                    metodo_pago=data.get("metodo_pago", "PPD"),
+                    forma_pago=data.get("forma_pago", "99"),
+                    tipo_comprobante="I",
+                    pdf_url=(
+                        f"/api/sat/invoice/{uuid_generado}/pdf"
+                        if uuid_generado
+                        else None
+                    ),
+                    xml_url=(
+                        f"/api/sat/invoice/{uuid_generado}/xml"
+                        if uuid_generado
+                        else None
+                    ),
+                )
+
+            self.db.add(factura)
+
+            if factura.uuid:
+                viaje.uuid_fiscal = factura.uuid
                 viaje.estatus = "facturado"
                 self.db.add(viaje)
+
             self.db.commit()
-            self.db.refresh(nueva_factura)
-            return nueva_factura
-        except Exception:
+            self.db.refresh(factura)
+            return factura
+
+        except Exception as e:
             self.db.rollback()
+            logger.error(f"Error guardando factura One-Shot: {str(e)}")
             raise HTTPException(
                 status_code=500, detail="Error al guardar factura One-Shot en BD."
             )

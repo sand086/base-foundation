@@ -530,30 +530,28 @@ class PaymentComplementService:
 
             # 2. GUARDAMOS EL HISTORIAL DE PAGOS Y CREAMOS EL MOVIMIENTO BANCARIO POR CADA FACTURA
             for factura in facturas_afectadas:
-                # Buscamos coincidencia comparando strings
-                abono = next(
-                    (
-                        p
-                        for p in pagos_data
-                        if str(p.get("invoice_id")) == str(factura.id)
-                    ),
-                    None,
-                )
-                monto_abono_float = (
-                    float(abono.get("monto_pagado", 0)) if abono else 0.0
+
+                # Buscamos en los doctos_relacionados la info que mandamos al SAT
+                doc_rel = next(
+                    (d for d in doctos_relacionados if d["uuid"] == factura.uuid), None
                 )
 
-                if monto_abono_float > 0:
-                    # A) Registro en CxC
+                if doc_rel:
+                    # A) Registro en CxC (INYECCIÓN DE CAMPOS FALTANTES 🚀)
                     nuevo_pago = ReceivableInvoicePayment(
                         invoice_id=factura.id,
                         bank_account_id=int(bank_account_id),
                         fecha_pago=fecha_pago_date,
-                        monto=monto_abono_float,
+                        monto=float(doc_rel["monto_pagado"]),
                         metodo_pago=str(forma_pago),
                         referencia=str(referencia) if referencia else "",
                         cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
                         complemento_uuid=str(complemento_uuid),
+                        # 🚀 INYECCIÓN DE LOS DATOS CRÍTICOS AL MODELO
+                        parcialidad=int(doc_rel["parcialidad"]),
+                        saldo_anterior=float(doc_rel["saldo_anterior"]),
+                        saldo_insoluto=float(doc_rel["saldo_insoluto"]),
+                        comprobante_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
                     )
                     self.db.add(nuevo_pago)
 
@@ -561,7 +559,7 @@ class PaymentComplementService:
                     mov_schema = finance_schemas.BankMovementCreate(
                         bank_account_id=int(bank_account_id),
                         tipo="ingreso",
-                        monto=monto_abono_float,
+                        monto=float(doc_rel["monto_pagado"]),
                         concepto=f"Cobro Fra. {factura.folio_interno or factura.id} (REP)",
                         referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
                         origen_modulo="CxC",  #  FIX CRÍTICO: ORIGEN MODULO AÑADIDO
