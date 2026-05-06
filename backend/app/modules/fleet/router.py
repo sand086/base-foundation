@@ -680,6 +680,10 @@ async def create_fuel_log(
     litros_urea: float = Form(0.0),
     precio_urea: float = Form(0.0),
     odometro: int = Form(0),
+    # --- NUEVOS CAMPOS MOTOGENERADOR ---
+    is_motogenerator: bool = Form(False),
+    horometro: Optional[float] = Form(None),
+    # -----------------------------------
     file: UploadFile = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -694,19 +698,43 @@ async def create_fuel_log(
         )
         evidencia_url, filename = storage["url"], storage["filename"]
 
-    #   IDEA 1: LA MEMORIA DEL CAMIÓN
-    # Buscamos el último ticket registrado para ESTA unidad, ordenado por odómetro
-    last_log = (
-        db.query(models.FuelLog)
-        .filter(models.FuelLog.unit_id == unit_id, models.FuelLog.record_status != "E")
-        .order_by(models.FuelLog.odometro.desc())
-        .first()
-    )
+    # --- LÓGICA DE MEMORIA (KILÓMETROS vs HORAS) ---
+    km_recorridos = 0.0
+    horas_recorridas = 0.0
 
-    km_recorridos = 0
-    # Si encontramos un ticket anterior, y el odómetro actual es mayor:
-    if last_log and odometro > last_log.odometro:
-        km_recorridos = odometro - last_log.odometro
+    if is_motogenerator:
+        # Busca el último ticket del Motogenerador
+        last_log = (
+            db.query(models.FuelLog)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.is_motogenerator == True,
+                models.FuelLog.record_status != "E",
+            )
+            .order_by(models.FuelLog.horometro.desc())
+            .first()
+        )
+        if (
+            last_log
+            and last_log.horometro
+            and horometro
+            and horometro > last_log.horometro
+        ):
+            horas_recorridas = horometro - last_log.horometro
+    else:
+        # Busca el último ticket del Tractocamión
+        last_log = (
+            db.query(models.FuelLog)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.is_motogenerator == False,
+                models.FuelLog.record_status != "E",
+            )
+            .order_by(models.FuelLog.odometro.desc())
+            .first()
+        )
+        if last_log and last_log.odometro and odometro > last_log.odometro:
+            km_recorridos = odometro - last_log.odometro
 
     created_logs = []
 
@@ -721,8 +749,12 @@ async def create_fuel_log(
             litros=litros,
             precio_por_litro=precio,
             total=litros * precio,
-            odometro=odometro,
-            km_sm=km_recorridos,  #   AQUÍ SE GUARDAN LOS KM AUTOMÁTICAMENTE
+            # Guardamos según el tipo de motor
+            odometro=odometro if not is_motogenerator else 0,
+            km_sm=km_recorridos if not is_motogenerator else 0.0,
+            is_motogenerator=is_motogenerator,
+            horometro=horometro if is_motogenerator else None,
+            horas_sm=horas_recorridas if is_motogenerator else None,
             evidencia_url=evidencia_url,
             created_by_id=current_user.id,
         )
@@ -779,6 +811,13 @@ async def update_fuel_log(
     log.odometro = data.odometro
     log.excede_tanque = data.excede_tanque
     log.capacidad_tanque_snapshot = data.capacidad_tanque_snapshot
+
+    # --- ACTUALIZACIÓN MOTOGENERADOR ---
+    log.is_motogenerator = data.is_motogenerator
+    log.horometro = data.horometro
+    log.horas_sm = data.horas_sm
+    # -----------------------------------
+
     if data.trip_leg_id:
         log.trip_leg_id = data.trip_leg_id
     log.updated_by_id = current_user.id

@@ -64,6 +64,7 @@ class UnitType(str, PyEnum):
     REMOLQUE = "remolque"
     CAMIONETA = "camioneta"
     CAMION = "camion"
+    MOTOGENERADOR = "motogenerador"
     OTRO = "otro"
 
 
@@ -637,9 +638,14 @@ class Trip(AuditMixin, Base):
     )
 
     is_refrigerated_1 = Column(Boolean, default=False, server_default="false")
-    motogenerator_1 = Column(String(50), nullable=True)
+    motogenerator_1_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+
     is_refrigerated_2 = Column(Boolean, default=False, server_default="false")
-    motogenerator_2 = Column(String(50), nullable=True)
+    motogenerator_2_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
 
     origin = Column(String(200), nullable=False)
     destination = Column(String(200), nullable=False)
@@ -690,6 +696,13 @@ class Trip(AuditMixin, Base):
         order_by="TripLeg.id",
     )
     work_orders = relationship("WorkOrder", back_populates="trip")
+
+    motogenerator_1_unit = relationship(
+        "Unit", foreign_keys=[motogenerator_1_id], viewonly=True
+    )
+    motogenerator_2_unit = relationship(
+        "Unit", foreign_keys=[motogenerator_2_id], viewonly=True
+    )
 
 
 class TripLeg(AuditMixin, Base):
@@ -1390,6 +1403,10 @@ class FuelLog(AuditMixin, Base):
     precio_por_litro = Column(Float, default=0.0, nullable=False)
     total = Column(Float, default=0.0, nullable=False)
     odometro = Column(Integer, nullable=False)  # Odómetro inicial
+
+    is_motogenerator = Column(Boolean, default=False, server_default="false")
+    horometro = Column(Float, nullable=True)  # Lectura inicial del generador
+    horas_sm = Column(Float, nullable=True)  # Horas de trabajo registradas al conciliar
 
     evidencia_url = Column(String(500), nullable=True)
     excede_tanque = Column(Boolean, default=False)

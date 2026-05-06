@@ -22,6 +22,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Fuel,
@@ -33,12 +34,13 @@ import {
   Check,
   Plus,
   Trash2,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { FUEL_CONFIG } from "../types";
 import { useTrips } from "@/features/trips/hooks/useTrips";
-import { useUnits } from "@/features/units/hooks/useUnits"; //  PASO 2.1: Importamos el hook
+import { useUnits } from "@/features/units/hooks/useUnits";
 
 /** =========================
  * Types & Interfaces
@@ -58,6 +60,8 @@ export interface TicketFormData {
   operator_id: string;
   trip_leg_ids: string[];
   odometro: string | number;
+  is_motogenerator: boolean;
+  horometro: string | number | null;
   tickets: SubTicket[];
 }
 
@@ -292,7 +296,7 @@ export function AddTicketModal({
   initialData,
 }: AddTicketModalProps) {
   const { trips = [] } = useTrips();
-  const { fetchLastOdometer } = useUnits(); //  PASO 2.2: Extracción de función
+  const { fetchLastOdometer } = useUnits();
 
   // Estados de vinculación
   const [parentData, setParentData] = useState({
@@ -302,7 +306,8 @@ export function AddTicketModal({
     odometro: "" as string | number,
   });
 
-  const [lastOdoCache, setLastOdoCache] = useState<number>(0); //  PASO 2.3: Estado para caché
+  const [isMotogenerator, setIsMotogenerator] = useState(false);
+  const [lastOdoCache, setLastOdoCache] = useState<number>(0);
 
   const [tickets, setTickets] = useState<SubTicket[]>([
     {
@@ -352,6 +357,7 @@ export function AddTicketModal({
     [trips],
   );
 
+  // Lógica Dinámica: Si es motogenerador, listamos los MG asociados al viaje.
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
       const validLegs = (t.legs || []).filter((leg: any) => {
@@ -359,13 +365,30 @@ export function AddTicketModal({
         return ["entregado", "cerrado"].includes(legStatus);
       });
 
-      return validLegs.map((leg: any) => ({
-        label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`,
-        value: `${t.id}|${leg.id}|${leg.unit_id}|${leg.operator_id}`,
-      }));
+      return validLegs.map((leg: any) => {
+        let label = "";
+        let finalUnitId = leg.unit_id;
+
+        if (isMotogenerator) {
+          // Si el viaje tiene asignado un motogenerador, lo mostramos
+          const mg_id = t.motogenerator_1_id || t.motogenerator_2_id;
+          // En caso de que tengas el número eco a la mano en el objeto (opcional), si no, mostramos un genérico.
+          const mg_name =
+            t.motogenerator_1 || t.motogenerator_2 || "Motogenerador";
+          finalUnitId = mg_id;
+          label = `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | ⚡ ${mg_name}`;
+        } else {
+          label = `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`;
+        }
+
+        return {
+          label,
+          value: `${t.id}|${leg.id}|${finalUnitId}|${leg.operator_id}`,
+        };
+      });
     });
     return list;
-  }, [activeTrips]);
+  }, [activeTrips, isMotogenerator]);
 
   const handleToggleLeg = (selectedValue: string) => {
     setParentData((prev) => {
@@ -379,8 +402,8 @@ export function AddTicketModal({
 
       if (newLegs.length > 0) {
         const [, , uid, oid] = newLegs[0].split("|");
-        newUnit = uid !== "undefined" ? uid : prev.unit_id;
-        newOp = oid !== "undefined" ? oid : prev.operator_id;
+        newUnit = uid !== "undefined" && uid !== "null" ? uid : prev.unit_id;
+        newOp = oid !== "undefined" && oid !== "null" ? oid : prev.operator_id;
       }
 
       return {
@@ -392,26 +415,34 @@ export function AddTicketModal({
     });
   };
 
-  //  PASO 2.4: EFECTO MAGICO DE PERSISTENCIA
   useEffect(() => {
-    if (parentData.unit_id && parentData.unit_id !== "undefined") {
+    if (
+      parentData.unit_id &&
+      parentData.unit_id !== "undefined" &&
+      parentData.unit_id !== "null"
+    ) {
       fetchLastOdometer(parentData.unit_id).then((km) => {
         setLastOdoCache(km);
-
-        // 🛑 FIX: Rompemos el bucle infinito
         setParentData((prev) => {
-          // Si el odómetro que llegó es igual al que ya tenemos,
-          // regresamos el mismo objeto 'prev'. React detendrá el re-render.
           if (prev.odometro === km) return prev;
-
-          // Solo si es distinto, creamos un objeto nuevo.
           return { ...prev, odometro: km };
         });
       });
     } else {
       setLastOdoCache(0);
     }
-  }, [parentData.unit_id, fetchLastOdometer]);
+  }, [parentData.unit_id, fetchLastOdometer, isMotogenerator]); // Re-ejecutar si cambia a motogenerador
+
+  // Resetear la selección al cambiar el switch de motogenerador
+  useEffect(() => {
+    setParentData((prev) => ({
+      ...prev,
+      selected_legs: [],
+      unit_id: "",
+      operator_id: "",
+      odometro: "",
+    }));
+  }, [isMotogenerator]);
 
   const totalGeneral = useMemo(
     () =>
@@ -430,11 +461,16 @@ export function AddTicketModal({
 
     const legIds = parentData.selected_legs.map((val) => val.split("|")[1]);
 
-    onSubmit({
+    const finalData: TicketFormData = {
       ...parentData,
       trip_leg_ids: legIds,
+      is_motogenerator: isMotogenerator,
+      odometro: isMotogenerator ? 0 : parentData.odometro,
+      horometro: isMotogenerator ? parentData.odometro : null,
       tickets,
-    });
+    };
+
+    onSubmit(finalData);
   };
 
   return (
@@ -442,17 +478,39 @@ export function AddTicketModal({
       <DialogContent className="w-[95vw] sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0 gap-0 border-none shadow-2xl overflow-hidden animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
-          <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-            <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20">
-              <Fuel className="h-6 w-6 text-brand-red drop-shadow-md" />
+          <div className="relative z-10 flex items-center justify-between gap-4 sm:gap-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-500/20">
+                <Fuel className="h-6 w-6 text-brand-red drop-shadow-md" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                  Registro Multi-Ticket
+                </DialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                  Vincule el viaje y agregue todos los vales del operador
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col gap-1 text-left">
-              <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
-                Registro Multi-Ticket
-              </DialogTitle>
-              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
-                Vincule el viaje y agregue todos los vales del operador
-              </p>
+
+            {/* SWITCH MOTOGENERADOR */}
+            <div className="flex items-center gap-3 bg-muted/50 p-2 px-4 rounded-xl border border-border">
+              <Zap
+                className={cn(
+                  "h-4 w-4",
+                  isMotogenerator ? "text-amber-500" : "text-muted-foreground",
+                )}
+              />
+              <div className="flex flex-col text-right">
+                <Label className="text-[10px] font-black uppercase tracking-widest cursor-pointer">
+                  Carga Motogenerador
+                </Label>
+              </div>
+              <Switch
+                checked={isMotogenerator}
+                onCheckedChange={setIsMotogenerator}
+                className="data-[state=checked]:bg-amber-500"
+              />
             </div>
           </div>
         </DialogHeader>
@@ -480,14 +538,19 @@ export function AddTicketModal({
                     items={searchableTrips}
                     selectedValues={parentData.selected_legs}
                     onToggle={handleToggleLeg}
-                    placeholder="Selecciona uno o más movimientos..."
+                    placeholder={
+                      isMotogenerator
+                        ? "Selecciona viajes con Motogenerador..."
+                        : "Selecciona uno o más movimientos..."
+                    }
                   />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Odómetro Actual (Opcional)
+                    {isMotogenerator
+                      ? "Orómetro Actual (Horas)"
+                      : "Odómetro Actual (Opcional)"}
                   </Label>
-                  {/*  PASO 2.5: INDICADOR VISUAL DEL ODÓMETRO */}
                   <div className="relative">
                     <Input
                       type="number"
