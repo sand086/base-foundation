@@ -409,7 +409,7 @@ const FuelLoads = () => {
             {row.is_motogenerator ? (
               <>
                 <Zap className="h-3 w-3 text-amber-500" />
-                ECO-{v}
+                {v}
               </>
             ) : (
               <>ECO-{v}</>
