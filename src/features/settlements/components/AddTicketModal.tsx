@@ -352,7 +352,6 @@ export function AddTicketModal({
     () =>
       (trips as any[]).filter((t) => {
         const status = String(t.status ?? "").toLowerCase();
-        // Agregamos en_transito para capturar viajes operando
         return ["entregado", "en_transito", "cerrado", "liquidado"].includes(
           status,
         );
@@ -360,40 +359,44 @@ export function AddTicketModal({
     [trips],
   );
 
-  // --- FASE 2: TRADUCTOR INTELIGENTE DE MOTOGENERADORES ---
+  // --- FASE 2: RESOLUCIÓN ESTRICTA DE MOTOGENERADORES ---
   const arrUnidades = useMemo(
     () => (Array.isArray(unidades) ? unidades : []),
     [unidades],
   );
 
-  const getMgName = (id: any, fallbackStr: any) => {
+  const resolveMotogenerator = (id: any, fallbackStr: any) => {
+    let foundUnit = null;
+
     // 1. Buscar si el ID real existe en BD
     if (id && !isNaN(Number(id))) {
-      const mg = arrUnidades.find((u: any) => String(u.id) === String(id));
-      if (mg) return mg.numero_economico;
+      foundUnit = arrUnidades.find((u: any) => String(u.id) === String(id));
     }
-    // 2. Si el fallback (texto quemado) esconde un ID (ej: "26")
-    if (fallbackStr && !isNaN(Number(fallbackStr))) {
-      const mg = arrUnidades.find(
+
+    // 2. Si el texto escondido es en realidad el ID (ej: "26")
+    if (!foundUnit && fallbackStr && !isNaN(Number(fallbackStr))) {
+      foundUnit = arrUnidades.find(
         (u: any) => String(u.id) === String(fallbackStr),
       );
-      if (mg) return mg.numero_economico;
     }
-    // 3. Buscar si el string quemado coincide con algún número económico de la BD
-    if (fallbackStr) {
-      const mgByEco = arrUnidades.find(
+
+    // 3. Buscar si el string quemado coincide con algún número económico de la BD (ej: "M10")
+    if (!foundUnit && fallbackStr) {
+      foundUnit = arrUnidades.find(
         (u: any) =>
           String(u.numero_economico).toLowerCase() ===
-          String(fallbackStr).toLowerCase(),
+          String(fallbackStr).toLowerCase().trim(),
       );
-      if (mgByEco) return mgByEco.numero_economico;
-      // Retornar el texto literal (Ej: M119) si no hay más opciones
-      return fallbackStr;
     }
-    return "MG";
+
+    if (foundUnit) {
+      return { id: foundUnit.id, name: foundUnit.numero_economico };
+    }
+
+    // Si no encontró nada, devuelve nulo para no romper el backend
+    return { id: null, name: fallbackStr || null };
   };
 
-  // Lógica Dinámica: Si es motogenerador, filtramos y listamos correctamente.
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
       const validLegs = (t.legs || []).filter((leg: any) => {
@@ -405,34 +408,37 @@ export function AddTicketModal({
 
       validLegs.forEach((leg: any) => {
         if (isMotogenerator) {
-          // REGLA: El motogenerador SOLO registra combustible en el tramo de ruta carretera.
+          // REGLA DE NEGOCIO: El motogenerador SOLO se alimenta en RUTA CARRETERA. No en patio.
           if (leg.leg_type !== "ruta_carretera") return;
 
-          // Filtramos solo los viajes que SÍ tengan un motogenerador asignado
-          const mg1_id = t.motogenerator_1_id;
-          const mg2_id = t.motogenerator_2_id;
-          const mg1_fallback = t.motogenerator_1;
-          const mg2_fallback = t.motogenerator_2;
-
+          // Filtramos solo viajes refrigerados
           if (!t.is_refrigerated_1 && !t.is_refrigerated_2) return;
 
-          if (t.is_refrigerated_1 && (mg1_id || mg1_fallback)) {
-            const mgName = getMgName(mg1_id, mg1_fallback);
+          const mg1 = resolveMotogenerator(
+            t.motogenerator_1_id,
+            t.motogenerator_1,
+          );
+          const mg2 = resolveMotogenerator(
+            t.motogenerator_2_id,
+            t.motogenerator_2,
+          );
+
+          if (t.is_refrigerated_1 && mg1.name) {
             options.push({
-              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mgName}`,
-              value: `${t.id}|${leg.id}|${mg1_id || mg1_fallback || ""}|${leg.operator_id}`,
+              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg1.name}`,
+              // Pasamos el ID real recuperado. Si es nulo pasamos "" para que falle limpiamente la UI.
+              value: `${t.id}|${leg.id}|${mg1.id || ""}|${leg.operator_id}`,
             });
           }
 
-          if (t.is_refrigerated_2 && (mg2_id || mg2_fallback)) {
-            const mgName = getMgName(mg2_id, mg2_fallback);
+          if (t.is_refrigerated_2 && mg2.name) {
             options.push({
-              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mgName}`,
-              value: `${t.id}|${leg.id}|${mg2_id || mg2_fallback || ""}|${leg.operator_id}`,
+              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg2.name}`,
+              value: `${t.id}|${leg.id}|${mg2.id || ""}|${leg.operator_id}`,
             });
           }
         } else {
-          // Tractocamión Normal
+          // Tractocamión Normal (Cualquier fase es válida)
           options.push({
             label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`,
             value: `${t.id}|${leg.id}|${leg.unit_id}|${leg.operator_id}`,
@@ -458,8 +464,8 @@ export function AddTicketModal({
 
       if (newLegs.length > 0) {
         const [, , uid, oid] = newLegs[0].split("|");
-        newUnit =
-          uid && uid !== "undefined" && uid !== "null" ? uid : prev.unit_id;
+        // Aseguramos de no meter basura (strings vacíos o nulls) en el unit_id
+        newUnit = uid && uid !== "undefined" && uid !== "null" ? uid : "";
         newOp =
           oid && oid !== "undefined" && oid !== "null" ? oid : prev.operator_id;
       }
@@ -477,7 +483,8 @@ export function AddTicketModal({
     if (
       parentData.unit_id &&
       parentData.unit_id !== "undefined" &&
-      parentData.unit_id !== "null"
+      parentData.unit_id !== "null" &&
+      parentData.unit_id !== ""
     ) {
       fetchLastOdometer(parentData.unit_id).then((km) => {
         setLastOdoCache(km);
@@ -512,6 +519,13 @@ export function AddTicketModal({
     e.preventDefault();
     if (parentData.selected_legs.length === 0)
       return toast.error("Selecciona al menos un viaje.");
+
+    if (isMotogenerator && !parentData.unit_id) {
+      return toast.error(
+        "Error: Este viaje no tiene un motogenerador válido asignado en la Base de Datos.",
+      );
+    }
+
     if (tickets.some((t) => t.litros_diesel <= 0))
       return toast.error("Todos los tickets deben tener litros registrados.");
     if (tickets.some((t) => !t.estacion || t.estacion.trim() === ""))
@@ -598,7 +612,7 @@ export function AddTicketModal({
                     onToggle={handleToggleLeg}
                     placeholder={
                       isMotogenerator
-                        ? "Selecciona viajes de carretera con Motogenerador..."
+                        ? "Selecciona viaje (Ruta) con Motogenerador..."
                         : "Selecciona uno o más movimientos..."
                     }
                   />

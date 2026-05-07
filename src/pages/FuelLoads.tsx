@@ -39,6 +39,7 @@ import {
   Check,
   ChevronsUpDown,
   Lock,
+  Zap,
 } from "lucide-react";
 
 // Tipos y Servicios
@@ -184,11 +185,21 @@ const FuelLoads = () => {
           const formData = new FormData();
           formData.append("unit_id", String(data.unit_id));
           formData.append("operator_id", String(data.operator_id));
-          formData.append("odometro", String(data.odometro || 0));
           formData.append("fecha_hora", String(ticket.fecha_hora));
           formData.append("estacion", ticket.estacion || "No especificada");
           formData.append("litros_diesel", String(litrosDistribuidos));
           formData.append("precio_diesel", String(ticket.precio_diesel || 0));
+
+          // --- FASE 2: ENVIAR DATOS SEGÚN EL TIPO DE EQUIPO ---
+          formData.append("is_motogenerator", String(data.is_motogenerator));
+
+          if (data.is_motogenerator) {
+            formData.append("odometro", "0");
+            formData.append("horometro", String(data.horometro || 0));
+          } else {
+            formData.append("odometro", String(data.odometro || 0));
+          }
+          // ----------------------------------------------------
 
           if (data.trip_id && data.trip_id !== "none")
             formData.append("trip_id", String(data.trip_id));
@@ -379,9 +390,16 @@ const FuelLoads = () => {
       {
         key: "unidad_numero",
         header: "ECO",
-        render: (v) => (
-          <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight">
-            {v}
+        render: (v, row) => (
+          <span className="font-mono font-black text-slate-900 dark:text-slate-200 bg-slate-100 dark:bg-white/5 px-2 py-1 rounded text-xs tracking-tight inline-flex items-center gap-1.5">
+            {row.is_motogenerator ? (
+              <>
+                <Zap className="h-3 w-3 text-amber-500" />
+                ECO-{v}
+              </>
+            ) : (
+              <>ECO-{v}</>
+            )}
           </span>
         ),
       },
@@ -446,10 +464,24 @@ const FuelLoads = () => {
       },
       {
         key: "odometro",
-        header: "Odómetro",
-        render: (v) => (
-          <span className="font-mono text-[11px] font-bold text-slate-500">
-            {Number(v).toLocaleString()} KM
+        header: "Lectura (Km/Hr)",
+        render: (v, row) => (
+          <span className="font-mono text-[11px] font-bold text-slate-500 flex flex-col">
+            {row.is_motogenerator ? (
+              <>
+                <span>{Number(row.horometro || 0).toLocaleString()} HRS</span>
+                <span className="text-[8px] uppercase tracking-widest text-amber-500">
+                  Orómetro
+                </span>
+              </>
+            ) : (
+              <>
+                <span>{Number(v).toLocaleString()} KM</span>
+                <span className="text-[8px] uppercase tracking-widest text-slate-400">
+                  Odómetro
+                </span>
+              </>
+            )}
           </span>
         ),
       },
@@ -900,7 +932,7 @@ const FuelLoads = () => {
 
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
-              {/*  ALERTA DE REVERSIÓN DE CONCILIACIÓN */}
+              {/* ALERTA DE REVERSIÓN DE CONCILIACIÓN */}
               {ticketToDelete?.is_conciliated ? (
                 <div className="p-5 sm:p-6 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm mb-4">
                   <div className="flex items-center gap-2 mb-3">

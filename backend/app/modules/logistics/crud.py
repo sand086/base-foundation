@@ -88,6 +88,10 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
             joinedload(models.Trip.remolque_2),
+            # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
+            joinedload(models.Trip.motogenerator_1_unit),
+            joinedload(models.Trip.motogenerator_2_unit),
+            # ---------------------------------------------------
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
@@ -112,6 +116,12 @@ def get_trip(db: Session, trip_id: str):
             joinedload(models.Trip.client),
             joinedload(models.Trip.tariff),
             joinedload(models.Trip.remolque_1),
+            joinedload(models.Trip.dolly),
+            joinedload(models.Trip.remolque_2),  # <-- Agregado por si acaso
+            # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
+            joinedload(models.Trip.motogenerator_1_unit),
+            joinedload(models.Trip.motogenerator_2_unit),
+            # ---------------------------------------------------
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
