@@ -296,7 +296,7 @@ export function AddTicketModal({
   initialData,
 }: AddTicketModalProps) {
   const { trips = [] } = useTrips();
-  const { fetchLastOdometer } = useUnits();
+  const { unidades, fetchLastOdometer } = useUnits(); // <-- FASE 2: Inyectamos unidades
 
   // Estados de vinculación
   const [parentData, setParentData] = useState({
@@ -357,7 +357,21 @@ export function AddTicketModal({
     [trips],
   );
 
-  // Lógica Dinámica: Si es motogenerador, listamos los MG asociados al viaje.
+  // --- FASE 2: TRADUCTOR INTELIGENTE DE MOTOGENERADORES ---
+  const arrUnidades = useMemo(
+    () => (Array.isArray(unidades) ? unidades : []),
+    [unidades],
+  );
+
+  const getMgName = (id: any, fallbackStr: any) => {
+    if (id) {
+      const mg = arrUnidades.find((u: any) => String(u.id) === String(id));
+      if (mg) return mg.numero_economico;
+    }
+    return fallbackStr || "MG";
+  };
+
+  // Lógica Dinámica: Si es motogenerador, filtramos y listamos correctamente.
   const searchableTrips = useMemo(() => {
     const list = activeTrips.flatMap((t) => {
       const validLegs = (t.legs || []).filter((leg: any) => {
@@ -365,30 +379,44 @@ export function AddTicketModal({
         return ["entregado", "cerrado"].includes(legStatus);
       });
 
-      return validLegs.map((leg: any) => {
-        let label = "";
-        let finalUnitId = leg.unit_id;
+      const options: { label: string; value: string }[] = [];
 
+      validLegs.forEach((leg: any) => {
         if (isMotogenerator) {
-          // Si el viaje tiene asignado un motogenerador, lo mostramos
-          const mg_id = t.motogenerator_1_id || t.motogenerator_2_id;
-          // En caso de que tengas el número eco a la mano en el objeto (opcional), si no, mostramos un genérico.
-          const mg_name =
-            t.motogenerator_1 || t.motogenerator_2 || "Motogenerador";
-          finalUnitId = mg_id;
-          label = `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | ⚡ ${mg_name}`;
-        } else {
-          label = `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`;
-        }
+          // Filtramos solo los viajes que SÍ tengan un motogenerador asignado
+          const mg1_id = t.motogenerator_1_id;
+          const mg2_id = t.motogenerator_2_id;
 
-        return {
-          label,
-          value: `${t.id}|${leg.id}|${finalUnitId}|${leg.operator_id}`,
-        };
+          if (!mg1_id && !mg2_id) return; // Si no tiene, lo ignoramos por completo.
+
+          if (mg1_id) {
+            const mgName = getMgName(mg1_id, t.motogenerator_1);
+            options.push({
+              label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | ⚡ ECO-${mgName}`,
+              value: `${t.id}|${leg.id}|${mg1_id}|${leg.operator_id}`,
+            });
+          }
+
+          if (mg2_id) {
+            const mgName = getMgName(mg2_id, t.motogenerator_2);
+            options.push({
+              label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | ⚡ ECO-${mgName}`,
+              value: `${t.id}|${leg.id}|${mg2_id}|${leg.operator_id}`,
+            });
+          }
+        } else {
+          options.push({
+            label: `Folio ${t.public_id || t.id} | ${leg.leg_type?.replace("_", " ")} | Eco: ${leg.unit?.numero_economico}`,
+            value: `${t.id}|${leg.id}|${leg.unit_id}|${leg.operator_id}`,
+          });
+        }
       });
+
+      return options;
     });
     return list;
-  }, [activeTrips, isMotogenerator]);
+  }, [activeTrips, isMotogenerator, arrUnidades]);
+  // --------------------------------------------------------
 
   const handleToggleLeg = (selectedValue: string) => {
     setParentData((prev) => {
