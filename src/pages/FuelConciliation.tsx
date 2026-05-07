@@ -77,6 +77,9 @@ import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
+// Importamos el Modal Blindado (Asegúrate de que la ruta sea correcta según tu proyecto)
+import { ConciliarViajeModal } from "@/features/settlements/components/FuelConciliationModal"; // Ajusta la ruta si es necesario
+
 // ============================================================================
 // INTERFACES
 // ============================================================================
@@ -106,14 +109,6 @@ export default function FuelConciliation() {
   const [selectedTripId, setSelectedTripId] = useState<string>("");
   const [selectedLegId, setSelectedLegId] = useState<string>("");
 
-  const [formData, setFormData] = useState<AuditFormData>({
-    litrosVales: "0",
-    kilometrosECM: "",
-    litrosECM: "",
-    odometroFinal: "",
-    maxOdoVales: 0,
-  });
-
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingVales, setIsFetchingVales] = useState(false);
   const [valesRawData, setValesRawData] = useState<any[]>([]);
@@ -122,9 +117,11 @@ export default function FuelConciliation() {
   const [legToReset, setLegToReset] = useState<string | null>(null);
   const [legToView, setLegToView] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [cobrarOperador, setCobrarOperador] = useState(true);
 
-  //  NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
+  // Estado para controlar el nuevo Modal Inteligente
+  const [isConciliarModalOpen, setIsConciliarModalOpen] = useState(false);
+
+  // NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
   const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
@@ -140,7 +137,7 @@ export default function FuelConciliation() {
       );
   }, [trips]);
 
-  //  2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
+  // 2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
   const filteredAuditedLegs = useMemo(() => {
     let filtered = auditedLegs;
     const hoyStr = new Date().toLocaleDateString("es-MX");
@@ -184,7 +181,7 @@ export default function FuelConciliation() {
     if (!activeTrip || !activeTrip.legs) return [];
     return activeTrip.legs.filter((leg) => {
       const legStatus = String(leg.status ?? "").toLowerCase();
-      //   EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
+      // EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
       return (
         ["entregado", "cerrado", "finalizado", "liquidado"].includes(
           legStatus,
@@ -225,20 +222,12 @@ export default function FuelConciliation() {
     try {
       const response = await axiosClient.get("/api/fleet/fuel-logs");
 
-      let mayorOdometroEnVales = 0;
-
       const valesDiesel = response.data.filter((log: any) => {
         const esValido =
           log.tipo_combustible === "diesel" &&
           String(log.trip_leg_id) === String(legIdToFetch) &&
           log.record_status === "A";
 
-        if (esValido) {
-          const odoLog = Number(log.odometro) || 0;
-          if (odoLog > mayorOdometroEnVales) {
-            mayorOdometroEnVales = odoLog;
-          }
-        }
         return esValido;
       });
 
@@ -249,21 +238,18 @@ export default function FuelConciliation() {
         0,
       );
 
-      setFormData((prev) => ({
-        ...prev,
-        litrosVales: totalVales.toString(),
-        maxOdoVales: mayorOdometroEnVales,
-      }));
-
       if (totalVales > 0) {
         toast.success("Suministro Sincronizado", {
-          description: `Se detectaron ${totalVales.toFixed(2)} L en vales. Odo Ref: ${mayorOdometroEnVales || "N/A"}`,
+          description: `Se detectaron ${totalVales.toFixed(2)} L en vales para este tramo.`,
         });
       } else {
         toast.info("Sin vales detectados", {
           description: `El tramo no tiene vales físicos registrados.`,
         });
       }
+
+      // Una vez obtenidos los vales, abrimos el modal inteligente
+      setIsConciliarModalOpen(true);
     } catch (error) {
       console.error("Error obteniendo vales:", error);
       toast.error("Error de Sincronización");
@@ -276,72 +262,27 @@ export default function FuelConciliation() {
     setSelectedTripId(id);
     setSelectedLegId("");
     setIsEditing(false);
-    handleResetState();
   };
 
   const handleLegSelect = async (legId: string) => {
     setSelectedLegId(legId);
     setIsEditing(false);
-    handleResetState();
     await fetchValesCombustible(legId);
   };
 
-  //   LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
-  const handleAutoCalculateOdometer = () => {
-    const kms = Number(formData.kilometrosECM);
-    if (kms > 0 && activeLeg) {
-      const baseOdo =
-        formData.maxOdoVales > 0
-          ? formData.maxOdoVales
-          : Number(activeLeg.odometro_inicial) || 0;
-
-      const odoFinal = baseOdo + kms;
-
-      setFormData((prev) => ({ ...prev, odometroFinal: String(odoFinal) }));
-
-      toast.info("Odómetro auto-calculado", {
-        description: `Base: ${baseOdo.toLocaleString()} km + Recorrido ECM: ${kms.toLocaleString()} km`,
-      });
-    }
-  };
-
-  //   REPARACIÓN DEL EDITAR
+  // REPARACIÓN DEL EDITAR
   const handleEditAudit = async (leg: any) => {
     setSelectedTripId(String(leg.trip_id));
     setSelectedLegId(String(leg.id));
     setIsEditing(true);
 
-    const auditEvent = leg.timeline_events?.find(
-      (e: any) =>
-        e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Detalles Fase"),
-    );
-
-    let kmEcmVal = "";
-    let ltEcmVal = "";
-
-    if (auditEvent && auditEvent.comments) {
-      const kmMatch = auditEvent.comments.match(/Km ECM:\s*([\d.]+)/);
-      const ltMatch = auditEvent.comments.match(/Litros ECM:\s*([\d.]+)/);
-      if (kmMatch) kmEcmVal = kmMatch[1];
-      if (ltMatch) ltEcmVal = ltMatch[1];
-    }
-
-    setFormData({
-      litrosVales: "0",
-      kilometrosECM: kmEcmVal,
-      litrosECM: ltEcmVal,
-      odometroFinal: String(leg.odometro_final || ""),
-      maxOdoVales: 0,
-    });
-
     await fetchValesCombustible(String(leg.id));
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    handleResetAll();
+    setSelectedTripId("");
+    setSelectedLegId("");
   };
 
   // Eliminar (Revertir)
@@ -369,104 +310,47 @@ export default function FuelConciliation() {
   };
 
   // =========================================================================
-  // LA MATEMÁTICA FINANCIERA Y EL RECIBO DE SANCIÓN (REGLA DEL 3%)
+  // GUARDAR Y APLICAR AL BACKEND (Llamado desde el Modal Inteligente)
   // =========================================================================
-  const auditResult = useMemo(() => {
-    const litrosVales = Number(formData.litrosVales) || 0;
-    const kmECM = Number(formData.kilometrosECM) || 0;
-    const litrosECM = Number(formData.litrosECM) || 0;
-
-    const rendimientoECM = litrosECM > 0 ? kmECM / litrosECM : 0;
-    const rendimientoReal = litrosVales > 0 ? kmECM / litrosVales : 0;
-
-    const diferenciaLitros = litrosVales - litrosECM;
-    const toleranciaPermitida = litrosECM * TOLERANCIA_FIJA;
-
-    let estatus: "CONCILIADO" | "COBRO_OPERADOR" = "CONCILIADO";
-    let esRoboSospechado = false;
-    let descuentoPesos = 0;
-    let mensajeDeduccion = "";
-
-    if (diferenciaLitros > 0 && diferenciaLitros > toleranciaPermitida) {
-      estatus = "COBRO_OPERADOR";
-      esRoboSospechado = true;
-      descuentoPesos = diferenciaLitros * PRECIO_DIESEL_ESTANDAR;
-      mensajeDeduccion = `Cargo por diésel: Excedente de ${diferenciaLitros.toFixed(1)}L sobre lo marcado por ECM, generando un descuento de $${descuentoPesos.toFixed(2)}`;
-    }
-
-    return {
-      litrosVales,
-      kmECM,
-      litrosECM,
-      rendimientoECM,
-      rendimientoReal,
-      diferenciaLitros,
-      toleranciaPermitida,
-      estatus,
-      esRoboSospechado,
-      descuentoPesos,
-      mensajeDeduccion,
-    };
-  }, [formData]);
-
-  const handleInputChange = (field: keyof AuditFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleResetState = () => {
-    setFormData({
-      litrosVales: "0",
-      kilometrosECM: "",
-      litrosECM: "",
-      odometroFinal: "",
-      maxOdoVales: 0,
-    });
-    setCobrarOperador(true);
-  };
-
-  const handleResetAll = () => {
-    setSelectedTripId("");
-    setSelectedLegId("");
-    setIsEditing(false);
-    handleResetState();
-  };
-
-  // =========================================================================
-  //   GUARDAR Y APLICAR SANCIÓN AL BACKEND
-  // =========================================================================
-  const handleAuthorizeAndClose = async () => {
+  const handleAuthorizeFromModal = async (tripId: number, calculos: any) => {
     if (!activeTrip || !selectedLegId) return;
-
-    if (!formData.odometroFinal) {
-      toast.error("Falta Odómetro Final", {
-        description: "Debe calcular/ingresar el Odómetro Final de la unidad.",
-      });
-      return;
-    }
 
     setIsProcessing(true);
 
     try {
-      const kmECM = auditResult?.kmECM || 0;
-      const ltECM = auditResult?.litrosECM || 0;
-      const vales = auditResult?.litrosVales || 0;
-      const rReal = auditResult?.rendimientoReal || 0;
-      const est = auditResult?.estatus || "CONCILIADO";
-      const isRobo = auditResult?.esRoboSospechado || false;
+      const kmECM = calculos.km_recorridos || 0;
+      const ltECM = calculos.litros_ecm || 0;
+      const vales = calculos.litros_vales || 0;
+      const rReal = calculos.rendimiento || 0;
+      const odoFinal = calculos.odometro_final || 0;
+      const isMoto = calculos.is_motogenerator || false;
+      const cobrar = calculos.cobrar_al_operador || false;
 
-      const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
+      const diferencia = calculos.diferencia || 0;
+      const est =
+        diferencia > ltECM * TOLERANCIA_FIJA ? "COBRO_OPERADOR" : "CONCILIADO";
+      const isRobo = est === "COBRO_OPERADOR";
+      const descuentoPesos = isRobo ? diferencia * PRECIO_DIESEL_ESTANDAR : 0;
+      const mensajeDeduccion = isRobo
+        ? `Cargo por diésel: Excedente de ${diferencia.toFixed(1)}L sobre lo marcado por ECM, generando un descuento de $${descuentoPesos.toFixed(2)}`
+        : "";
+
+      const sufijo = isMoto ? "Hrs" : "Km";
+      const lblSufijo = isMoto ? "Horómetro" : "Odómetro";
+
+      const comentarioBitacora = `Detalles Fase (${isMoto ? "MG" : "Tracto"}). ${sufijo} ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal} ${isMoto ? "hr/L" : "km/L"}. Ver: ${est}. ${isRobo ? mensajeDeduccion : ""}`;
 
       const payload = {
         status: "entregado",
         location: "Conciliación de Combustible",
         comments: comentarioBitacora.trim(),
-        odometro: Number(formData.odometroFinal),
-        odometro_final: Number(formData.odometroFinal),
+        odometro: Number(odoFinal),
+        odometro_final: Number(odoFinal),
         combustible_litros: Number(vales),
         trip_leg_id: Number(selectedLegId),
-        penalizacion_monto: cobrarOperador ? auditResult.descuentoPesos : 0,
-        penalizacion_motivo: cobrarOperador
-          ? auditResult.mensajeDeduccion
+        penalizacion_monto: cobrar ? descuentoPesos : 0,
+        penalizacion_motivo: cobrar
+          ? mensajeDeduccion
           : "Excedente perdonado por el auditor.",
       };
 
@@ -486,7 +370,9 @@ export default function FuelConciliation() {
       );
 
       await fetchTrips();
-      handleResetAll();
+      setSelectedTripId("");
+      setSelectedLegId("");
+      setIsEditing(false);
     } catch (error) {
       console.error("Error al conciliar:", error);
       toast.error("Error de Servidor", {
@@ -506,7 +392,8 @@ export default function FuelConciliation() {
     );
     const text = auditEvent?.comments || "";
 
-    const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
+    // Adaptamos el Regex para capturar Km o Hrs
+    const kmMatch = text.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
     const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
     const valesMatch = text.match(/Vales:\s*([\d.]+)/);
     const rendMatch = text.match(/Rend Real:\s*([\d.]+)/);
@@ -571,7 +458,7 @@ export default function FuelConciliation() {
         header: "Odo Final",
         render: (v: number) => (
           <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs">
-            {v?.toLocaleString() || 0} km
+            {v?.toLocaleString() || 0}
           </span>
         ),
       },
@@ -601,7 +488,7 @@ export default function FuelConciliation() {
         header: "",
         sortable: false,
         render: (_, row) => {
-          //  BLINDAJE: Detectar si el viaje ya fue pagado
+          // BLINDAJE: Detectar si el viaje ya fue pagado
           const isLiquidado = row.status === "liquidado";
 
           return (
@@ -632,7 +519,7 @@ export default function FuelConciliation() {
 
                 <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
 
-                {/*  EDITAR (Protegido) */}
+                {/* EDITAR (Protegido) */}
                 <DropdownMenuItem
                   onClick={() => {
                     if (isLiquidado) {
@@ -650,7 +537,7 @@ export default function FuelConciliation() {
                   <Pencil className="h-3.5 w-3.5 mr-2" /> Editar / Recalcular
                 </DropdownMenuItem>
 
-                {/*  ELIMINAR (Protegido) */}
+                {/* ELIMINAR (Protegido) */}
                 <DropdownMenuItem
                   className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
                   onClick={() => {
@@ -799,350 +686,98 @@ export default function FuelConciliation() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Si estamos en proceso de pedir los vales, mostrar un indicador visual */}
+            {isFetchingVales && (
+              <div className="col-span-1 md:col-span-2 flex items-center justify-center p-2 text-blue-500 animate-pulse text-xs font-bold gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Analizando
+                suministros de la fase...
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {tripData && (
-          <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl animate-in slide-in-from-top-2">
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
-                <Truck className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-0.5">
-                  Viaje en Captura • Fase {tripData.fase}
-                </p>
-                <p className="text-sm font-bold tracking-tight">
-                  {tripData.cartaPorteId} • {tripData.ruta}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-6 text-xs font-medium bg-white/5 py-2.5 px-5 rounded-xl border border-white/10 w-full md:w-auto">
-              <div className="flex flex-col">
-                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
-                  <User className="h-3 w-3" /> Operador
-                </span>
-                <span className="truncate max-w-[120px]">
-                  {tripData.operador}
-                </span>
-              </div>
-              <div className="hidden md:block w-px bg-white/20"></div>
-              <div className="flex flex-col">
-                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
-                  <Gauge className="h-3 w-3" /> Unidad
-                </span>
-                <span>
-                  ECO-{tripData.unidadId} ({tripData.configuracion})
-                </span>
-              </div>
-              <div className="hidden md:block w-px bg-white/20"></div>
-              <div className="flex flex-col">
-                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Salida
-                </span>
-                <span>{tripData.fechaViaje}</span>
-              </div>
-            </div>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
+          <div className="flex items-center gap-2 px-1">
+            <History className="h-4 w-4 text-slate-400" />
+            <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
+              Historial de Auditorías
+            </h3>
           </div>
-        )}
 
-        {!tripData ? (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
-            <div className="flex items-center gap-2 px-1">
-              <History className="h-4 w-4 text-slate-400" />
-              <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
-                Historial de Auditorías
-              </h3>
-            </div>
-
-            {/*  NUEVO: Pestañas de Hoy / Histórico */}
-            <div className="flex items-center pb-2">
-              <Tabs
-                value={dateFilter}
-                onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
-                className="w-[300px]"
-              >
-                <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
-                  <TabsTrigger
-                    value="hoy"
-                    className="rounded-lg font-bold text-xs"
-                  >
-                    Hoy
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="historico"
-                    className="rounded-lg font-bold text-xs"
-                  >
-                    Histórico
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <EnhancedDataTable
-                  data={filteredAuditedLegs} //  Usamos la tabla filtrada
-                  columns={auditedColumns as any}
-                  className="border-none"
-                  searchPlaceholder="Buscar por folio o operador..."
-                  customFilters={
-                    dateFilter === "historico" && (
-                      <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
-                        <DateRangePicker
-                          dateRange={dateRange}
-                          onDateRangeChange={setDateRange}
-                          placeholder="Rango de fechas"
-                          className="w-[280px]"
-                        />
-                        {dateRange?.from && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDateRange(undefined)}
-                            className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
-                            title="Limpiar fechas"
-                          >
-                            <FilterX size={18} />
-                          </Button>
-                        )}
-                      </div>
-                    )
-                  }
-                />
-              </CardContent>
-            </Card>
+          {/* NUEVO: Pestañas de Hoy / Histórico */}
+          <div className="flex items-center pb-2">
+            <Tabs
+              value={dateFilter}
+              onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
+              className="w-[300px]"
+            >
+              <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
+                <TabsTrigger
+                  value="hoy"
+                  className="rounded-lg font-bold text-xs"
+                >
+                  Hoy
+                </TabsTrigger>
+                <TabsTrigger
+                  value="historico"
+                  className="rounded-lg font-bold text-xs"
+                >
+                  Histórico
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
-        ) : (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
-            <div className="grid md:grid-cols-2 gap-4">
-              {/* LADO FÍSICO */}
-              <Card className="border-t-4 border-t-amber-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
-                <CardHeader className="bg-amber-50/50 dark:bg-amber-900/10 p-4 border-b border-amber-100 dark:border-amber-900/30">
-                  <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center justify-between text-amber-700 dark:text-amber-500">
-                    <span className="flex items-center gap-2">
-                      <Fuel className="h-4 w-4" /> 1. Suministro Físico
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-[9px] hover:bg-amber-100 dark:hover:bg-amber-900/50"
-                      onClick={() => fetchValesCombustible(selectedLegId)}
-                      disabled={isFetchingVales}
-                    >
-                      <RefreshCw
-                        className={cn(
-                          "h-3 w-3 mr-1",
-                          isFetchingVales && "animate-spin",
-                        )}
-                      />{" "}
-                      Refrescar
-                    </Button>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-5">
-                  <div className="space-y-2">
-                    <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                      Total Sincronizado
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="text"
-                        disabled
-                        value={formData.litrosVales}
-                        className="pr-12 font-mono h-12 bg-slate-50 dark:bg-slate-800 text-2xl font-black text-slate-700 dark:text-white"
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">
-                        L
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
 
-              {/* LADO DIGITAL (ECM) */}
-              <Card className="border-t-4 border-t-blue-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
-                <CardHeader className="bg-blue-50/50 dark:bg-blue-900/10 p-4 border-b border-blue-100 dark:border-blue-900/30">
-                  <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-blue-700 dark:text-blue-500">
-                    <Gauge className="h-4 w-4" /> 2. Computadora (ECM)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-5 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                        KMs ECM *
-                      </Label>
-                      <Input
-                        type="number"
-                        placeholder="Ej. 900"
-                        value={formData.kilometrosECM}
-                        onChange={(e) =>
-                          handleInputChange("kilometrosECM", e.target.value)
-                        }
-                        onBlur={handleAutoCalculateOdometer}
-                        className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
+          <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
+            <CardContent className="p-0">
+              <EnhancedDataTable
+                data={filteredAuditedLegs} // Usamos la tabla filtrada
+                columns={auditedColumns as any}
+                className="border-none"
+                searchPlaceholder="Buscar por folio o operador..."
+                customFilters={
+                  dateFilter === "historico" && (
+                    <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
+                      <DateRangePicker
+                        dateRange={dateRange}
+                        onDateRangeChange={setDateRange}
+                        placeholder="Rango de fechas"
+                        className="w-[280px]"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                        Litros ECM *
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.1"
-                        placeholder="Ej. 448"
-                        value={formData.litrosECM}
-                        onChange={(e) =>
-                          handleInputChange("litrosECM", e.target.value)
-                        }
-                        onBlur={handleAutoCalculateOdometer}
-                        className="h-10 font-mono font-bold dark:bg-slate-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2 border-t border-slate-100 dark:border-white/5 pt-3">
-                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
-                      <span>Odómetro Final Calculado *</span>
-                      {formData.maxOdoVales > 0 && (
-                        <span className="text-amber-500 lowercase opacity-80">
-                          (Base vale físico)
-                        </span>
+                      {dateRange?.from && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDateRange(undefined)}
+                          className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
+                          title="Limpiar fechas"
+                        >
+                          <FilterX size={18} />
+                        </Button>
                       )}
-                    </Label>
-                    <Input
-                      type="number"
-                      value={formData.odometroFinal}
-                      onChange={(e) =>
-                        handleInputChange("odometroFinal", e.target.value)
-                      }
-                      className={cn(
-                        "h-10 font-mono font-bold text-lg dark:text-white transition-colors",
-                        formData.odometroFinal
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20"
-                          : "bg-slate-50 dark:bg-slate-800 text-slate-700",
-                      )}
-                      placeholder="Autocalculado..."
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* BARRA INFERIOR COMPACTA: VEREDICTO Y BOTONES */}
-            <Card className="border-none shadow-2xl bg-white dark:bg-slate-900 overflow-hidden">
-              <div
-                className={cn(
-                  "h-1.5 w-full",
-                  auditResult?.esRoboSospechado
-                    ? "bg-rose-500"
-                    : "bg-emerald-500",
-                )}
+                    </div>
+                  )
+                }
               />
-              <CardContent className="p-4 flex flex-col lg:flex-row items-center justify-between gap-6">
-                <div className="flex flex-wrap gap-4 md:gap-8 justify-center lg:justify-start divide-x divide-slate-200 dark:divide-white/10 w-full lg:w-auto">
-                  <div className="flex flex-col pr-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      Rend. ECM
-                    </span>
-                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white">
-                      {auditResult?.rendimientoECM.toFixed(2) || "0.00"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col pl-4 md:pl-8 pr-2">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      Rend. Real
-                    </span>
-                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white">
-                      {auditResult?.rendimientoReal.toFixed(2) || "0.00"}
-                    </span>
-                  </div>
-                  <div className="flex flex-col pl-4 md:pl-8">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                      {auditResult?.diferenciaLitros != null &&
-                      auditResult.diferenciaLitros > 0
-                        ? "Faltante / Exceso"
-                        : "Ahorro Diésel"}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-2xl font-mono font-black",
-                        auditResult?.esRoboSospechado
-                          ? "text-rose-600 dark:text-rose-500"
-                          : "text-emerald-600 dark:text-emerald-500",
-                      )}
-                    >
-                      {auditResult?.diferenciaLitros != null &&
-                      auditResult.diferenciaLitros > 0
-                        ? "+"
-                        : ""}
-                      {auditResult?.diferenciaLitros.toFixed(1) || "0.0"}{" "}
-                      <span className="text-sm">L</span>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-                  {auditResult?.esRoboSospechado && (
-                    <div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 px-3 py-1.5 bg-rose-50 dark:bg-rose-900/10 rounded-lg border border-rose-100 dark:border-rose-900/30">
-                      <div className="flex flex-col text-right">
-                        <span className="font-black uppercase text-[10px] tracking-widest leading-none">
-                          Excede Tol.
-                        </span>
-                        <span className="text-[9px] font-medium text-rose-800 dark:text-rose-300 mt-0.5">
-                          ¿Cobrar ${auditResult.descuentoPesos.toFixed(2)}?
-                        </span>
-                      </div>
-                      <Switch
-                        checked={cobrarOperador}
-                        onCheckedChange={setCobrarOperador}
-                        className="data-[state=checked]:bg-rose-600"
-                      />
-                    </div>
-                  )}
-                  {isEditing ? (
-                    <Button
-                      variant="ghost"
-                      onClick={handleCancelEdit}
-                      className="w-full sm:w-auto font-bold uppercase tracking-widest text-[10px] text-slate-500 hover:text-rose-600 h-11 px-6"
-                    >
-                      Cancelar Edición
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      onClick={handleResetAll}
-                      className="w-full sm:w-auto font-bold uppercase tracking-widest text-[10px] text-slate-500 hover:text-slate-700 h-11 px-6"
-                    >
-                      Cancelar y Limpiar
-                    </Button>
-                  )}
-
-                  <Button
-                    onClick={handleAuthorizeAndClose}
-                    disabled={isProcessing || !formData.odometroFinal}
-                    className={cn(
-                      "w-full sm:w-auto font-black text-white uppercase tracking-widest text-[11px] h-11 px-8 shadow-lg",
-                      auditResult?.esRoboSospechado
-                        ? "bg-rose-600 hover:bg-rose-700 shadow-rose-500/20"
-                        : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20",
-                    )}
-                  >
-                    {isProcessing ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-2" />
-                    )}
-                    Confirmar y Cerrar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* DIALOG DE VISTA DE DETALLES */}
+      {/* AQUÍ INYECTAMOS EL NUEVO MODAL INTELIGENTE DE CONCILIACIÓN */}
+      <ConciliarViajeModal
+        open={isConciliarModalOpen}
+        onOpenChange={(open) => {
+          setIsConciliarModalOpen(open);
+          if (!open) handleCancelEdit();
+        }}
+        trip={activeTrip}
+        fuelLoads={valesRawData}
+        onConciliar={handleAuthorizeFromModal}
+      />
+
+      {/* DIALOG DE VISTA DE DETALLES HISTÓRICOS */}
       <Dialog
         open={!!legToView}
         onOpenChange={(open) => !open && setLegToView(null)}
@@ -1205,7 +840,7 @@ export default function FuelConciliation() {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center shadow-sm">
                 <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
-                  KMs ECM
+                  Km / Hrs ECM
                 </p>
                 <p className="font-mono font-black text-slate-800 dark:text-white text-lg">
                   {Number(parsedAuditDetails?.km || 0).toLocaleString()}
@@ -1238,8 +873,8 @@ export default function FuelConciliation() {
                 </p>
                 <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-3xl flex items-baseline gap-1">
                   {parsedAuditDetails?.rend || "0.00"}
-                  <span className="text-xs font-bold uppercase opacity-60">
-                    km/L
+                  <span className="text-[10px] font-bold uppercase opacity-60 ml-1">
+                    hr/L | km/L
                   </span>
                 </p>
               </div>
@@ -1288,9 +923,6 @@ export default function FuelConciliation() {
                 </p>
                 <p className="font-mono text-xl font-black text-slate-800 dark:text-blue-400">
                   {Number(legToView?.odometro_final || 0).toLocaleString()}
-                  <span className="text-[10px] ml-1 text-slate-400 uppercase font-bold">
-                    km
-                  </span>
                 </p>
               </div>
             </div>
