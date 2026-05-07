@@ -113,16 +113,19 @@ export function ConciliarViajeModal({
   const nombreMotogeneradorAfectado = useMemo(() => {
     if (!trip) return "Motogenerador Activo";
     // Buscamos si en la data del viaje existe el MG. Priorizamos el 1, luego el 2.
+    // AQUÍ LA SOLUCIÓN: Buscamos en _unit?.numero_economico en lugar de sólo en el string plano.
     if ((trip as any).is_refrigerated_1) {
       return getMgName(
         (trip as any).motogenerator_1_id,
-        (trip as any).motogenerator_1,
+        (trip as any).motogenerator_1_unit?.numero_economico ||
+          (trip as any).motogenerator_1,
       );
     }
     if ((trip as any).is_refrigerated_2) {
       return getMgName(
         (trip as any).motogenerator_2_id,
-        (trip as any).motogenerator_2,
+        (trip as any).motogenerator_2_unit?.numero_economico ||
+          (trip as any).motogenerator_2,
       );
     }
     return "Equipo Auxiliar";
