@@ -77,14 +77,15 @@ export interface Trip extends TripResponse {
     km_recorridos: number;
   };
 
-  // --- CAMPOS FASE 2: MOTOGENERADORES ---
   is_refrigerated_1?: boolean | null;
   motogenerator_1_id?: number | null;
-  motogenerator_1?: string | null; // Se mantiene para retrocompatibilidad
+  motogenerator_1?: string | null;
+  motogenerator_1_unit?: any | null; // <--- AÑADIDO: Objeto completo de la unidad
 
   is_refrigerated_2?: boolean | null;
   motogenerator_2_id?: number | null;
   motogenerator_2?: string | null;
+  motogenerator_2_unit?: any | null;
   // --------------------------------------
 }
 
