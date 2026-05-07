@@ -376,7 +376,14 @@ class FuelLogBase(BaseModel):
     litros: float = Field(..., ge=0)
     precio_por_litro: float = Field(..., ge=0)
     total: float = Field(..., ge=0)
-    odometro: int = Field(..., ge=0)
+
+    # --- MODIFICACIONES PARA SOPORTE DE MOTOGENERADORES ---
+    odometro: Optional[int] = Field(default=0, ge=0)
+    is_motogenerator: bool = False
+    horometro: Optional[float] = Field(default=None, ge=0)
+    horas_sm: Optional[float] = Field(default=None, ge=0)
+    # ------------------------------------------------------
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("tipo_combustible")
@@ -403,7 +410,14 @@ class FuelLogUpdate(BaseModel):
     litros: Optional[float] = Field(default=None, ge=0)
     precio_por_litro: Optional[float] = Field(default=None, ge=0)
     total: Optional[float] = Field(default=None, ge=0)
+
+    # --- MODIFICACIONES PARA SOPORTE DE MOTOGENERADORES ---
     odometro: Optional[int] = Field(default=None, ge=0)
+    is_motogenerator: Optional[bool] = None
+    horometro: Optional[float] = Field(default=None, ge=0)
+    horas_sm: Optional[float] = Field(default=None, ge=0)
+    # ------------------------------------------------------
+
     fecha_hora: Optional[datetime] = None
     evidencia_url: Optional[str] = Field(default=None, max_length=500)
     excede_tanque: Optional[bool] = None

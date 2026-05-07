@@ -17,6 +17,7 @@ import {
   MapPin,
   ClipboardList,
   Award,
+  Snowflake,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +90,13 @@ export type WizardData = {
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
+
+  // --- FASE 2: MOTOGENERADORES POR ID ---
+  is_refrigerated_1: boolean;
+  motogenerator_1_id: string;
+  is_refrigerated_2: boolean;
+  motogenerator_2_id: string;
+  // --------------------------------------
 
   unitId: string;
   remolque1Id: string;
@@ -291,9 +299,17 @@ export const DispatchWizard = ({
         remolque1Id: tripFromState.remolque_1_id
           ? String(tripFromState.remolque_1_id)
           : "",
+        is_refrigerated_1: tripFromState.is_refrigerated_1 || false,
+        motogenerator_1_id: tripFromState.motogenerator_1_id
+          ? String(tripFromState.motogenerator_1_id)
+          : "",
         dollyId: tripFromState.dolly_id ? String(tripFromState.dolly_id) : "",
         remolque2Id: tripFromState.remolque_2_id
           ? String(tripFromState.remolque_2_id)
+          : "",
+        is_refrigerated_2: tripFromState.is_refrigerated_2 || false,
+        motogenerator_2_id: tripFromState.motogenerator_2_id
+          ? String(tripFromState.motogenerator_2_id)
           : "",
         driverId: tripFromState.legs?.[0]?.operator_id
           ? String(tripFromState.legs[0].operator_id)
@@ -332,16 +348,39 @@ export const DispatchWizard = ({
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  //  INYECCIÓN PASO 3.1: Obtenemos fetchLastOdometer
   const { unidades, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { createTrip, trips } = useTrips();
   const { clients } = useClients();
   const { products: satProducts } = useSatCatalogs();
 
-  //  INYECCIÓN PASO 3.2: Estados para almacenar la memoria de los camiones
   const [odoTramo1, setOdoTramo1] = useState(0);
   const [odoTramo2, setOdoTramo2] = useState(0);
+
+  const arrUnidades = useMemo(
+    () => (Array.isArray(unidades) ? unidades : []),
+    [unidades],
+  );
+
+  // --- FASE 2: LISTA DE MOTOGENERADORES DESDE LA BD ---
+  const availableMotogenerators = useMemo(() => {
+    const mgs = arrUnidades
+      .filter((u: any) => {
+        const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        return (
+          searchIn.includes("motogenerador") &&
+          ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
+        );
+      })
+      .map((u: any) => ({
+        label: `${u.numero_economico} - ${u.marca || "Thermo King"}`,
+        value: String(u.id),
+      }));
+    return mgs.length === 0
+      ? [{ label: "No hay motogeneradores disponibles", value: "" }]
+      : mgs;
+  }, [arrUnidades]);
+  // ----------------------------------------------------
 
   const availableSatProducts = useMemo(
     () =>
@@ -372,6 +411,12 @@ export const DispatchWizard = ({
     referencia_cliente: initialData?.referencia_cliente || "",
     unitId: initialData?.unitId || "",
     remolque1Id: initialData?.remolque1Id || "",
+
+    is_refrigerated_1: initialData?.is_refrigerated_1 || false,
+    motogenerator_1_id: initialData?.motogenerator_1_id || "",
+    is_refrigerated_2: initialData?.is_refrigerated_2 || false,
+    motogenerator_2_id: initialData?.motogenerator_2_id || "",
+
     dollyId: initialData?.dollyId || "",
     remolque2Id: initialData?.remolque2Id || "",
     driverId: initialData?.driverId || "",
@@ -388,7 +433,6 @@ export const DispatchWizard = ({
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
   });
 
-  //  INYECCIÓN PASO 3.3: Efectos silenciosos que consultan el backend cuando se escoge un camión
   useEffect(() => {
     if (data.unitId) {
       fetchLastOdometer(data.unitId).then(setOdoTramo1);
@@ -434,9 +478,17 @@ export const DispatchWizard = ({
           remolque1Id: foundTrip.remolque_1_id
             ? String(foundTrip.remolque_1_id)
             : "",
+          is_refrigerated_1: foundTrip.is_refrigerated_1 || false,
+          motogenerator_1_id: foundTrip.motogenerator_1_id
+            ? String(foundTrip.motogenerator_1_id)
+            : "",
           dollyId: foundTrip.dolly_id ? String(foundTrip.dolly_id) : "",
           remolque2Id: foundTrip.remolque_2_id
             ? String(foundTrip.remolque_2_id)
+            : "",
+          is_refrigerated_2: foundTrip.is_refrigerated_2 || false,
+          motogenerator_2_id: foundTrip.motogenerator_2_id
+            ? String(foundTrip.motogenerator_2_id)
             : "",
           driverId: foundTrip.legs?.[0]?.operator_id
             ? String(foundTrip.legs[0].operator_id)
@@ -445,7 +497,6 @@ export const DispatchWizard = ({
           anticipo_casetas: foundTrip.legs?.[0]?.anticipo_casetas || 0,
           anticipo_viaticos: foundTrip.legs?.[0]?.anticipo_viaticos || 0,
           anticipo_combustible: foundTrip.legs?.[0]?.anticipo_combustible || 0,
-          // Carga dinámica de tramo 2
           conoceRutaCompleta: (foundTrip.legs?.length || 0) > 1,
           unit2Id: foundTrip.legs?.[1]?.unit_id
             ? String(foundTrip.legs[1].unit_id)
@@ -465,10 +516,6 @@ export const DispatchWizard = ({
     }
   }, [tripIdParam, trips, data.clienteId, tripFromState]);
 
-  const arrUnidades = useMemo(
-    () => (Array.isArray(unidades) ? unidades : []),
-    [unidades],
-  );
   const arrOperadores = useMemo(
     () => (Array.isArray(operadores) ? operadores : []),
     [operadores],
@@ -486,7 +533,6 @@ export const DispatchWizard = ({
             `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`.toLowerCase();
           return (
             (searchIn.includes("tracto") || searchIn.includes("camion")) &&
-            // 👇 AQUÍ SE AGREGÓ EL ESTATUS DE RUTA
             ["disponible", "bloqueado", "en_ruta", "en ruta"].includes(
               u.status?.toLowerCase(),
             )
@@ -541,7 +587,6 @@ export const DispatchWizard = ({
     () =>
       arrOperadores
         .filter((o: any) =>
-          // 👇 AQUÍ TAMBIÉN SE AGREGÓ EL ESTATUS DE RUTA
           ["activo", "disponible", "inactivo", "en_ruta", "en ruta"].includes(
             o.status?.toLowerCase(),
           ),
@@ -602,11 +647,9 @@ export const DispatchWizard = ({
         responseType: "blob",
       });
 
-      // Especificamos que es un PDF para que el navegador lo renderice
       const file = new Blob([response.data], { type: "application/pdf" });
       const fileURL = URL.createObjectURL(file);
 
-      // Abrimos el PDF en una nueva pestaña
       window.open(fileURL, "_blank");
 
       toast({
@@ -614,7 +657,6 @@ export const DispatchWizard = ({
         description: "El documento se ha abierto en una nueva pestaña.",
       });
 
-      // Limpiamos la memoria del navegador después de unos segundos
       setTimeout(() => {
         URL.revokeObjectURL(fileURL);
       }, 10000);
@@ -665,11 +707,22 @@ export const DispatchWizard = ({
         costo_casetas: Number(infoTarifa.casetas || 0),
         status: finalStatus,
         start_date: new Date().toISOString(),
-        is_dummy_stamping: false, // Ya no usamos el bypass desde UI directa
+        is_dummy_stamping: false,
         conoce_ruta_completa: data.conoceRutaCompleta,
-        ocultar_montos_pdf: true, // Siempre ocultamos el monto en el PDF operativo
+        ocultar_montos_pdf: true,
 
-        //  FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
+        // --- Mapeo correcto de IDs Motogenerador ---
+        is_refrigerated_1: data.is_refrigerated_1,
+        motogenerator_1_id: data.is_refrigerated_1
+          ? cleanId(data.motogenerator_1_id) || null
+          : null,
+        is_refrigerated_2: isFullTrip ? data.is_refrigerated_2 : false,
+        motogenerator_2_id:
+          isFullTrip && data.is_refrigerated_2
+            ? cleanId(data.motogenerator_2_id) || null
+            : null,
+        // -------------------------------------------
+
         remolque_1_id: cleanId(data.remolque1Id) || null,
         dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
@@ -680,7 +733,7 @@ export const DispatchWizard = ({
           unit_id: cleanId(data.unitId) || null,
           leg_type: data.leg_type || "carga_muelle",
           operator_id: cleanId(data.driverId) || null,
-          odometro_inicial: odoTramo1, //  PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
+          odometro_inicial: odoTramo1,
           nivel_tanque_inicial: 0,
         };
 
@@ -689,7 +742,7 @@ export const DispatchWizard = ({
             unit_id: cleanId(data.unit2Id) || null,
             operator_id: cleanId(data.driver2Id) || null,
             leg_type: "ruta_carretera",
-            odometro_inicial: odoTramo2, //  PASO 3.4: INYECCIÓN DE LA ESCALERITA AQUÍ
+            odometro_inicial: odoTramo2,
             nivel_tanque_inicial: 0,
           };
         }
@@ -719,7 +772,6 @@ export const DispatchWizard = ({
                 "Vinculando viaje y timbrando documento con SAT. Por favor espera.",
             });
 
-            //   DECISIÓN DEL MOTOR DUAL
             const isOneShot = data.conoceRutaCompleta;
             const endpoint = isOneShot
               ? "/api/sat/stamp/one-shot"
@@ -727,9 +779,9 @@ export const DispatchWizard = ({
 
             const stampRes = await axiosClient.post(endpoint, {
               viaje_id: resultTripId,
-              is_nominal: !isOneShot, // Si es One-Shot, es factura real
+              is_nominal: !isOneShot,
               use_dummy: false,
-              ocultar_montos: true, // Siempre PDF Ciego en Dispatch
+              ocultar_montos: true,
             });
 
             const uuid = stampRes.data?.data?.uuid || stampRes.data?.uuid;
@@ -770,10 +822,8 @@ export const DispatchWizard = ({
           onSuccess();
         } else {
           if (finalStatus === "creado") {
-            // Le dio al botón "Planeador" -> Lo mandamos al Calendario
             navigate("/dispatch?tab=planner&view=calendar", { replace: true });
           } else {
-            // Le dio al botón "Despachar" -> Lo mandamos a la Tabla
             navigate("/dispatch?tab=planner&view=table", { replace: true });
           }
         }
@@ -822,7 +872,6 @@ export const DispatchWizard = ({
         Boolean(data.dollyId && data.remolque2Id && data.contenedor_2);
     }
 
-    // Validar Tramo 2 si activan el Motor Dual (1 Timbre)
     if (data.generarCartaPorte && data.conoceRutaCompleta) {
       isValid =
         isValid &&
@@ -902,7 +951,6 @@ export const DispatchWizard = ({
                 </div>
               </div>
 
-              {/* FIX: Separamos en 2 columnas Cliente y Destino */}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
@@ -1326,7 +1374,6 @@ export const DispatchWizard = ({
                         setData((p) => ({
                           ...p,
                           remolque1Id: v,
-                          // Sincronización automática con el Tramo 2 (Magia UX)
                           remolque1Id_2:
                             p.remolque1Id_2 === p.remolque1Id
                               ? v
@@ -1335,6 +1382,46 @@ export const DispatchWizard = ({
                       }
                       placeholder="Buscar..."
                     />
+                    {/* 👇 SWITCH Y SELECT MOTOGENERADOR 1 👇 */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <Switch
+                        checked={data.is_refrigerated_1}
+                        onCheckedChange={(c) =>
+                          setData((p) => ({ ...p, is_refrigerated_1: c }))
+                        }
+                      />
+                      <Label
+                        className="text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer"
+                        onClick={() =>
+                          setData((p) => ({
+                            ...p,
+                            is_refrigerated_1: !p.is_refrigerated_1,
+                          }))
+                        }
+                      >
+                        ¿Es Refrigerado?
+                      </Label>
+                    </div>
+                    {data.is_refrigerated_1 && (
+                      <div className="animate-in fade-in slide-in-from-left-2 mt-2 border-l-2 border-brand-red pl-3 space-y-1.5">
+                        <Label
+                          variant="brand"
+                          className="text-brand-red text-[10px]"
+                          required
+                        >
+                          MOTOGENERADOR 1
+                        </Label>
+                        <SearchableSelect
+                          items={availableMotogenerators}
+                          value={data.motogenerator_1_id}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, motogenerator_1_id: v }))
+                          }
+                          placeholder="Seleccionar equipo..."
+                        />
+                      </div>
+                    )}
+                    {/* 👆 FIN MOTOGENERADOR 1 👆 */}
                   </div>
                   {isFullTrip && (
                     <>
@@ -1375,6 +1462,49 @@ export const DispatchWizard = ({
                           }
                           placeholder="Buscar..."
                         />
+                        {/* 👇 SWITCH Y SELECT MOTOGENERADOR 2 👇 */}
+                        <div className="flex items-center gap-2 pt-2">
+                          <Switch
+                            checked={data.is_refrigerated_2}
+                            onCheckedChange={(c) =>
+                              setData((p) => ({ ...p, is_refrigerated_2: c }))
+                            }
+                          />
+                          <Label
+                            className="text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer"
+                            onClick={() =>
+                              setData((p) => ({
+                                ...p,
+                                is_refrigerated_2: !p.is_refrigerated_2,
+                              }))
+                            }
+                          >
+                            ¿Es Refrigerado?
+                          </Label>
+                        </div>
+                        {data.is_refrigerated_2 && (
+                          <div className="animate-in fade-in slide-in-from-left-2 mt-2 border-l-2 border-brand-red pl-3 space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="text-brand-red text-[10px]"
+                              required
+                            >
+                              MOTOGENERADOR 2
+                            </Label>
+                            <SearchableSelect
+                              items={availableMotogenerators}
+                              value={data.motogenerator_2_id}
+                              onSelect={(v) =>
+                                setData((p) => ({
+                                  ...p,
+                                  motogenerator_2_id: v,
+                                }))
+                              }
+                              placeholder="Seleccionar equipo..."
+                            />
+                          </div>
+                        )}
+                        {/* 👆 FIN MOTOGENERADOR 2 👆 */}
                       </div>
                     </>
                   )}
@@ -1411,7 +1541,6 @@ export const DispatchWizard = ({
                           setData((p) => ({
                             ...p,
                             generarCartaPorte: c,
-                            // Si lo apagan, se apaga el motor dual también
                             conoceRutaCompleta: c
                               ? p.conoceRutaCompleta
                               : false,
@@ -1443,7 +1572,6 @@ export const DispatchWizard = ({
                               setData((p) => ({
                                 ...p,
                                 conoceRutaCompleta: c,
-                                // Sincronizamos chasis por si acaso al prender
                                 unit2Id: c ? p.unit2Id || p.unitId : p.unit2Id,
                                 driver2Id: c
                                   ? p.driver2Id || p.driverId
@@ -1654,7 +1782,6 @@ export const DispatchWizard = ({
         {currentStep === 3 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              {/* Tarjeta de Ruta */}
               <Card
                 className={cn(
                   shellClass,
@@ -1760,10 +1887,23 @@ export const DispatchWizard = ({
                         <span className="text-muted-foreground font-bold">
                           Remolque 1:
                         </span>
-                        <span className="font-black text-right">
+                        <span className="font-black text-right flex items-center justify-end gap-1.5">
                           {availableRemolques
                             .find((r) => r.value === data.remolque1Id)
                             ?.label?.split(" ")[0] || "N/A"}
+                          {data.is_refrigerated_1 && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                            >
+                              <Snowflake className="h-2.5 w-2.5" />
+                              {availableMotogenerators
+                                .find(
+                                  (m) => m.value === data.motogenerator_1_id,
+                                )
+                                ?.label?.split(" ")[0] || "REF"}
+                            </Badge>
+                          )}
                         </span>
                       </div>
                       <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
@@ -1791,10 +1931,24 @@ export const DispatchWizard = ({
                             <span className="text-muted-foreground font-bold">
                               Remolque 2:
                             </span>
-                            <span className="font-black text-right">
+                            <span className="font-black text-right flex items-center justify-end gap-1.5">
                               {availableRemolques
                                 .find((r) => r.value === data.remolque2Id)
                                 ?.label?.split(" ")[0] || "N/A"}
+                              {data.is_refrigerated_2 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                                >
+                                  <Snowflake className="h-2.5 w-2.5" />
+                                  {availableMotogenerators
+                                    .find(
+                                      (m) =>
+                                        m.value === data.motogenerator_2_id,
+                                    )
+                                    ?.label?.split(" ")[0] || "REF"}
+                                </Badge>
+                              )}
                             </span>
                           </div>
                           <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
@@ -1841,10 +1995,23 @@ export const DispatchWizard = ({
                           <span className="text-muted-foreground font-bold">
                             Remolque 1:
                           </span>
-                          <span className="font-black text-right">
+                          <span className="font-black text-right flex items-center justify-end gap-1.5">
                             {availableRemolques
                               .find((r) => r.value === data.remolque1Id_2)
                               ?.label?.split(" ")[0] || "N/A"}
+                            {data.is_refrigerated_1 && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                              >
+                                <Snowflake className="h-2.5 w-2.5" />
+                                {availableMotogenerators
+                                  .find(
+                                    (m) => m.value === data.motogenerator_1_id,
+                                  )
+                                  ?.label?.split(" ")[0] || "REF"}
+                              </Badge>
+                            )}
                           </span>
                         </div>
 
@@ -1864,10 +2031,24 @@ export const DispatchWizard = ({
                               <span className="text-muted-foreground font-bold">
                                 Remolque 2:
                               </span>
-                              <span className="font-black text-right">
+                              <span className="font-black text-right flex items-center justify-end gap-1.5">
                                 {availableRemolques
                                   .find((r) => r.value === data.remolque2Id_2)
                                   ?.label?.split(" ")[0] || "N/A"}
+                                {data.is_refrigerated_2 && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                                  >
+                                    <Snowflake className="h-2.5 w-2.5" />
+                                    {availableMotogenerators
+                                      .find(
+                                        (m) =>
+                                          m.value === data.motogenerator_2_id,
+                                      )
+                                      ?.label?.split(" ")[0] || "REF"}
+                                  </Badge>
+                                )}
                               </span>
                             </div>
                           </>

@@ -500,6 +500,23 @@ EXPECTED_TIRES = {
 
 
 def get_unit_last_odometer(db: Session, unit_id: int):
+    # --- MODIFICACIÓN FASE 2: Validar si es motogenerador ---
+    unit = db.query(models.Unit).filter(models.Unit.id == unit_id).first()
+
+    if unit and str(unit.tipo_1).upper() == "MOTOGENERADOR":
+        last_fuel = (
+            db.query(models.FuelLog)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.is_motogenerator == True,
+                models.FuelLog.record_status != RecordStatus.ELIMINADO,
+            )
+            .order_by(models.FuelLog.id.desc())
+            .first()
+        )
+        return last_fuel.horometro if last_fuel and last_fuel.horometro else 0
+    # --------------------------------------------------------
+
     # 1. Busca en el último tramo de viaje de esa unidad (PROTEGIDO)
     last_leg = (
         db.query(models.TripLeg)
@@ -534,7 +551,7 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
     today = date.today()
     razones_bloqueo: list[str] = []
 
-    # 1) Documentos vencidos (Se mantiene igual)
+    # 1) Documentos vencidos
     expired_count = 0
     date_fields = [
         "seguro_vence",

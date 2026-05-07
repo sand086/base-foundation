@@ -20,6 +20,7 @@ import {
   User,
   Container,
   Package,
+  Zap, // <-- Añadido el ícono de Rayo para el Motogenerador
 } from "lucide-react";
 import { FuelLoad } from "../types";
 import { Trip } from "@/features/trips/types";
@@ -42,25 +43,34 @@ export function ConciliarViajeModal({
   onConciliar,
 }: ConciliarViajeModalProps) {
   const [lecturaSM, setLecturaSM] = useState({
-    kilometrosSM: "",
+    kilometrosSM: "", // Aunque se llame kilometrosSM en el estado, se usará para horas si es MG
     litrosSM: "",
-    odometroFinal: "",
+    odometroFinal: "", // Se usará para orómetro si es MG
   });
+
+  // --- LÓGICA FASE 2: Detectar si conciliamos Motogenerador o Tractocamión ---
+  const isMotogenerator = useMemo(() => {
+    return fuelLoads.length > 0 && fuelLoads.some((f) => f.is_motogenerator);
+  }, [fuelLoads]);
 
   const litrosDelVale = useMemo(() => {
     return fuelLoads.reduce((sum, f) => sum + Number(f.litros), 0);
   }, [fuelLoads]);
 
-  const odometroInicial = trip?.legs?.[0]?.odometro_inicial || 0;
+  // Si es motogenerador, sacamos la lectura inicial del primer vale. Si es tracto, del viaje.
+  const odometroInicial = isMotogenerator
+    ? Number(fuelLoads[0]?.horometro || 0)
+    : Number(trip?.legs?.[0]?.odometro_inicial || 0);
+
   const [cobrarOperador, setCobrarOperador] = useState(true);
 
-  const kmSM = Number(lecturaSM.kilometrosSM) || 0;
+  const kmSM = Number(lecturaSM.kilometrosSM) || 0; // Representa horas si isMotogenerator=true
   const ltsSM = Number(lecturaSM.litrosSM) || 0;
   const odoFinal = Number(lecturaSM.odometroFinal) || 0;
 
   const rendimientoSM = ltsSM > 0 ? (kmSM / ltsSM).toFixed(2) : "0.00";
   const diferenciaLitros = litrosDelVale - ltsSM;
-  const hayExcesoConsumo = diferenciaLitros > 0; // <- Solo dejamos esta
+  const hayExcesoConsumo = diferenciaLitros > 0;
   const rendimientoReal =
     litrosDelVale > 0 ? (kmSM / litrosDelVale).toFixed(2) : "0.00";
 
@@ -71,8 +81,7 @@ export function ConciliarViajeModal({
       !lecturaSM.odometroFinal
     ) {
       toast.error("Datos Incompletos", {
-        description:
-          "Debes llenar Kilómetros SM, Litros SM y el Odómetro Final.",
+        description: `Debes llenar ${isMotogenerator ? "Horas SM" : "Kilómetros SM"}, Litros SM y el ${isMotogenerator ? "Orómetro" : "Odómetro"} Final.`,
       });
       return;
     }
@@ -80,12 +89,13 @@ export function ConciliarViajeModal({
     onConciliar(trip!.id, {
       odometro_inicial: odometroInicial,
       odometro_final: odoFinal,
-      km_recorridos: kmSM,
+      km_recorridos: kmSM, // El componente padre decidirá si lo mapea a horas_sm o km_sm
       litros_vales: litrosDelVale,
       litros_ecm: ltsSM,
       diferencia: diferenciaLitros,
       rendimiento: rendimientoReal,
       cobrar_al_operador: hayExcesoConsumo ? cobrarOperador : false,
+      is_motogenerator: isMotogenerator, // Pasamos la bandera al padre
     });
 
     toast.success("Viaje Conciliado", {
@@ -110,11 +120,18 @@ export function ConciliarViajeModal({
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-4 sm:gap-5">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20">
-                <Activity className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-md" />
+                {isMotogenerator ? (
+                  <Zap className="h-7 w-7 sm:h-8 sm:w-8 text-amber-500 drop-shadow-md" />
+                ) : (
+                  <Activity className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600 dark:text-blue-400 drop-shadow-md" />
+                )}
               </div>
               <div className="flex flex-col gap-1 text-left min-w-0">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
-                  Conciliación SM
+                  Conciliación SM{" "}
+                  {isMotogenerator && (
+                    <span className="text-amber-500 ml-2">(Motogenerador)</span>
+                  )}
                 </DialogTitle>
                 <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                   TRP-{trip.public_id || trip.id} • {trip.origin} ➔{" "}
@@ -147,12 +164,20 @@ export function ConciliarViajeModal({
             </div>
             <div className="flex flex-col">
               <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">
-                Unidad / Eco
+                {isMotogenerator ? "Motogenerador" : "Unidad / Eco"}
               </span>
               <div className="flex items-center gap-2 mt-1">
-                <Truck className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                {isMotogenerator ? (
+                  <Zap className="h-3.5 w-3.5 text-amber-500" />
+                ) : (
+                  <Truck className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                )}
                 <span className="text-xs font-bold text-foreground">
-                  {unit?.numero_economico || "N/A"} ({unit?.placas || "---"})
+                  {isMotogenerator
+                    ? trip.motogenerator_1 ||
+                      trip.motogenerator_2 ||
+                      "Motogenerador Activo"
+                    : `${unit?.numero_economico || "N/A"} (${unit?.placas || "---"})`}
                 </span>
               </div>
             </div>
@@ -189,12 +214,12 @@ export function ConciliarViajeModal({
 
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                  Kilómetros SM
+                  {isMotogenerator ? "Horas SM" : "Kilómetros SM"}
                 </Label>
                 <Input
                   type="number"
                   className="font-mono font-bold h-11 shadow-sm"
-                  placeholder="Ej. 1200"
+                  placeholder={isMotogenerator ? "Ej. 45" : "Ej. 1200"}
                   value={lecturaSM.kilometrosSM}
                   onChange={(e) =>
                     setLecturaSM((p) => ({
@@ -225,13 +250,13 @@ export function ConciliarViajeModal({
                   Rendimiento SM
                 </span>
                 <span className="font-mono font-black text-foreground">
-                  {rendimientoSM} km/L
+                  {rendimientoSM} {isMotogenerator ? "hr/L" : "km/L"}
                 </span>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-border">
                 <Label className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex justify-between">
-                  Odómetro Final
+                  {isMotogenerator ? "Orómetro Final" : "Odómetro Final"}
                   <span className="text-[9px] text-muted-foreground italic">
                     Inicial: {odometroInicial}
                   </span>
@@ -244,7 +269,7 @@ export function ConciliarViajeModal({
                       ? "border-rose-300 text-rose-600"
                       : "",
                   )}
-                  placeholder="Ej. 256000"
+                  placeholder={isMotogenerator ? "Ej. 5200" : "Ej. 256000"}
                   value={lecturaSM.odometroFinal}
                   onChange={(e) =>
                     setLecturaSM((p) => ({
@@ -255,8 +280,9 @@ export function ConciliarViajeModal({
                 />
                 {odoFinal > 0 && odoFinal <= odometroInicial ? (
                   <p className="text-[9px] text-rose-600 font-bold uppercase tracking-tighter flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" /> Error: El odómetro
-                    debe ser mayor al inicial.
+                    <AlertTriangle className="h-3 w-3" /> Error: El{" "}
+                    {isMotogenerator ? "orómetro" : "odómetro"} debe ser mayor
+                    al inicial.
                   </p>
                 ) : (
                   <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-widest ml-1">
@@ -287,7 +313,7 @@ export function ConciliarViajeModal({
                     Rendimiento Real
                   </span>
                   <span className="font-mono font-black text-emerald-600 text-lg">
-                    {rendimientoReal} km/L
+                    {rendimientoReal} {isMotogenerator ? "hr/L" : "km/L"}
                   </span>
                 </div>
 
@@ -356,31 +382,32 @@ export function ConciliarViajeModal({
                 </div>
               </div>
 
-              {/* ALERTAS DE BLOQUEO */}
-              {(unit?.status === "bloqueado" ||
-                trailer?.status === "bloqueado") && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-1">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="text-[10px] font-black uppercase">
-                      Alertas de Activos
-                    </span>
+              {/* ALERTAS DE BLOQUEO (No mostramos si es motogenerador para limpiar la vista) */}
+              {!isMotogenerator &&
+                (unit?.status === "bloqueado" ||
+                  trailer?.status === "bloqueado") && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-[10px] font-black uppercase">
+                        Alertas de Activos
+                      </span>
+                    </div>
+                    <ul className="text-[9px] text-amber-600 dark:text-amber-500 font-medium list-disc ml-4 uppercase">
+                      {unit?.status === "bloqueado" && (
+                        <li>
+                          Tractor {unit.numero_economico}: {unit.razon_bloqueo}
+                        </li>
+                      )}
+                      {trailer?.status === "bloqueado" && (
+                        <li>
+                          Remolque {trailer.numero_economico}:{" "}
+                          {trailer.razon_bloqueo}
+                        </li>
+                      )}
+                    </ul>
                   </div>
-                  <ul className="text-[9px] text-amber-600 dark:text-amber-500 font-medium list-disc ml-4 uppercase">
-                    {unit?.status === "bloqueado" && (
-                      <li>
-                        Tractor {unit.numero_economico}: {unit.razon_bloqueo}
-                      </li>
-                    )}
-                    {trailer?.status === "bloqueado" && (
-                      <li>
-                        Remolque {trailer.numero_economico}:{" "}
-                        {trailer.razon_bloqueo}
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
+                )}
             </div>
           </div>
         </div>

@@ -371,6 +371,41 @@ export function CreateTireModal({
                       )}
                     />
 
+                    {/* ACTUAL */}
+                    {isEditing && (
+                      <FormField
+                        control={form.control}
+                        name="profundidad_actual"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel
+                              variant="brand"
+                              required
+                              className="text-blue-600 dark:text-blue-400"
+                            >
+                              Profundidad Actual (Desgaste)
+                            </FormLabel>
+                            <FormControl>
+                              <div className="relative flex items-center">
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                  placeholder="Ej: 10.5"
+                                  className="h-11 pr-12 font-mono font-black text-blue-700 bg-blue-50/30 border-blue-200 dark:border-blue-900 shadow-inner"
+                                />
+                                <span className="absolute right-4 text-blue-400 font-black text-[10px] uppercase pointer-events-none select-none">
+                                  mm
+                                </span>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
                     {/* 👇 CAMBIO PRINCIPAL: Bloqueo y advertencia en Profundidad Original 👇 */}
                     <FormField
                       control={form.control}
@@ -406,49 +441,15 @@ export function CreateTireModal({
                           {isEditing && (
                             <p className="text-[9px] font-bold text-amber-600 dark:text-amber-500 mt-1 leading-tight flex gap-1">
                               <Info className="h-3 w-3 shrink-0" />
-                              Dato inmutable. Si hubo un error de captura, da de
-                              baja la llanta y regístrala de nuevo.
+                              Dato no actualizable. Si hubo un error de captura,
+                              da de baja la llanta y regístrala de nuevo para
+                              tener su historial de vida correcto.
                             </p>
                           )}
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
-                    {/* ACTUAL */}
-                    {isEditing && (
-                      <FormField
-                        control={form.control}
-                        name="profundidad_actual"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel
-                              variant="brand"
-                              required
-                              className="text-blue-600 dark:text-blue-400"
-                            >
-                              Profundidad Actual (Desgaste)
-                            </FormLabel>
-                            <FormControl>
-                              <div className="relative flex items-center">
-                                <Input
-                                  type="number"
-                                  step="any"
-                                  {...field}
-                                  value={field.value ?? ""}
-                                  placeholder="Ej: 10.5"
-                                  className="h-11 pr-12 font-mono font-black text-blue-700 bg-blue-50/30 border-blue-200 dark:border-blue-900 shadow-inner"
-                                />
-                                <span className="absolute right-4 text-blue-400 font-black text-[10px] uppercase pointer-events-none select-none">
-                                  mm
-                                </span>
-                              </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
                   </div>
                 </div>
 

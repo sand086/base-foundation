@@ -58,6 +58,7 @@ import {
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { useOperators } from "@/features/operators/hooks/useOperators";
 import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
+import { useBilling } from "@/features/receivables/hooks/useBilling";
 import { Trip, TripLegCreatePayload } from "../types";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
@@ -215,6 +216,7 @@ export function NextLegModal({
   const { unidades, updateLoadStatus, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { products: satProducts } = useSatCatalogs();
+  const { handleStampNominal } = useBilling(); // 🚀 INYECTADO PARA EL TIMBRADO AUTOMÁTICO
 
   const [loading, setLoading] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
@@ -520,6 +522,7 @@ export function NextLegModal({
 
     setLoading(true);
     try {
+      // 1. Actualizamos datos fiscales del viaje
       await axiosClient.put(`/api/logistics/trips/${tripPadre.id}`, {
         ...tripFiscalData,
         numero_contenedor: tripFiscalData.contenedor_1,
@@ -529,7 +532,7 @@ export function NextLegModal({
         remolque_2_id: formData.remolque_2_id,
       });
 
-      //  QUIRÚRGICO: Enviamos el odómetro inyectado en el payload al backend
+      // 2. Preparamos y enviamos la nueva fase operativa
       const payloadConOdometro = {
         ...formData,
         odometro_inicial: odoInicial,
@@ -540,6 +543,7 @@ export function NextLegModal({
         payloadConOdometro as TripLegCreatePayload,
       );
 
+      // 3. Acciones posteriores si la fase se guardó correctamente
       if (success) {
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
@@ -553,6 +557,18 @@ export function NextLegModal({
           toast.success(
             `Equipo liberado en ${formData.destino_vacio}. Viaje listo para liquidación.`,
           );
+        } else if (formData.leg_type === "ruta_carretera") {
+          // 🚀 MAGIA AQUÍ: TIMBRADO AUTOMÁTICO DE CARTA PORTE $1 AL PASAR A RUTA CARRETERA
+          toast.loading("Actualizando Carta Porte para Ruta Carretera...", {
+            id: `cp-${tripPadre.id}`,
+          });
+          handleStampNominal(Number(tripPadre.id), () => {
+            toast.success(
+              "Carta Porte de Carretera generada y reemplazada exitosamente.",
+              { id: `cp-${tripPadre.id}` },
+            );
+            if (onSuccessRefresh) onSuccessRefresh();
+          });
         }
 
         onOpenChange(false);
@@ -566,7 +582,7 @@ export function NextLegModal({
   }, [
     tripPadre,
     formData,
-    odoInicial, //  Dependencia para asegurar la sincronía de React
+    odoInicial,
     validateForm,
     onSubmit,
     updateLoadStatus,
@@ -574,6 +590,7 @@ export function NextLegModal({
     tripFiscalData,
     legUiConfig,
     onSuccessRefresh,
+    handleStampNominal, // 🚀 DEPENDENCIA INYECTADA
   ]);
 
   const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
@@ -1046,7 +1063,7 @@ export function NextLegModal({
                 <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
                   Unidad (Tractocamión)
                 </Label>
-                {/*  INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
+                {/* INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
                 {odoInicial > 0 && (
                   <span className="text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded shadow-sm border border-emerald-200 dark:border-emerald-800/50">
                     ODÓMETRO ACTUAL: {odoInicial.toLocaleString()} KM
