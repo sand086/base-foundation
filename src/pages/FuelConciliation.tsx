@@ -78,12 +78,8 @@ import { useTrips } from "@/features/trips/hooks/useTrips";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import axiosClient from "@/api/axiosClient";
 
-// Importamos el Modal Blindado (Asegúrate de que la ruta sea correcta según tu proyecto)
-import { ConciliarViajeModal } from "@/features/settlements/components/FuelConciliationModal"; // Ajusta la ruta si es necesario
+import { ConciliarViajeModal } from "@/features/settlements/components/FuelConciliationModal";
 
-// ============================================================================
-// INTERFACES
-// ============================================================================
 interface AuditFormData {
   litrosVales: string;
   kilometrosECM: string;
@@ -92,41 +88,33 @@ interface AuditFormData {
   maxOdoVales: number;
 }
 
-// ============================================================================
-// COMPONENTE PRINCIPAL: AUDITORÍA Y CONCILIACIÓN OPERATIVA
-// ============================================================================
 export default function FuelConciliation() {
   const { trips, fetchTrips } = useTrips();
 
   const { valueAsNumber: rendimientoConfig, isLoading: loadingRend } =
     useSystemConfig("rendimiento_diesel_esperado");
 
-  // ==========================================================
-  // REGLAS DE NEGOCIO ESTRICTAS
-  // ==========================================================
-  const TOLERANCIA_FIJA = 0.03; // 3%
-  const PRECIO_DIESEL_ESTANDAR = 24.0; // Precio para cuantificar el descuento
+  const TOLERANCIA_FIJA = 0.03;
+  const PRECIO_DIESEL_ESTANDAR = 24.0;
 
   const [selectedTripId, setSelectedTripId] = useState<string>("");
-  const [selectedLegId, setSelectedLegId] = useState<string>("");
+
+  // ⚡ NUEVO: En vez de selectedLegId, guardamos la opción completa ("57|tracto" o "57|mg")
+  const [selectedLegOption, setSelectedLegOption] = useState<string>("");
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingVales, setIsFetchingVales] = useState(false);
   const [valesRawData, setValesRawData] = useState<any[]>([]);
 
-  // Estados de Modales y Edición
   const [legToReset, setLegToReset] = useState<string | null>(null);
   const [legToView, setLegToView] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  // Estado para controlar el nuevo Modal Inteligente
   const [isConciliarModalOpen, setIsConciliarModalOpen] = useState(false);
 
-  // NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
   const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
 
-  // 1. FILTRADO BASE DE HISTÓRICOS
   const auditedLegs = useMemo(() => {
     return trips
       .flatMap((t) => t.legs?.map((l) => ({ ...l, trip: t })) || [])
@@ -138,7 +126,6 @@ export default function FuelConciliation() {
       );
   }, [trips]);
 
-  // 2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
   const filteredAuditedLegs = useMemo(() => {
     let filtered = auditedLegs;
     const hoyStr = new Date().toLocaleDateString("es-MX");
@@ -172,12 +159,10 @@ export default function FuelConciliation() {
     return filtered;
   }, [auditedLegs, dateFilter, dateRange]);
 
-  // Selección Activa
   const activeTrip = useMemo(() => {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
-  // EXTRACCIÓN INTELIGENTE DE MOTOGENERADOR PARA EL VIAJE ACTIVO
   const activeTripMgName = useMemo(() => {
     if (!activeTrip) return null;
     if ((activeTrip as any).is_refrigerated_1) {
@@ -197,23 +182,56 @@ export default function FuelConciliation() {
     return null;
   }, [activeTrip]);
 
-  // 3. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
-  const tripLegs = useMemo(() => {
+  // ⚡ SEPARACIÓN EXACTA TRACTO VS MG EN EL DROPDOWN
+  const legOptions = useMemo(() => {
     if (!activeTrip || !activeTrip.legs) return [];
-    return activeTrip.legs.filter((leg) => {
+
+    // Obtenemos solo el ID si hay algo seleccionado
+    const currentLegId = selectedLegOption.split("|")[0];
+
+    const filteredLegs = activeTrip.legs.filter((leg) => {
       const legStatus = String(leg.status ?? "").toLowerCase();
-      // EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
       return (
         ["entregado", "cerrado", "finalizado", "liquidado"].includes(
           legStatus,
-        ) || String(leg.id) === selectedLegId
+        ) || String(leg.id) === currentLegId
       );
     });
-  }, [activeTrip, selectedLegId]);
+
+    return filteredLegs.flatMap((leg) => {
+      const options = [];
+
+      // 1. Siempre agregamos la opción del Tractocamión
+      options.push({
+        value: `${leg.id}|tracto`,
+        id: leg.id,
+        label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Tracto: ECO-${leg.unit?.numero_economico}`,
+        type: "tracto",
+      });
+
+      // 2. Si la fase lo amerita y hay Termo, agregamos la SEGUNDA opción INDEPENDIENTE
+      if (leg.leg_type === "ruta_carretera" && activeTripMgName) {
+        options.push({
+          value: `${leg.id}|mg`,
+          id: leg.id,
+          label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Termo: ⚡ ECO-${activeTripMgName}`,
+          type: "mg",
+        });
+      }
+      return options;
+    });
+  }, [activeTrip, activeTripMgName, selectedLegOption]);
+
+  // Derivamos el ID Real y el Tipo a partir de la opción seleccionada
+  const selectedLegId = selectedLegOption.split("|")[0];
+  const conciliatingType = selectedLegOption.split("|")[1] as
+    | "tracto"
+    | "mg"
+    | undefined;
 
   const activeLeg = useMemo(
-    () => tripLegs.find((l) => String(l.id) === selectedLegId) || null,
-    [tripLegs, selectedLegId],
+    () => activeTrip?.legs?.find((l) => String(l.id) === selectedLegId) || null,
+    [activeTrip, selectedLegId],
   );
 
   const tripData = useMemo(() => {
@@ -232,13 +250,10 @@ export default function FuelConciliation() {
           })
         : "N/A",
       fase: activeLeg.leg_type.replace("_", " ").toUpperCase(),
-      motogenerador: activeTripMgName, // ⚡ AÑADIDO PARA LA VISTA
+      motogenerador: activeTripMgName,
     };
   }, [activeTrip, activeLeg, activeTripMgName]);
 
-  // =========================================================================
-  // EXTRACCIÓN DE DATOS Y PUNTO DE REFERENCIA (INTELIGENCIA DE ODÓMETROS)
-  // =========================================================================
   const fetchValesCombustible = async (legIdToFetch: string) => {
     setIsFetchingVales(true);
     try {
@@ -262,7 +277,7 @@ export default function FuelConciliation() {
 
       if (totalVales > 0) {
         toast.success("Suministro Sincronizado", {
-          description: `Se detectaron ${totalVales.toFixed(2)} L en vales para este tramo.`,
+          description: `Se detectaron ${totalVales.toFixed(2)} L en vales.`,
         });
       } else {
         toast.info("Sin vales detectados", {
@@ -270,7 +285,6 @@ export default function FuelConciliation() {
         });
       }
 
-      // Una vez obtenidos los vales, abrimos el modal inteligente
       setIsConciliarModalOpen(true);
     } catch (error) {
       console.error("Error obteniendo vales:", error);
@@ -282,20 +296,21 @@ export default function FuelConciliation() {
 
   const handleTripSelect = (id: string) => {
     setSelectedTripId(id);
-    setSelectedLegId("");
+    setSelectedLegOption("");
     setIsEditing(false);
   };
 
-  const handleLegSelect = async (legId: string) => {
-    setSelectedLegId(legId);
+  const handleLegSelect = async (val: string) => {
+    setSelectedLegOption(val);
     setIsEditing(false);
+    const legId = val.split("|")[0];
     await fetchValesCombustible(legId);
   };
 
-  // REPARACIÓN DEL EDITAR
   const handleEditAudit = async (leg: any) => {
     setSelectedTripId(String(leg.trip_id));
-    setSelectedLegId(String(leg.id));
+    // Por defecto asume Tracto al editar desde la tabla porque no guardábamos el tipo en la tabla
+    setSelectedLegOption(`${leg.id}|tracto`);
     setIsEditing(true);
 
     await fetchValesCombustible(String(leg.id));
@@ -304,10 +319,9 @@ export default function FuelConciliation() {
   const handleCancelEdit = () => {
     setIsEditing(false);
     setSelectedTripId("");
-    setSelectedLegId("");
+    setSelectedLegOption("");
   };
 
-  // Eliminar (Revertir)
   const handleResetAudit = async () => {
     if (!legToReset) return;
     const toastId = toast.loading("Revirtiendo auditoría...");
@@ -331,9 +345,6 @@ export default function FuelConciliation() {
     }
   };
 
-  // =========================================================================
-  // GUARDAR Y APLICAR AL BACKEND (Llamado desde el Modal Inteligente)
-  // =========================================================================
   const handleAuthorizeFromModal = async (tripId: number, calculos: any) => {
     if (!activeTrip || !selectedLegId) return;
 
@@ -358,16 +369,14 @@ export default function FuelConciliation() {
         : "";
 
       const sufijo = isMoto ? "Hrs" : "Km";
-      const lblSufijo = isMoto ? "Horómetro" : "Odómetro";
 
       const comentarioBitacora = `Detalles Fase (${isMoto ? "MG" : "Tracto"}). ${sufijo} ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal} ${isMoto ? "hr/L" : "km/L"}. Ver: ${est}. ${isRobo ? mensajeDeduccion : ""}`;
 
-      const payload = {
+      // ⚡ PREVENCIÓN DE SOBREESCRITURA DE ODÓMETROS
+      const payload: any = {
         status: "entregado",
         location: "Conciliación de Combustible",
         comments: comentarioBitacora.trim(),
-        odometro: Number(odoFinal),
-        odometro_final: Number(odoFinal),
         combustible_litros: Number(vales),
         trip_leg_id: Number(selectedLegId),
         penalizacion_monto: cobrar ? descuentoPesos : 0,
@@ -375,6 +384,13 @@ export default function FuelConciliation() {
           ? mensajeDeduccion
           : "Excedente perdonado por el auditor.",
       };
+
+      // Solo guardamos el Odómetro Final en la base si estamos conciliando el TRACTO.
+      // Las horas del MG quedan solo en la bitácora para no romper el camión.
+      if (!isMoto) {
+        payload.odometro = Number(odoFinal);
+        payload.odometro_final = Number(odoFinal);
+      }
 
       await axiosClient.post(
         `/api/logistics/trips/${selectedTripId}/timeline`,
@@ -393,7 +409,7 @@ export default function FuelConciliation() {
 
       await fetchTrips();
       setSelectedTripId("");
-      setSelectedLegId("");
+      setSelectedLegOption("");
       setIsEditing(false);
     } catch (error) {
       console.error("Error al conciliar:", error);
@@ -414,7 +430,6 @@ export default function FuelConciliation() {
     );
     const text = auditEvent?.comments || "";
 
-    // Adaptamos el Regex para capturar Km o Hrs
     const kmMatch = text.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
     const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
     const valesMatch = text.match(/Vales:\s*([\d.]+)/);
@@ -510,7 +525,6 @@ export default function FuelConciliation() {
         header: "",
         sortable: false,
         render: (_, row) => {
-          // BLINDAJE: Detectar si el viaje ya fue pagado
           const isLiquidado = row.status === "liquidado";
 
           return (
@@ -541,7 +555,6 @@ export default function FuelConciliation() {
 
                 <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
 
-                {/* EDITAR (Protegido) */}
                 <DropdownMenuItem
                   onClick={() => {
                     if (isLiquidado) {
@@ -559,7 +572,6 @@ export default function FuelConciliation() {
                   <Pencil className="h-3.5 w-3.5 mr-2" /> Editar / Recalcular
                 </DropdownMenuItem>
 
-                {/* ELIMINAR (Protegido) */}
                 <DropdownMenuItem
                   className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
                   onClick={() => {
@@ -668,7 +680,6 @@ export default function FuelConciliation() {
                         t.client?.razon_social || "Sin Cliente";
                       const config = t.dolly_id ? "FULL" : "SENC";
 
-                      // Buscamos si tiene MG para mostrarlo en el dropdown
                       let tMgName = null;
                       if ((t as any).is_refrigerated_1) {
                         tMgName =
@@ -698,10 +709,10 @@ export default function FuelConciliation() {
 
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
-                2. Seleccionar Fase / Tramo:
+                2. Seleccionar Fase / Equipo a Auditar:
               </Label>
               <Select
-                value={selectedLegId}
+                value={selectedLegOption}
                 onValueChange={handleLegSelect}
                 disabled={!selectedTripId || isEditing}
               >
@@ -709,30 +720,19 @@ export default function FuelConciliation() {
                   <SelectValue placeholder="Seleccione tramo..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {tripLegs.map((leg) => {
-                    // Validamos si la fase es ruta carretera y el viaje tiene MG
-                    const isRuta = leg.leg_type === "ruta_carretera";
-                    const hasMG = !!activeTripMgName;
-
-                    return (
-                      <SelectItem
-                        key={leg.id}
-                        value={String(leg.id)}
-                        className="text-xs"
-                      >
-                        {leg.leg_type.replace("_", " ").toUpperCase()} | Op:{" "}
-                        {leg.operator?.name || "N/A"}
-                        {hasMG && isRuta
-                          ? ` (Incluye ⚡ ECO-${activeTripMgName})`
-                          : ""}
-                      </SelectItem>
-                    );
-                  })}
+                  {legOptions.map((opt) => (
+                    <SelectItem
+                      key={opt.value}
+                      value={opt.value}
+                      className="text-xs"
+                    >
+                      {opt.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Si estamos en proceso de pedir los vales, mostrar un indicador visual */}
             {isFetchingVales && (
               <div className="col-span-1 md:col-span-2 flex items-center justify-center p-2 text-blue-500 animate-pulse text-xs font-bold gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Analizando
@@ -811,7 +811,6 @@ export default function FuelConciliation() {
               </h3>
             </div>
 
-            {/* NUEVO: Pestañas de Hoy / Histórico */}
             <div className="flex items-center pb-2">
               <Tabs
                 value={dateFilter}
@@ -838,7 +837,7 @@ export default function FuelConciliation() {
             <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
               <CardContent className="p-0">
                 <EnhancedDataTable
-                  data={filteredAuditedLegs} // Usamos la tabla filtrada
+                  data={filteredAuditedLegs}
                   columns={auditedColumns as any}
                   className="border-none"
                   searchPlaceholder="Buscar por folio o operador..."
@@ -872,7 +871,6 @@ export default function FuelConciliation() {
         ) : null}
       </div>
 
-      {/* AQUÍ INYECTAMOS EL NUEVO MODAL INTELIGENTE DE CONCILIACIÓN */}
       <ConciliarViajeModal
         open={isConciliarModalOpen}
         onOpenChange={(open) => {
@@ -882,9 +880,9 @@ export default function FuelConciliation() {
         trip={activeTrip}
         fuelLoads={valesRawData}
         onConciliar={handleAuthorizeFromModal}
+        conciliatingType={conciliatingType || "tracto"}
       />
 
-      {/* DIALOG DE VISTA DE DETALLES HISTÓRICOS */}
       <Dialog
         open={!!legToView}
         onOpenChange={(open) => !open && setLegToView(null)}
@@ -1047,7 +1045,6 @@ export default function FuelConciliation() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Confirmación de Reversión */}
       <AlertDialog
         open={!!legToReset}
         onOpenChange={(open) => !open && setLegToReset(null)}
