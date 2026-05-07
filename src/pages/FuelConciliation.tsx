@@ -234,7 +234,7 @@ export default function FuelConciliation() {
       if (leg.leg_type === "ruta_carretera" && activeTripMgName) {
         options.push({
           value: `${leg.id}|mg`,
-          label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Termo: ⚡ ECO-${activeTripMgName}`,
+          label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Termo: ${activeTripMgName}`,
         });
       }
       return options;

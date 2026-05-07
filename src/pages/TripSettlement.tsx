@@ -67,7 +67,7 @@ import { OperatorSettlementDetailModal } from "@/features/receivables/components
 import {
   EnhancedDataTable,
   ColumnDef,
-} from "@/components/ui/enhanced-data-table"; // <-- IMPORTACIÓN DEL DATATABLE
+} from "@/components/ui/enhanced-data-table";
 
 interface ConceptoExtra {
   id: string;
@@ -152,7 +152,6 @@ export default function TripSettlement() {
         legs.push({
           ...l,
           trip: { ...t, clientName },
-          // Campos virtuales para el buscador de EnhancedDataTable
           _search_ref: `TRP-${t.public_id || t.id} ${l.operator?.name || ""}`,
           _unit_eco: l.unit?.numero_economico || "",
           _operator_name: l.operator?.name || "",
@@ -234,11 +233,51 @@ export default function TripSettlement() {
     return allLegs.filter((l) => selectedLegIds.includes(String(l.id)));
   }, [allLegs, selectedLegIds]);
 
+  // =========================================================================================
+  // MAGIA CONSOLIDADA: Crea un solo "Súper Tramo" si el usuario seleccionó múltiples viajes
+  // Esto engaña al Modal para que muestre 1 Solo Ticket con la suma total.
+  // =========================================================================================
+  const consolidatedLegsForModal = useMemo(() => {
+    if (selectedLegsData.length === 0) return [];
+    if (activeTab === "historico" || selectedLegsData.length === 1)
+      return selectedLegsData;
+
+    const firstLeg = selectedLegsData[0];
+    const lastLeg = selectedLegsData[selectedLegsData.length - 1];
+
+    // Obtenemos todos los folios únicos para ponerlos en el ticket
+    const allTripIds = Array.from(
+      new Set(selectedLegsData.map((l) => l.trip?.public_id || l.trip_id)),
+    ).join(" / ");
+
+    // Unimos los eventos de bitácora para que el Modal lea correctamente el Diésel
+    const combinedEvents = selectedLegsData.flatMap(
+      (l) => l.timeline_events || [],
+    );
+
+    return [
+      {
+        ...firstLeg,
+        id: `LOTE-${firstLeg.id}`,
+        leg_type: "liquidación_consolidada",
+        trip: {
+          ...firstLeg.trip,
+          public_id: allTripIds,
+          route_name: "Operación de Múltiples Tramos",
+          origin: firstLeg.trip?.origin,
+          destination: lastLeg.trip?.destination,
+        },
+        timeline_events: combinedEvents,
+        odometro_final: lastLeg.odometro_final,
+      },
+    ];
+  }, [selectedLegsData, activeTab]);
+
   // 3. DEFINIR COLUMNAS DEL DATATABLE
   const columns = useMemo<ColumnDef<any>[]>(() => {
     const cols: ColumnDef<any>[] = [
       {
-        key: "_search_ref", // Usado para el buscador global por Referencia y Operador
+        key: "_search_ref",
         header: "Referencia",
         render: (value, leg) => (
           <div>
@@ -272,7 +311,7 @@ export default function TripSettlement() {
         header: "Fase Operativa",
         type: "status",
         statusOptions: ["Muelle / Patio", "Ruta Carretera", "Retorno Vacío"],
-        statusNormalizer: (val) => legTypeLabels[val] || val, // Traduce los id base para el dropdown del datatable
+        statusNormalizer: (val) => legTypeLabels[val] || val,
         render: (value, leg) => (
           <div>
             <Badge
@@ -400,33 +439,27 @@ export default function TripSettlement() {
     return cols;
   }, [activeTab]);
 
-  // REEMPLAZA ESTO EN TripSettlement.tsx
   const isAuditPending = useMemo(() => {
     if (!selectedLegsData || selectedLegsData.length === 0) return false;
 
     return selectedLegsData.some((leg) => {
-      // Solo obligamos la auditoría en carretera (si quieres que aplique a patio, quita este if)
       if (leg.leg_type !== "ruta_carretera") return false;
 
-      // 1. Buscar si existe el evento de "Conciliación" en su bitácora
       const auditEvent = leg.timeline_events?.find(
         (e: any) =>
           e.location === "Conciliación de Combustible" ||
           e.comments?.includes("Detalles Fase"),
       );
 
-      // Si no hay evento de conciliación, BLOQUEAMOS
       if (!auditEvent) return true;
 
-      // 2. Verificar que tenga Vales registrados > 0
       const cleanText = auditEvent.comments?.replace(/\n/g, " ") || "";
       const valesMatch = cleanText.match(/Vales:\s*([\d.,]+)/);
       const vales = valesMatch ? Number(valesMatch[1].replace(/,/g, "")) : 0;
 
-      // Si tiene 0 vales de combustible, BLOQUEAMOS
       if (vales <= 0) return true;
 
-      return false; // Todo en orden, permitimos liquidar
+      return false;
     });
   }, [selectedLegsData]);
 
@@ -607,27 +640,9 @@ export default function TripSettlement() {
 
     setSelectedLegIds((prev) => {
       if (prev.includes(id)) {
-        return prev.filter((legId) => legId !== id); // Si ya estaba, lo quita
+        return prev.filter((legId) => legId !== id);
       } else {
-        // Validamos si ya hay tramos seleccionados
-        if (prev.length > 0) {
-          const firstSelectedId = prev[0];
-          const firstSelectedLeg = allLegs.find(
-            (l) => String(l.id) === firstSelectedId,
-          );
-
-          // Si el viaje del nuevo tramo no coincide con el que ya tenemos seleccionado, BLOQUEAMOS
-          if (
-            firstSelectedLeg &&
-            firstSelectedLeg.trip_id !== targetLeg.trip_id
-          ) {
-            toast.error("Selección Inválida", {
-              description:
-                "Solo puedes liquidar tramos que pertenezcan al mismo número de viaje.",
-            });
-            return prev;
-          }
-        }
+        // PERMITIMOS JUNTAR TRAMOS AUNQUE SEAN DIFERENTE VIAJE, EL MODAL SE ENCARGARÁ
         return [...prev, id];
       }
     });
@@ -793,12 +808,10 @@ export default function TripSettlement() {
         });
         if (refresh) refresh();
       } catch (error: any) {
-        // Extraemos el mensaje de error específico que manda FastAPI
         const backendMessage =
           error.response?.data?.detail ||
           "Error interno al reabrir la liquidación.";
 
-        // Mostramos el mensaje exacto en la alerta (Toast)
         toast.error("Operación bloqueada", {
           description: backendMessage,
         });
@@ -920,24 +933,13 @@ export default function TripSettlement() {
               enableRowSelection={activeTab === "pendientes"}
               selectedRows={selectedLegsData}
               onSelectedRowsChange={(rows) => {
-                // Si deseleccionan todo
                 if (rows.length === 0) {
                   setSelectedLegIds([]);
                   return;
                 }
 
-                // Forzamos a que todos sean del mismo viaje que el primero que seleccionaron
-                const firstTripId = rows[0].trip_id;
-                const validRows = rows.filter((r) => r.trip_id === firstTripId);
-
-                if (validRows.length !== rows.length) {
-                  toast.warning("Filtro aplicado", {
-                    description:
-                      "Se omitieron tramos de otros viajes. Se liquidará por viaje completo.",
-                  });
-                }
-
-                setSelectedLegIds(validRows.map((r) => String(r.id)));
+                // Permite seleccionar múltiples sin restricción de viaje para poder consolidar todo
+                setSelectedLegIds(rows.map((r) => String(r.id)));
               }}
               onRowClick={(row) => {
                 if (activeTab === "pendientes") {
@@ -1016,7 +1018,7 @@ export default function TripSettlement() {
                     <div className="space-y-4">
                       <div className="flex justify-between items-center text-sm bg-blue-50/50 dark:bg-blue-500/10 p-3 rounded-xl border border-blue-100 dark:border-blue-500/20 mb-4">
                         <span className="text-blue-800 dark:text-blue-400 font-bold text-[11px] uppercase tracking-widest">
-                          Sueldo Base (Ruta/Maniobras)
+                          Sueldo Base (Suma consolidada)
                         </span>
                         <div className="relative w-36">
                           <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-400 dark:text-blue-300" />
@@ -1108,6 +1110,7 @@ export default function TripSettlement() {
                           </div>
                         )}
 
+                        {/* EL VALE DE COBRO POR DIÉSEL (Consolidado) */}
                         {liquidacion.combustibleFaltante > 0 && (
                           <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1 rounded group transition-colors">
                             <div className="flex items-center gap-1.5">
@@ -1122,7 +1125,7 @@ export default function TripSettlement() {
                               </Button>
                               <span className="text-rose-800 dark:text-rose-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
                                 <ShieldAlert className="h-3 w-3 text-rose-600 dark:text-rose-400" />{" "}
-                                Faltante Diésel
+                                VALE DE COBRO (FALTANTE DIÉSEL)
                               </span>
                             </div>
                             <span className="font-mono font-black text-rose-600 dark:text-rose-400">
@@ -1166,7 +1169,7 @@ export default function TripSettlement() {
                   <div className="bg-slate-900 dark:bg-slate-950 p-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        Neto a Depositar
+                        Neto a Depositar (Consolidado)
                       </span>
                       <span className="text-3xl font-black font-mono text-white tracking-tighter">
                         {formatCurrencyLocal(liquidacion.neto_a_pagar)}
@@ -1411,6 +1414,7 @@ export default function TripSettlement() {
         </DialogContent>
       </Dialog>
 
+      {/* AQUÍ LE PASAMOS EL ARRAY CONSOLIDADO PARA QUE EL MODAL VEA UN SOLO RECIBO */}
       <OperatorSettlementDetailModal
         open={showReceiptModal}
         onOpenChange={(open) => {
@@ -1425,7 +1429,7 @@ export default function TripSettlement() {
             setAuditDetails(null);
           }
         }}
-        selectedLegsData={selectedLegsData}
+        selectedLegsData={consolidatedLegsForModal}
         liquidacion={liquidacion}
         conceptosExtra={conceptosExtra}
         previewData={previewData}
