@@ -429,14 +429,14 @@ export function AddTicketModal({
 
           if (t.is_refrigerated_1 && mg1.id) {
             options.push({
-              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg1.name}`,
+              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA |  ${mg1.name}`,
               value: `${t.id}|${leg.id}|${mg1.id}|${leg.operator_id}`,
             });
           }
 
           if (t.is_refrigerated_2 && mg2.id) {
             options.push({
-              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg2.name}`,
+              label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ${mg2.name}`,
               value: `${t.id}|${leg.id}|${mg2.id}|${leg.operator_id}`,
             });
           }

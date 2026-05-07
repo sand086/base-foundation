@@ -83,7 +83,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-//  IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
+// IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
 import { useTrips } from "@/features/trips/hooks/useTrips";
 
 interface FuelLoadDisplay extends FuelLoad {
@@ -94,7 +94,7 @@ interface FuelLoadDisplay extends FuelLoad {
 }
 
 const FuelLoads = () => {
-  //  INYECTAMOS USTRIPS PARA EL BLINDAJE
+  // INYECTAMOS USTRIPS PARA EL BLINDAJE
   const { trips } = useTrips();
 
   const [units, setUnits] = useState<Unit[]>([]);
@@ -148,10 +148,10 @@ const FuelLoads = () => {
 
         return {
           ...item,
-          // FASE 3: Fallback de ID en caso de no encontrar el número económico
+          // AQUÍ LA SOLUCIÓN: Priorizamos unit local en lugar del item.unit que puede venir mal del backend
           unidad_numero:
-            item.unit?.numero_economico ||
             unit?.numero_economico ||
+            item.unit?.numero_economico ||
             item.unit_id ||
             "N/A",
           operador_nombre:
@@ -337,7 +337,7 @@ const FuelLoads = () => {
     [cargas, idParaEliminar],
   );
 
-  //  LÓGICA DE BLINDAJE
+  // LÓGICA DE BLINDAJE
   const getTicketTripStatus = useCallback(
     (tripId: number | string | null | undefined) => {
       if (!tripId) return { isLiquidado: false };
