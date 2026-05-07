@@ -394,7 +394,6 @@ export function AddTicketModal({
     }
 
     // QUIRÚRGICO: Si no se encontró en 'unidades', de todas formas devuelve el ID y un nombre fallback
-    // Esto garantiza que el componente en searchableTrips NO falle si "mg1.name" es nulo originalmente.
     return {
       id: id || null,
       name: fallbackStr || (id ? `ID-${id}` : "Desconocido"),
@@ -418,16 +417,16 @@ export function AddTicketModal({
           // Filtramos solo viajes refrigerados
           if (!t.is_refrigerated_1 && !t.is_refrigerated_2) return;
 
+          // AQUÍ LA MAGIA: Extraemos el número económico desde el objeto anidado `_unit`
           const mg1 = resolveMotogenerator(
             t.motogenerator_1_id,
-            t.motogenerator_1,
+            t.motogenerator_1_unit?.numero_economico || t.motogenerator_1,
           );
           const mg2 = resolveMotogenerator(
             t.motogenerator_2_id,
-            t.motogenerator_2,
+            t.motogenerator_2_unit?.numero_economico || t.motogenerator_2,
           );
 
-          // QUIRÚRGICO: Cambiado de 'mg1.name' a 'mg1.id'. Si el viaje indica estar refrigerado y hay un ID, SE MUESTRA.
           if (t.is_refrigerated_1 && mg1.id) {
             options.push({
               label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg1.name}`,

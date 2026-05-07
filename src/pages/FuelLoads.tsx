@@ -131,20 +131,34 @@ const FuelLoads = () => {
       setOperators(safeOperators);
 
       const normalizedFuel: FuelLoadDisplay[] = safeFuel.map((item: any) => {
-        const unit = safeUnits.find((u: Unit) => u.id === item.unit_id);
+        // FASE 1: Búsqueda segura cruzando strings para evitar fallos de tipo
+        const unit = safeUnits.find(
+          (u: Unit) => String(u.id) === String(item.unit_id),
+        );
         const capacity =
           item.tipo_combustible === "diesel"
             ? unit?.capacidad_tanque_diesel || 800
             : unit?.capacidad_tanque_urea || 60;
 
+        // FASE 2: Parseo estricto del booleano de motogenerador
+        const isMoto =
+          item.is_motogenerator === true ||
+          String(item.is_motogenerator).toLowerCase() === "true" ||
+          item.is_motogenerator === 1;
+
         return {
           ...item,
+          // FASE 3: Fallback de ID en caso de no encontrar el número económico
           unidad_numero:
-            item.unit?.numero_economico || unit?.numero_economico || "N/A",
+            item.unit?.numero_economico ||
+            unit?.numero_economico ||
+            item.unit_id ||
+            "N/A",
           operador_nombre:
-            item.operator?.name || item.operator?.nombre || "N/A",
+            item.operator?.name || item.operator?.nombre || "Sin Operador",
           excede_tanque: Number(item.litros) > Number(capacity),
           is_conciliated: Boolean(item.is_conciliated),
+          is_motogenerator: isMoto,
         };
       });
       setCargas(normalizedFuel);
@@ -469,14 +483,17 @@ const FuelLoads = () => {
           <span className="font-mono text-[11px] font-bold text-slate-500 flex flex-col">
             {row.is_motogenerator ? (
               <>
-                <span>{Number(row.horometro || 0).toLocaleString()} HRS</span>
+                <span>
+                  {Number(row.horometro || row.odometro || 0).toLocaleString()}{" "}
+                  HRS
+                </span>
                 <span className="text-[8px] uppercase tracking-widest text-amber-500">
-                  Orómetro
+                  Horómetro
                 </span>
               </>
             ) : (
               <>
-                <span>{Number(v).toLocaleString()} KM</span>
+                <span>{Number(v || 0).toLocaleString()} KM</span>
                 <span className="text-[8px] uppercase tracking-widest text-slate-400">
                   Odómetro
                 </span>
