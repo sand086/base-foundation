@@ -393,8 +393,12 @@ export function AddTicketModal({
       return { id: foundUnit.id, name: foundUnit.numero_economico };
     }
 
-    // Si no encontró nada, devuelve nulo para no romper el backend
-    return { id: null, name: fallbackStr || null };
+    // QUIRÚRGICO: Si no se encontró en 'unidades', de todas formas devuelve el ID y un nombre fallback
+    // Esto garantiza que el componente en searchableTrips NO falle si "mg1.name" es nulo originalmente.
+    return {
+      id: id || null,
+      name: fallbackStr || (id ? `ID-${id}` : "Desconocido"),
+    };
   };
 
   const searchableTrips = useMemo(() => {
@@ -423,18 +427,18 @@ export function AddTicketModal({
             t.motogenerator_2,
           );
 
-          if (t.is_refrigerated_1 && mg1.name) {
+          // QUIRÚRGICO: Cambiado de 'mg1.name' a 'mg1.id'. Si el viaje indica estar refrigerado y hay un ID, SE MUESTRA.
+          if (t.is_refrigerated_1 && mg1.id) {
             options.push({
               label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg1.name}`,
-              // Pasamos el ID real recuperado. Si es nulo pasamos "" para que falle limpiamente la UI.
-              value: `${t.id}|${leg.id}|${mg1.id || ""}|${leg.operator_id}`,
+              value: `${t.id}|${leg.id}|${mg1.id}|${leg.operator_id}`,
             });
           }
 
-          if (t.is_refrigerated_2 && mg2.name) {
+          if (t.is_refrigerated_2 && mg2.id) {
             options.push({
               label: `Folio ${t.public_id || t.id} | RUTA CARRETERA | ⚡ ECO-${mg2.name}`,
-              value: `${t.id}|${leg.id}|${mg2.id || ""}|${leg.operator_id}`,
+              value: `${t.id}|${leg.id}|${mg2.id}|${leg.operator_id}`,
             });
           }
         } else {
@@ -620,7 +624,7 @@ export function AddTicketModal({
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     {isMotogenerator
-                      ? "Orómetro Actual (Horas)"
+                      ? "Horómetro Actual (Horas)"
                       : "Odómetro Actual (Opcional)"}
                   </Label>
                   <div className="relative">
