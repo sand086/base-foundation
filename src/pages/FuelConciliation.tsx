@@ -69,6 +69,7 @@ import {
   Calendar,
   User,
   FilterX,
+  Zap,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -176,6 +177,26 @@ export default function FuelConciliation() {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
+  // EXTRACCIÓN INTELIGENTE DE MOTOGENERADOR PARA EL VIAJE ACTIVO
+  const activeTripMgName = useMemo(() => {
+    if (!activeTrip) return null;
+    if ((activeTrip as any).is_refrigerated_1) {
+      return (
+        (activeTrip as any).motogenerator_1_unit?.numero_economico ||
+        (activeTrip as any).motogenerator_1 ||
+        "S/N"
+      );
+    }
+    if ((activeTrip as any).is_refrigerated_2) {
+      return (
+        (activeTrip as any).motogenerator_2_unit?.numero_economico ||
+        (activeTrip as any).motogenerator_2 ||
+        "S/N"
+      );
+    }
+    return null;
+  }, [activeTrip]);
+
   // 3. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
   const tripLegs = useMemo(() => {
     if (!activeTrip || !activeTrip.legs) return [];
@@ -211,8 +232,9 @@ export default function FuelConciliation() {
           })
         : "N/A",
       fase: activeLeg.leg_type.replace("_", " ").toUpperCase(),
+      motogenerador: activeTripMgName, // ⚡ AÑADIDO PARA LA VISTA
     };
-  }, [activeTrip, activeLeg]);
+  }, [activeTrip, activeLeg, activeTripMgName]);
 
   // =========================================================================
   // EXTRACCIÓN DE DATOS Y PUNTO DE REFERENCIA (INTELIGENCIA DE ODÓMETROS)
@@ -645,6 +667,19 @@ export default function FuelConciliation() {
                       const clientName =
                         t.client?.razon_social || "Sin Cliente";
                       const config = t.dolly_id ? "FULL" : "SENC";
+
+                      // Buscamos si tiene MG para mostrarlo en el dropdown
+                      let tMgName = null;
+                      if ((t as any).is_refrigerated_1) {
+                        tMgName =
+                          (t as any).motogenerator_1_unit?.numero_economico ||
+                          (t as any).motogenerator_1;
+                      } else if ((t as any).is_refrigerated_2) {
+                        tMgName =
+                          (t as any).motogenerator_2_unit?.numero_economico ||
+                          (t as any).motogenerator_2;
+                      }
+
                       return (
                         <SelectItem
                           key={t.id}
@@ -653,6 +688,7 @@ export default function FuelConciliation() {
                         >
                           {t.public_id || t.id} • {clientName} • {config} •{" "}
                           {t.origin}
+                          {tMgName ? ` • ⚡ ECO-${tMgName}` : ""}
                         </SelectItem>
                       );
                     })}
@@ -673,16 +709,25 @@ export default function FuelConciliation() {
                   <SelectValue placeholder="Seleccione tramo..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {tripLegs.map((leg) => (
-                    <SelectItem
-                      key={leg.id}
-                      value={String(leg.id)}
-                      className="text-xs"
-                    >
-                      {leg.leg_type.replace("_", " ").toUpperCase()} | Op:{" "}
-                      {leg.operator?.name || "N/A"}
-                    </SelectItem>
-                  ))}
+                  {tripLegs.map((leg) => {
+                    // Validamos si la fase es ruta carretera y el viaje tiene MG
+                    const isRuta = leg.leg_type === "ruta_carretera";
+                    const hasMG = !!activeTripMgName;
+
+                    return (
+                      <SelectItem
+                        key={leg.id}
+                        value={String(leg.id)}
+                        className="text-xs"
+                      >
+                        {leg.leg_type.replace("_", " ").toUpperCase()} | Op:{" "}
+                        {leg.operator?.name || "N/A"}
+                        {hasMG && isRuta
+                          ? ` (Incluye ⚡ ECO-${activeTripMgName})`
+                          : ""}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -697,72 +742,134 @@ export default function FuelConciliation() {
           </CardContent>
         </Card>
 
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
-          <div className="flex items-center gap-2 px-1">
-            <History className="h-4 w-4 text-slate-400" />
-            <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
-              Historial de Auditorías
-            </h3>
-          </div>
+        {tripData && (
+          <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl animate-in slide-in-from-top-2">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+                <Truck className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-0.5">
+                  Viaje en Captura • Fase {tripData.fase}
+                </p>
+                <p className="text-sm font-bold tracking-tight">
+                  {tripData.cartaPorteId} • {tripData.ruta}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-6 text-xs font-medium bg-white/5 py-2.5 px-5 rounded-xl border border-white/10 w-full md:w-auto">
+              <div className="flex flex-col">
+                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                  <User className="h-3 w-3" /> Operador
+                </span>
+                <span className="truncate max-w-[120px]">
+                  {tripData.operador}
+                </span>
+              </div>
+              <div className="hidden md:block w-px bg-white/20"></div>
+              <div className="flex flex-col">
+                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                  <Gauge className="h-3 w-3" /> Unidad
+                </span>
+                <span>
+                  ECO-{tripData.unidadId} ({tripData.configuracion})
+                </span>
+              </div>
 
-          {/* NUEVO: Pestañas de Hoy / Histórico */}
-          <div className="flex items-center pb-2">
-            <Tabs
-              value={dateFilter}
-              onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
-              className="w-[300px]"
-            >
-              <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
-                <TabsTrigger
-                  value="hoy"
-                  className="rounded-lg font-bold text-xs"
-                >
-                  Hoy
-                </TabsTrigger>
-                <TabsTrigger
-                  value="historico"
-                  className="rounded-lg font-bold text-xs"
-                >
-                  Histórico
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
+              {/* VISTA AÑADIDA DEL MOTOGENERADOR */}
+              {tripData.motogenerador && (
+                <>
+                  <div className="hidden md:block w-px bg-white/20"></div>
+                  <div className="flex flex-col">
+                    <span className="text-[8px] text-amber-500 uppercase font-black tracking-widest flex items-center gap-1">
+                      <Zap className="h-3 w-3" /> Motogenerador
+                    </span>
+                    <span className="text-amber-400">
+                      ECO-{tripData.motogenerador}
+                    </span>
+                  </div>
+                </>
+              )}
 
-          <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
-            <CardContent className="p-0">
-              <EnhancedDataTable
-                data={filteredAuditedLegs} // Usamos la tabla filtrada
-                columns={auditedColumns as any}
-                className="border-none"
-                searchPlaceholder="Buscar por folio o operador..."
-                customFilters={
-                  dateFilter === "historico" && (
-                    <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
-                      <DateRangePicker
-                        dateRange={dateRange}
-                        onDateRangeChange={setDateRange}
-                        placeholder="Rango de fechas"
-                        className="w-[280px]"
-                      />
-                      {dateRange?.from && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDateRange(undefined)}
-                          className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
-                          title="Limpiar fechas"
-                        >
-                          <FilterX size={18} />
-                        </Button>
-                      )}
-                    </div>
-                  )
-                }
-              />
-            </CardContent>
-          </Card>
-        </div>
+              <div className="hidden md:block w-px bg-white/20"></div>
+              <div className="flex flex-col">
+                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Salida
+                </span>
+                <span>{tripData.fechaViaje}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!tripData ? (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
+            <div className="flex items-center gap-2 px-1">
+              <History className="h-4 w-4 text-slate-400" />
+              <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
+                Historial de Auditorías
+              </h3>
+            </div>
+
+            {/* NUEVO: Pestañas de Hoy / Histórico */}
+            <div className="flex items-center pb-2">
+              <Tabs
+                value={dateFilter}
+                onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
+                className="w-[300px]"
+              >
+                <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
+                  <TabsTrigger
+                    value="hoy"
+                    className="rounded-lg font-bold text-xs"
+                  >
+                    Hoy
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="historico"
+                    className="rounded-lg font-bold text-xs"
+                  >
+                    Histórico
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
+              <CardContent className="p-0">
+                <EnhancedDataTable
+                  data={filteredAuditedLegs} // Usamos la tabla filtrada
+                  columns={auditedColumns as any}
+                  className="border-none"
+                  searchPlaceholder="Buscar por folio o operador..."
+                  customFilters={
+                    dateFilter === "historico" && (
+                      <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <DateRangePicker
+                          dateRange={dateRange}
+                          onDateRangeChange={setDateRange}
+                          placeholder="Rango de fechas"
+                          className="w-[280px]"
+                        />
+                        {dateRange?.from && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDateRange(undefined)}
+                            className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
+                            title="Limpiar fechas"
+                          >
+                            <FilterX size={18} />
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  }
+                />
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
       </div>
 
       {/* AQUÍ INYECTAMOS EL NUEVO MODAL INTELIGENTE DE CONCILIACIÓN */}
