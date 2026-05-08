@@ -1,22 +1,20 @@
-import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useMemo } from "react";
 import {
-  Download,
   AlertCircle,
   Eye,
   MoreHorizontal,
   Plus,
-  FileInput,
   CreditCard,
   Trash2,
   Clock,
   Ban,
   CheckCircle2,
-  Sheet as SheetIcon,
   Loader2,
   BadgeDollarSign,
   ReceiptText,
-  FileSignature, //  NUEVO ÍCONO
+  FileSignature,
+  Filter,
+  FileText,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +44,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
@@ -60,7 +65,7 @@ import {
 } from "@/features/receivables/types";
 import axiosClient from "@/api/axiosClient";
 import { cn } from "@/lib/utils";
-// HOOKS
+
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useReceivables } from "@/features/receivables/hooks/useReceivables";
 
@@ -71,7 +76,6 @@ export default function Receivables() {
     refreshReceivables,
     deleteReceivable,
     registerMultiplePaymentRep,
-    registerPayment,
     reopenReceivable,
     stampInvoice,
   } = useReceivables();
@@ -86,6 +90,9 @@ export default function Receivables() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
+
+  // NUEVO: Estado para el filtro por cliente
+  const [selectedClientId, setSelectedClientId] = useState<string>("all");
 
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
@@ -116,7 +123,6 @@ export default function Receivables() {
         const folioValido =
           inv.folio_interno === null ||
           inv.folio_interno !== "folio interno bueno";
-
         return montoValido && folioValido;
       })
       .map((inv: any) => {
@@ -125,7 +131,6 @@ export default function Receivables() {
           inv.clientName ||
           inv.client_razon_social ||
           "Cliente Desconocido";
-
         let diasCredito = Number(
           inv.client?.dias_credito ||
             inv.cliente?.dias_credito ||
@@ -133,13 +138,10 @@ export default function Receivables() {
         );
 
         if (!diasCredito) {
-          if (clienteNombre.toUpperCase().includes("HANSA")) {
-            diasCredito = 15;
-          } else if (clienteNombre.toUpperCase().includes("KARCHER")) {
+          if (clienteNombre.toUpperCase().includes("HANSA")) diasCredito = 15;
+          else if (clienteNombre.toUpperCase().includes("KARCHER"))
             diasCredito = 8;
-          } else {
-            diasCredito = 15;
-          }
+          else diasCredito = 15;
         }
 
         const fechaEmision = inv.fecha_emision || inv.created_at;
@@ -150,19 +152,14 @@ export default function Receivables() {
             ? fechaEmision.split("T")[0]
             : fechaEmision;
           const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
-
           let addedDays = 0;
           while (addedDays < diasCredito) {
             fechaObj.setDate(fechaObj.getDate() + 1);
-            if (fechaObj.getDay() !== 0 && fechaObj.getDay() !== 6) {
-              addedDays++;
-            }
+            if (fechaObj.getDay() !== 0 && fechaObj.getDay() !== 6) addedDays++;
           }
-
           const yyyy = fechaObj.getFullYear();
           const mm = String(fechaObj.getMonth() + 1).padStart(2, "0");
           const dd = String(fechaObj.getDate()).padStart(2, "0");
-
           fechaVencimientoCalculada = `${yyyy}-${mm}-${dd}`;
         }
 
@@ -190,13 +187,35 @@ export default function Receivables() {
       }) as ReceivableInvoice[];
   }, [receivables]);
 
+  // NUEVO: Extraemos los clientes únicos para el filtro
+  const uniqueClients = useMemo(() => {
+    const map = new Map<string, string>();
+    formattedInvoices.forEach((inv) => {
+      if (inv.client_id && inv.cliente) {
+        map.set(String(inv.client_id), inv.cliente);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [formattedInvoices]);
+
+  // NUEVO: Filtramos las facturas según el cliente seleccionado
+  const filteredInvoices = useMemo(() => {
+    if (selectedClientId === "all") return formattedInvoices;
+    return formattedInvoices.filter(
+      (inv) => String(inv.client_id) === selectedClientId,
+    );
+  }, [formattedInvoices, selectedClientId]);
+
+  // NUEVO: El resumen financiero ahora es REACTIVO a las facturas filtradas
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
     let totalCobrado = 0;
     let porCobrarVigente = 0;
     let carteraVencida = 0;
 
-    formattedInvoices.forEach((inv) => {
+    filteredInvoices.forEach((inv) => {
       const monto = Number(inv.monto_total) || 0;
       const saldo = Number(inv.saldo_pendiente) || 0;
       const cobrado = monto - saldo > 0 ? monto - saldo : 0;
@@ -212,7 +231,6 @@ export default function Receivables() {
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
         const fechaStr = inv.fecha_vencimiento.includes("T")
           ? inv.fecha_vencimiento.split("T")[0]
           : inv.fecha_vencimiento;
@@ -222,20 +240,16 @@ export default function Receivables() {
         const diffTime = today.getTime() - vencimiento.getTime();
         const daysOverdue = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        if (daysOverdue > 0) {
-          carteraVencida += saldo;
-        } else {
-          porCobrarVigente += saldo;
-        }
+        if (daysOverdue > 0) carteraVencida += saldo;
+        else porCobrarVigente += saldo;
       }
     });
 
     return { totalFacturado, totalCobrado, porCobrarVigente, carteraVencida };
-  }, [formattedInvoices]);
+  }, [filteredInvoices]);
 
   const handlePaySelectedInvoices = () => {
     if (selectedRows.length === 0) return;
-
     const firstClientId = selectedRows[0].client_id;
     const allSameClient = selectedRows.every(
       (inv) => inv.client_id === firstClientId,
@@ -248,17 +262,15 @@ export default function Receivables() {
       });
       return;
     }
-
     setInvoicesToPay(selectedRows);
     setIsPaymentModalOpen(true);
   };
 
   const handleExportToExcel = () => {
-    if (formattedInvoices.length === 0) {
+    if (filteredInvoices.length === 0) {
       toast.error("No hay datos para exportar");
       return;
     }
-
     const headers = [
       "Folio",
       "Cliente",
@@ -270,8 +282,7 @@ export default function Receivables() {
       "Estatus",
       "Días Vencidos",
     ];
-
-    const rows = formattedInvoices.map((inv) => {
+    const rows = filteredInvoices.map((inv) => {
       const diasVencidos = calculateDaysOverdue(inv.fecha_vencimiento);
       return [
         inv.folio_interno || inv.uuid,
@@ -285,13 +296,11 @@ export default function Receivables() {
         diasVencidos > 0 ? diasVencidos : 0,
       ].join(",");
     });
-
     const csvContent = [headers.join(","), ...rows].join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], {
       type: "text/csv;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);
-
     const link = document.createElement("a");
     link.href = url;
     link.setAttribute(
@@ -301,27 +310,17 @@ export default function Receivables() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
     toast.success("Archivo Excel generado exitosamente");
-  };
-
-  const handleImportServices = (selectedServices: FinalizableService[]) => {
-    setImportedServices(selectedServices);
-    setIsImportModalOpen(false);
-    setIsCreateModalOpen(true);
   };
 
   const handleCreateInvoice = async (invoiceData: any) => {
     try {
       await axiosClient.post("/api/finance/receivables", invoiceData);
-
       setIsCreateModalOpen(false);
       setImportedServices(undefined);
       toast.success("Factura generada y guardada exitosamente");
-
       await refreshReceivables?.();
     } catch (error: any) {
-      console.error("Error al crear factura:", error);
       toast.error("Error al generar la factura", {
         description:
           error.response?.data?.detail ||
@@ -364,9 +363,7 @@ export default function Receivables() {
         header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
-          //  BLINDAJE VISUAL: Detectar si es Provisional
           const isProvisional = row.status_sat === "PROVISIONAL";
-
           return (
             <div className="flex flex-col items-start">
               <span
@@ -376,7 +373,7 @@ export default function Receivables() {
               </span>
               {isProvisional && (
                 <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[9px] uppercase tracking-widest border-none mt-1">
-                  PROVISIONAL (SIN TIMBRAR)
+                  PROVISIONAL
                 </Badge>
               )}
             </div>
@@ -447,7 +444,6 @@ export default function Receivables() {
         type: "date",
         render: (value, row) => {
           if (!value) return "—";
-
           if (row.saldo_pendiente === 0) {
             return (
               <div className="flex flex-col">
@@ -457,10 +453,8 @@ export default function Receivables() {
               </div>
             );
           }
-
           const today = new Date();
           today.setHours(0, 0, 0, 0);
-
           const safeDate = new Date(
             value.includes("-")
               ? value.split("T")[0].replace(/-/g, "/")
@@ -489,7 +483,6 @@ export default function Receivables() {
               diasFaltantes <= 3
                 ? "text-amber-600 dark:text-amber-400"
                 : "text-emerald-600 dark:text-emerald-400";
-
             return (
               <div className="flex flex-col">
                 <span
@@ -532,8 +525,6 @@ export default function Receivables() {
           const isSelectionActive = selectedRows.length > 0;
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
-
-          //  VERIFICACIONES DE SEGURIDAD (CANDADOS)
           const isProvisional = row.status_sat === "PROVISIONAL";
 
           return (
@@ -568,31 +559,24 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {/*  ACCIÓN 1: TIMBRAR FACTURA PROVISIONAL */}
                 {isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
                       onClick={async () => {
                         if (
-                          window.confirm(
-                            "¿Timbrar esta factura ante el SAT?\n\nEl sistema usará la información de la liquidación para generar la Factura Definitiva (Sustitución).",
-                          )
+                          window.confirm("¿Timbrar esta factura ante el SAT?")
                         ) {
-                          //  FIX: Mandamos el VIAJE_ID, no el Invoice ID, porque así lo pide el backend
                           const viajeId =
                             (row as any).viaje_id || (row as any).trip_id;
-                          if (!viajeId) {
-                            toast.error("Error", {
-                              description:
-                                "Esta factura no tiene un viaje asociado válido.",
+                          if (!viajeId)
+                            return toast.error("Error", {
+                              description: "Sin viaje válido",
                             });
-                            return;
-                          }
                           await stampInvoice(Number(viajeId));
                         }
                       }}
-                      className="gap-2 font-black text-[11px] uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50 dark:focus:bg-indigo-900/30"
+                      className="gap-2 font-black text-[11px] uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50"
                     >
                       <FileSignature className="h-4 w-4 mr-2" /> Timbrar Factura
                       SAT
@@ -600,7 +584,6 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/*  ACCIÓN 2: REGISTRAR COBRO (BLOQUEADO SI ES PROVISIONAL) */}
                 {(row.saldo_pendiente || 0) > 0 && !isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -617,16 +600,13 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/*  ACCIÓN 3: ANULAR REP (DESBLOQUEO DE ESCALERA) */}
                 {hasPayments && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
                       onClick={async () => {
                         if (
-                          window.confirm(
-                            "¿Estás seguro de ANULAR EL PAGO de esta factura?\n\nAl confirmar, la factura volverá a estar Por Cobrar y se liberará el candado de la Liquidación.",
-                          )
+                          window.confirm("¿Anular el pago de esta factura?")
                         ) {
                           await reopenReceivable(Number(row.id));
                         }
@@ -654,6 +634,12 @@ export default function Receivables() {
     );
   }
 
+  // Nombre del cliente seleccionado para pasar al Modal de Estado de Cuenta
+  const selectedClientName =
+    selectedClientId === "all"
+      ? "Todos los Clientes"
+      : uniqueClients.find((c) => c.id === selectedClientId)?.name || "Cliente";
+
   return (
     <div className="space-y-6 pb-20 animate-page-enter relative">
       <PageHeader
@@ -661,6 +647,46 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
+          {/* NUEVO: Select dinámico de Clientes */}
+          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm">
+            <Filter className="h-4 w-4 text-slate-400 mr-2" />
+            <Select
+              value={selectedClientId}
+              onValueChange={setSelectedClientId}
+            >
+              <SelectTrigger className="w-[200px] border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <SelectValue placeholder="Todos los clientes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="font-bold text-xs">
+                  Todos los clientes
+                </SelectItem>
+                {uniqueClients.map((client) => (
+                  <SelectItem
+                    key={client.id}
+                    value={client.id}
+                    className="text-xs uppercase"
+                  >
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* NUEVO: Botón de Estado de Cuenta */}
+          <Button
+            variant="outline"
+            className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-200 font-bold"
+            disabled={
+              selectedClientId === "all" || filteredInvoices.length === 0
+            }
+            onClick={() => setIsAccountStatementOpen(true)}
+          >
+            <FileText className="h-4 w-4 mr-2 text-indigo-500" />
+            Estado de Cuenta
+          </Button>
+
           <ActionButton
             size="md"
             className="bg-brand-navy hover:bg-brand-navy/90"
@@ -736,7 +762,7 @@ export default function Receivables() {
       <Card className="shadow-2xl border-none overflow-hidden bg-transparent relative z-0">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
-            data={formattedInvoices}
+            data={filteredInvoices}
             columns={columns}
             exportFileName="cuentas_por_cobrar"
             enableRowSelection={true}
@@ -767,9 +793,7 @@ export default function Receivables() {
                 </span>
               </div>
             </div>
-
             <div className="h-8 w-px bg-white/20 hidden sm:block"></div>
-
             <Button
               onClick={handlePaySelectedInvoices}
               className="bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl border-none shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] haptic-press"
@@ -795,7 +819,6 @@ export default function Receivables() {
         onOpenChange={setIsDetailSheetOpen}
         invoice={selectedInvoice}
       />
-
       <ClientRegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
@@ -804,12 +827,23 @@ export default function Receivables() {
         clientId={invoicesToPay[0]?.client_id || invoicesToPay[0]?.client?.id}
         onSubmit={handleRegisterPayment}
       />
-      <AccountStatementModal
-        open={isAccountStatementOpen}
-        onClose={() => setIsAccountStatementOpen(false)}
-        invoices={formattedInvoices}
-      />
 
+      {(() => {
+        const selectedClientName =
+          selectedClientId === "all"
+            ? "all"
+            : uniqueClients.find((c) => c.id === selectedClientId)?.name ||
+              "all";
+
+        return (
+          <AccountStatementModal
+            open={isAccountStatementOpen}
+            onClose={() => setIsAccountStatementOpen(false)}
+            invoices={formattedInvoices}
+            initialClient={selectedClientName} // <-- 2. Se lo enviamos al Modal
+          />
+        );
+      })()}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}

@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   Receipt,
   Download,
@@ -28,18 +29,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   ReceivableInvoice,
   getInvoiceStatusInfo,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
 import { toast } from "sonner";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import { format } from "date-fns";
 
 interface AccountStatementModalProps {
   open: boolean;
   onClose: () => void;
   invoices: ReceivableInvoice[];
+  initialClient?: string; // <-- AÑADIMOS EL PUENTE CON EL FILTRO EXTERNO
 }
 
 const companyBankData = {
@@ -65,8 +70,18 @@ export function AccountStatementModal({
   open,
   onClose,
   invoices,
+  initialClient = "all", // <-- VALOR POR DEFECTO
 }: AccountStatementModalProps) {
-  const [selectedClient, setSelectedClient] = useState<string>("all");
+  const [selectedClient, setSelectedClient] = useState<string>(initialClient);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const pdfRef = useRef<HTMLDivElement>(null);
+
+  // <-- SINCRONIZA EL MODAL CON LA PANTALLA PRINCIPAL AL ABRIRSE
+  useEffect(() => {
+    if (open) {
+      setSelectedClient(initialClient);
+    }
+  }, [open, initialClient]);
 
   const clients = useMemo(() => {
     const uniqueClients = [...new Set(invoices.map((inv) => inv.cliente))];
@@ -108,13 +123,76 @@ export function AccountStatementModal({
     }).format(amount);
   };
 
-  const handleDownload = () => {
-    toast.success("Generando PDF...", {
-      description: "El estado de cuenta se descargará en unos segundos.",
+  const handleDownload = async () => {
+    if (!pdfRef.current) return;
+    setIsGeneratingPDF(true);
+    toast.info("Generando PDF...", {
+      description: "Por favor espera un momento.",
     });
+
+    const htmlElement = document.documentElement;
+    const wasDark = htmlElement.classList.contains("dark");
+    if (wasDark) {
+      htmlElement.classList.remove("dark");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    try {
+      const canvas = await html2canvas(pdfRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "letter",
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const canvasRatio = canvas.height / canvas.width;
+      const imgHeight = pdfWidth * canvasRatio;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position -= pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      // Nombre del PDF adaptado al cliente seleccionado
+      const fileNameClient =
+        selectedClient === "all"
+          ? "Todos_Los_Clientes"
+          : selectedClient.replace(/\s+/g, "_");
+
+      pdf.save(
+        `Estado_Cuenta_${fileNameClient}_${format(new Date(), "dd-MM-yyyy")}.pdf`,
+      );
+
+      toast.success("Estado de Cuenta generado con éxito");
+    } catch (error) {
+      console.error("Error generando PDF:", error);
+      toast.error("Error al generar el documento PDF");
+    } finally {
+      if (wasDark) htmlElement.classList.add("dark");
+      setIsGeneratingPDF(false);
+    }
   };
 
   const handlePrint = () => {
+    window.print();
     toast.success("Preparando impresión...", {
       description: "Se abrirá la ventana de impresión.",
     });
@@ -128,10 +206,16 @@ export function AccountStatementModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      {/* CAPA 1: CASCARÓN TAHOE */}
-      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl">
-        {/* CAPA 2: HEADER */}
-        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
+      <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl print:bg-white print:shadow-none print:w-full print:max-w-none">
+        {/* CSS DE IMPRESIÓN */}
+        <style media="print">{`
+          @page { size: letter; margin: 15mm; }
+          body * { visibility: hidden; }
+          #print-area, #print-area * { visibility: visible; }
+          #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        `}</style>
+
+        <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10 print:hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
             <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-white/10">
@@ -148,10 +232,8 @@ export function AccountStatementModal({
           </div>
         </DialogHeader>
 
-        {/* CAPA 3: BODY */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
-          {/* Client Filter */}
-          <div className="flex items-center gap-4 p-5 border border-border rounded-2xl bg-card shadow-sm">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4 print:p-0 print:overflow-visible">
+          <div className="flex items-center gap-4 p-5 border border-border rounded-2xl bg-card shadow-sm print:hidden">
             <div className="flex-1">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2 block">
                 Filtrar por Cliente
@@ -178,9 +260,14 @@ export function AccountStatementModal({
             </div>
           </div>
 
-          {/* Statement Content */}
-          <div className="p-5 border-2 border-dashed border-border rounded-2xl bg-card shadow-sm space-y-6">
-            {/* Header */}
+          {/* ========================================================= */}
+          {/* ÁREA DE IMPRESIÓN (PDF / PRINTER) */}
+          {/* ========================================================= */}
+          <div
+            id="print-area"
+            ref={pdfRef}
+            className="p-5 border-2 border-dashed border-border rounded-2xl bg-card shadow-sm space-y-6 print:border-none print:shadow-none print:p-0"
+          >
             <div className="flex justify-between items-start border-b border-border pb-4">
               <div>
                 <h2 className="text-xl font-bold text-primary flex items-center gap-2">
@@ -191,12 +278,11 @@ export function AccountStatementModal({
                   RFC: {companyBankData.rfc}
                 </p>
               </div>
-              <Badge className="bg-primary text-primary-foreground font-black text-[10px]">
+              <Badge className="bg-primary text-primary-foreground font-black text-[10px] print:border print:border-black print:text-black print:bg-white">
                 ESTADO DE CUENTA
               </Badge>
             </div>
 
-            {/* Client Info (if filtered) */}
             {selectedClient !== "all" && (
               <div className="p-3 bg-muted/30 rounded-lg">
                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
@@ -208,7 +294,6 @@ export function AccountStatementModal({
               </div>
             )}
 
-            {/* Invoice List */}
             <div>
               <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2 text-[10px]">
                 <DollarSign className="h-4 w-4" /> Facturas Pendientes
@@ -290,7 +375,6 @@ export function AccountStatementModal({
 
             <Separator className="bg-border" />
 
-            {/* Totals */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
                 <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 mb-1 font-black">
@@ -323,7 +407,6 @@ export function AccountStatementModal({
 
             <Separator className="bg-border" />
 
-            {/* Bank Details */}
             <div>
               <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
                 <CreditCard className="h-4 w-4" /> Datos Bancarios para Depósito
@@ -332,7 +415,7 @@ export function AccountStatementModal({
                 {companyBankData.cuentas.map((cuenta, idx) => (
                   <div
                     key={idx}
-                    className="p-4 bg-muted/50 border border-border rounded-lg"
+                    className="p-4 bg-muted/50 border border-border rounded-lg break-inside-avoid"
                   >
                     <p className="font-black text-primary mb-2">
                       {cuenta.banco}
@@ -362,23 +445,24 @@ export function AccountStatementModal({
               </div>
             </div>
 
-            {/* Footer del doc */}
             <div className="text-center text-[10px] text-muted-foreground pt-4 border-t border-dashed border-border">
               <p>Documento generado el {currentDate}</p>
               <p className="mt-1 font-black uppercase tracking-widest">
-                Transportes Rápidos 3T © 2025 - Sistema de Gestión
+                Transportes Rápidos 3T © {new Date().getFullYear()} - Sistema de
+                Gestión
               </p>
             </div>
           </div>
         </div>
 
         {/* CAPA 5: FOOTER */}
-        <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10">
+        <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10 print:hidden">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
             <Button
               variant="outline"
               className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2"
               onClick={handlePrint}
+              disabled={isGeneratingPDF}
             >
               <Printer className="h-4 w-4" />
               Imprimir
@@ -387,12 +471,14 @@ export function AccountStatementModal({
               variant="outline"
               className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2"
               onClick={handleDownload}
+              disabled={isGeneratingPDF}
             >
               <Download className="h-4 w-4" />
-              Descargar PDF
+              {isGeneratingPDF ? "Generando..." : "Descargar PDF"}
             </Button>
             <Button
               onClick={onClose}
+              disabled={isGeneratingPDF}
               className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
               Cerrar

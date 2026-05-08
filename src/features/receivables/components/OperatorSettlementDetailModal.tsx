@@ -10,6 +10,8 @@ import {
   FileText,
   Gauge,
   DollarSign,
+  Truck,
+  Snowflake,
 } from "lucide-react";
 import {
   Dialog,
@@ -119,7 +121,6 @@ export function OperatorSettlementDetailModal({
       totalEcm += Number(previewData.consumo_esperado || 0);
       totalPenalizacion += Number(previewData.deduccion_combustible || 0);
 
-      // Fallback variables preview si el backend las mandó (opcional)
       totalHorasMoto += Number(previewData.horas_moto || 0);
       totalLtEcmMoto += Number(previewData.consumo_esperado_moto || 0);
       totalValesMoto += Number(previewData.consumo_real_moto || 0);
@@ -146,7 +147,7 @@ export function OperatorSettlementDetailModal({
           const vMatch = cleanText.match(/Vales(?:\s+Tracto)?:\s*([\d.,]+)/);
           const ecmMatch = cleanText.match(/Litros ECM:\s*([\d.,]+)/);
 
-          // Extracción Moto (Si existen en el texto de la bitácora)
+          // Extracción Moto
           const hMotoMatch = cleanText.match(/Horas Moto:\s*([\d.,]+)/);
           const ecmMotoMatch = cleanText.match(/Litros Moto:\s*([\d.,]+)/);
           const vMotoMatch = cleanText.match(/Vales Moto:\s*([\d.,]+)/);
@@ -501,6 +502,40 @@ export function OperatorSettlementDetailModal({
                   }
                 }
 
+                // =========================================================================
+                // MAGIA MATEMÁTICA: Extracción pura e independiente por equipo para los vales
+                // =========================================================================
+                const diffTracto = Math.max(
+                  0,
+                  Number(legAudit.vales) - Number(legAudit.ltEcm),
+                );
+                const diffMoto = Math.max(
+                  0,
+                  Number(legAudit.valesMoto) - Number(legAudit.ltMoto),
+                );
+                const precioCombustible = Number(
+                  previewData?.precio_promedio ||
+                    liquidacion?.precioPorLitro ||
+                    24.5,
+                );
+
+                let penalizacionTracto =
+                  diffTracto > 0 ? diffTracto * precioCombustible : 0;
+                const penalizacionMoto =
+                  diffMoto > 0 ? diffMoto * precioCombustible : 0;
+
+                // Fallback de seguridad si en el histórico ya solo hay un monto global
+                if (legPenalizacion > 0 && diffTracto === 0 && diffMoto === 0) {
+                  penalizacionTracto = legPenalizacion;
+                }
+
+                // Identificadores visuales de unidades
+                const ecoTracto = leg.unit?.numero_economico || "TRACTO";
+                const ecoMoto =
+                  leg.trip?.motogenerator_1_unit?.numero_economico ||
+                  leg.trip?.motogenerator_2_unit?.numero_economico ||
+                  "MOTO";
+
                 return (
                   <div
                     key={leg.id}
@@ -835,13 +870,39 @@ export function OperatorSettlementDetailModal({
                                 </div>
                               )}
 
-                              {legPenalizacion > 0 && (
-                                <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold">
+                              {/* VALES DE COBRO EXACTOS (Desglosados visualmente) */}
+                              {penalizacionTracto > 0 && (
+                                <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold bg-rose-50/50 dark:bg-rose-500/10 p-2 rounded-lg border border-rose-100 dark:border-rose-500/20">
                                   <div className="flex flex-col">
-                                    <span>Faltante Diésel (Penalización)</span>
+                                    <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-widest">
+                                      <Truck className="h-3 w-3" /> Faltante
+                                      Diésel ({ecoTracto})
+                                    </span>
+                                    <span className="text-[9px] font-mono text-rose-500/80 mt-0.5 ml-4.5">
+                                      {diffTracto.toFixed(2)} Lts x{" "}
+                                      {formatCurrencyLocal(precioCombustible)}
+                                    </span>
                                   </div>
                                   <span className="font-mono font-black mt-0.5">
-                                    -{formatCurrencyLocal(legPenalizacion)}
+                                    -{formatCurrencyLocal(penalizacionTracto)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {penalizacionMoto > 0 && (
+                                <div className="flex justify-between items-start text-purple-600 dark:text-purple-400 font-bold bg-purple-50/50 dark:bg-purple-500/10 p-2 rounded-lg border border-purple-100 dark:border-purple-500/20 mt-2">
+                                  <div className="flex flex-col">
+                                    <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-widest">
+                                      <Snowflake className="h-3 w-3" /> Faltante
+                                      Diésel ({ecoMoto})
+                                    </span>
+                                    <span className="text-[9px] font-mono text-purple-500/80 mt-0.5 ml-4.5">
+                                      {diffMoto.toFixed(2)} Lts x{" "}
+                                      {formatCurrencyLocal(precioCombustible)}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono font-black mt-0.5">
+                                    -{formatCurrencyLocal(penalizacionMoto)}
                                   </span>
                                 </div>
                               )}

@@ -20,6 +20,7 @@ import {
   Receipt,
   AlertTriangle,
   Lock,
+  Snowflake,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,10 +117,13 @@ export default function TripSettlement() {
     [],
   );
 
-  // ESTADOS FINANCIEROS
+  // ESTADOS FINANCIEROS Y DE COBRO (Separados exactamente como lo pidio el usuario)
   const [sueldoBasePactado, setSueldoBasePactado] = useState<number>(0);
   const [auditDetails, setAuditDetails] = useState<any>(null);
-  const [combustibleFaltante, setCombustibleFaltante] = useState<number>(0);
+
+  const [penalizacionTracto, setPenalizacionTracto] = useState<number>(0);
+  const [penalizacionMoto, setPenalizacionMoto] = useState<number>(0);
+
   const [previewData, setPreviewData] = useState<any>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
@@ -272,6 +276,13 @@ export default function TripSettlement() {
       },
     ];
   }, [selectedLegsData, activeTab]);
+
+  // Identificadores de unidades para los Vales de Cobro Visuales
+  const ecoTracto = selectedLegsData[0]?.unit?.numero_economico || "TRACTO";
+  const ecoMoto =
+    selectedLegsData[0]?.trip?.motogenerator_1_unit?.numero_economico ||
+    selectedLegsData[0]?.trip?.motogenerator_2_unit?.numero_economico ||
+    "MOTO";
 
   // 3. DEFINIR COLUMNAS DEL DATATABLE
   const columns = useMemo<ColumnDef<any>[]>(() => {
@@ -454,7 +465,7 @@ export default function TripSettlement() {
       if (!auditEvent) return true;
 
       const cleanText = auditEvent.comments?.replace(/\n/g, " ") || "";
-      const valesMatch = cleanText.match(/Vales:\s*([\d.,]+)/);
+      const valesMatch = cleanText.match(/Vales(?:\s+Tracto)?:\s*([\d.,]+)/);
       const vales = valesMatch ? Number(valesMatch[1].replace(/,/g, "")) : 0;
 
       if (vales <= 0) return true;
@@ -483,7 +494,9 @@ export default function TripSettlement() {
         otrosAnticipos:
           (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0),
         deduccionesManuales: leg.monto_maniobras || 0,
-        combustibleFaltante: leg.monto_penalizaciones || 0,
+        combustibleFaltante: leg.monto_penalizaciones || 0, // Fallback en histórico
+        penalizacionTracto: leg.monto_penalizaciones || 0,
+        penalizacionMoto: 0,
         total_deducciones:
           (leg.anticipo_viaticos || 0) +
           (leg.otros_anticipos || 0) +
@@ -520,7 +533,7 @@ export default function TripSettlement() {
       deduccionViaticos +
       otrosAnticipos +
       deduccionesManuales +
-      (combustibleFaltante || 0);
+      (penalizacionTracto + penalizacionMoto);
 
     return {
       hasRoadMove,
@@ -530,7 +543,9 @@ export default function TripSettlement() {
       deduccionViaticos,
       otrosAnticipos,
       deduccionesManuales,
-      combustibleFaltante,
+      combustibleFaltante: penalizacionTracto + penalizacionMoto, // Total sumado
+      penalizacionTracto,
+      penalizacionMoto,
       total_deducciones,
       neto_a_pagar: total_ingresos - total_deducciones,
     };
@@ -538,7 +553,8 @@ export default function TripSettlement() {
     selectedLegsData,
     sueldoBasePactado,
     conceptosExtra,
-    combustibleFaltante,
+    penalizacionTracto,
+    penalizacionMoto,
     activeTab,
   ]);
 
@@ -547,16 +563,38 @@ export default function TripSettlement() {
 
     if (selectedLegIds.length === 0) {
       setPreviewData(null);
-      setCombustibleFaltante(0);
+      setPenalizacionTracto(0);
+      setPenalizacionMoto(0);
       setSueldoBasePactado(0);
       return;
     }
 
-    let penalizacionLocal = 0;
+    let penalizacionLocalFallback = 0;
     let sueldoLocalCalculado = 0;
+    let pTractoLocal = 0;
+    let pMotoLocal = 0;
+    let foundSplit = false;
 
     selectedLegsData.forEach((leg) => {
-      penalizacionLocal += Number(leg.monto_penalizaciones) || 0;
+      penalizacionLocalFallback += Number(leg.monto_penalizaciones) || 0;
+
+      // Lectura exacta de bitácora (Sin inventar matemáticas aquí)
+      const auditEvent = leg.timeline_events?.find(
+        (e: any) =>
+          e.location === "Conciliación de Combustible" ||
+          e.comments?.includes("Detalles Fase"),
+      );
+      if (auditEvent && auditEvent.comments) {
+        const txt = auditEvent.comments;
+        // Expresión regular para buscar si Finanzas dejó los cobros separados
+        const matchTracto = txt.match(/Cobro Tracto:\s*\$?([\d.,]+)/i);
+        const matchMoto = txt.match(/Cobro Moto:\s*\$?([\d.,]+)/i);
+
+        if (matchTracto || matchMoto) foundSplit = true;
+        if (matchTracto)
+          pTractoLocal += Number(matchTracto[1].replace(/,/g, ""));
+        if (matchMoto) pMotoLocal += Number(matchMoto[1].replace(/,/g, ""));
+      }
 
       if (leg.leg_type === "ruta_carretera") {
         let sueldoTarifa = 0;
@@ -572,10 +610,7 @@ export default function TripSettlement() {
             const tariff =
               subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
               subClient.tariffs[0];
-
-            if (tariff?.sueldo_operador) {
-              sueldoTarifa = tariff.sueldo_operador;
-            }
+            if (tariff?.sueldo_operador) sueldoTarifa = tariff.sueldo_operador;
           }
         }
 
@@ -601,11 +636,20 @@ export default function TripSettlement() {
       getSettlementPreview(selectedLegIds)
         .then((data: any) => {
           setPreviewData(data);
-          setCombustibleFaltante(
+
+          const totalBackendPenalty =
             data?.deduccion_combustible ||
-              data?.penalizacion_combustible ||
-              penalizacionLocal,
-          );
+            data?.penalizacion_combustible ||
+            penalizacionLocalFallback;
+
+          if (foundSplit) {
+            setPenalizacionTracto(pTractoLocal);
+            setPenalizacionMoto(pMotoLocal);
+          } else {
+            // Si no vinieron separados, lo cobramos en el Tracto como siempre
+            setPenalizacionTracto(totalBackendPenalty);
+            setPenalizacionMoto(0);
+          }
 
           const sueldoAPI =
             data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
@@ -616,13 +660,19 @@ export default function TripSettlement() {
         .catch(() => {
           toast.error("Error de conexión al verificar telemetría del viaje.");
           setPreviewData(null);
-          setCombustibleFaltante(penalizacionLocal);
+          setPenalizacionTracto(
+            foundSplit ? pTractoLocal : penalizacionLocalFallback,
+          );
+          setPenalizacionMoto(foundSplit ? pMotoLocal : 0);
           setSueldoBasePactado(sueldoLocalCalculado);
         })
         .finally(() => setIsLoadingPreview(false));
     } else {
       setPreviewData(null);
-      setCombustibleFaltante(penalizacionLocal);
+      setPenalizacionTracto(
+        foundSplit ? pTractoLocal : penalizacionLocalFallback,
+      );
+      setPenalizacionMoto(foundSplit ? pMotoLocal : 0);
       setSueldoBasePactado(sueldoLocalCalculado);
     }
   }, [selectedLegIds, activeTab]);
@@ -642,7 +692,7 @@ export default function TripSettlement() {
       if (prev.includes(id)) {
         return prev.filter((legId) => legId !== id);
       } else {
-        // PERMITIMOS JUNTAR TRAMOS AUNQUE SEAN DIFERENTE VIAJE, EL MODAL SE ENCARGARÁ
+        // PERMITIMOS JUNTAR TRAMOS AUNQUE SEAN DIFERENTE VIAJE, EL MODAL SE ENCARGARÁ DE CONSOLIDARLOS
         return [...prev, id];
       }
     });
@@ -672,11 +722,6 @@ export default function TripSettlement() {
   const removeConcepto = (id: string) => {
     setConceptosExtra((prev) => prev.filter((c) => c.id !== id));
     toast.info("Concepto eliminado exitosamente.");
-  };
-
-  const removeCombustibleFaltante = () => {
-    setCombustibleFaltante(0);
-    toast.success("Cargo por combustible anulado para esta liquidación.");
   };
 
   const handleLiquidate = async () => {
@@ -749,7 +794,7 @@ export default function TripSettlement() {
 
         const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
         const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
-        const valesMatch = text.match(/Vales:\s*([\d.]+)/);
+        const valesMatch = text.match(/Vales(?:\s+Tracto)?:\s*([\d.]+)/);
         const rendMatch = text.match(/Rend Real:\s*([\d.]+)/);
         const verMatch = text.match(/Ver:\s*([A-Z_]+)/);
 
@@ -859,7 +904,8 @@ export default function TripSettlement() {
                     setSelectedOperatorId(val);
                     setSelectedLegIds([]);
                     setConceptosExtra([]);
-                    setCombustibleFaltante(0);
+                    setPenalizacionTracto(0);
+                    setPenalizacionMoto(0);
                     setSueldoBasePactado(0);
                   }}
                 >
@@ -988,8 +1034,9 @@ export default function TripSettlement() {
                     Conciliacion Pendiente
                   </AlertTitle>
                   <AlertDescription className="text-xs font-bold mt-1 ml-2 leading-relaxed">
-                    El sistema detecta {previewData?.legs_sin_ticket?.length}{" "}
-                    tramo(s) de carretera que{" "}
+                    El sistema detecta{" "}
+                    {previewData?.legs_sin_ticket?.length || 0} tramo(s) de
+                    carretera que{" "}
                     <span className="underline">no han sido conciliados</span>{" "}
                     en Diésel.
                     <br />
@@ -1110,29 +1157,50 @@ export default function TripSettlement() {
                           </div>
                         )}
 
-                        {/* EL VALE DE COBRO POR DIÉSEL (Consolidado) */}
-                        {liquidacion.combustibleFaltante > 0 && (
-                          <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1 rounded group transition-colors">
+                        {/* ===== VALE DE COBRO 1: TRACTOCAMIÓN ===== */}
+                        {penalizacionTracto > 0 && (
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1.5 rounded group transition-colors mt-2">
                             <div className="flex items-center gap-1.5">
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/30"
-                                onClick={removeCombustibleFaltante}
-                                title="Perdonar Cobro"
+                                onClick={() => setPenalizacionTracto(0)}
+                                title="Eliminar Cargo"
                               >
                                 <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                               </Button>
-                              <span className="text-rose-800 dark:text-rose-400 text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-                                <ShieldAlert className="h-3 w-3 text-rose-600 dark:text-rose-400" />{" "}
-                                VALE DE COBRO (FALTANTE DIÉSEL)
+                              <span className="text-rose-800 dark:text-rose-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                <Truck className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                                FALTANTE DIÉSEL ({ecoTracto})
                               </span>
                             </div>
                             <span className="font-mono font-black text-rose-600 dark:text-rose-400">
-                              -
-                              {formatCurrencyLocal(
-                                liquidacion.combustibleFaltante,
-                              )}
+                              -{formatCurrencyLocal(penalizacionTracto)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ===== VALE DE COBRO 2: MOTOGENERADOR ===== */}
+                        {penalizacionMoto > 0 && (
+                          <div className="flex justify-between items-center text-sm bg-rose-50/80 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 px-2 py-1.5 rounded group transition-colors mt-2">
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/30"
+                                onClick={() => setPenalizacionMoto(0)}
+                                title="Eliminar Cargo"
+                              >
+                                <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                              </Button>
+                              <span className="text-rose-800 dark:text-rose-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                <Snowflake className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                                FALTANTE DIÉSEL ({ecoMoto})
+                              </span>
+                            </div>
+                            <span className="font-mono font-black text-rose-600 dark:text-rose-400">
+                              -{formatCurrencyLocal(penalizacionMoto)}
                             </span>
                           </div>
                         )}
@@ -1423,7 +1491,8 @@ export default function TripSettlement() {
             setSelectedOperatorId("");
             setSelectedLegIds([]);
             setConceptosExtra([]);
-            setCombustibleFaltante(0);
+            setPenalizacionTracto(0);
+            setPenalizacionMoto(0);
             setSueldoBasePactado(0);
             setPreviewData(null);
             setAuditDetails(null);
