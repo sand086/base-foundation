@@ -88,6 +88,10 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
             joinedload(models.Trip.remolque_2),
+            # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
+            joinedload(models.Trip.motogenerator_1_unit),
+            joinedload(models.Trip.motogenerator_2_unit),
+            # ---------------------------------------------------
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
@@ -112,6 +116,12 @@ def get_trip(db: Session, trip_id: str):
             joinedload(models.Trip.client),
             joinedload(models.Trip.tariff),
             joinedload(models.Trip.remolque_1),
+            joinedload(models.Trip.dolly),
+            joinedload(models.Trip.remolque_2),  # <-- Agregado por si acaso
+            # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
+            joinedload(models.Trip.motogenerator_1_unit),
+            joinedload(models.Trip.motogenerator_2_unit),
+            # ---------------------------------------------------
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
@@ -700,27 +710,60 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             )
         )
 
-    # --- MODIFICACIÓN FASE 2: Excluir vales del Motogenerador del castigo al chofer ---
+    # --- MODIFICACIÓN FASE 3: Jalar ambos vales (Tracto y Moto) en la Liquidación ---
     vales_diesel_tracto = [
         f
         for f in fuel_logs
         if getattr(f, "tipo_combustible", "diesel").lower() == "diesel"
         and not getattr(f, "is_motogenerator", False)
     ]
+    vales_diesel_moto = [
+        f
+        for f in fuel_logs
+        if getattr(f, "tipo_combustible", "diesel").lower() == "diesel"
+        and getattr(f, "is_motogenerator", False)
+    ]
 
-    consumo_real_litros = sum(getattr(f, "litros", 0) for f in vales_diesel_tracto)
+    consumo_real_tracto = sum(getattr(f, "litros", 0) for f in vales_diesel_tracto)
+    consumo_real_moto = sum(getattr(f, "litros", 0) for f in vales_diesel_moto)
+    consumo_real_litros = consumo_real_tracto + consumo_real_moto
+
     rendimiento_esperado = getattr(leg.unit, "rendimiento_ecm_esperado", 3.2) or 3.2
-    consumo_esperado = (
+    consumo_esperado_tracto = (
         (kms_recorridos / rendimiento_esperado) if kms_recorridos > 0 else 0.0
     )
 
-    if vales_diesel_tracto:
-        precio_promedio_litro = sum(
-            getattr(f, "precio_por_litro", 0) for f in vales_diesel_tracto
-        ) / len(vales_diesel_tracto)
+    # Para el motogenerador, el consumo esperado viene de la conciliación manual (litros_sm)
+    consumo_esperado_moto = sum(
+        getattr(f, "litros_sm", getattr(f, "litros", 0)) or getattr(f, "litros", 0)
+        for f in vales_diesel_moto
+    )
+    consumo_esperado = consumo_esperado_tracto + consumo_esperado_moto
 
-    diferencia_cruda = consumo_real_litros - consumo_esperado
-    diferencia_litros = diferencia_cruda if diferencia_cruda > 0 else 0.0
+    todos_los_vales = vales_diesel_tracto + vales_diesel_moto
+    if todos_los_vales:
+        precio_promedio_litro = sum(
+            getattr(f, "precio_por_litro", 0) for f in todos_los_vales
+        ) / len(todos_los_vales)
+
+    # Solo calculamos diferencia matemática base sobre el tracto
+    diferencia_cruda_tracto = consumo_real_tracto - consumo_esperado_tracto
+    diferencia_litros_tracto = (
+        diferencia_cruda_tracto if diferencia_cruda_tracto > 0 else 0.0
+    )
+
+    # Priorizamos si ya se hizo la conciliación formal en la BD
+    diff_db_tracto = sum(
+        getattr(f, "diferencia_litros", 0) or 0.0 for f in vales_diesel_tracto
+    )
+    diff_db_moto = sum(
+        getattr(f, "diferencia_litros", 0) or 0.0 for f in vales_diesel_moto
+    )
+
+    if diff_db_tracto > 0:
+        diferencia_litros_tracto = diff_db_tracto
+
+    diferencia_litros = diferencia_litros_tracto + diff_db_moto
     # ----------------------------------------------------------------------------------
 
     deduccion_combustible = float(getattr(leg, "monto_penalizaciones", 0.0) or 0.0)
@@ -1189,19 +1232,17 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         rendimiento = float(rend_ecm or 3.2)
         total_consumo_esperado += (distancia / rendimiento) if distancia > 0 else 0.0
 
-        # --- MODIFICACIÓN FASE 2: Solo sumar vales del tractocamión ---
-        fuel_logs_activos_tracto = [
+        # --- MODIFICACIÓN FASE 3: Sumar todos los vales (Tracto y Moto) ---
+        fuel_logs_activos = [
             f
             for f in leg.fuel_logs
-            if f.record_status == "A"
-            and str(f.tipo_combustible).lower() == "diesel"
-            and not getattr(f, "is_motogenerator", False)
+            if f.record_status == "A" and str(f.tipo_combustible).lower() == "diesel"
         ]
 
-        if is_ruta and not fuel_logs_activos_tracto:
+        if is_ruta and not fuel_logs_activos:
             legs_sin_ticket.append(leg.id)
 
-        for f in fuel_logs_activos_tracto:
+        for f in fuel_logs_activos:
             lts = float(f.litros or 0.0)
             precio = float(f.precio_por_litro or 24.50)
             total_real_liters += lts
@@ -1220,15 +1261,13 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         if penalizacion and float(penalizacion) > 0:
             deduccion_combustible += float(penalizacion)
 
-        # --- MODIFICACIÓN FASE 2: Diferencia de litros solo tracto ---
-        vales_tracto = [
+        # --- MODIFICACIÓN FASE 3: Diferencia de litros sumada de todos ---
+        vales_todos = [
             f
             for f in leg.fuel_logs
-            if f.record_status == "A"
-            and str(f.tipo_combustible).lower() == "diesel"
-            and not getattr(f, "is_motogenerator", False)
+            if f.record_status == "A" and str(f.tipo_combustible).lower() == "diesel"
         ]
-        for vale in vales_tracto:
+        for vale in vales_todos:
             is_conciliated = getattr(vale, "is_conciliated", False)
             diferencia = getattr(vale, "diferencia_litros", 0.0)
 

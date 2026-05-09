@@ -1,20 +1,17 @@
 import * as React from "react";
-import { format, differenceInMinutes } from "date-fns";
+import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Receipt,
   MapPin,
-  Clock,
-  Route,
   Activity,
-  Fuel,
   Download,
   ShieldCheck,
   FileText,
   Gauge,
   DollarSign,
-  CheckCircle,
-  ShieldAlert,
+  Truck,
+  Snowflake,
 } from "lucide-react";
 import {
   Dialog,
@@ -83,7 +80,7 @@ export function OperatorSettlementDetailModal({
 }: ModalDetailsProps) {
   const [isGeneratingPDF, setIsGeneratingPDF] = React.useState(false);
   const [activeReceiptTab, setActiveReceiptTab] = React.useState<string>("");
-  const [isExporting, setIsExporting] = React.useState(false); // <--- ESTADO CLAVE PARA EL PDF
+  const [isExporting, setIsExporting] = React.useState(false);
   const pdfRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -113,11 +110,20 @@ export function OperatorSettlementDetailModal({
     let totalVales = 0;
     let totalPenalizacion = 0;
 
+    // --- VARIABLES MOTOGENERADOR ---
+    let totalHorasMoto = 0;
+    let totalLtEcmMoto = 0;
+    let totalValesMoto = 0;
+
     if (previewData) {
       totalKms += Number(previewData.total_kms || 0);
       totalVales += Number(previewData.consumo_real || 0);
       totalEcm += Number(previewData.consumo_esperado || 0);
       totalPenalizacion += Number(previewData.deduccion_combustible || 0);
+
+      totalHorasMoto += Number(previewData.horas_moto || 0);
+      totalLtEcmMoto += Number(previewData.consumo_esperado_moto || 0);
+      totalValesMoto += Number(previewData.consumo_real_moto || 0);
     }
 
     if (totalKms === 0 && totalVales === 0) {
@@ -136,15 +142,34 @@ export function OperatorSettlementDetailModal({
         );
         if (auditEvent && auditEvent.comments) {
           const cleanText = auditEvent.comments.replace(/\n/g, " ");
-          const vMatch = cleanText.match(/Vales:\s*([\d.,]+)/);
+
+          // Extracción Tracto
+          const vMatch = cleanText.match(/Vales(?:\s+Tracto)?:\s*([\d.,]+)/);
           const ecmMatch = cleanText.match(/Litros ECM:\s*([\d.,]+)/);
+
+          // Extracción Moto
+          const hMotoMatch = cleanText.match(/Horas Moto:\s*([\d.,]+)/);
+          const ecmMotoMatch = cleanText.match(/Litros Moto:\s*([\d.,]+)/);
+          const vMotoMatch = cleanText.match(/Vales Moto:\s*([\d.,]+)/);
+
           if (vMatch) totalVales += Number(vMatch[1].replace(/,/g, ""));
           if (ecmMatch) totalEcm += Number(ecmMatch[1].replace(/,/g, ""));
+
+          if (hMotoMatch)
+            totalHorasMoto += Number(hMotoMatch[1].replace(/,/g, ""));
+          if (ecmMotoMatch)
+            totalLtEcmMoto += Number(ecmMotoMatch[1].replace(/,/g, ""));
+          if (vMotoMatch)
+            totalValesMoto += Number(vMotoMatch[1].replace(/,/g, ""));
         }
       });
     }
 
     const rend = totalVales > 0 ? (totalKms / totalVales).toFixed(2) : "0.00";
+    const rendMoto =
+      totalHorasMoto > 0 && totalValesMoto > 0
+        ? (totalValesMoto / totalHorasMoto).toFixed(2)
+        : "0.00";
     const veredicto = totalPenalizacion > 0 ? "COBRO_OPERADOR" : "CONCILIADO";
 
     return {
@@ -152,6 +177,10 @@ export function OperatorSettlementDetailModal({
       ltEcm: totalEcm,
       vales: totalVales,
       rend: rend,
+      horasMoto: totalHorasMoto,
+      ltMoto: totalLtEcmMoto,
+      valesMoto: totalValesMoto,
+      rendMoto: rendMoto,
       veredicto: veredicto,
       fechaAudit: format(new Date(), "dd/MM/yyyy HH:mm"),
       textOriginal: `Conciliación sumatoria de ${selectedLegsData.length} movimiento(s) para este recibo.`,
@@ -161,7 +190,7 @@ export function OperatorSettlementDetailModal({
   const handleDownloadPDF = async () => {
     if (!pdfRef.current) return;
     setIsGeneratingPDF(true);
-    setIsExporting(true); // Forzamos a que todos los recibos se hagan visibles
+    setIsExporting(true);
 
     const htmlElement = document.documentElement;
     const wasDark = htmlElement.classList.contains("dark");
@@ -170,7 +199,6 @@ export function OperatorSettlementDetailModal({
       htmlElement.classList.remove("dark");
     }
 
-    // Damos tiempo a React de renderizar todos los Tabs en pantalla antes de la foto
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
@@ -217,7 +245,7 @@ export function OperatorSettlementDetailModal({
       toast?.error?.("Error al generar el documento PDF");
     } finally {
       if (wasDark) htmlElement.classList.add("dark");
-      setIsExporting(false); // Volvemos a ocultar los recibos no activos
+      setIsExporting(false);
       setIsGeneratingPDF(false);
     }
   };
@@ -292,11 +320,10 @@ export function OperatorSettlementDetailModal({
               ref={pdfRef}
               className={cn(
                 "w-full bg-transparent flex flex-col print:bg-white",
-                isExporting ? "gap-6" : "gap-0", // Solo hay gap si se están mostrando todos para la foto
+                isExporting ? "gap-6" : "gap-0",
               )}
             >
               {selectedLegsData.map((leg, index) => {
-                // LÓGICA DE VISIBILIDAD: Se muestra si está exportando PDF, si es el tab activo, o si solo hay 1 recibo
                 const isVisible =
                   isExporting ||
                   activeReceiptTab === String(leg.id) ||
@@ -345,6 +372,10 @@ export function OperatorSettlementDetailModal({
                   ltEcm: "0",
                   vales: "0",
                   rend: "0.00",
+                  horasMoto: "0",
+                  ltMoto: "0",
+                  valesMoto: "0",
+                  rendMoto: "0.00",
                   veredicto:
                     legPenalizacion > 0 ? "COBRO_OPERADOR" : "CONCILIADO",
                   textOriginal: "Sin observaciones de auditoría registradas.",
@@ -357,7 +388,7 @@ export function OperatorSettlementDetailModal({
                   auditDetails.hasData &&
                   numLegs === 1
                 ) {
-                  legAudit = auditDetails;
+                  legAudit = { ...legAudit, ...auditDetails };
                 } else {
                   const auditEvent = leg.timeline_events?.find(
                     (e: any) =>
@@ -371,9 +402,25 @@ export function OperatorSettlementDetailModal({
                     const ltEcmMatch = cleanText.match(
                       /Litros ECM:\s*([\d.,]+)/,
                     );
-                    const valesMatch = cleanText.match(/Vales:\s*([\d.,]+)/);
+                    const valesMatch = cleanText.match(
+                      /Vales(?:\s+Tracto)?:\s*([\d.,]+)/,
+                    );
                     const rendMatch = cleanText.match(/Rend Real:\s*([\d.,]+)/);
                     const verMatch = cleanText.match(/Ver:\s*([A-Z_]+)/);
+
+                    // Moto Extractions
+                    const hMotoMatch = cleanText.match(
+                      /Horas Moto:\s*([\d.,]+)/,
+                    );
+                    const ecmMotoMatch = cleanText.match(
+                      /Litros Moto:\s*([\d.,]+)/,
+                    );
+                    const vMotoMatch = cleanText.match(
+                      /Vales Moto:\s*([\d.,]+)/,
+                    );
+                    const rendMotoMatch = cleanText.match(
+                      /Rend Moto:\s*([\d.,]+)/,
+                    );
 
                     const extKm = kmMatch
                       ? Number(kmMatch[1].replace(/,/g, ""))
@@ -385,6 +432,13 @@ export function OperatorSettlementDetailModal({
                       ? Number(valesMatch[1].replace(/,/g, ""))
                       : 0;
 
+                    const extHorasMoto = hMotoMatch
+                      ? Number(hMotoMatch[1].replace(/,/g, ""))
+                      : 0;
+                    const extValesMoto = vMotoMatch
+                      ? Number(vMotoMatch[1].replace(/,/g, ""))
+                      : 0;
+
                     legAudit = {
                       km: String(extKm),
                       ltEcm: String(extLtEcm),
@@ -394,6 +448,20 @@ export function OperatorSettlementDetailModal({
                         : extVales > 0
                           ? (extKm / extVales).toFixed(2)
                           : "0.00",
+
+                      horasMoto: String(extHorasMoto),
+                      ltMoto: String(
+                        ecmMotoMatch
+                          ? Number(ecmMotoMatch[1].replace(/,/g, ""))
+                          : 0,
+                      ),
+                      valesMoto: String(extValesMoto),
+                      rendMoto: rendMotoMatch
+                        ? rendMotoMatch[1]
+                        : extHorasMoto > 0 && extValesMoto > 0
+                          ? (extValesMoto / extHorasMoto).toFixed(2)
+                          : "0.00",
+
                       veredicto: verMatch
                         ? verMatch[1]
                         : legPenalizacion > 0
@@ -415,6 +483,17 @@ export function OperatorSettlementDetailModal({
                               previewData.total_kms / previewData.consumo_real
                             ).toFixed(2)
                           : "0.00",
+                      horasMoto: String(previewData.horas_moto || 0),
+                      ltMoto: String(previewData.consumo_esperado_moto || 0),
+                      valesMoto: String(previewData.consumo_real_moto || 0),
+                      rendMoto:
+                        Number(previewData.horas_moto) > 0 &&
+                        Number(previewData.consumo_real_moto) > 0
+                          ? (
+                              Number(previewData.consumo_real_moto) /
+                              Number(previewData.horas_moto)
+                            ).toFixed(2)
+                          : "0.00",
                       veredicto:
                         legPenalizacion > 0 ? "COBRO_OPERADOR" : "CONCILIADO",
                       textOriginal: `Calculado en pre-liquidación. Dif: ${previewData.diferencia_litros?.toFixed(2) || "0.00"}L.`,
@@ -422,6 +501,40 @@ export function OperatorSettlementDetailModal({
                     };
                   }
                 }
+
+                // =========================================================================
+                // MAGIA MATEMÁTICA: Extracción pura e independiente por equipo para los vales
+                // =========================================================================
+                const diffTracto = Math.max(
+                  0,
+                  Number(legAudit.vales) - Number(legAudit.ltEcm),
+                );
+                const diffMoto = Math.max(
+                  0,
+                  Number(legAudit.valesMoto) - Number(legAudit.ltMoto),
+                );
+                const precioCombustible = Number(
+                  previewData?.precio_promedio ||
+                    liquidacion?.precioPorLitro ||
+                    24.5,
+                );
+
+                let penalizacionTracto =
+                  diffTracto > 0 ? diffTracto * precioCombustible : 0;
+                const penalizacionMoto =
+                  diffMoto > 0 ? diffMoto * precioCombustible : 0;
+
+                // Fallback de seguridad si en el histórico ya solo hay un monto global
+                if (legPenalizacion > 0 && diffTracto === 0 && diffMoto === 0) {
+                  penalizacionTracto = legPenalizacion;
+                }
+
+                // Identificadores visuales de unidades
+                const ecoTracto = leg.unit?.numero_economico || "TRACTO";
+                const ecoMoto =
+                  leg.trip?.motogenerator_1_unit?.numero_economico ||
+                  leg.trip?.motogenerator_2_unit?.numero_economico ||
+                  "MOTO";
 
                 return (
                   <div
@@ -569,7 +682,7 @@ export function OperatorSettlementDetailModal({
                             <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-white/10 pb-2">
                               <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
                                 <ShieldCheck className="h-3 w-3 text-blue-500 dark:text-blue-400" />
-                                Conciliación Diésel
+                                Conciliación Tractocamión
                               </span>
                               <span className="text-[9px] uppercase font-bold text-slate-400">
                                 {legAudit.fechaAudit}
@@ -614,7 +727,63 @@ export function OperatorSettlementDetailModal({
                               </div>
                             </div>
 
-                            <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 shadow-sm">
+                            {/* ======================= MÓDULO MOTOGENERADOR CONDICIONAL ======================= */}
+                            {(Number(legAudit.valesMoto) > 0 ||
+                              Number(legAudit.horasMoto) > 0) && (
+                              <div className="mt-6 mb-4">
+                                <div className="flex items-center justify-between mb-4 border-b border-slate-200 dark:border-white/10 pb-2">
+                                  <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                    <Activity className="h-3 w-3 text-purple-500 dark:text-purple-400" />
+                                    Conciliación Motogenerador
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
+                                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 text-center shadow-sm flex flex-col justify-center items-center">
+                                    <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
+                                      Horas Motor
+                                    </p>
+                                    <p className="font-mono font-black text-slate-800 dark:text-slate-200 text-sm">
+                                      {Number(legAudit.horasMoto || 0).toFixed(
+                                        1,
+                                      )}{" "}
+                                      h
+                                    </p>
+                                  </div>
+                                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 text-center shadow-sm flex flex-col justify-center items-center">
+                                    <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
+                                      Litros Esperados
+                                    </p>
+                                    <p className="font-mono font-black text-slate-800 dark:text-slate-200 text-sm">
+                                      {Number(legAudit.ltMoto || 0).toFixed(1)}
+                                    </p>
+                                  </div>
+                                  <div className="bg-purple-50 dark:bg-purple-500/10 p-3 rounded-lg border border-purple-100 dark:border-purple-500/20 text-center shadow-sm flex flex-col justify-center items-center">
+                                    <p className="text-[9px] uppercase font-bold text-purple-600 dark:text-purple-400 mb-1 tracking-tighter">
+                                      Litros Vales
+                                    </p>
+                                    <p className="font-mono font-black text-purple-700 dark:text-purple-300 text-sm">
+                                      {Number(legAudit.valesMoto || 0).toFixed(
+                                        1,
+                                      )}
+                                    </p>
+                                  </div>
+                                  <div className="bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg border border-blue-100 dark:border-blue-500/20 flex flex-col justify-center items-center text-center shadow-sm">
+                                    <p className="text-[9px] uppercase font-black text-blue-600 dark:text-blue-400 mb-1 tracking-widest">
+                                      Lts / Hr
+                                    </p>
+                                    <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-lg flex items-baseline gap-1">
+                                      {legAudit.rendMoto || "0.00"}
+                                      <span className="text-[9px] font-bold uppercase opacity-60">
+                                        L/h
+                                      </span>
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* ============================================================================== */}
+
+                            <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-100 dark:border-white/5 shadow-sm mt-4">
                               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-1.5">
                                 <FileText className="h-3 w-3 text-blue-400" />{" "}
                                 Notas Adicionales
@@ -701,13 +870,39 @@ export function OperatorSettlementDetailModal({
                                 </div>
                               )}
 
-                              {legPenalizacion > 0 && (
-                                <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold">
+                              {/* VALES DE COBRO EXACTOS (Desglosados visualmente) */}
+                              {penalizacionTracto > 0 && (
+                                <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold bg-rose-50/50 dark:bg-rose-500/10 p-2 rounded-lg border border-rose-100 dark:border-rose-500/20">
                                   <div className="flex flex-col">
-                                    <span>Faltante Diésel (Penalización)</span>
+                                    <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-widest">
+                                      <Truck className="h-3 w-3" /> Faltante
+                                      Diésel ({ecoTracto})
+                                    </span>
+                                    <span className="text-[9px] font-mono text-rose-500/80 mt-0.5 ml-4.5">
+                                      {diffTracto.toFixed(2)} Lts x{" "}
+                                      {formatCurrencyLocal(precioCombustible)}
+                                    </span>
                                   </div>
                                   <span className="font-mono font-black mt-0.5">
-                                    -{formatCurrencyLocal(legPenalizacion)}
+                                    -{formatCurrencyLocal(penalizacionTracto)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {penalizacionMoto > 0 && (
+                                <div className="flex justify-between items-start text-purple-600 dark:text-purple-400 font-bold bg-purple-50/50 dark:bg-purple-500/10 p-2 rounded-lg border border-purple-100 dark:border-purple-500/20 mt-2">
+                                  <div className="flex flex-col">
+                                    <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-widest">
+                                      <Snowflake className="h-3 w-3" /> Faltante
+                                      Diésel ({ecoMoto})
+                                    </span>
+                                    <span className="text-[9px] font-mono text-purple-500/80 mt-0.5 ml-4.5">
+                                      {diffMoto.toFixed(2)} Lts x{" "}
+                                      {formatCurrencyLocal(precioCombustible)}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono font-black mt-0.5">
+                                    -{formatCurrencyLocal(penalizacionMoto)}
                                   </span>
                                 </div>
                               )}

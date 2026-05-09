@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,12 +20,13 @@ import {
   User,
   Container,
   Package,
-  Zap, // <-- Añadido el ícono de Rayo para el Motogenerador
+  Zap,
 } from "lucide-react";
 import { FuelLoad } from "../types";
 import { Trip } from "@/features/trips/types";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useUnits } from "@/features/units/hooks/useUnits";
 
 interface ConciliarViajeModalProps {
   open: boolean;
@@ -42,24 +43,66 @@ export function ConciliarViajeModal({
   fuelLoads,
   onConciliar,
 }: ConciliarViajeModalProps) {
+  const { unidades } = useUnits();
+
+  // --- NUEVA LÓGICA: Selector manual de Tracto vs Motogenerador ---
+  const tieneMG = useMemo(() => {
+    return (trip as any)?.is_refrigerated_1 || (trip as any)?.is_refrigerated_2;
+  }, [trip]);
+
+  const [isMotogenerator, setIsMotogenerator] = useState(false);
+
   const [lecturaSM, setLecturaSM] = useState({
-    kilometrosSM: "", // Aunque se llame kilometrosSM en el estado, se usará para horas si es MG
+    kilometrosSM: "", // Aunque se llame kilometrosSM, se usará para horas si es MG
     litrosSM: "",
     odometroFinal: "", // Se usará para orómetro si es MG
   });
 
-  // --- LÓGICA FASE 2: Detectar si conciliamos Motogenerador o Tractocamión ---
-  const isMotogenerator = useMemo(() => {
-    return fuelLoads.length > 0 && fuelLoads.some((f) => f.is_motogenerator);
-  }, [fuelLoads]);
+  // Limpiar el estado si cambias de tipo de conciliación o de viaje
+  useEffect(() => {
+    setIsMotogenerator(false);
+    setLecturaSM({ kilometrosSM: "", litrosSM: "", odometroFinal: "" });
+  }, [trip, open]);
 
+  const handleToggleMG = (checked: boolean) => {
+    setIsMotogenerator(checked);
+    setLecturaSM({ kilometrosSM: "", litrosSM: "", odometroFinal: "" });
+  };
+  // ---------------------------------------------------------------
+
+  // Sumar solo los litros que corresponden (Puro Tracto o Puro MG)
   const litrosDelVale = useMemo(() => {
-    return fuelLoads.reduce((sum, f) => sum + Number(f.litros), 0);
-  }, [fuelLoads]);
+    return fuelLoads
+      .filter((f: any) => {
+        const isMoto =
+          f.is_motogenerator === true ||
+          String(f.is_motogenerator).toLowerCase() === "true" ||
+          f.is_motogenerator === 1;
+        return isMoto === isMotogenerator;
+      })
+      .reduce((sum, f) => sum + Number(f.litros), 0);
+  }, [fuelLoads, isMotogenerator]);
 
-  // Si es motogenerador, sacamos la lectura inicial del primer vale. Si es tracto, del viaje.
+  // Si es motogenerador, sacamos la lectura inicial del primer vale (buscando horometro o su fallback a odometro).
+  // Si es tracto, de la fase operativa del viaje.
   const odometroInicial = isMotogenerator
-    ? Number(fuelLoads[0]?.horometro || 0)
+    ? Number(
+        fuelLoads.find((f: any) => {
+          const isMoto =
+            f.is_motogenerator === true ||
+            String(f.is_motogenerator).toLowerCase() === "true" ||
+            f.is_motogenerator === 1;
+          return isMoto;
+        })?.horometro ||
+          fuelLoads.find((f: any) => {
+            const isMoto =
+              f.is_motogenerator === true ||
+              String(f.is_motogenerator).toLowerCase() === "true" ||
+              f.is_motogenerator === 1;
+            return isMoto;
+          })?.odometro ||
+          0,
+      )
     : Number(trip?.legs?.[0]?.odometro_inicial || 0);
 
   const [cobrarOperador, setCobrarOperador] = useState(true);
@@ -73,6 +116,56 @@ export function ConciliarViajeModal({
   const hayExcesoConsumo = diferenciaLitros > 0;
   const rendimientoReal =
     litrosDelVale > 0 ? (kmSM / litrosDelVale).toFixed(2) : "0.00";
+
+  // --- TRADUCTOR INTELIGENTE DE MOTOGENERADORES ---
+  const arrUnidades = useMemo(
+    () => (Array.isArray(unidades) ? unidades : []),
+    [unidades],
+  );
+
+  const getMgName = (id: any, fallbackStr: any) => {
+    if (id && !isNaN(Number(id))) {
+      const mg = arrUnidades.find((u: any) => String(u.id) === String(id));
+      if (mg) return mg.numero_economico;
+    }
+    if (fallbackStr && !isNaN(Number(fallbackStr))) {
+      const mg = arrUnidades.find(
+        (u: any) => String(u.id) === String(fallbackStr),
+      );
+      if (mg) return mg.numero_economico;
+    }
+    if (fallbackStr) {
+      const mgByEco = arrUnidades.find(
+        (u: any) =>
+          String(u.numero_economico).toLowerCase() ===
+          String(fallbackStr).toLowerCase(),
+      );
+      if (mgByEco) return mgByEco.numero_economico;
+      return fallbackStr;
+    }
+    return "MG";
+  };
+
+  const nombreMotogeneradorAfectado = useMemo(() => {
+    if (!trip) return "Motogenerador Activo";
+    // Buscamos si en la data del viaje existe el MG. Priorizamos el 1, luego el 2.
+    if ((trip as any).is_refrigerated_1) {
+      return getMgName(
+        (trip as any).motogenerator_1_id,
+        (trip as any).motogenerator_1_unit?.numero_economico ||
+          (trip as any).motogenerator_1,
+      );
+    }
+    if ((trip as any).is_refrigerated_2) {
+      return getMgName(
+        (trip as any).motogenerator_2_id,
+        (trip as any).motogenerator_2_unit?.numero_economico ||
+          (trip as any).motogenerator_2,
+      );
+    }
+    return "Equipo Auxiliar";
+  }, [trip, arrUnidades]);
+  // -----------------------------------------------
 
   const handleSubmit = () => {
     if (
@@ -89,16 +182,16 @@ export function ConciliarViajeModal({
     onConciliar(trip!.id, {
       odometro_inicial: odometroInicial,
       odometro_final: odoFinal,
-      km_recorridos: kmSM, // El componente padre decidirá si lo mapea a horas_sm o km_sm
+      km_recorridos: kmSM, // El componente padre (Backend) mapeará a horas_sm o km_sm según is_motogenerator
       litros_vales: litrosDelVale,
       litros_ecm: ltsSM,
       diferencia: diferenciaLitros,
       rendimiento: rendimientoReal,
       cobrar_al_operador: hayExcesoConsumo ? cobrarOperador : false,
-      is_motogenerator: isMotogenerator, // Pasamos la bandera al padre
+      is_motogenerator: isMotogenerator, // Pasamos la bandera crucial
     });
 
-    toast.success("Viaje Conciliado", {
+    toast.success(`Viaje Conciliado (${isMotogenerator ? "MG" : "Tracto"})`, {
       description: "Los datos se han pasado a Liquidación.",
     });
     onOpenChange(false);
@@ -117,8 +210,8 @@ export function ConciliarViajeModal({
         {/* CAPA 2: HEADER */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-border shrink-0 relative overflow-hidden z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-4 sm:gap-5">
+          <div className="relative z-10 flex items-center justify-between w-full gap-4">
+            <div className="flex items-center gap-4 sm:gap-5 min-w-0">
               <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shadow-inner shrink-0 icon-plate border bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/20">
                 {isMotogenerator ? (
                   <Zap className="h-7 w-7 sm:h-8 sm:w-8 text-amber-500 drop-shadow-md" />
@@ -127,22 +220,50 @@ export function ConciliarViajeModal({
                 )}
               </div>
               <div className="flex flex-col gap-1 text-left min-w-0">
-                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none truncate">
                   Conciliación SM{" "}
                   {isMotogenerator && (
-                    <span className="text-amber-500 ml-2">(Motogenerador)</span>
+                    <span className="text-amber-500 ml-1 text-lg sm:text-2xl">
+                      (Motogenerador)
+                    </span>
                   )}
                 </DialogTitle>
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1 truncate">
                   TRP-{trip.public_id || trip.id} • {trip.origin} ➔{" "}
                   {trip.destination}
                 </p>
               </div>
             </div>
-            <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800">
-              <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">
-                {trip.status}
-              </span>
+
+            {/* AQUÍ ESTÁ EL SWITCH DE SELECCIÓN */}
+            <div className="flex items-center gap-3 shrink-0">
+              {tieneMG && (
+                <div className="flex items-center gap-2 bg-muted/50 p-2 px-3 rounded-xl border border-border">
+                  <Zap
+                    className={cn(
+                      "h-4 w-4",
+                      isMotogenerator
+                        ? "text-amber-500"
+                        : "text-muted-foreground",
+                    )}
+                  />
+                  <div className="flex flex-col text-right hidden sm:flex">
+                    <Label className="text-[10px] font-black uppercase tracking-widest cursor-pointer">
+                      Motogenerador
+                    </Label>
+                  </div>
+                  <Switch
+                    checked={isMotogenerator}
+                    onCheckedChange={handleToggleMG}
+                    className="data-[state=checked]:bg-amber-500"
+                  />
+                </div>
+              )}
+              <div className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-800 hidden lg:block">
+                <span className="text-[10px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-tighter">
+                  {trip.status}
+                </span>
+              </div>
             </div>
           </div>
         </DialogHeader>
@@ -150,33 +271,31 @@ export function ConciliarViajeModal({
         {/* CAPA 3: BODY */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/30 dark:bg-transparent custom-scrollbar space-y-6 mt-4">
           {/* RESUMEN DE OPERACIÓN */}
-          <div className="p-5 border border-border rounded-2xl bg-card shadow-sm grid grid-cols-4 gap-4">
+          <div className="p-5 border border-border rounded-2xl bg-card shadow-sm grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="flex flex-col">
               <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">
                 Operador
               </span>
               <div className="flex items-center gap-2 mt-1">
-                <User className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                <User className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                 <span className="text-xs font-bold truncate text-foreground">
                   {operator?.name || "Sin asignar"}
                 </span>
               </div>
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col overflow-hidden">
               <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">
                 {isMotogenerator ? "Motogenerador" : "Unidad / Eco"}
               </span>
               <div className="flex items-center gap-2 mt-1">
                 {isMotogenerator ? (
-                  <Zap className="h-3.5 w-3.5 text-amber-500" />
+                  <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                 ) : (
-                  <Truck className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  <Truck className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                 )}
-                <span className="text-xs font-bold text-foreground">
+                <span className="text-xs font-bold text-foreground truncate">
                   {isMotogenerator
-                    ? trip.motogenerator_1 ||
-                      trip.motogenerator_2 ||
-                      "Motogenerador Activo"
+                    ? `ECO-${nombreMotogeneradorAfectado}`
                     : `${unit?.numero_economico || "N/A"} (${unit?.placas || "---"})`}
                 </span>
               </div>
@@ -186,8 +305,8 @@ export function ConciliarViajeModal({
                 Remolque
               </span>
               <div className="flex items-center gap-2 mt-1">
-                <Container className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                <span className="text-xs font-bold text-foreground">
+                <Container className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                <span className="text-xs font-bold text-foreground truncate">
                   {trailer?.numero_economico || "S/R"}
                 </span>
               </div>
@@ -197,15 +316,15 @@ export function ConciliarViajeModal({
                 Carga / Peso
               </span>
               <div className="flex items-center gap-2 mt-1">
-                <Package className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                <span className="text-xs font-bold text-foreground">
+                <Package className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
+                <span className="text-xs font-bold text-foreground truncate">
                   {trip.peso_toneladas} Tons
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* LECTURAS MANUALES (SM) */}
             <div className="space-y-5">
               <h3 className="text-[10px] font-black uppercase tracking-[0.15em] text-muted-foreground border-b border-border pb-2">
@@ -301,7 +420,7 @@ export function ConciliarViajeModal({
               <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    Litros Cargados (Vales)
+                    Litros Cargados ({isMotogenerator ? "MG" : "Tracto"})
                   </span>
                   <span className="font-mono font-black text-amber-600 text-lg">
                     {litrosDelVale.toFixed(1)} L
@@ -333,9 +452,9 @@ export function ConciliarViajeModal({
                   >
                     <div className="flex items-center gap-2">
                       {hayExcesoConsumo ? (
-                        <AlertTriangle className="text-rose-500 h-5 w-5" />
+                        <AlertTriangle className="text-rose-500 h-5 w-5 shrink-0" />
                       ) : (
-                        <CheckCircle2 className="text-emerald-500 h-5 w-5" />
+                        <CheckCircle2 className="text-emerald-500 h-5 w-5 shrink-0" />
                       )}
                       <span
                         className={cn(
@@ -346,13 +465,13 @@ export function ConciliarViajeModal({
                         )}
                       >
                         {hayExcesoConsumo
-                          ? "Exceso de Consumo Detectado"
+                          ? "Exceso Detectado"
                           : "Conciliación Exacta"}
                       </span>
                     </div>
                     <span
                       className={cn(
-                        "font-mono font-black text-xl",
+                        "font-mono font-black text-xl ml-2",
                         hayExcesoConsumo ? "text-rose-600" : "text-emerald-600",
                       )}
                     >
@@ -428,7 +547,7 @@ export function ConciliarViajeModal({
               onClick={handleSubmit}
               disabled={odoFinal > 0 && odoFinal <= odometroInicial}
             >
-              Registrar y Volver al Historial
+              Registrar {isMotogenerator ? "Horómetro" : "Odómetro"}
             </Button>
           </div>
         </DialogFooter>

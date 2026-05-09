@@ -462,6 +462,8 @@ class TripResponse(TripBase):
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None
+    motogenerator_1_unit: Optional[UnitResponse] = None
+    motogenerator_2_unit: Optional[UnitResponse] = None
 
     legs: List[TripLegResponse] = Field(default_factory=list)
 

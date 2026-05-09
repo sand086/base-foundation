@@ -407,10 +407,15 @@ const RolesPermissions: React.FC = () => {
     field: keyof Permiso,
   ): void => {
     const key = moduloId.toLowerCase();
-    setDraftPermisos((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], [field]: !prev[key][field] },
-    }));
+    setDraftPermisos((prev) => {
+      // SOLUCIÓN: Fallback seguro si no existe el prev[key]
+      const currentPerm = prev[key] || { ...EMPTY_PERMISO };
+
+      return {
+        ...prev,
+        [key]: { ...currentPerm, [field]: !currentPerm[field] },
+      };
+    });
   };
 
   const handleToggleAllModulePermisos = (moduloId: string): void => {
@@ -504,6 +509,9 @@ const RolesPermissions: React.FC = () => {
     setNewRoleName("");
     setNewRoleDescription("");
     setSelectedRoleId(null);
+
+    setDraftPermisos(normalizePerms(null, availableModules));
+
     setShowRoleEditor(true);
   };
 
