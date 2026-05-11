@@ -427,7 +427,7 @@ export default function FleetTires() {
       {/* HEADER TAHOE */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-5 rounded-2xl border border-white/20 dark:border-white/10 backdrop-blur-md shadow-sm gap-4">
         <div>
-          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-3 uppercase tracking-tighter heading-crisp">
+          <h1 className="uppercase text-2xl font-black text-brand-navy dark:text-white flex items-center gap-3 uppercase tracking-tighter heading-crisp">
             <div className="p-2.5 bg-slate-900 dark:bg-slate-800 rounded-xl border border-slate-700 shadow-inner">
               <CircleDot className="h-6 w-6 text-white" />
             </div>

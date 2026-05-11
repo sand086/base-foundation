@@ -517,7 +517,7 @@ export default function FlotaUnitDetail() {
           </Button>
           <Separator orientation="vertical" className="h-8" />
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="uppercase text-2xl font-bold flex items-center gap-2">
               <Truck className="h-6 w-6" /> Unidad {unit.numero_economico}
             </h1>
             <p className="text-muted-foreground">

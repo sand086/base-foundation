@@ -29,7 +29,10 @@ import {
 } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { manualsData, type ManualModule } from "@/features/manuals/data/manualsData";
+import {
+  manualsData,
+  type ManualModule,
+} from "@/features/manuals/data/manualsData";
 
 const iconMap: Record<string, React.ElementType> = {
   Users,
@@ -42,7 +45,13 @@ const iconMap: Record<string, React.ElementType> = {
   CircleDot,
 };
 
-const allTags = ["Básico", "Avanzado", "Administración", "Seguridad", "Facturación"];
+const allTags = [
+  "Básico",
+  "Avanzado",
+  "Administración",
+  "Seguridad",
+  "Facturación",
+];
 
 export default function ManualsPage() {
   const [selectedModuleId, setSelectedModuleId] = useState<string>("usuarios");
@@ -52,7 +61,7 @@ export default function ManualsPage() {
 
   const selectedModule = useMemo(
     () => manualsData.find((m) => m.id === selectedModuleId) ?? manualsData[0],
-    [selectedModuleId]
+    [selectedModuleId],
   );
 
   const filteredModules = useMemo(() => {
@@ -64,7 +73,7 @@ export default function ManualsPage() {
         const matchFaq = m.faq.some(
           (f) =>
             f.pregunta.toLowerCase().includes(q) ||
-            f.respuesta.toLowerCase().includes(q)
+            f.respuesta.toLowerCase().includes(q),
         );
         if (!matchTitle && !matchDesc && !matchFaq) return false;
       }
@@ -77,7 +86,7 @@ export default function ManualsPage() {
 
   const toggleTag = (tag: string) => {
     setActiveTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
   };
 
@@ -89,7 +98,7 @@ export default function ManualsPage() {
       <aside
         className={cn(
           "flex-shrink-0 border-r border-slate-200/80 dark:border-white/10 bg-white/70 dark:bg-white/[0.03] backdrop-blur-xl transition-all duration-300 flex flex-col",
-          sidebarOpen ? "w-64" : "w-0 overflow-hidden border-r-0"
+          sidebarOpen ? "w-64" : "w-0 overflow-hidden border-r-0",
         )}
       >
         <div className="p-4 border-b border-slate-100 dark:border-white/10">
@@ -117,13 +126,15 @@ export default function ManualsPage() {
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-200 group",
                     isActive
                       ? "bg-brand-red/10 dark:bg-brand-red/20 text-brand-red"
-                      : "text-slate-600 dark:text-white/60 hover:bg-slate-100/80 dark:hover:bg-white/5"
+                      : "text-slate-600 dark:text-white/60 hover:bg-slate-100/80 dark:hover:bg-white/5",
                   )}
                 >
                   <ModIcon
                     className={cn(
                       "h-4 w-4 flex-shrink-0",
-                      isActive ? "text-brand-red" : "opacity-60 group-hover:opacity-100"
+                      isActive
+                        ? "text-brand-red"
+                        : "opacity-60 group-hover:opacity-100",
                     )}
                   />
                   <span className="text-[12px] font-bold uppercase tracking-wider truncate">
@@ -172,7 +183,7 @@ export default function ManualsPage() {
                   "px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-all duration-200",
                   activeTags.includes(tag)
                     ? "bg-brand-red text-white border-brand-red shadow-sm"
-                    : "bg-white dark:bg-white/5 text-slate-500 dark:text-white/50 border-slate-200 dark:border-white/10 hover:border-brand-red/50 hover:text-brand-red"
+                    : "bg-white dark:bg-white/5 text-slate-500 dark:text-white/50 border-slate-200 dark:border-white/10 hover:border-brand-red/50 hover:text-brand-red",
                 )}
               >
                 {tag}
@@ -198,7 +209,7 @@ export default function ManualsPage() {
                 <Icon className="h-6 w-6 text-brand-red" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                <h1 className="uppercase text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                   {selectedModule.titulo}
                 </h1>
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -253,7 +264,10 @@ export default function ManualsPage() {
               </TabsList>
 
               {/* ─── GENERAL TAB ─── */}
-              <TabsContent value="descripcion" className="mt-4 space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <TabsContent
+                value="descripcion"
+                className="mt-4 space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300"
+              >
                 <Card className="p-5 md:p-6 rounded-2xl border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-white/[0.03] backdrop-blur-sm shadow-sm">
                   <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-white/40 mb-3">
                     Descripción
@@ -284,7 +298,10 @@ export default function ManualsPage() {
 
               {/* ─── FIELDS / DICTIONARY TAB ─── */}
               {selectedModule.campos.length > 0 && (
-                <TabsContent value="campos" className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <TabsContent
+                  value="campos"
+                  className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
                   <Card className="rounded-2xl border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-white/[0.03] backdrop-blur-sm shadow-sm overflow-hidden">
                     <div className="p-5 md:p-6 pb-3">
                       <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-white/40">
@@ -357,7 +374,10 @@ export default function ManualsPage() {
 
               {/* ─── MODALS TAB ─── */}
               {selectedModule.modales.length > 0 && (
-                <TabsContent value="modales" className="mt-4 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <TabsContent
+                  value="modales"
+                  className="mt-4 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
                   {selectedModule.modales.map((modal, i) => (
                     <Card
                       key={i}
@@ -380,7 +400,10 @@ export default function ManualsPage() {
               )}
 
               {/* ─── FAQ TAB ─── */}
-              <TabsContent value="faq" className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <TabsContent
+                value="faq"
+                className="mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300"
+              >
                 <Card className="p-5 md:p-6 rounded-2xl border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-white/[0.03] backdrop-blur-sm shadow-sm">
                   <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 dark:text-white/40 mb-4">
                     Preguntas frecuentes

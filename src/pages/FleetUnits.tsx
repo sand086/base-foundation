@@ -411,7 +411,7 @@ export default function FleetUnits() {
       {/*  HEADER TAHOE */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between bg-white/40 dark:bg-slate-900/40 p-4 rounded-2xl shadow-sm border border-white/20 dark:border-white/10 backdrop-blur-md gap-4">
         <div>
-          <h1 className="text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase tracking-tighter heading-crisp">
+          <h1 className="uppercase text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase tracking-tighter heading-crisp">
             <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
               <Truck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
             </div>

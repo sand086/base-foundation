@@ -524,7 +524,7 @@ export default function MonitoringCenter() {
       {/* CAPA 2: HEADER TAHOE */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 shrink-0 pb-2 border-b border-slate-200/50 dark:border-white/10">
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
+          <h1 className="uppercase text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
             <div className="p-2 bg-slate-100 dark:bg-white/5 rounded-xl shadow-inner">
               <Activity className="h-6 w-6 text-brand-navy dark:text-white" />
             </div>

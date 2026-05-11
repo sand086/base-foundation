@@ -146,7 +146,7 @@ export default function TwoFactorAuth() {
                 <Shield className="h-10 w-10 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
               </div>
 
-              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+              <h1 className="uppercase text-2xl md:text-3xl font-bold text-white tracking-tight">
                 Verificación de Seguridad
               </h1>
 

@@ -846,7 +846,7 @@ export default function ClientForm() {
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Button>
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tighter text-brand-navy drop-shadow-sm heading-crisp flex items-center gap-3">
+          <h1 className="uppercase text-3xl font-black uppercase tracking-tighter text-brand-navy drop-shadow-sm heading-crisp flex items-center gap-3">
             <Users className="h-7 w-7 text-brand-red" />
             {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
           </h1>

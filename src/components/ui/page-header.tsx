@@ -58,7 +58,7 @@ export function PageHeader({
 
         <div className="space-y-1.5">
           {/* REGLA: Tipografía Industrial - Título */}
-          <h1 className="text-2xl md:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
+          <h1 className="uppercase text-2xl md:text-4xl font-black uppercase tracking-tighter text-slate-900 dark:text-white heading-crisp leading-none">
             {title}
           </h1>
 
