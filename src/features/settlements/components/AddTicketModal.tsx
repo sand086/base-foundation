@@ -472,17 +472,15 @@ export function AddTicketModal({
 
   const handleToggleLeg = (selectedValue: string) => {
     setParentData((prev) => {
-      const isSelected = prev.selected_legs.includes(selectedValue);
-      const newLegs = isSelected
-        ? prev.selected_legs.filter((l) => l !== selectedValue)
-        : [...prev.selected_legs, selectedValue];
+      // ⚡ CIRUGÍA: Forzamos a que el array SIEMPRE tenga 1 solo elemento.
+      // Si el usuario hace click en otro viaje, reemplaza al anterior.
+      const newLegs = [selectedValue];
 
       let newUnit = prev.unit_id;
       let newOp = prev.operator_id;
 
       if (newLegs.length > 0) {
         const [, , uid, oid] = newLegs[0].split("|");
-        // Aseguramos de no meter basura (strings vacíos o nulls) en el unit_id
         newUnit = uid && uid !== "undefined" && uid !== "null" ? uid : "";
         newOp =
           oid && oid !== "undefined" && oid !== "null" ? oid : prev.operator_id;

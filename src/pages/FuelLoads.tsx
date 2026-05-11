@@ -220,14 +220,19 @@ const FuelLoads = () => {
           formData.append("operator_id", String(data.operator_id));
           formData.append("fecha_hora", String(ticket.fecha_hora));
           formData.append("estacion", ticket.estacion || "No especificada");
-          formData.append("litros_diesel", String(litrosDistribuidos));
-          formData.append("precio_diesel", String(ticket.precio_diesel || 0));
 
-          // 💧 ASEGURAMOS QUE LA UREA SE GUARDE CORRECTAMENTE EN LA BD
-          formData.append(
-            "tipo_combustible",
-            ticket.tipo_combustible || "diesel",
-          );
+          // Dependiendo del switch, mandamos los litros al campo correcto del backend
+          if (ticket.tipo_combustible === "urea") {
+            formData.append("litros_urea", String(litrosDistribuidos));
+            formData.append("precio_urea", String(ticket.precio_diesel || 0));
+            formData.append("litros_diesel", "0");
+            formData.append("precio_diesel", "0");
+          } else {
+            formData.append("litros_diesel", String(litrosDistribuidos));
+            formData.append("precio_diesel", String(ticket.precio_diesel || 0));
+            formData.append("litros_urea", "0");
+            formData.append("precio_urea", "0");
+          }
 
           formData.append("is_motogenerator", String(data.is_motogenerator));
 
