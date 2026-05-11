@@ -472,8 +472,6 @@ export function AddTicketModal({
 
   const handleToggleLeg = (selectedValue: string) => {
     setParentData((prev) => {
-      // ⚡ CIRUGÍA: Forzamos a que el array SIEMPRE tenga 1 solo elemento.
-      // Si el usuario hace click en otro viaje, reemplaza al anterior.
       const newLegs = [selectedValue];
 
       let newUnit = prev.unit_id;
