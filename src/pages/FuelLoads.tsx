@@ -87,12 +87,28 @@ import {
 // IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
 import { useTrips } from "@/features/trips/hooks/useTrips";
 
+interface SubTicket {
+  id: string;
+  fecha_hora: string;
+  estacion: string;
+  litros_diesel: number;
+  precio_diesel: number;
+  evidencia: File | null;
+  tipo_combustible?: "diesel" | "urea"; // 💧 AGREGADO PARA SOPORTAR UREA
+}
+
 interface FuelLoadDisplay extends FuelLoad {
   unidad_numero: string;
   operador_nombre: string;
   excede_tanque: boolean;
   is_conciliated?: boolean;
 }
+
+const legTypeLabels: Record<string, string> = {
+  carga_muelle: "Muelle / Patio",
+  ruta_carretera: "Ruta Carretera",
+  entrega_vacio: "Retorno Vacío",
+};
 
 const FuelLoads = () => {
   // INYECTAMOS USTRIPS PARA EL BLINDAJE
@@ -207,6 +223,12 @@ const FuelLoads = () => {
           formData.append("litros_diesel", String(litrosDistribuidos));
           formData.append("precio_diesel", String(ticket.precio_diesel || 0));
 
+          // 💧 ASEGURAMOS QUE LA UREA SE GUARDE CORRECTAMENTE EN LA BD
+          formData.append(
+            "tipo_combustible",
+            ticket.tipo_combustible || "diesel",
+          );
+
           formData.append("is_motogenerator", String(data.is_motogenerator));
 
           if (data.is_motogenerator) {
@@ -300,7 +322,7 @@ const FuelLoads = () => {
     const ahora = new Date();
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // ❄️ BLINDAJE EN KPIs: Separamos matemáticamente los vales
+    // ❄️ BLINDAJE EN KPIs: Separamos matemáticamente los vales (Tracto/Moto)
     const cargasEquipo = cargas.filter((c) =>
       equipmentFilter === "mg" ? c.is_motogenerator : !c.is_motogenerator,
     );
@@ -314,16 +336,24 @@ const FuelLoads = () => {
       (c) => new Date(c.fecha_hora) >= hace7Dias,
     );
 
-    const litros = cargasSemana.reduce(
+    // 💧 SEPARAMOS UREA DE DIÉSEL PARA NO ARRUINAR EL RENDIMIENTO
+    const cargasDieselSemana = cargasSemana.filter(
+      (c) => c.tipo_combustible !== "urea",
+    );
+
+    // Para el rendimiento, SOLO sumamos litros de DIÉSEL
+    const litros = cargasDieselSemana.reduce(
       (sum, c) => sum + (Number(c.litros) || 0),
       0,
     );
+
+    // Para Inversión (Dinero Gasto), sumamos AMBOS (Diésel y Urea)
     const inversion = cargasSemana.reduce(
       (sum, c) => sum + (Number(c.total) || 0),
       0,
     );
 
-    const sorted = [...cargasSemana].sort(
+    const sorted = [...cargasDieselSemana].sort(
       (a, b) =>
         new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
     );
@@ -514,7 +544,6 @@ const FuelLoads = () => {
       },
       {
         key: "odometro",
-        // ❄️ CAMBIAMOS EL HEADER DINÁMICAMENTE
         header: equipmentFilter === "mg" ? "Horómetro (Hrs)" : "Odómetro (KM)",
         render: (v, row) => (
           <span className="font-mono text-[11px] font-bold text-slate-500 flex flex-col">
@@ -547,7 +576,9 @@ const FuelLoads = () => {
             className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase truncate max-w-[180px] block"
             title={String(v)}
           >
-            {v !== "N/A" ? v : "Sin Operador"}
+            {v
+              ? String(v).trim().split(/\s+/).slice(0, 2).join(" ")
+              : "Sin Operador"}
           </span>
         ),
       },
@@ -627,7 +658,7 @@ const FuelLoads = () => {
         },
       },
     ],
-    [getTicketTripStatus, equipmentFilter], // Added equipmentFilter to dependencies
+    [getTicketTripStatus, equipmentFilter],
   );
 
   if (isLoading)
@@ -651,28 +682,7 @@ const FuelLoads = () => {
           className="heading-crisp mb-0"
         />
 
-        {/* ❄️ NUEVO: SELECTOR DE TRACTO VS MOTOGENERADOR */}
         <div className="flex flex-wrap items-center gap-3">
-          <Tabs
-            value={equipmentFilter}
-            onValueChange={(v) => setEquipmentFilter(v as "tracto" | "mg")}
-          >
-            <TabsList className="h-11 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shadow-inner border border-slate-200/50 dark:border-white/5">
-              <TabsTrigger
-                value="tracto"
-                className="font-bold text-[10px] uppercase tracking-widest rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm transition-all"
-              >
-                <Truck className="h-3.5 w-3.5 mr-1.5" /> Tractocamiones
-              </TabsTrigger>
-              <TabsTrigger
-                value="mg"
-                className="font-bold text-[10px] uppercase tracking-widest rounded-lg data-[state=active]:bg-white data-[state=active]:text-amber-500 data-[state=active]:shadow-sm transition-all"
-              >
-                <Zap className="h-3.5 w-3.5 mr-1.5" /> Motogeneradores
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           <Popover open={openUnitSearch} onOpenChange={setOpenUnitSearch}>
             <PopoverTrigger asChild>
               <Button
@@ -684,7 +694,7 @@ const FuelLoads = () => {
                 {selectedUnitId === "all"
                   ? "FLOTA COMPLETA"
                   : units.find((u) => String(u.id) === selectedUnitId)
-                    ? `${equipmentFilter === "mg" ? "MG" : "ECO"}-${units.find((u) => String(u.id) === selectedUnitId)?.numero_economico}`
+                    ? `ECO-${units.find((u) => String(u.id) === selectedUnitId)?.numero_economico}`
                     : "SELECCIONAR UNIDAD..."}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
@@ -775,9 +785,8 @@ const FuelLoads = () => {
             label: "Volumen Semanal",
             val: `${statsAuditoria.litros.toLocaleString()} L`,
             icon: Fuel,
-            color:
-              equipmentFilter === "mg" ? "text-amber-500" : "text-blue-500",
-            bg: equipmentFilter === "mg" ? "bg-amber-500/10" : "bg-blue-500/10",
+            color: "text-amber-500",
+            bg: "bg-amber-500/10",
             metric: "Consumo 7d",
           },
           {
@@ -789,14 +798,13 @@ const FuelLoads = () => {
             metric: "Capital 7d",
           },
           {
-            label: `Rendimiento Real (${equipmentFilter === "mg" ? "Horas" : "KMs"})`,
-            val: `${statsAuditoria.rendimiento} ${equipmentFilter === "mg" ? "hr/L" : "KM/L"}`,
+            label: "Rendimiento Real",
+            val: `${statsAuditoria.rendimiento} KM/L`,
             icon: BarChart3,
-            color: "text-indigo-500",
-            bg: "bg-indigo-500/10",
+            color: "text-blue-500",
+            bg: "bg-blue-500/10",
             dark: false,
-            metric:
-              equipmentFilter === "mg" ? "Promedio por Hora" : "Flota Promedio",
+            metric: "Flota Promedio",
           },
         ].map((kpi, i) => (
           <Card
