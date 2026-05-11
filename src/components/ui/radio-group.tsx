@@ -46,7 +46,7 @@ const RadioGroupItem = React.forwardRef<
         "data-[state=checked]:border-brand-red data-[state=checked]:bg-brand-red/5",
         "group focus-visible:ring-2 focus-visible:ring-brand-red/40 focus-visible:ring-offset-2",
 
-        // ⚡ INTERACCIÓN HÁPTICA
+        // ❄️ INTERACCIÓN HÁPTICA
         "active:scale-90 disabled:cursor-not-allowed disabled:opacity-30",
 
         // 🛑 SOPORTE PARA ERRORES (Validación Visual)

@@ -121,7 +121,7 @@ export const useSecurityNotifications = () => {
       case "forced_assignment":
         title = "Asignación Forzada";
         message = `${details.adminName} forzó la asignación del viaje ${details.tripId}.`;
-        toast.warning("⚡ Overrider de Sistema", {
+        toast.warning("❄️ Overrider de Sistema", {
           description: message,
           icon: React.createElement(Info, { className: "h-4 w-4" }),
         });

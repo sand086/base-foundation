@@ -96,97 +96,6 @@ export function OperatorSettlementDetailModal({
       minimumFractionDigits: 2,
     }).format(amount || 0);
 
-  const finalAuditDetails = React.useMemo(() => {
-    if (
-      auditDetails &&
-      auditDetails.hasData &&
-      (Number(auditDetails.vales) > 0 || Number(auditDetails.km) > 0)
-    ) {
-      return auditDetails;
-    }
-
-    let totalKms = 0;
-    let totalEcm = 0;
-    let totalVales = 0;
-    let totalPenalizacion = 0;
-
-    // --- VARIABLES MOTOGENERADOR ---
-    let totalHorasMoto = 0;
-    let totalLtEcmMoto = 0;
-    let totalValesMoto = 0;
-
-    if (previewData) {
-      totalKms += Number(previewData.total_kms || 0);
-      totalVales += Number(previewData.consumo_real || 0);
-      totalEcm += Number(previewData.consumo_esperado || 0);
-      totalPenalizacion += Number(previewData.deduccion_combustible || 0);
-
-      totalHorasMoto += Number(previewData.horas_moto || 0);
-      totalLtEcmMoto += Number(previewData.consumo_esperado_moto || 0);
-      totalValesMoto += Number(previewData.consumo_real_moto || 0);
-    }
-
-    if (totalKms === 0 && totalVales === 0) {
-      selectedLegsData.forEach((mov) => {
-        const kRecorridos =
-          mov.odometro_final && mov.odometro_inicial
-            ? mov.odometro_final - mov.odometro_inicial
-            : 0;
-        totalKms += kRecorridos > 0 ? kRecorridos : 0;
-        totalPenalizacion += Number(mov.monto_penalizaciones || 0);
-
-        const auditEvent = mov.timeline_events?.find(
-          (e: any) =>
-            e.location === "Conciliación de Combustible" ||
-            e.comments?.includes("Detalles Fase"),
-        );
-        if (auditEvent && auditEvent.comments) {
-          const cleanText = auditEvent.comments.replace(/\n/g, " ");
-
-          // Extracción Tracto
-          const vMatch = cleanText.match(/Vales(?:\s+Tracto)?:\s*([\d.,]+)/);
-          const ecmMatch = cleanText.match(/Litros ECM:\s*([\d.,]+)/);
-
-          // Extracción Moto
-          const hMotoMatch = cleanText.match(/Horas Moto:\s*([\d.,]+)/);
-          const ecmMotoMatch = cleanText.match(/Litros Moto:\s*([\d.,]+)/);
-          const vMotoMatch = cleanText.match(/Vales Moto:\s*([\d.,]+)/);
-
-          if (vMatch) totalVales += Number(vMatch[1].replace(/,/g, ""));
-          if (ecmMatch) totalEcm += Number(ecmMatch[1].replace(/,/g, ""));
-
-          if (hMotoMatch)
-            totalHorasMoto += Number(hMotoMatch[1].replace(/,/g, ""));
-          if (ecmMotoMatch)
-            totalLtEcmMoto += Number(ecmMotoMatch[1].replace(/,/g, ""));
-          if (vMotoMatch)
-            totalValesMoto += Number(vMotoMatch[1].replace(/,/g, ""));
-        }
-      });
-    }
-
-    const rend = totalVales > 0 ? (totalKms / totalVales).toFixed(2) : "0.00";
-    const rendMoto =
-      totalHorasMoto > 0 && totalValesMoto > 0
-        ? (totalValesMoto / totalHorasMoto).toFixed(2)
-        : "0.00";
-    const veredicto = totalPenalizacion > 0 ? "COBRO_OPERADOR" : "CONCILIADO";
-
-    return {
-      km: totalKms,
-      ltEcm: totalEcm,
-      vales: totalVales,
-      rend: rend,
-      horasMoto: totalHorasMoto,
-      ltMoto: totalLtEcmMoto,
-      valesMoto: totalValesMoto,
-      rendMoto: rendMoto,
-      veredicto: veredicto,
-      fechaAudit: format(new Date(), "dd/MM/yyyy HH:mm"),
-      textOriginal: `Conciliación sumatoria de ${selectedLegsData.length} movimiento(s) para este recibo.`,
-    };
-  }, [auditDetails, previewData, selectedLegsData]);
-
   const handleDownloadPDF = async () => {
     if (!pdfRef.current) return;
     setIsGeneratingPDF(true);
@@ -339,9 +248,6 @@ export function OperatorSettlementDetailModal({
                 const legManiobras = isHistorico
                   ? leg.monto_maniobras || 0
                   : (liquidacion?.deduccionesManuales || 0) / numLegs;
-                const legPenalizacion = isHistorico
-                  ? leg.monto_penalizaciones || 0
-                  : (liquidacion?.combustibleFaltante || 0) / numLegs;
 
                 const rawConceptos = isHistorico
                   ? leg.desglose_conceptos || []
@@ -357,179 +263,112 @@ export function OperatorSettlementDetailModal({
                 const legViaticos = leg.anticipo_viaticos || 0;
                 const legCombustible = leg.anticipo_combustible || 0;
                 const legOtrosAnticipos = leg.otros_anticipos || 0;
+                const legPenalizacion = isHistorico
+                  ? leg.monto_penalizaciones || 0
+                  : (liquidacion?.combustibleFaltante || 0) / numLegs;
+
+                // ⚡ EXTRACCIÓN QUIRÚRGICA: Leemos exactamente lo que se escribió en la conciliación
+                let pTracto = 0;
+                let pMoto = 0;
+                let extKm = 0,
+                  extLtEcm = 0,
+                  extVales = 0,
+                  rendTracto = "0.00",
+                  txtTracto = "";
+                let extHorasMoto = 0,
+                  extLtEcmMoto = 0,
+                  extValesMoto = 0,
+                  rendMoto = "0.00",
+                  txtMoto = "";
+
+                const auditEvents =
+                  leg.timeline_events?.filter(
+                    (e: any) =>
+                      e.location === "Conciliación de Combustible" ||
+                      e.comments?.includes("Detalles Fase"),
+                  ) || [];
+
+                const tractoEvents = auditEvents.filter(
+                  (e: any) => !e.comments?.includes("(MG)"),
+                );
+                const mgEvents = auditEvents.filter((e: any) =>
+                  e.comments?.includes("(MG)"),
+                );
+
+                if (tractoEvents.length > 0) {
+                  const u = tractoEvents[tractoEvents.length - 1]; // Toma el último
+                  txtTracto = u.comments || "";
+                  const kmM = txtTracto.match(/(?:Km|Hrs) ECM:\s*([\d.,]+)/);
+                  const ltM = txtTracto.match(/Litros ECM:\s*([\d.,]+)/);
+                  const valM = txtTracto.match(
+                    /Vales(?:\s+Tracto)?:\s*([\d.,]+)/,
+                  );
+                  const rM = txtTracto.match(/Rend Real:\s*([\d.,]+)/);
+                  const descM = txtTracto.match(/descuento de \$([\d.,]+)/i);
+
+                  if (kmM) extKm = Number(kmM[1].replace(/,/g, ""));
+                  if (ltM) extLtEcm = Number(ltM[1].replace(/,/g, ""));
+                  if (valM) extVales = Number(valM[1].replace(/,/g, ""));
+                  if (rM) rendTracto = rM[1];
+                  if (descM) pTracto = Number(descM[1].replace(/,/g, ""));
+                }
+
+                if (mgEvents.length > 0) {
+                  const u = mgEvents[mgEvents.length - 1]; // Toma el último
+                  txtMoto = u.comments || "";
+                  const kmM = txtMoto.match(/(?:Km|Hrs) ECM:\s*([\d.,]+)/);
+                  const ltM = txtMoto.match(/Litros ECM:\s*([\d.,]+)/);
+                  const valM = txtMoto.match(/Vales(?:\s+Moto)?:\s*([\d.,]+)/);
+                  const rM = txtMoto.match(/Rend Real:\s*([\d.,]+)/);
+                  const descM = txtMoto.match(/descuento de \$([\d.,]+)/i);
+
+                  if (kmM) extHorasMoto = Number(kmM[1].replace(/,/g, ""));
+                  if (ltM) extLtEcmMoto = Number(ltM[1].replace(/,/g, ""));
+                  if (valM) extValesMoto = Number(valM[1].replace(/,/g, ""));
+                  if (rM) rendMoto = rM[1];
+                  if (descM) pMoto = Number(descM[1].replace(/,/g, ""));
+                }
+
+                // Fallback si la regex falló pero sabemos que hay penalización
+                if (pTracto === 0 && pMoto === 0 && legPenalizacion > 0) {
+                  pTracto = legPenalizacion;
+                }
+
+                const penalizacionTracto = pTracto;
+                const penalizacionMoto = pMoto;
+
+                const legAudit: any = {
+                  km: String(extKm),
+                  ltEcm: String(extLtEcm),
+                  vales: String(extVales),
+                  rend: rendTracto,
+                  horasMoto: String(extHorasMoto),
+                  ltMoto: String(extLtEcmMoto),
+                  valesMoto: String(extValesMoto),
+                  rendMoto: rendMoto,
+                  veredicto:
+                    penalizacionTracto > 0 || penalizacionMoto > 0
+                      ? "COBRO_OPERADOR"
+                      : "CONCILIADO",
+                  textOriginal:
+                    [txtTracto, txtMoto].filter(Boolean).join("\n\n") ||
+                    "Sin observaciones de auditoría registradas.",
+                  fechaAudit: leg.last_update
+                    ? format(new Date(leg.last_update), "dd/MM/yyyy HH:mm")
+                    : "N/A",
+                };
 
                 const legNetoCalculado =
                   legSueldoBase +
                   legBonos -
                   (legManiobras +
-                    legPenalizacion +
+                    penalizacionTracto +
+                    penalizacionMoto +
                     legViaticos +
                     legCombustible +
                     legOtrosAnticipos);
 
-                let legAudit: any = {
-                  km: "0",
-                  ltEcm: "0",
-                  vales: "0",
-                  rend: "0.00",
-                  horasMoto: "0",
-                  ltMoto: "0",
-                  valesMoto: "0",
-                  rendMoto: "0.00",
-                  veredicto:
-                    legPenalizacion > 0 ? "COBRO_OPERADOR" : "CONCILIADO",
-                  textOriginal: "Sin observaciones de auditoría registradas.",
-                  fechaAudit: "N/A",
-                };
-
-                if (
-                  isHistorico &&
-                  auditDetails &&
-                  auditDetails.hasData &&
-                  numLegs === 1
-                ) {
-                  legAudit = { ...legAudit, ...auditDetails };
-                } else {
-                  const auditEvent = leg.timeline_events?.find(
-                    (e: any) =>
-                      e.location === "Conciliación de Combustible" ||
-                      e.comments?.includes("Detalles Fase"),
-                  );
-
-                  if (auditEvent && auditEvent.comments) {
-                    const cleanText = auditEvent.comments.replace(/\n/g, " ");
-                    const kmMatch = cleanText.match(/Km ECM:\s*([\d.,]+)/);
-                    const ltEcmMatch = cleanText.match(
-                      /Litros ECM:\s*([\d.,]+)/,
-                    );
-                    const valesMatch = cleanText.match(
-                      /Vales(?:\s+Tracto)?:\s*([\d.,]+)/,
-                    );
-                    const rendMatch = cleanText.match(/Rend Real:\s*([\d.,]+)/);
-                    const verMatch = cleanText.match(/Ver:\s*([A-Z_]+)/);
-
-                    // Moto Extractions
-                    const hMotoMatch = cleanText.match(
-                      /Horas Moto:\s*([\d.,]+)/,
-                    );
-                    const ecmMotoMatch = cleanText.match(
-                      /Litros Moto:\s*([\d.,]+)/,
-                    );
-                    const vMotoMatch = cleanText.match(
-                      /Vales Moto:\s*([\d.,]+)/,
-                    );
-                    const rendMotoMatch = cleanText.match(
-                      /Rend Moto:\s*([\d.,]+)/,
-                    );
-
-                    const extKm = kmMatch
-                      ? Number(kmMatch[1].replace(/,/g, ""))
-                      : 0;
-                    const extLtEcm = ltEcmMatch
-                      ? Number(ltEcmMatch[1].replace(/,/g, ""))
-                      : 0;
-                    const extVales = valesMatch
-                      ? Number(valesMatch[1].replace(/,/g, ""))
-                      : 0;
-
-                    const extHorasMoto = hMotoMatch
-                      ? Number(hMotoMatch[1].replace(/,/g, ""))
-                      : 0;
-                    const extValesMoto = vMotoMatch
-                      ? Number(vMotoMatch[1].replace(/,/g, ""))
-                      : 0;
-
-                    legAudit = {
-                      km: String(extKm),
-                      ltEcm: String(extLtEcm),
-                      vales: String(extVales),
-                      rend: rendMatch
-                        ? rendMatch[1]
-                        : extVales > 0
-                          ? (extKm / extVales).toFixed(2)
-                          : "0.00",
-
-                      horasMoto: String(extHorasMoto),
-                      ltMoto: String(
-                        ecmMotoMatch
-                          ? Number(ecmMotoMatch[1].replace(/,/g, ""))
-                          : 0,
-                      ),
-                      valesMoto: String(extValesMoto),
-                      rendMoto: rendMotoMatch
-                        ? rendMotoMatch[1]
-                        : extHorasMoto > 0 && extValesMoto > 0
-                          ? (extValesMoto / extHorasMoto).toFixed(2)
-                          : "0.00",
-
-                      veredicto: verMatch
-                        ? verMatch[1]
-                        : legPenalizacion > 0
-                          ? "COBRO_OPERADOR"
-                          : "CONCILIADO",
-                      textOriginal: auditEvent.comments,
-                      fechaAudit: leg.last_update
-                        ? format(new Date(leg.last_update), "dd/MM/yyyy HH:mm")
-                        : "N/A",
-                    };
-                  } else if (!isHistorico && numLegs === 1 && previewData) {
-                    legAudit = {
-                      km: String(previewData.total_kms || 0),
-                      ltEcm: String(previewData.consumo_esperado || 0),
-                      vales: String(previewData.consumo_real || 0),
-                      rend:
-                        previewData.consumo_real > 0
-                          ? (
-                              previewData.total_kms / previewData.consumo_real
-                            ).toFixed(2)
-                          : "0.00",
-                      horasMoto: String(previewData.horas_moto || 0),
-                      ltMoto: String(previewData.consumo_esperado_moto || 0),
-                      valesMoto: String(previewData.consumo_real_moto || 0),
-                      rendMoto:
-                        Number(previewData.horas_moto) > 0 &&
-                        Number(previewData.consumo_real_moto) > 0
-                          ? (
-                              Number(previewData.consumo_real_moto) /
-                              Number(previewData.horas_moto)
-                            ).toFixed(2)
-                          : "0.00",
-                      veredicto:
-                        legPenalizacion > 0 ? "COBRO_OPERADOR" : "CONCILIADO",
-                      textOriginal: `Calculado en pre-liquidación. Dif: ${previewData.diferencia_litros?.toFixed(2) || "0.00"}L.`,
-                      fechaAudit: format(new Date(), "dd/MM/yyyy HH:mm"),
-                    };
-                  }
-                }
-
-                // =========================================================================
-                // MAGIA MATEMÁTICA: Extracción pura e independiente por equipo para los vales
-                // =========================================================================
-                const diffTracto = Math.max(
-                  0,
-                  Number(legAudit.vales) - Number(legAudit.ltEcm),
-                );
-                const diffMoto = Math.max(
-                  0,
-                  Number(legAudit.valesMoto) - Number(legAudit.ltMoto),
-                );
-                const precioCombustible = Number(
-                  previewData?.precio_promedio ||
-                    liquidacion?.precioPorLitro ||
-                    24.5,
-                );
-
-                let penalizacionTracto =
-                  diffTracto > 0 ? diffTracto * precioCombustible : 0;
-                const penalizacionMoto =
-                  diffMoto > 0 ? diffMoto * precioCombustible : 0;
-
-                // Fallback de seguridad si en el histórico ya solo hay un monto global
-                if (legPenalizacion > 0 && diffTracto === 0 && diffMoto === 0) {
-                  penalizacionTracto = legPenalizacion;
-                }
-
-                // Identificadores visuales de unidades
+                // Identificadores de Equipo
                 const ecoTracto = leg.unit?.numero_economico || "TRACTO";
                 const ecoMoto =
                   leg.trip?.motogenerator_1_unit?.numero_economico ||
@@ -589,7 +428,7 @@ export function OperatorSettlementDetailModal({
                       {/* BODY */}
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                         <div className="md:col-span-7 space-y-4">
-                          {/* Detalles Operación Múltiple */}
+                          {/* Detalles Operación */}
                           <div className="bg-slate-50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
                             <div className="flex justify-between items-center mb-3 border-b pb-2 border-slate-200 dark:border-white/10">
                               <span className="text-[10px] uppercase font-black tracking-widest text-slate-500 dark:text-slate-400">
@@ -608,7 +447,13 @@ export function OperatorSettlementDetailModal({
                                   Operador
                                 </span>
                                 <span className="font-black text-slate-900 dark:text-white text-sm truncate">
-                                  {leg.operator?.name || "N/A"}
+                                  {leg.operator?.name
+                                    ? leg.operator.name
+                                        .trim()
+                                        .split(/\s+/)
+                                        .slice(0, 2)
+                                        .join(" ")
+                                    : "N/A"}
                                 </span>
                               </div>
                               <div>
@@ -788,25 +633,10 @@ export function OperatorSettlementDetailModal({
                                 <FileText className="h-3 w-3 text-blue-400" />{" "}
                                 Notas Adicionales
                               </p>
-                              <p className="text-[10px] font-mono font-medium leading-relaxed italic text-slate-600 dark:text-slate-400">
+                              <p className="text-[10px] font-mono font-medium leading-relaxed italic text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
                                 {legAudit.textOriginal ||
                                   "Sin observaciones adicionales registradas en la auditoría."}
                               </p>
-                            </div>
-
-                            <div className="mt-3 flex justify-end">
-                              <div className="inline-flex items-center gap-2 py-1.5 px-3 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10">
-                                <Gauge className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                                  Odómetro Cerrado:
-                                </span>
-                                <span className="font-mono text-xs font-black text-slate-800 dark:text-slate-200">
-                                  {Number(
-                                    leg?.odometro_final || 0,
-                                  ).toLocaleString()}{" "}
-                                  km
-                                </span>
-                              </div>
                             </div>
                           </div>
                         </div>
@@ -819,8 +649,10 @@ export function OperatorSettlementDetailModal({
 
                             <div className="space-y-3 text-xs font-medium">
                               <div className="flex justify-between items-center text-slate-700 dark:text-slate-300">
-                                <span>Sueldo Base (Proporcional)</span>
-                                <span className="font-mono font-semibold">
+                                <span className="font-medium text-emerald-400">
+                                  Sueldo Base (Proporcional)
+                                </span>
+                                <span className="font-mono font-semibold text-emerald-400">
                                   {formatCurrencyLocal(legSueldoBase)}
                                 </span>
                               </div>
@@ -878,10 +710,6 @@ export function OperatorSettlementDetailModal({
                                       <Truck className="h-3 w-3" /> Faltante
                                       Diésel ({ecoTracto})
                                     </span>
-                                    <span className="text-[9px] font-mono text-rose-500/80 mt-0.5 ml-4.5">
-                                      {diffTracto.toFixed(2)} Lts x{" "}
-                                      {formatCurrencyLocal(precioCombustible)}
-                                    </span>
                                   </div>
                                   <span className="font-mono font-black mt-0.5">
                                     -{formatCurrencyLocal(penalizacionTracto)}
@@ -890,15 +718,11 @@ export function OperatorSettlementDetailModal({
                               )}
 
                               {penalizacionMoto > 0 && (
-                                <div className="flex justify-between items-start text-purple-600 dark:text-purple-400 font-bold bg-purple-50/50 dark:bg-purple-500/10 p-2 rounded-lg border border-purple-100 dark:border-purple-500/20 mt-2">
+                                <div className="flex justify-between items-start text-rose-600 dark:text-rose-400 font-bold bg-purple-50/50 dark:bg-purple-500/10 p-2 rounded-lg border border-purple-100 dark:border-purple-500/20 mt-2">
                                   <div className="flex flex-col">
                                     <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-widest">
                                       <Snowflake className="h-3 w-3" /> Faltante
                                       Diésel ({ecoMoto})
-                                    </span>
-                                    <span className="text-[9px] font-mono text-purple-500/80 mt-0.5 ml-4.5">
-                                      {diffMoto.toFixed(2)} Lts x{" "}
-                                      {formatCurrencyLocal(precioCombustible)}
                                     </span>
                                   </div>
                                   <span className="font-mono font-black mt-0.5">

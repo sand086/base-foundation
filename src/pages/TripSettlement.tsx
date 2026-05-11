@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   FileCheck,
   User,
@@ -117,7 +117,7 @@ export default function TripSettlement() {
     [],
   );
 
-  // ESTADOS FINANCIEROS Y DE COBRO (Separados exactamente como lo pidio el usuario)
+  // ESTADOS FINANCIEROS Y DE COBRO
   const [sueldoBasePactado, setSueldoBasePactado] = useState<number>(0);
   const [auditDetails, setAuditDetails] = useState<any>(null);
 
@@ -281,7 +281,9 @@ export default function TripSettlement() {
   const ecoTracto = selectedLegsData[0]?.unit?.numero_economico || "TRACTO";
   const ecoMoto =
     selectedLegsData[0]?.trip?.motogenerator_1_unit?.numero_economico ||
+    selectedLegsData[0]?.trip?.motogenerator_1 ||
     selectedLegsData[0]?.trip?.motogenerator_2_unit?.numero_economico ||
+    selectedLegsData[0]?.trip?.motogenerator_2 ||
     "MOTO";
 
   // 3. DEFINIR COLUMNAS DEL DATATABLE
@@ -474,6 +476,135 @@ export default function TripSettlement() {
     });
   }, [selectedLegsData]);
 
+  // =========================================================================================
+  // ⚡ MAGIA PARA EXTRAER EXACTAMENTE LAS MULTAS (Llamado automáticamente sin loops infinitos)
+  // =========================================================================================
+  const joinedLegIds = selectedLegIds.join(",");
+
+  useEffect(() => {
+    if (activeTab === "historico") return;
+
+    if (selectedLegIds.length === 0) {
+      setPreviewData(null);
+      setPenalizacionTracto(0);
+      setPenalizacionMoto(0);
+      setSueldoBasePactado(0);
+      return;
+    }
+
+    let pTractoLocal = 0;
+    let pMotoLocal = 0;
+    let sueldoLocalCalculado = 0;
+    let foundSplit = false;
+
+    selectedLegsData.forEach((leg) => {
+      // LEER LA BITÁCORA EN BUSCA DEL TEXTO QUE GUARDAMOS EN CONCILIACIÓN
+
+      const auditEvents =
+        leg.timeline_events?.filter(
+          (e: any) =>
+            e.location === "Conciliación de Combustible" ||
+            e.comments?.includes("Detalles Fase"),
+        ) || [];
+
+      // 1. Separamos los eventos por tipo (Tracto vs MG)
+      const tractoEvents = auditEvents.filter(
+        (e: any) => !e.comments?.includes("(MG)"),
+      );
+      const mgEvents = auditEvents.filter((e: any) =>
+        e.comments?.includes("(MG)"),
+      );
+
+      // 2. Extraemos el descuento SOLO del ÚLTIMO evento de Tracto
+      if (tractoEvents.length > 0) {
+        const ultimoTracto = tractoEvents[tractoEvents.length - 1]; // Toma el más reciente
+        const match = ultimoTracto.comments?.match(/descuento de \$([\d.,]+)/i);
+        if (match) {
+          foundSplit = true;
+          pTractoLocal += Number(match[1].replace(/,/g, ""));
+        }
+      }
+
+      // 3. Extraemos el descuento SOLO del ÚLTIMO evento de Motogenerador
+      if (mgEvents.length > 0) {
+        const ultimoMg = mgEvents[mgEvents.length - 1]; // Toma el más reciente
+        const match = ultimoMg.comments?.match(/descuento de \$([\d.,]+)/i);
+        if (match) {
+          foundSplit = true;
+          pMotoLocal += Number(match[1].replace(/,/g, ""));
+        }
+      }
+
+      // Cálculo de Sueldo Base
+      if (leg.leg_type === "ruta_carretera") {
+        let sueldoTarifa = 0;
+        const trip = leg.trip;
+
+        if (trip?.client?.sub_clients) {
+          const subClient =
+            trip.client.sub_clients.find(
+              (sc: any) => sc.id === trip.sub_client_id,
+            ) || trip.client.sub_clients[0];
+
+          if (subClient?.tariffs) {
+            const tariff =
+              subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
+              subClient.tariffs[0];
+            if (tariff?.sueldo_operador) sueldoTarifa = tariff.sueldo_operador;
+          }
+        }
+
+        sueldoLocalCalculado +=
+          leg.monto_sueldo ||
+          sueldoTarifa ||
+          trip?.sueldo_operador ||
+          trip?.monto_sueldo ||
+          trip?.pago_operador ||
+          0;
+      } else {
+        const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
+        sueldoLocalCalculado += isFull ? 300 : 200;
+      }
+    });
+
+    setPenalizacionTracto(pTractoLocal);
+    setPenalizacionMoto(pMotoLocal);
+    setSueldoBasePactado(sueldoLocalCalculado);
+
+    // Consulta de pre-liquidación al backend
+    const roadLeg = selectedLegsData.find(
+      (l) => l.leg_type === "ruta_carretera",
+    );
+    if (roadLeg && typeof getSettlementPreview === "function") {
+      setIsLoadingPreview(true);
+      getSettlementPreview(selectedLegIds)
+        .then((data: any) => {
+          setPreviewData(data);
+
+          // Si por alguna razón el regex falló, intentamos usar el fallback del backend solo en el tracto
+          if (!foundSplit) {
+            const penalizacionLocalFallback = selectedLegsData.reduce(
+              (sum, leg) => sum + (Number(leg.monto_penalizaciones) || 0),
+              0,
+            );
+            const totalBackendPenalty =
+              data?.deduccion_combustible ||
+              data?.penalizacion_combustible ||
+              penalizacionLocalFallback;
+            setPenalizacionTracto(totalBackendPenalty);
+            setPenalizacionMoto(0);
+          }
+
+          const sueldoAPI =
+            data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
+          if (sueldoAPI > 0) setSueldoBasePactado(sueldoAPI);
+        })
+        .catch(() => setPreviewData(null))
+        .finally(() => setIsLoadingPreview(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [joinedLegIds, activeTab]);
+
   const liquidacion = useMemo(() => {
     if (selectedLegsData.length === 0) return null;
 
@@ -494,8 +625,8 @@ export default function TripSettlement() {
         otrosAnticipos:
           (leg.otros_anticipos || 0) + (leg.anticipo_combustible || 0),
         deduccionesManuales: leg.monto_maniobras || 0,
-        combustibleFaltante: leg.monto_penalizaciones || 0, // Fallback en histórico
-        penalizacionTracto: leg.monto_penalizaciones || 0,
+        combustibleFaltante: leg.monto_penalizaciones || 0,
+        penalizacionTracto: leg.monto_penalizaciones || 0, // Fallback en histórico
         penalizacionMoto: 0,
         total_deducciones:
           (leg.anticipo_viaticos || 0) +
@@ -529,11 +660,14 @@ export default function TripSettlement() {
       .reduce((s, c) => s + c.monto, 0);
 
     const total_ingresos = pagoBaseBruto + bonosAdicionales;
+
+    // SUMA DE TODAS LAS DEDUCCIONES INCLUYENDO TRACTO Y MOTO
     const total_deducciones =
       deduccionViaticos +
       otrosAnticipos +
       deduccionesManuales +
-      (penalizacionTracto + penalizacionMoto);
+      penalizacionTracto +
+      penalizacionMoto;
 
     return {
       hasRoadMove,
@@ -543,7 +677,7 @@ export default function TripSettlement() {
       deduccionViaticos,
       otrosAnticipos,
       deduccionesManuales,
-      combustibleFaltante: penalizacionTracto + penalizacionMoto, // Total sumado
+      combustibleFaltante: penalizacionTracto + penalizacionMoto, // Total sumado para el backend
       penalizacionTracto,
       penalizacionMoto,
       total_deducciones,
@@ -557,125 +691,6 @@ export default function TripSettlement() {
     penalizacionMoto,
     activeTab,
   ]);
-
-  useEffect(() => {
-    if (activeTab === "historico") return;
-
-    if (selectedLegIds.length === 0) {
-      setPreviewData(null);
-      setPenalizacionTracto(0);
-      setPenalizacionMoto(0);
-      setSueldoBasePactado(0);
-      return;
-    }
-
-    let penalizacionLocalFallback = 0;
-    let sueldoLocalCalculado = 0;
-    let pTractoLocal = 0;
-    let pMotoLocal = 0;
-    let foundSplit = false;
-
-    selectedLegsData.forEach((leg) => {
-      penalizacionLocalFallback += Number(leg.monto_penalizaciones) || 0;
-
-      // Lectura exacta de bitácora (Sin inventar matemáticas aquí)
-      const auditEvent = leg.timeline_events?.find(
-        (e: any) =>
-          e.location === "Conciliación de Combustible" ||
-          e.comments?.includes("Detalles Fase"),
-      );
-      if (auditEvent && auditEvent.comments) {
-        const txt = auditEvent.comments;
-        // Expresión regular para buscar si Finanzas dejó los cobros separados
-        const matchTracto = txt.match(/Cobro Tracto:\s*\$?([\d.,]+)/i);
-        const matchMoto = txt.match(/Cobro Moto:\s*\$?([\d.,]+)/i);
-
-        if (matchTracto || matchMoto) foundSplit = true;
-        if (matchTracto)
-          pTractoLocal += Number(matchTracto[1].replace(/,/g, ""));
-        if (matchMoto) pMotoLocal += Number(matchMoto[1].replace(/,/g, ""));
-      }
-
-      if (leg.leg_type === "ruta_carretera") {
-        let sueldoTarifa = 0;
-        const trip = leg.trip;
-
-        if (trip?.client?.sub_clients) {
-          const subClient =
-            trip.client.sub_clients.find(
-              (sc: any) => sc.id === trip.sub_client_id,
-            ) || trip.client.sub_clients[0];
-
-          if (subClient?.tariffs) {
-            const tariff =
-              subClient.tariffs.find((t: any) => t.id === trip.tariff_id) ||
-              subClient.tariffs[0];
-            if (tariff?.sueldo_operador) sueldoTarifa = tariff.sueldo_operador;
-          }
-        }
-
-        sueldoLocalCalculado +=
-          leg.monto_sueldo ||
-          sueldoTarifa ||
-          trip?.sueldo_operador ||
-          trip?.monto_sueldo ||
-          trip?.pago_operador ||
-          0;
-      } else {
-        const isFull = !!(leg.trip?.dolly_id || leg.trip?.remolque_2_id);
-        sueldoLocalCalculado += isFull ? 300 : 200;
-      }
-    });
-
-    const roadLeg = selectedLegsData.find(
-      (l) => l.leg_type === "ruta_carretera",
-    );
-
-    if (roadLeg && typeof getSettlementPreview === "function") {
-      setIsLoadingPreview(true);
-      getSettlementPreview(selectedLegIds)
-        .then((data: any) => {
-          setPreviewData(data);
-
-          const totalBackendPenalty =
-            data?.deduccion_combustible ||
-            data?.penalizacion_combustible ||
-            penalizacionLocalFallback;
-
-          if (foundSplit) {
-            setPenalizacionTracto(pTractoLocal);
-            setPenalizacionMoto(pMotoLocal);
-          } else {
-            // Si no vinieron separados, lo cobramos en el Tracto como siempre
-            setPenalizacionTracto(totalBackendPenalty);
-            setPenalizacionMoto(0);
-          }
-
-          const sueldoAPI =
-            data?.sueldo_operador_pactado || data?.monto_sueldo || 0;
-          setSueldoBasePactado(
-            sueldoAPI > 0 ? sueldoAPI : sueldoLocalCalculado,
-          );
-        })
-        .catch(() => {
-          toast.error("Error de conexión al verificar telemetría del viaje.");
-          setPreviewData(null);
-          setPenalizacionTracto(
-            foundSplit ? pTractoLocal : penalizacionLocalFallback,
-          );
-          setPenalizacionMoto(foundSplit ? pMotoLocal : 0);
-          setSueldoBasePactado(sueldoLocalCalculado);
-        })
-        .finally(() => setIsLoadingPreview(false));
-    } else {
-      setPreviewData(null);
-      setPenalizacionTracto(
-        foundSplit ? pTractoLocal : penalizacionLocalFallback,
-      );
-      setPenalizacionMoto(foundSplit ? pMotoLocal : 0);
-      setSueldoBasePactado(sueldoLocalCalculado);
-    }
-  }, [selectedLegIds, activeTab]);
 
   const formatCurrencyLocal = (amount: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -692,7 +707,6 @@ export default function TripSettlement() {
       if (prev.includes(id)) {
         return prev.filter((legId) => legId !== id);
       } else {
-        // PERMITIMOS JUNTAR TRAMOS AUNQUE SEAN DIFERENTE VIAJE, EL MODAL SE ENCARGARÁ DE CONSOLIDARLOS
         return [...prev, id];
       }
     });
@@ -773,11 +787,12 @@ export default function TripSettlement() {
         `/api/logistics/trips/leg/${leg.id}/settlement`,
       );
 
-      const auditEvent = leg.timeline_events?.find(
-        (e: any) =>
-          e.location === "Conciliación de Combustible" ||
-          e.comments?.includes("Detalles Fase"),
-      );
+      const auditEvents =
+        leg.timeline_events?.filter(
+          (e: any) =>
+            e.location === "Conciliación de Combustible" ||
+            e.comments?.includes("Detalles Fase"),
+        ) || [];
 
       let km = Number(response.data?.kmsRecorridos) || 0;
       let ltEcm = Number(response.data?.consumoEsperadoLitros) || 0;
@@ -789,10 +804,14 @@ export default function TripSettlement() {
           : "CONCILIADO";
       let texto = "Datos recuperados de la liquidación oficial.";
 
-      if (vales === 0 && auditEvent && auditEvent.comments) {
-        const text = auditEvent.comments;
+      if (vales === 0 && auditEvents.length > 0) {
+        // En historial, agarramos el evento del tracto para rellenar los datos si no hay backend response
+        const tractoEvent =
+          auditEvents.find((e: any) => !e.comments?.includes("(MG)")) ||
+          auditEvents[0];
+        const text = tractoEvent.comments;
 
-        const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
+        const kmMatch = text.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
         const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
         const valesMatch = text.match(/Vales(?:\s+Tracto)?:\s*([\d.]+)/);
         const rendMatch = text.match(/Rend Real:\s*([\d.]+)/);
@@ -803,7 +822,7 @@ export default function TripSettlement() {
         vales = valesMatch ? Number(valesMatch[1]) : vales;
         rend = rendMatch ? rendMatch[1] : rend;
         veredicto = verMatch ? verMatch[1] : veredicto;
-        texto = text;
+        texto = auditEvents.map((e: any) => e.comments).join("\n\n");
       }
 
       if (response.data || vales > 0) {
@@ -1219,7 +1238,7 @@ export default function TripSettlement() {
                                   className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-200/50 dark:hover:bg-rose-500/20"
                                   onClick={() => removeConcepto(c.id)}
                                 >
-                                  <Trash2 className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                                  <Trash2 className="h-3 w-3 text-rose-500 dark:text-rose-400" />
                                 </Button>
                                 <span className="text-rose-700 dark:text-rose-400 text-xs font-medium">
                                   {c.descripcion}

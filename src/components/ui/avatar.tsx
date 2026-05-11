@@ -28,7 +28,7 @@ const Avatar = React.forwardRef<
       // 💎 GLASSMORPHISM & BORDERS HD
       "bg-white/50 dark:bg-white/5 backdrop-blur-md",
       "border border-slate-200 dark:border-white/10 shadow-sm",
-      // ⚡ INTERACCIÓN HÁPTICA
+      // ❄️ INTERACCIÓN HÁPTICA
       "transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer",
       className,
     )}

@@ -40,6 +40,7 @@ import {
   ChevronsUpDown,
   Lock,
   Zap,
+  Truck,
 } from "lucide-react";
 
 // Tipos y Servicios
@@ -103,6 +104,11 @@ const FuelLoads = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [idParaEliminar, setIdParaEliminar] = useState<number | null>(null);
 
+  // ❄️ NUEVO: Estado para separar la vista de Tractos vs Motogeneradores
+  const [equipmentFilter, setEquipmentFilter] = useState<"tracto" | "mg">(
+    "tracto",
+  );
+
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
   const [openUnitSearch, setOpenUnitSearch] = useState(false);
 
@@ -131,7 +137,6 @@ const FuelLoads = () => {
       setOperators(safeOperators);
 
       const normalizedFuel: FuelLoadDisplay[] = safeFuel.map((item: any) => {
-        // FASE 1: Búsqueda segura cruzando strings para evitar fallos de tipo
         const unit = safeUnits.find(
           (u: Unit) => String(u.id) === String(item.unit_id),
         );
@@ -140,7 +145,6 @@ const FuelLoads = () => {
             ? unit?.capacidad_tanque_diesel || 800
             : unit?.capacidad_tanque_urea || 60;
 
-        // FASE 2: Parseo estricto del booleano de motogenerador
         const isMoto =
           item.is_motogenerator === true ||
           String(item.is_motogenerator).toLowerCase() === "true" ||
@@ -148,7 +152,6 @@ const FuelLoads = () => {
 
         return {
           ...item,
-          // AQUÍ LA SOLUCIÓN: Priorizamos unit local en lugar del item.unit que puede venir mal del backend
           unidad_numero:
             unit?.numero_economico ||
             item.unit?.numero_economico ||
@@ -204,7 +207,6 @@ const FuelLoads = () => {
           formData.append("litros_diesel", String(litrosDistribuidos));
           formData.append("precio_diesel", String(ticket.precio_diesel || 0));
 
-          // --- FASE 2: ENVIAR DATOS SEGÚN EL TIPO DE EQUIPO ---
           formData.append("is_motogenerator", String(data.is_motogenerator));
 
           if (data.is_motogenerator) {
@@ -213,7 +215,6 @@ const FuelLoads = () => {
           } else {
             formData.append("odometro", String(data.odometro || 0));
           }
-          // ----------------------------------------------------
 
           if (data.trip_id && data.trip_id !== "none")
             formData.append("trip_id", String(data.trip_id));
@@ -246,7 +247,12 @@ const FuelLoads = () => {
   }, [cargas]);
 
   const filteredCargas = useMemo(() => {
-    let filtered = cargas;
+    // ❄️ BLINDAJE: Filtramos PRIMERO por el TAB seleccionado (Tracto o MG)
+    const baseFiltered = cargas.filter((c) =>
+      equipmentFilter === "mg" ? c.is_motogenerator : !c.is_motogenerator,
+    );
+
+    let filtered = baseFiltered;
 
     if (selectedUnitId !== "all") {
       filtered = filtered.filter((c) => String(c.unit_id) === selectedUnitId);
@@ -281,37 +287,65 @@ const FuelLoads = () => {
     }
 
     return filtered;
-  }, [cargas, selectedUnitId, dateFilter, dateRange, selectedStation]);
+  }, [
+    cargas,
+    equipmentFilter,
+    selectedUnitId,
+    dateFilter,
+    dateRange,
+    selectedStation,
+  ]);
 
   const statsAuditoria = useMemo(() => {
     const ahora = new Date();
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // ❄️ BLINDAJE EN KPIs: Separamos matemáticamente los vales
+    const cargasEquipo = cargas.filter((c) =>
+      equipmentFilter === "mg" ? c.is_motogenerator : !c.is_motogenerator,
+    );
+
     const todasLasCargasUnidad =
       selectedUnitId === "all"
-        ? cargas
-        : cargas.filter((c) => String(c.unit_id) === selectedUnitId);
+        ? cargasEquipo
+        : cargasEquipo.filter((c) => String(c.unit_id) === selectedUnitId);
 
     const cargasSemana = todasLasCargasUnidad.filter(
       (c) => new Date(c.fecha_hora) >= hace7Dias,
     );
-    const litros = cargasSemana.reduce((sum, c) => sum + (c.litros || 0), 0);
-    const inversion = cargasSemana.reduce((sum, c) => sum + (c.total || 0), 0);
+
+    const litros = cargasSemana.reduce(
+      (sum, c) => sum + (Number(c.litros) || 0),
+      0,
+    );
+    const inversion = cargasSemana.reduce(
+      (sum, c) => sum + (Number(c.total) || 0),
+      0,
+    );
+
     const sorted = [...cargasSemana].sort(
       (a, b) =>
         new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
     );
 
-    const odoActual = sorted.length > 0 ? sorted[0].odometro : 0;
+    // ❄️ DETECCIÓN INTELIGENTE: Horómetro si es MG, Odómetro si es tracto
+    const getOdo = (c: any) =>
+      equipmentFilter === "mg"
+        ? Number(c.horometro) || Number(c.odometro) || 0
+        : Number(c.odometro) || 0;
+
+    const odoActual = sorted.length > 0 ? getOdo(sorted[0]) : 0;
     const odoAnterior =
-      sorted.length > 1 ? sorted[sorted.length - 1].odometro : odoActual;
-    const kmRecorridos = odoActual - odoAnterior;
+      sorted.length > 1 ? getOdo(sorted[sorted.length - 1]) : odoActual;
+    const kmRecorridos = Math.abs(odoActual - odoAnterior); // Absoluto para evitar negativos
+
     const rendimiento =
       kmRecorridos > 0 && litros > 0
         ? (kmRecorridos / litros).toFixed(2)
         : "0.00";
 
     return { litros, inversion, odoActual, kmRecorridos, rendimiento };
-  }, [cargas, selectedUnitId]);
+  }, [cargas, selectedUnitId, equipmentFilter]);
 
   const selectedUnitObj = useMemo(
     () => units.find((u) => String(u.id) === selectedUnitId),
@@ -337,7 +371,6 @@ const FuelLoads = () => {
     [cargas, idParaEliminar],
   );
 
-  // LÓGICA DE BLINDAJE
   const getTicketTripStatus = useCallback(
     (tripId: number | string | null | undefined) => {
       if (!tripId) return { isLiquidado: false };
@@ -412,7 +445,10 @@ const FuelLoads = () => {
                 {v}
               </>
             ) : (
-              <>ECO-{v}</>
+              <>
+                <Truck className="h-3 w-3 text-slate-400" />
+                ECO-{v}
+              </>
             )}
           </span>
         ),
@@ -478,16 +514,17 @@ const FuelLoads = () => {
       },
       {
         key: "odometro",
-        header: "Lectura (Km/Hr)",
+        // ❄️ CAMBIAMOS EL HEADER DINÁMICAMENTE
+        header: equipmentFilter === "mg" ? "Horómetro (Hrs)" : "Odómetro (KM)",
         render: (v, row) => (
           <span className="font-mono text-[11px] font-bold text-slate-500 flex flex-col">
             {row.is_motogenerator ? (
               <>
-                <span>
+                <span className="text-amber-600 dark:text-amber-500">
                   {Number(row.horometro || row.odometro || 0).toLocaleString()}{" "}
                   HRS
                 </span>
-                <span className="text-[8px] uppercase tracking-widest text-amber-500">
+                <span className="text-[8px] uppercase tracking-widest text-amber-500 opacity-80">
                   Horómetro
                 </span>
               </>
@@ -518,77 +555,79 @@ const FuelLoads = () => {
         key: "acciones",
         header: "",
         sortable: false,
-        render: (_, row) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
+        render: (_, row) => {
+          const isLiquidado = getTicketTripStatus(row.trip_id).isLiquidado;
+
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50 haptic-press"
+                >
+                  <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
               >
-                <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
-            >
-              <DropdownMenuItem
-                onClick={() => setCargaToView(row)}
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-              >
-                <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
-                Detalles
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  const { isLiquidado } = getTicketTripStatus(row.trip_id);
-                  if (isLiquidado) {
-                    toast.error("Bloqueo de Seguridad", {
-                      description:
-                        "No se puede editar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación.",
-                      duration: 6000,
-                    });
-                    return;
-                  }
-                  if (row.is_conciliated) {
-                    toast.warning("⚠️ Vale Previamente Conciliado", {
-                      description:
-                        "Al editar este vale, los cálculos de dinero y odómetro quedarán desfasados. Deberás ir a la pestaña de Auditoría y hacer el recalculo.",
-                      duration: 8000,
-                    });
-                  }
-                  setCargaToEdit(row);
-                }}
-                className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
-              >
-                <Pencil className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
-                Editar
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="dark:bg-white/10" />
-              <DropdownMenuItem
-                className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-                onClick={() => {
-                  const { isLiquidado } = getTicketTripStatus(row.trip_id);
-                  if (isLiquidado) {
-                    toast.error("Bloqueo de Seguridad", {
-                      description:
-                        "No se puede eliminar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación para poder eliminarlo.",
-                      duration: 6000,
-                    });
-                    return;
-                  }
-                  setIdParaEliminar(row.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" /> Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ),
+                <DropdownMenuItem
+                  onClick={() => setCargaToView(row)}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Eye className="h-4 w-4 text-blue-500 dark:text-blue-400" />{" "}
+                  Detalles
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (isLiquidado) {
+                      toast.error("Bloqueo de Seguridad", {
+                        description:
+                          "No se puede editar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación.",
+                        duration: 6000,
+                      });
+                      return;
+                    }
+                    if (row.is_conciliated) {
+                      toast.warning("⚠️ Vale Previamente Conciliado", {
+                        description:
+                          "Al editar este vale, los cálculos de dinero y odómetro quedarán desfasados. Deberás ir a la pestaña de Auditoría y hacer el recalculo.",
+                        duration: 8000,
+                      });
+                    }
+                    setCargaToEdit(row);
+                  }}
+                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                >
+                  <Pencil className="h-4 w-4 text-brand-green dark:text-[#009740]" />{" "}
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="dark:bg-white/10" />
+                <DropdownMenuItem
+                  className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                  onClick={() => {
+                    if (isLiquidado) {
+                      toast.error("Bloqueo de Seguridad", {
+                        description:
+                          "No se puede eliminar un vale de un viaje liquidado. Primero cancela la liquidación y revierte la conciliación para poder eliminarlo.",
+                        duration: 6000,
+                      });
+                      return;
+                    }
+                    setIdParaEliminar(row.id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" /> Eliminar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        },
       },
     ],
-    [getTicketTripStatus],
+    [getTicketTripStatus, equipmentFilter], // Added equipmentFilter to dependencies
   );
 
   if (isLoading)
@@ -612,7 +651,28 @@ const FuelLoads = () => {
           className="heading-crisp mb-0"
         />
 
+        {/* ❄️ NUEVO: SELECTOR DE TRACTO VS MOTOGENERADOR */}
         <div className="flex flex-wrap items-center gap-3">
+          <Tabs
+            value={equipmentFilter}
+            onValueChange={(v) => setEquipmentFilter(v as "tracto" | "mg")}
+          >
+            <TabsList className="h-11 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 shadow-inner border border-slate-200/50 dark:border-white/5">
+              <TabsTrigger
+                value="tracto"
+                className="font-bold text-[10px] uppercase tracking-widest rounded-lg data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm transition-all"
+              >
+                <Truck className="h-3.5 w-3.5 mr-1.5" /> Tractocamiones
+              </TabsTrigger>
+              <TabsTrigger
+                value="mg"
+                className="font-bold text-[10px] uppercase tracking-widest rounded-lg data-[state=active]:bg-white data-[state=active]:text-amber-500 data-[state=active]:shadow-sm transition-all"
+              >
+                <Zap className="h-3.5 w-3.5 mr-1.5" /> Motogeneradores
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           <Popover open={openUnitSearch} onOpenChange={setOpenUnitSearch}>
             <PopoverTrigger asChild>
               <Button
@@ -624,7 +684,7 @@ const FuelLoads = () => {
                 {selectedUnitId === "all"
                   ? "FLOTA COMPLETA"
                   : units.find((u) => String(u.id) === selectedUnitId)
-                    ? `ECO-${units.find((u) => String(u.id) === selectedUnitId)?.numero_economico}`
+                    ? `${equipmentFilter === "mg" ? "MG" : "ECO"}-${units.find((u) => String(u.id) === selectedUnitId)?.numero_economico}`
                     : "SELECCIONAR UNIDAD..."}
                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
@@ -715,8 +775,9 @@ const FuelLoads = () => {
             label: "Volumen Semanal",
             val: `${statsAuditoria.litros.toLocaleString()} L`,
             icon: Fuel,
-            color: "text-amber-500",
-            bg: "bg-amber-500/10",
+            color:
+              equipmentFilter === "mg" ? "text-amber-500" : "text-blue-500",
+            bg: equipmentFilter === "mg" ? "bg-amber-500/10" : "bg-blue-500/10",
             metric: "Consumo 7d",
           },
           {
@@ -728,13 +789,14 @@ const FuelLoads = () => {
             metric: "Capital 7d",
           },
           {
-            label: "Rendimiento Real",
-            val: `${statsAuditoria.rendimiento} KM/L`,
+            label: `Rendimiento Real (${equipmentFilter === "mg" ? "Horas" : "KMs"})`,
+            val: `${statsAuditoria.rendimiento} ${equipmentFilter === "mg" ? "hr/L" : "KM/L"}`,
             icon: BarChart3,
-            color: "text-blue-500",
-            bg: "bg-blue-500/10",
+            color: "text-indigo-500",
+            bg: "bg-indigo-500/10",
             dark: false,
-            metric: "Flota Promedio",
+            metric:
+              equipmentFilter === "mg" ? "Promedio por Hora" : "Flota Promedio",
           },
         ].map((kpi, i) => (
           <Card
@@ -959,9 +1021,10 @@ const FuelLoads = () => {
                     </h4>
                   </div>
                   <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
-                    Este vale ya fue procesado en la mesa de control{" "}
-                    <b>(Conciliación)</b>. Al eliminarlo, los cálculos
-                    financieros y de odómetro del viaje quedarán desfasados.
+                    Conciliación Operativa Este vale ya fue procesado en la mesa
+                    de control <b>(Conciliación)</b>. Al eliminarlo, los
+                    cálculos financieros y de odómetro del viaje quedarán
+                    desfasados.
                     <br />
                     <br />
                     Deberás ir a la pestaña de Auditoría, <b>Revertir</b> la

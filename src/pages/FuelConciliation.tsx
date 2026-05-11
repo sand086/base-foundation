@@ -40,6 +40,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
 } from "@/components/ui/dialog";
 import {
   EnhancedDataTable,
@@ -66,6 +67,7 @@ import {
   ShieldCheck,
   Truck,
   Calendar,
+  Snowflake,
   User,
   FilterX,
   Zap,
@@ -118,6 +120,7 @@ export default function FuelConciliation() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFetchingVales, setIsFetchingVales] = useState(false);
+  const [valesRawData, setValesRawData] = useState<any[]>([]);
 
   // Estados de Modales y Edición
   const [legToReset, setLegToReset] = useState<string | null>(null);
@@ -137,47 +140,91 @@ export default function FuelConciliation() {
     ? selectedLegOption.split("|")[1] === "mg"
     : false;
 
-  // 1. FILTRADO BASE DE HISTÓRICOS
+  // 1. FILTRADO INTELIGENTE DE HISTÓRICOS (SEPARA TRACTO DE MG)
   const auditedLegs = useMemo(() => {
-    return trips
-      .flatMap((t) => t.legs?.map((l) => ({ ...l, trip: t })) || [])
-      .filter((l) => l.odometro_final != null && l.odometro_final > 0)
-      .sort(
-        (a, b) =>
-          new Date(b.last_update || 0).getTime() -
-          new Date(a.last_update || 0).getTime(),
-      );
+    const audits: any[] = [];
+
+    trips.forEach((t) => {
+      t.legs?.forEach((l) => {
+        // Buscamos los eventos de línea de tiempo que sean de conciliación
+        const conciliations =
+          l.timeline_events?.filter(
+            (e: any) =>
+              e.location === "Conciliación de Combustible" ||
+              (e.comments && e.comments.includes("Detalles Fase")),
+          ) || [];
+
+        if (conciliations.length > 0) {
+          // Separamos los eventos de Tracto y los de Motogenerador (MG)
+          const tractoEvents = conciliations.filter(
+            (e: any) => !e.comments?.includes("(MG)"),
+          );
+          const mgEvents = conciliations.filter((e: any) =>
+            e.comments?.includes("(MG)"),
+          );
+
+          if (tractoEvents.length > 0) {
+            const latestTracto = tractoEvents[tractoEvents.length - 1]; // Tomamos el más reciente
+            audits.push({
+              ...l,
+              trip: t,
+              audit_event: latestTracto,
+              is_mg_audit: false,
+              audit_date: latestTracto.time || l.last_update,
+            });
+          }
+          if (mgEvents.length > 0) {
+            const latestMg = mgEvents[mgEvents.length - 1]; // Tomamos el más reciente
+            audits.push({
+              ...l,
+              trip: t,
+              audit_event: latestMg,
+              is_mg_audit: true,
+              audit_date: latestMg.time || l.last_update,
+            });
+          }
+        } else if (l.odometro_final != null && l.odometro_final > 0) {
+          // Soporte para registros legacy (antiguos)
+          audits.push({
+            ...l,
+            trip: t,
+            audit_event: null,
+            is_mg_audit: false,
+            audit_date: l.last_update,
+          });
+        }
+      });
+    });
+
+    return audits.sort(
+      (a, b) =>
+        new Date(b.audit_date).getTime() - new Date(a.audit_date).getTime(),
+    );
   }, [trips]);
 
-  // 2. FILTRADO DINÁMICO POR FECHAS (HOY VS HISTÓRICO)
+  // 2. FILTRADO DINÁMICO POR FECHAS
   const filteredAuditedLegs = useMemo(() => {
     let filtered = auditedLegs;
     const hoyStr = new Date().toLocaleDateString("es-MX");
 
     if (dateFilter === "hoy") {
       filtered = filtered.filter(
-        (l) =>
-          new Date(l.last_update || 0).toLocaleDateString("es-MX") === hoyStr,
+        (l) => new Date(l.audit_date).toLocaleDateString("es-MX") === hoyStr,
       );
     } else {
       filtered = filtered.filter(
-        (l) =>
-          new Date(l.last_update || 0).toLocaleDateString("es-MX") !== hoyStr,
+        (l) => new Date(l.audit_date).toLocaleDateString("es-MX") !== hoyStr,
       );
 
       if (dateRange?.from) {
         const fromDate = new Date(dateRange.from);
         fromDate.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(
-          (l) => new Date(l.last_update || 0) >= fromDate,
-        );
+        filtered = filtered.filter((l) => new Date(l.audit_date) >= fromDate);
       }
       if (dateRange?.to) {
         const toDate = new Date(dateRange.to);
         toDate.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(
-          (l) => new Date(l.last_update || 0) <= toDate,
-        );
+        filtered = filtered.filter((l) => new Date(l.audit_date) <= toDate);
       }
     }
     return filtered;
@@ -234,7 +281,7 @@ export default function FuelConciliation() {
       if (leg.leg_type === "ruta_carretera" && activeTripMgName) {
         options.push({
           value: `${leg.id}|mg`,
-          label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Termo: ${activeTripMgName}`,
+          label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Termo: ⚡ ECO-${activeTripMgName}`,
         });
       }
       return options;
@@ -280,7 +327,7 @@ export default function FuelConciliation() {
   const fetchValesCombustible = async (legIdToFetch: string, isMg: boolean) => {
     setIsFetchingVales(true);
     try {
-      const response = await axiosClient.get("/api/fleet/fuel-logs");
+      const response = await axiosClient.get("/api/fleet/fuel-logs?limit=5000");
 
       let mayorOdometroEnVales = 0;
 
@@ -307,6 +354,8 @@ export default function FuelConciliation() {
         }
         return esValido;
       });
+
+      setValesRawData(valesDiesel);
 
       const totalVales = valesDiesel.reduce(
         (sum: number, log: any) => sum + Number(log.litros),
@@ -376,40 +425,41 @@ export default function FuelConciliation() {
     }
   };
 
-  // REPARACIÓN DEL EDITAR
-  const handleEditAudit = async (leg: any) => {
-    setSelectedTripId(String(leg.trip_id));
+  // REPARACIÓN DEL EDITAR INTELIGENTE (Detecta qué fila se clickeó)
+  const handleEditAudit = async (row: any) => {
+    setSelectedTripId(String(row.trip?.id || row.trip_id));
 
-    // Si viene de la tabla, asumimos tracto porque no guarda el tipo en el grid
-    const defaultOption = `${leg.id}|tracto`;
+    // Sabemos si el registro es de MG o Tracto gracias a la fila
+    const isMgEdit = row.is_mg_audit;
+    const defaultOption = `${row.id}|${isMgEdit ? "mg" : "tracto"}`;
     setSelectedLegOption(defaultOption);
     setIsEditing(true);
 
-    const auditEvent = leg.timeline_events?.find(
-      (e: any) =>
-        e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Detalles Fase"),
-    );
-
     let kmEcmVal = "";
     let ltEcmVal = "";
+    let odoFinalEdit = "";
+
+    const auditEvent = row.audit_event;
 
     if (auditEvent && auditEvent.comments) {
       const kmMatch = auditEvent.comments.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
       const ltMatch = auditEvent.comments.match(/Litros ECM:\s*([\d.]+)/);
+      const odoMatch = auditEvent.comments.match(/Lectura Final:\s*([\d.]+)/);
+
       if (kmMatch) kmEcmVal = kmMatch[1];
       if (ltMatch) ltEcmVal = ltMatch[1];
+      if (odoMatch) odoFinalEdit = odoMatch[1];
     }
 
     setFormData({
       litrosVales: "0",
       kilometrosECM: kmEcmVal,
       litrosECM: ltEcmVal,
-      odometroFinal: String(leg.odometro_final || ""),
+      odometroFinal: odoFinalEdit || String(row.odometro_final || ""),
       maxOdoVales: 0,
     });
 
-    await fetchValesCombustible(String(leg.id), false);
+    await fetchValesCombustible(String(row.id), !!isMgEdit);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -537,7 +587,9 @@ export default function FuelConciliation() {
       const isRobo = auditResult?.esRoboSospechado || false;
 
       const sufijo = isMotogenerator ? "Hrs" : "Km";
-      const comentarioBitacora = `Detalles Fase (${isMotogenerator ? "MG" : "Tracto"}). ${sufijo} ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} ${isMotogenerator ? "hr/L" : "km/L"}. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
+
+      // Añadimos "Lectura Final:" al comentario para blindar el orómetro del MG
+      const comentarioBitacora = `Detalles Fase (${isMotogenerator ? "MG" : "Tracto"}). Lectura Final: ${odoFinalVal}. ${sufijo} ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} ${isMotogenerator ? "hr/L" : "km/L"}. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
 
       const payload: any = {
         status: "entregado",
@@ -586,13 +638,10 @@ export default function FuelConciliation() {
 
   const parsedAuditDetails = useMemo(() => {
     if (!legToView) return null;
-    const auditEvent = legToView.timeline_events?.find(
-      (e: any) =>
-        e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Detalles Fase"),
-    );
+    const auditEvent = legToView.audit_event;
     const text = auditEvent?.comments || "";
 
+    const lecMatch = text.match(/Lectura Final:\s*([\d.]+)/);
     const kmMatch = text.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
     const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
     const valesMatch = text.match(/Vales:\s*([\d.]+)/);
@@ -600,6 +649,7 @@ export default function FuelConciliation() {
     const verMatch = text.match(/Ver:\s*([A-Z_]+)/);
 
     return {
+      lecturaFinal: lecMatch ? lecMatch[1] : legToView.odometro_final || "0",
       km: kmMatch ? kmMatch[1] : "0",
       ltEcm: ltEcmMatch ? ltEcmMatch[1] : "0",
       vales: valesMatch ? valesMatch[1] : "0",
@@ -615,7 +665,7 @@ export default function FuelConciliation() {
   const auditedColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
-        key: "last_update",
+        key: "audit_date",
         header: "Fecha",
         render: (v) => (
           <span className="text-xs font-mono text-slate-500">
@@ -634,14 +684,25 @@ export default function FuelConciliation() {
       },
       {
         key: "leg_type",
-        header: "Fase",
-        render: (v: string) => (
-          <Badge
-            variant="outline"
-            className="bg-slate-50 dark:bg-white/5 uppercase text-[9px] tracking-widest text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
-          >
-            {v?.replace("_", " ")}
-          </Badge>
+        header: "Fase / Equipo",
+        render: (v: string, row: any) => (
+          <div className="flex flex-col items-start gap-1">
+            <Badge
+              variant="outline"
+              className="bg-slate-50 dark:bg-white/5 uppercase text-[9px] tracking-widest text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
+            >
+              {v?.replace("_", " ")}
+            </Badge>
+            {row.is_mg_audit ? (
+              <Badge className="bg-amber-100/50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 text-[8px] uppercase tracking-widest border-none">
+                <Snowflake className="h-4 w-4 mr-2" /> TERMO
+              </Badge>
+            ) : (
+              <Badge className="bg-blue-100/50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 text-[8px] uppercase tracking-widest border-none">
+                <Truck className="h-4 w-4 mr-2" /> TRACTO
+              </Badge>
+            )}
+          </div>
         ),
       },
       {
@@ -654,32 +715,44 @@ export default function FuelConciliation() {
         ),
       },
       {
-        key: "odometro_final",
-        header: "Odo Final",
-        render: (v: number) => (
-          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs">
-            {v?.toLocaleString() || 0}
-          </span>
-        ),
+        key: "rendimiento",
+        header: "Rend. Real",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /Rend Real:\s*([\d.]+)/,
+          );
+          const rend = match ? Number(match[1]).toFixed(2) : "0.00";
+          return (
+            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs flex items-baseline gap-1">
+              {rend}
+              <span className="text-[9px] opacity-60 uppercase tracking-widest">
+                {row.is_mg_audit ? "hr/L" : "km/L"}
+              </span>
+            </span>
+          );
+        },
       },
       {
-        key: "status",
-        header: "Estatus",
-        render: (v: string) => {
-          const cerrado = ["entregado", "cerrado", "liquidado"].includes(
-            String(v).toLowerCase(),
+        key: "descuento",
+        header: "Descuento",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /descuento de \$([\d.,]+)/i,
           );
+          const descuento = match ? Number(match[1].replace(/,/g, "")) : 0;
           return (
-            <Badge
+            <span
               className={cn(
-                "border-none tracking-widest text-[9px] uppercase",
-                cerrado
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+                "font-mono font-black text-xs",
+                descuento > 0
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-emerald-600 dark:text-emerald-400",
               )}
             >
-              {cerrado ? "CERRADO" : "EN CURSO"}
-            </Badge>
+              {descuento > 0
+                ? `-$${descuento.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                : "$0.00"}
+            </span>
           );
         },
       },
@@ -878,7 +951,7 @@ export default function FuelConciliation() {
 
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
-                2. Seleccionar Fase / Equipo a Auditar:
+                2. Seleccionar Equipo a Auditar:
               </Label>
               <Select
                 value={selectedLegOption}
@@ -1385,7 +1458,7 @@ export default function FuelConciliation() {
                 <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-3xl flex items-baseline gap-1">
                   {parsedAuditDetails?.rend || "0.00"}
                   <span className="text-[10px] font-bold uppercase opacity-60 ml-1">
-                    hr/L | km/L
+                    {legToView?.is_mg_audit ? "hr/L" : "km/L"}
                   </span>
                 </p>
               </div>
@@ -1430,10 +1503,12 @@ export default function FuelConciliation() {
             <div className="pt-2 text-center border-t border-slate-100 dark:border-white/5">
               <div className="inline-flex flex-col items-center py-2 px-6 rounded-full bg-slate-50 dark:bg-white/5">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-1">
-                  <Gauge className="h-3.5 w-3.5" /> Odómetro Cerrado
+                  <Gauge className="h-3.5 w-3.5" /> Lectura Final Cierre
                 </p>
                 <p className="font-mono text-xl font-black text-slate-800 dark:text-blue-400">
-                  {Number(legToView?.odometro_final || 0).toLocaleString()}
+                  {Number(
+                    parsedAuditDetails?.lecturaFinal || 0,
+                  ).toLocaleString()}
                 </p>
               </div>
             </div>
