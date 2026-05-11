@@ -35,6 +35,7 @@ import {
   Plus,
   Trash2,
   Zap,
+  Droplets,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -53,6 +54,7 @@ interface SubTicket {
   litros_diesel: number;
   precio_diesel: number;
   evidencia: File | null;
+  tipo_combustible: "diesel" | "urea"; // ⚡ AGREGADO
 }
 
 export interface TicketFormData {
@@ -317,6 +319,7 @@ export function AddTicketModal({
       litros_diesel: 0,
       precio_diesel: FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
       evidencia: null,
+      tipo_combustible: "diesel",
     },
   ]);
 
@@ -332,6 +335,7 @@ export function AddTicketModal({
         precio_diesel:
           lastTicket?.precio_diesel || FUEL_CONFIG.PRECIOS_PROMEDIO.diesel,
         evidencia: null,
+        tipo_combustible: lastTicket?.tipo_combustible || "diesel",
       },
     ]);
   };
@@ -344,7 +348,18 @@ export function AddTicketModal({
 
   const updateSubTicket = (id: string, field: keyof SubTicket, value: any) => {
     setTickets(
-      tickets.map((t) => (t.id === id ? { ...t, [field]: value } : t)),
+      tickets.map((t) => {
+        if (t.id === id) {
+          const updatedTicket = { ...t, [field]: value };
+          // Ajustar precio sugerido automáticamente al cambiar el tipo
+          if (field === "tipo_combustible") {
+            updatedTicket.precio_diesel =
+              value === "urea" ? 15.0 : FUEL_CONFIG.PRECIOS_PROMEDIO.diesel;
+          }
+          return updatedTicket;
+        }
+        return t;
+      }),
     );
   };
 
@@ -671,7 +686,12 @@ export function AddTicketModal({
                 {tickets.map((ticket, index) => (
                   <div
                     key={ticket.id}
-                    className="relative group bg-card p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm animate-in fade-in slide-in-from-left-2"
+                    className={cn(
+                      "relative group bg-card p-5 rounded-2xl border shadow-sm animate-in fade-in slide-in-from-left-2 transition-colors",
+                      ticket.tipo_combustible === "urea"
+                        ? "border-blue-300 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20"
+                        : "border-slate-200 dark:border-white/10",
+                    )}
                   >
                     {tickets.length > 1 && (
                       <Button
@@ -686,7 +706,39 @@ export function AddTicketModal({
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end">
-                      {/* SELECTOR DE ESTACIÓN MEJORADO */}
+                      {/* TIPO DE COMBUSTIBLE */}
+                      <div className="space-y-1.5 flex flex-col justify-end pb-2">
+                        <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-slate-200 dark:border-white/10">
+                          <span
+                            className={cn(
+                              "text-[10px] font-black uppercase tracking-widest flex items-center gap-1",
+                              ticket.tipo_combustible === "urea"
+                                ? "text-blue-600"
+                                : "text-amber-600",
+                            )}
+                          >
+                            {ticket.tipo_combustible === "urea" ? (
+                              <Droplets className="h-3 w-3" />
+                            ) : (
+                              <Fuel className="h-3 w-3" />
+                            )}
+                            {ticket.tipo_combustible}
+                          </span>
+                          <Switch
+                            checked={ticket.tipo_combustible === "urea"}
+                            onCheckedChange={(checked) =>
+                              updateSubTicket(
+                                ticket.id,
+                                "tipo_combustible",
+                                checked ? "urea" : "diesel",
+                              )
+                            }
+                            className="data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-amber-500 scale-75"
+                          />
+                        </div>
+                      </div>
+
+                      {/* SELECTOR DE ESTACIÓN */}
                       <div className="space-y-1.5 lg:col-span-2">
                         <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Estación / Gasolinera
@@ -720,7 +772,7 @@ export function AddTicketModal({
 
                       <div className="space-y-1.5">
                         <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
-                          Precio
+                          Precio L.
                         </Label>
                         <Input
                           type="number"
@@ -737,29 +789,11 @@ export function AddTicketModal({
                         />
                       </div>
 
-                      <div className="space-y-1.5">
-                        <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
-                          Fecha/Hora
-                        </Label>
-                        <Input
-                          type="datetime-local"
-                          className="text-xs"
-                          value={ticket.fecha_hora}
-                          onChange={(e) =>
-                            updateSubTicket(
-                              ticket.id,
-                              "fecha_hora",
-                              e.target.value,
-                            )
-                          }
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 lg:col-span-1">
                         <Label className="text-[9px] font-black uppercase text-muted-foreground/80">
                           Evidencia
                         </Label>
-                        <div className="relative h-10 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-lg hover:border-brand-navy hover:bg-muted/50 transition-colors flex items-center justify-center overflow-hidden">
+                        <div className="relative h-10 border-2 border-dashed border-slate-300 dark:border-white/10 rounded-lg hover:border-brand-navy bg-white dark:bg-slate-900 transition-colors flex items-center justify-center overflow-hidden">
                           <input
                             type="file"
                             accept="image/*"
@@ -775,12 +809,9 @@ export function AddTicketModal({
                           {ticket.evidencia ? (
                             <div className="flex items-center gap-1 text-emerald-600">
                               <CheckCircle2 className="h-4 w-4" />
-                              <span className="text-[10px] font-bold truncate max-w-[80px]">
-                                {ticket.evidencia.name}
-                              </span>
                             </div>
                           ) : (
-                            <Camera className="h-5 w-5 text-slate-400" />
+                            <Camera className="h-4 w-4 text-slate-400" />
                           )}
                         </div>
                       </div>
