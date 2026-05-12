@@ -8,7 +8,6 @@ import {
   Trash2,
   Clock,
   Ban,
-  CheckCircle2,
   Loader2,
   BadgeDollarSign,
   ReceiptText,
@@ -63,7 +62,6 @@ import {
   getInvoiceStatusInfo,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
-import axiosClient from "@/api/axiosClient";
 import { cn } from "@/lib/utils";
 
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -83,8 +81,6 @@ export default function Receivables() {
   const { bankAccounts = [] } = useBankAccounts();
 
   // Estados UI
-  const [services, setServices] = useState<FinalizableService[]>([]);
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -520,6 +516,9 @@ export default function Receivables() {
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
           const isProvisional = row.status_sat === "PROVISIONAL";
 
+          // 🚀 Detectamos si la factura ya está timbrada (tiene UUID)
+          const isStamped = !!row.uuid && row.status_sat === "TIMBRADA";
+
           return (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -551,6 +550,35 @@ export default function Receivables() {
                   <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
                   Ver Detalle
                 </DropdownMenuItem>
+
+                {/* 🚀 BOTONES DE DESCARGA SIEMPRE DISPONIBLES SI ESTÁ TIMBRADA */}
+                {isStamped && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.open(
+                          `/api/sat/invoice/${row.uuid}/pdf`,
+                          "_blank",
+                        )
+                      }
+                      className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-indigo-600 dark:text-indigo-400 dark:focus:bg-indigo-950/30"
+                    >
+                      <FileText className="h-4 w-4 mr-2" /> Descargar PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        window.open(
+                          `/api/sat/invoice/${row.uuid}/xml`,
+                          "_blank",
+                        )
+                      }
+                      className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-amber-600 dark:text-amber-400 dark:focus:bg-amber-950/30"
+                    >
+                      <FileSignature className="h-4 w-4 mr-2" /> Descargar XML
+                    </DropdownMenuItem>
+                  </>
+                )}
 
                 {isProvisional && (
                   <>
