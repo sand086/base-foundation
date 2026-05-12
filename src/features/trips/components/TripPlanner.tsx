@@ -34,6 +34,7 @@ import {
   ChevronRight,
   Plus,
   ShieldAlert,
+  Snowflake,
   Route as RouteIcon,
   Container,
   RefreshCw,
@@ -482,18 +483,18 @@ export const TripPlanner = () => {
                 {row.mg1 && (
                   <Badge
                     variant="outline"
-                    className="text-[9px] font-black text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
+                    className="text-[9px] font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
                   >
-                    <Container className="h-3 w-3 mr-1 shrink-0" /> MG1:{" "}
+                    <Snowflake className="h-3 w-3 mr-1 shrink-0" /> MG1:{" "}
                     {row.mg1}
                   </Badge>
                 )}
                 {row.mg2 && (
                   <Badge
                     variant="outline"
-                    className="text-[9px] font-black text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
+                    className="text-[9px] font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
                   >
-                    <Container className="h-3 w-3 mr-1 shrink-0" /> MG2:{" "}
+                    <Snowflake className="h-3 w-3 mr-1 shrink-0" /> MG2:{" "}
                     {row.mg2}
                   </Badge>
                 )}
