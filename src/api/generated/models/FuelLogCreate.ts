@@ -11,7 +11,10 @@ export type FuelLogCreate = {
     litros: number;
     precio_por_litro: number;
     total: number;
-    odometro: number;
+    odometro?: (number | null);
+    is_motogenerator?: boolean;
+    horometro?: (number | null);
+    horas_sm?: (number | null);
     fecha_hora?: (string | null);
     excede_tanque?: boolean;
     capacidad_tanque_snapshot?: (number | null);

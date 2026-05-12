@@ -34,6 +34,22 @@ export type TripResponse = {
      */
     sat_clave_unidad?: (string | null);
     mercancia_clave_stcc?: (string | null);
+    /**
+     * ¿Remolque 1 es refrigerado?
+     */
+    is_refrigerated_1?: (boolean | null);
+    /**
+     * ID del motogenerador 1
+     */
+    motogenerator_1_id?: (number | null);
+    /**
+     * ¿Remolque 2 es refrigerado?
+     */
+    is_refrigerated_2?: (boolean | null);
+    /**
+     * ID del motogenerador 2
+     */
+    motogenerator_2_id?: (number | null);
     status?: TripStatus;
     tarifa_base: number;
     costo_casetas?: number;
@@ -48,6 +64,8 @@ export type TripResponse = {
     remolque_1?: (UnitResponse | null);
     dolly?: (UnitResponse | null);
     remolque_2?: (UnitResponse | null);
+    motogenerator_1_unit?: (UnitResponse | null);
+    motogenerator_2_unit?: (UnitResponse | null);
     legs?: Array<TripLegResponse>;
     record_status: RecordStatus;
     created_at?: (string | null);

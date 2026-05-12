@@ -7,7 +7,7 @@ export type OperatorCreate = {
     public_id?: (string | null);
     name: string;
     license_number: string;
-    license_type?: string;
+    license_type_id?: (number | null);
     license_expiry: string;
     medical_check_expiry: string;
     phone?: (string | null);

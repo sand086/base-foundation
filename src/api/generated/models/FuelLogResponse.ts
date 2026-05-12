@@ -16,7 +16,10 @@ export type FuelLogResponse = {
     litros: number;
     precio_por_litro: number;
     total: number;
-    odometro: number;
+    odometro?: (number | null);
+    is_motogenerator?: boolean;
+    horometro?: (number | null);
+    horas_sm?: (number | null);
     id: number;
     fecha_hora: string;
     evidencia_url?: (string | null);

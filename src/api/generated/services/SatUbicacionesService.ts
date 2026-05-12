@@ -6,6 +6,8 @@ import type { SatLocationCreate } from '../models/SatLocationCreate';
 import type { SatLocationResponse } from '../models/SatLocationResponse';
 import type { SatNeighborhoodCreate } from '../models/SatNeighborhoodCreate';
 import type { SatNeighborhoodResponse } from '../models/SatNeighborhoodResponse';
+import type { SatPostalCodeCreate } from '../models/SatPostalCodeCreate';
+import type { SatPostalCodeResponse } from '../models/SatPostalCodeResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
@@ -224,6 +226,80 @@ export class SatUbicacionesService {
         return __request(OpenAPI, {
             method: 'DELETE',
             url: '/api/sat/sat-neighborhoods/{item_id}',
+            path: {
+                'item_id': itemId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Location Codes
+     * @returns SatPostalCodeResponse Successful Response
+     * @throws ApiError
+     */
+    public static getLocationCodesApiSatSatLocationCodesGet(): CancelablePromise<Array<SatPostalCodeResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/sat/sat-location-codes',
+        });
+    }
+    /**
+     * Create Location Code
+     * @param requestBody
+     * @returns SatPostalCodeResponse Successful Response
+     * @throws ApiError
+     */
+    public static createLocationCodeApiSatSatLocationCodesPost(
+        requestBody: SatPostalCodeCreate,
+    ): CancelablePromise<SatPostalCodeResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/sat-location-codes',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Location Code
+     * @param itemId
+     * @param requestBody
+     * @returns SatPostalCodeResponse Successful Response
+     * @throws ApiError
+     */
+    public static updateLocationCodeApiSatSatLocationCodesItemIdPut(
+        itemId: number,
+        requestBody: SatPostalCodeCreate,
+    ): CancelablePromise<SatPostalCodeResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/sat/sat-location-codes/{item_id}',
+            path: {
+                'item_id': itemId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Location Code
+     * @param itemId
+     * @returns void
+     * @throws ApiError
+     */
+    public static deleteLocationCodeApiSatSatLocationCodesItemIdDelete(
+        itemId: number,
+    ): CancelablePromise<void> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/sat/sat-location-codes/{item_id}',
             path: {
                 'item_id': itemId,
             },

@@ -130,6 +130,8 @@ export type { SatNeighborhoodCreate } from './models/SatNeighborhoodCreate';
 export type { SatNeighborhoodResponse } from './models/SatNeighborhoodResponse';
 export type { SatPermitTypeCreate } from './models/SatPermitTypeCreate';
 export type { SatPermitTypeResponse } from './models/SatPermitTypeResponse';
+export type { SatPostalCodeCreate } from './models/SatPostalCodeCreate';
+export type { SatPostalCodeResponse } from './models/SatPostalCodeResponse';
 export type { SatProductCreate } from './models/SatProductCreate';
 export type { SatProductResponse } from './models/SatProductResponse';
 export type { SatStationCreate } from './models/SatStationCreate';
