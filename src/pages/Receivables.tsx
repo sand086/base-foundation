@@ -314,11 +314,12 @@ export default function Receivables() {
   };
 
   const handleCreateInvoice = async () => {
-    // Ya no hacemos el POST aquí porque el Modal y el SAT lo hacen directamente.
-    // Solo cerramos el modal, limpiamos y recargamos la tabla.
     setIsCreateModalOpen(false);
     setImportedServices(undefined);
-    await refreshReceivables?.();
+
+    if (refreshReceivables) {
+      await refreshReceivables();
+    }
   };
 
   const handleRegisterPayment = async (payload: any) => {

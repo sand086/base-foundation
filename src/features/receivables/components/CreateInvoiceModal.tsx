@@ -327,6 +327,11 @@ export function CreateInvoiceModal({
 
     // Si hubo éxito, cerramos y disparamos el refresh de la tabla
     if (result) {
+      // 🚀 MAGIA: Abrimos el PDF de la factura en una nueva pestaña automáticamente
+      if (result.data && result.data.uuid) {
+        window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
+      }
+
       onSubmit();
       onOpenChange(false);
     }
