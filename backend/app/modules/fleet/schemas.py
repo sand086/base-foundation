@@ -55,7 +55,7 @@ class OperatorBase(ORMBase):
     public_id: Optional[str] = Field(default=None, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
     license_number: str = Field(..., min_length=1, max_length=50)
-    license_type: str = Field(default="E", max_length=5)
+    license_type_id: Optional[int] = None
     license_expiry: date
     medical_check_expiry: date
     phone: Optional[str] = Field(default=None, max_length=20)
@@ -81,7 +81,7 @@ class OperatorUpdate(ORMBase):
     public_id: Optional[str] = Field(default=None, max_length=50)
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     license_number: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    license_type: Optional[str] = Field(default=None, max_length=5)
+    license_type_id: Optional[int] = None
     license_expiry: Optional[date] = None
     medical_check_expiry: Optional[date] = None
     phone: Optional[str] = Field(default=None, max_length=20)

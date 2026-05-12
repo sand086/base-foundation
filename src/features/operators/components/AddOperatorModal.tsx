@@ -57,7 +57,7 @@ const operatorSchema = z.object({
   name: z.string().min(2, "El nombre es requerido"),
   rfc: z.string().min(12, "RFC inválido").max(13, "RFC inválido"),
   license_number: z.string().min(3, "Número de licencia requerido"),
-  license_type: z.string().min(1, "Seleccione el tipo de licencia"),
+  license_type_id: z.string().min(1, "Seleccione el tipo de licencia"),
   license_expiry: z.date({ required_error: "Fecha requerida" }),
   medical_check_expiry: z.date({ required_error: "Fecha requerida" }),
   phone: z.string().min(10, "Ingrese un número válido a 10 dígitos"),
@@ -94,7 +94,7 @@ export function AddOperatorModal({
       name: "",
       rfc: "XAXX010101000",
       license_number: "",
-      license_type: "",
+      license_type_id: "",
       phone: "",
       assigned_unit_id: "none",
       hire_date: new Date(),
@@ -110,7 +110,7 @@ export function AddOperatorModal({
           name: operatorToEdit.name,
           rfc: operatorToEdit.rfc || "XAXX010101000",
           license_number: operatorToEdit.license_number,
-          license_type: operatorToEdit.license_type,
+          license_type_id: operatorToEdit.license_type_id,
           license_expiry: operatorToEdit.license_expiry
             ? new Date(`${operatorToEdit.license_expiry}T12:00:00`)
             : undefined,
@@ -131,7 +131,7 @@ export function AddOperatorModal({
           name: "",
           rfc: "XAXX010101000",
           license_number: "",
-          license_type: "",
+          license_type_id: "",
           assigned_unit_id: "none",
           hire_date: new Date(),
         });
@@ -153,7 +153,7 @@ export function AddOperatorModal({
       name: data.name.trim(),
       rfc: data.rfc.trim().toUpperCase(),
       license_number: data.license_number.trim().toUpperCase(),
-      license_type: data.license_type,
+      license_type: data.license_type_id,
       license_expiry: format(data.license_expiry, "yyyy-MM-dd"),
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       phone: data.phone.trim(),
@@ -304,19 +304,18 @@ export function AddOperatorModal({
                   />
                   <FormField
                     control={form.control}
-                    name="license_type"
+                    name="license_type_id" // ⚡ Cambiado a ID
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel variant="brand" required>
-                          Tipo
+                          Tipo de Licencia
                         </FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          defaultValue={field.value}
                           value={field.value}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
+                            <SelectTrigger className="h-11 font-bold">
                               <SelectValue placeholder="Selecciona..." />
                             </SelectTrigger>
                           </FormControl>
@@ -324,35 +323,12 @@ export function AddOperatorModal({
                             {licenseTypes
                               ?.filter((lt) => lt.activo)
                               .map((lt) => (
-                                <SelectItem
-                                  key={String(lt.id)}
-                                  value={lt.nombre}
-                                >
-                                  {lt.nombre}{" "}
-                                  {lt.descripcion ? `- ${lt.descripcion}` : ""}
+                                <SelectItem key={lt.id} value={String(lt.id)}>
+                                  {lt.nombre}
                                 </SelectItem>
                               ))}
-
-                            {(!licenseTypes || licenseTypes.length === 0) && (
-                              <SelectItem value="none" disabled>
-                                Cargando licencias...
-                              </SelectItem>
-                            )}
                           </SelectContent>
                         </Select>
-
-                        {/* NUEVO: Mensaje de ayuda visual */}
-                        <div className="flex items-start gap-1.5 mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-950/30 p-2 rounded-lg border border-blue-100 dark:border-blue-900/50">
-                          <Info className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
-                          <p className="leading-tight">
-                            ¿No ves el tipo que necesitas? Agrégalo desde{" "}
-                            <strong className="text-brand-navy dark:text-white">
-                              Ajustes {">"} Catálogos {">"} Licencias
-                            </strong>
-                            .
-                          </p>
-                        </div>
-
                         <FormMessage />
                       </FormItem>
                     )}

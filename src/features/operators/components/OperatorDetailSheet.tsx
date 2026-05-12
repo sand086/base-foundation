@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -34,7 +34,7 @@ import {
   FileText,
 } from "lucide-react";
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
-
+import { useLicenseTypes } from "@/features/settings/hooks/useLicenseTypes"; // ⚡ NUEVO IMPORT
 import { FleetOperatorsService } from "@/api/generated";
 import { Operator } from "../types";
 
@@ -156,6 +156,7 @@ export function OperatorDetailSheet({
 }: OperatorDetailSheetProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { licenseTypes } = useLicenseTypes();
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -201,6 +202,14 @@ export function OperatorDetailSheet({
       emergency_phone: "",
     },
   });
+
+  const licenseName = useMemo(() => {
+    if (!operator || !operator.license_type_id) return "SIN LICENCIA";
+    const found = licenseTypes?.find(
+      (lt) => String(lt.id) === String(operator.license_type_id),
+    );
+    return found ? found.nombre : `TIPO ${operator.license_type_id}`;
+  }, [operator, licenseTypes]);
 
   const { reset, handleSubmit } = form;
 
@@ -569,7 +578,7 @@ export function OperatorDetailSheet({
                     Licencia Federal
                   </p>
                   <p className="text-2xl font-black text-brand-navy dark:text-white uppercase tracking-tighter">
-                    Tipo {operator.license_type}
+                    {licenseName}
                   </p>
                 </div>
 

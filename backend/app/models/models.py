@@ -574,7 +574,12 @@ class Operator(AuditMixin, Base):
 
     name = Column(String(100), nullable=False)
     license_number = Column(String(50), unique=True, nullable=False)
-    license_type = Column(String(5), default="E")
+    license_type = relationship("LicenseTypeCatalog")
+    license_type_id = Column(
+        Integer,
+        ForeignKey("license_types_catalog.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     license_expiry = Column(Date, nullable=False)
     medical_check_expiry = Column(Date, nullable=False)
     phone = Column(String(20))
