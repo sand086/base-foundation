@@ -213,6 +213,13 @@ export default function Payables() {
   }, [normalizedInvoices]);
 
   const filteredInvoices = useMemo(() => {
+    // Definimos hoy y la ventana de 5 días para "Por Vencer"
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const en5Dias = new Date(hoy);
+    en5Dias.setDate(hoy.getDate() + 5);
+
     return normalizedInvoices.filter((inv: any) => {
       // 1. Buscador (Folio, Proveedor, UUID o Concepto)
       const searchLower = searchTerm.toLowerCase();
@@ -223,10 +230,23 @@ export default function Payables() {
         inv.uuid?.toLowerCase().includes(searchLower) ||
         inv.concepto?.toLowerCase().includes(searchLower);
 
-      // 2. Filtro de Estatus
-      const matchesStatus =
-        statusFilter === "all" ||
-        inv.estatus?.toLowerCase() === statusFilter.toLowerCase();
+      // 2. Filtro de Estatus (INTEGRADO CON VENCIDO Y POR VENCER)
+      let matchesStatus = false;
+      const isActiva = inv.estatus !== "pagado" && inv.estatus !== "cancelado";
+      const fechaVencimiento = new Date(inv.fecha_vencimiento);
+      fechaVencimiento.setHours(0, 0, 0, 0);
+
+      if (statusFilter === "all") {
+        matchesStatus = true;
+      } else if (statusFilter === "vencido") {
+        matchesStatus = isActiva && fechaVencimiento < hoy;
+      } else if (statusFilter === "por_vencer") {
+        matchesStatus =
+          isActiva && fechaVencimiento >= hoy && fechaVencimiento <= en5Dias;
+      } else {
+        matchesStatus =
+          inv.estatus?.toLowerCase() === statusFilter.toLowerCase();
+      }
 
       // 3. Filtro de CECO
       const matchesCeco =
@@ -723,6 +743,13 @@ export default function Payables() {
             <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
             <SelectItem value="pagado">Pagado</SelectItem>
             <SelectItem value="cancelado">Cancelado</SelectItem>
+            {/* NUEVOS FILTROS */}
+            <SelectItem value="vencido" className="text-brand-red font-bold">
+              Vencido
+            </SelectItem>
+            <SelectItem value="por_vencer" className="text-amber-600 font-bold">
+              Por Vencer (5 días)
+            </SelectItem>
           </SelectContent>
         </Select>
 

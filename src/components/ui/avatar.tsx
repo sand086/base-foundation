@@ -25,10 +25,8 @@ const Avatar = React.forwardRef<
     ref={ref}
     className={cn(
       "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
-      // 💎 GLASSMORPHISM & BORDERS HD
       "bg-white/50 dark:bg-white/5 backdrop-blur-md",
       "border border-slate-200 dark:border-white/10 shadow-sm",
-      // ❄️ INTERACCIÓN HÁPTICA
       "transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer",
       className,
     )}
@@ -66,9 +64,7 @@ const AvatarFallback = React.forwardRef<
     ref={ref}
     className={cn(
       "flex h-full w-full items-center justify-center rounded-full uppercase",
-      //  ️ TIPOGRAFÍA INDUSTRIAL
       "text-[11px] font-black tracking-[0.15em]",
-      // 🌓 COLORS & THEME (Reactividad Total)
       "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-brand-navy dark:to-black",
       "text-slate-500 dark:text-white/60",
       "animate-pulse-slow",

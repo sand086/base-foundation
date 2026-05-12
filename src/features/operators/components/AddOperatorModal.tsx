@@ -25,6 +25,7 @@ import {
   CreditCard,
   Truck,
   Loader2,
+  Info,
   Check,
   Fingerprint,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 import { Operator } from "@/features/operators/types";
 import { useUnits } from "@/features/units/hooks/useUnits";
+import { useLicenseTypes } from "@/features/settings/hooks/useLicenseTypes";
 
 import {
   Form,
@@ -75,6 +77,7 @@ export function AddOperatorModal({
   isSaving = false,
 }: AddOperatorModalProps) {
   const { unidades } = useUnits();
+  const { licenseTypes } = useLicenseTypes();
   const isEditMode = !!operatorToEdit;
 
   const unidadesSelectables = useMemo(() => {
@@ -180,11 +183,11 @@ export function AddOperatorModal({
               )}
             >
               <User
-                  className={cn(
-                    "h-6 w-6",
-                    isEditMode
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-emerald-600 dark:text-emerald-400",
+                className={cn(
+                  "h-6 w-6",
+                  isEditMode
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-emerald-600 dark:text-emerald-400",
                 )}
               />
             </div>
@@ -314,17 +317,42 @@ export function AddOperatorModal({
                         >
                           <FormControl>
                             <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                              <SelectValue placeholder="Tipo" />
+                              <SelectValue placeholder="Selecciona..." />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="A">Tipo A</SelectItem>
-                            <SelectItem value="B">Tipo B</SelectItem>
-                            <SelectItem value="E">
-                              Tipo E (Federal)
-                            </SelectItem>
+                            {licenseTypes
+                              ?.filter((lt) => lt.activo)
+                              .map((lt) => (
+                                <SelectItem
+                                  key={String(lt.id)}
+                                  value={lt.nombre}
+                                >
+                                  {lt.nombre}{" "}
+                                  {lt.descripcion ? `- ${lt.descripcion}` : ""}
+                                </SelectItem>
+                              ))}
+
+                            {(!licenseTypes || licenseTypes.length === 0) && (
+                              <SelectItem value="none" disabled>
+                                Cargando licencias...
+                              </SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
+
+                        {/* NUEVO: Mensaje de ayuda visual */}
+                        <div className="flex items-start gap-1.5 mt-1.5 text-[10px] text-slate-500 dark:text-slate-400 bg-blue-50 dark:bg-blue-950/30 p-2 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                          <Info className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
+                          <p className="leading-tight">
+                            ¿No ves el tipo que necesitas? Agrégalo desde{" "}
+                            <strong className="text-brand-navy dark:text-white">
+                              Ajustes {">"} Catálogos {">"} Licencias
+                            </strong>
+                            .
+                          </p>
+                        </div>
+
                         <FormMessage />
                       </FormItem>
                     )}

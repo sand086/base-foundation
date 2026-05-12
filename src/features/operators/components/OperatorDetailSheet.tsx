@@ -225,6 +225,8 @@ export function OperatorDetailSheet({
       setIsEditing(false);
       setTempFotoUrl(null); // Reseteamos la foto temporal al abrir
     }
+    // Omitimos isEditing de las dependencias intencionalmente para evitar ciclos
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operator, open, reset]);
 
   const handleStartEditing = () => setIsEditing(true);
@@ -248,8 +250,12 @@ export function OperatorDetailSheet({
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       emergency_contact: data.emergency_contact,
       emergency_phone: data.emergency_phone,
-      foto_url: tempFotoUrl || operator.foto_url, // Mandamos la nueva foto si hay
     };
+
+    delete updatedOperator.foto_url;
+    if (tempFotoUrl) {
+      updatedOperator.foto_url = tempFotoUrl;
+    }
 
     onSave?.(updatedOperator);
     toast({

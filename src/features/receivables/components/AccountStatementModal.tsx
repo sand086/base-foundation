@@ -51,12 +51,15 @@ const companyBankData = {
   razonSocial: "Transportes Rápidos 3T S.A. de C.V.",
   rfc: "TR3T850101ABC",
   cuentas: [
+    // Se comenta Banamex por petición del cliente (Fase 1)
+    /*
     {
       banco: "Banamex",
       clabe: "002180700100000001",
       cuenta: "70010000000",
       titular: "Transportes Rápidos 3T S.A. de C.V.",
     },
+    */
     {
       banco: "Banorte",
       clabe: "072180000000000001",
@@ -65,7 +68,6 @@ const companyBankData = {
     },
   ],
 };
-
 export function AccountStatementModal({
   open,
   onClose,
