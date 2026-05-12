@@ -196,7 +196,7 @@ export const TripPlanner = () => {
   } = useTrips();
 
   const [tripToView, setTripToView] = useState<Trip | null>(null);
-  const { updateLoadStatus } = useUnits();
+  const { unidades, updateLoadStatus } = useUnits();
   const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
   const [selectedDayTrips, setSelectedDayTrips] = useState<Trip[] | null>(null);
   const [selectedLegToUpdate, setSelectedLegToUpdate] =
@@ -260,9 +260,11 @@ export const TripPlanner = () => {
       }),
     [trips],
   );
+
+  // 🚀 ACTUALIZADO: Extracción segura de unidades y motogeneradores + campo de búsqueda
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
-    const items: { leg: TripLeg; tripPadre: Trip }[] = [];
+    const items: any[] = [];
     for (const trip of safeTrips) {
       if (trip.status === "cerrado") continue;
       if (trip.legs && trip.legs.length > 0) {
@@ -272,11 +274,43 @@ export const TripPlanner = () => {
               !["entregado", "cerrado"].includes(leg.status.toLowerCase()),
           ) || trip.legs[trip.legs.length - 1];
 
-        if (activeLeg) items.push({ leg: activeLeg, tripPadre: trip });
+        if (activeLeg) {
+          // 🛡️ Extracción segura para evitar el error ts(2339)
+          const getUnitName = (objOrString: any, id: any) => {
+            if (typeof objOrString === "string") return objOrString;
+            if (objOrString?.numero_economico)
+              return objOrString.numero_economico;
+            return (
+              (unidades as any[])?.find((u) => Number(u.id) === Number(id))
+                ?.numero_economico || null
+            );
+          };
+
+          const mg1Str = getUnitName(
+            (trip as any).motogenerator_1,
+            (trip as any).motogenerator_1_id,
+          );
+          const mg2Str = getUnitName(
+            (trip as any).motogenerator_2,
+            (trip as any).motogenerator_2_id,
+          );
+
+          // Creamos un string "fantasma" para que el buscador encuentre cualquiera de los elementos
+          const asignacionSearch =
+            `${activeLeg.unit?.numero_economico || ""} ${activeLeg.operator?.name || ""} ${mg1Str || ""} ${mg2Str || ""}`.trim();
+
+          items.push({
+            leg: activeLeg,
+            tripPadre: trip,
+            mg1: mg1Str, // Inyectamos el nombre final
+            mg2: mg2Str, // Inyectamos el nombre final
+            _asignacionSearch: asignacionSearch, // El nuevo campo clave
+          });
+        }
       }
     }
     return items.sort((a, b) => b.leg.id - a.leg.id);
-  }, [trips]);
+  }, [trips, unidades]);
 
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
@@ -367,8 +401,8 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
-  // 🚀 COLUMNAS DE LA TABLA INTELIGENTE
-  const tableColumns: ColumnDef<{ leg: TripLeg; tripPadre: Trip }>[] = useMemo(
+  // 🚀 ACTUALIZADO: Columnas cambiadas a <any> para aceptar campos calculados
+  const tableColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
         key: "tripPadre.created_at",
@@ -421,14 +455,16 @@ export const TripPlanner = () => {
         ),
       },
       {
-        key: "leg.unit.numero_economico",
+        key: "_asignacionSearch", // 🚀 MAGIA: Se usa este campo que tiene todos los ecos integrados para el filtro
         header: "Asignación Física",
         render: (value, row) => (
           <div className="flex flex-col gap-1.5">
+            {/* TRACTO */}
             <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
               <Truck className="h-4 w-4 shrink-0 text-red-500" /> ECO-
               {row.leg.unit?.numero_economico || "N/A"}
             </div>
+            {/* OPERADOR */}
             <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
               <User className="h-4 w-4 shrink-0 text-blue-500" />{" "}
               {(() => {
@@ -440,6 +476,29 @@ export const TripPlanner = () => {
                 return `${parts[0]} ${parts[2]}`; // Ej: Luis Enrique Garcia Martinez -> Luis Garcia
               })()}
             </div>
+            {/* MOTOGENERADORES */}
+            {(row.mg1 || row.mg2) && (
+              <div className="flex items-center gap-2 mt-0.5">
+                {row.mg1 && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] font-black text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
+                  >
+                    <Container className="h-3 w-3 mr-1 shrink-0" /> MG1:{" "}
+                    {row.mg1}
+                  </Badge>
+                )}
+                {row.mg2 && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] font-black text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
+                  >
+                    <Container className="h-3 w-3 mr-1 shrink-0" /> MG2:{" "}
+                    {row.mg2}
+                  </Badge>
+                )}
+              </div>
+            )}
           </div>
         ),
       },

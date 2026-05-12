@@ -634,8 +634,20 @@ export function NextLegModal({
     handleStampNominal, // 🚀 DEPENDENCIA INYECTADA
   ]);
 
-  const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
-    ?.referencia;
+  // Extracción dinámica (prioriza lo que el usuario esté tecleando/seleccionando)
+  const refActual = tripFiscalData.referencia || (tripPadre as any)?.referencia;
+  const cont1Actual =
+    tripFiscalData.contenedor_1 || (tripPadre as any)?.contenedor_1;
+  const cont2Actual =
+    tripFiscalData.contenedor_2 || (tripPadre as any)?.contenedor_2;
+
+  // Buscamos los nombres (números económicos) de los motogeneradores seleccionados
+  const mg1Unit = availableMotogenerators.find(
+    (u) => u.id === formData.motogenerator_1_id,
+  );
+  const mg2Unit = availableMotogenerators.find(
+    (u) => u.id === formData.motogenerator_2_id,
+  );
 
   if (!tripPadre) return null;
 
@@ -675,10 +687,43 @@ export function NextLegModal({
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
 
-                {referencia && (
-                  <Badge className="ml-2 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-500/30 tracking-widest flex items-center gap-1.5">
+                {/* Contenedor 1 */}
+                {cont1Actual && (
+                  <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50 tracking-widest flex items-center gap-1.5">
                     <Container className="h-3.5 w-3.5" />
-                    CONTENEDOR: {referencia}
+                    CONT 1: {cont1Actual}
+                  </Badge>
+                )}
+
+                {/* Contenedor 2 (Solo si existe) */}
+                {cont2Actual && (
+                  <Badge className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/50 tracking-widest flex items-center gap-1.5">
+                    <Container className="h-3.5 w-3.5" />
+                    CONT 2: {cont2Actual}
+                  </Badge>
+                )}
+
+                {/* Motogenerador 1 */}
+                {mg1Unit && (
+                  <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/50 tracking-widest flex items-center gap-1.5">
+                    <Box className="h-3.5 w-3.5" />
+                    MG 1: {mg1Unit.numero_economico}
+                  </Badge>
+                )}
+
+                {/* Motogenerador 2 */}
+                {mg2Unit && (
+                  <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800/50 tracking-widest flex items-center gap-1.5">
+                    <Box className="h-3.5 w-3.5" />
+                    MG 2: {mg2Unit.numero_economico}
+                  </Badge>
+                )}
+
+                {/* Referencia / Booking */}
+                {refActual && (
+                  <Badge className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50 tracking-widest flex items-center gap-1.5">
+                    <Hash className="h-3.5 w-3.5" />
+                    REF: {refActual}
                   </Badge>
                 )}
               </div>
