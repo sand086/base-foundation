@@ -1271,3 +1271,127 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
+
+    def generar_factura_libre(self, d: dict):
+        """Genera y timbra una factura de Ingreso Pura (Sin Carta Porte)"""
+        from datetime import date
+        from decimal import Decimal
+        import base64
+        import zeep
+        from cryptography import x509
+
+        # 1. Variables básicas
+        folio_int = f"FL-{int(datetime.now().timestamp())}"[-6:]  # Folio Libre temporal
+        fecha = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+        # 2. Armar XML limpio (Sin complementos)
+        xml_base = self._armar_xml_ingreso_libre(d, folio_int, fecha)
+
+        # 3. Sellar el XML
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
+            cert = x509.load_der_x509_certificate(cer_data)
+            cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
+            sn_hex = format(cert.serial_number, "x")
+            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+
+        xml_con_cert = xml_base.replace(
+            "<cfdi:Comprobante",
+            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
+        )
+        sello_b64, _ = self._generar_sello_xslt(xml_con_cert.encode("utf-8"))
+        xml_sellado = xml_con_cert.replace(
+            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
+        )
+
+        # 4. Enviar a Timbrar al PAC
+        try:
+            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            result = client_zeep.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
+            )
+
+            if int(getattr(result, "status", 0)) != 200:
+                raise ValueError(f"Error PAC: {result.mensaje}")
+
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) != 200:
+                raise ValueError(f"Error SAT: {res_sat.mensaje}")
+
+            uuid_timbrado = res_sat.uuid
+            raw_cfdi = res_sat.cfdiTimbrado
+            cfdi_bytes = (
+                raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
+            )
+
+            # Guardar XML
+            self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
+
+            # 5. Guardar en Base de Datos como "Factura Libre"
+            from app.models.models import ReceivableInvoice
+
+            factura = ReceivableInvoice(
+                client_id=d.get("client_id"),
+                viaje_id=None,  # ES FACTURA LIBRE
+                uuid=uuid_timbrado,
+                is_nominal=False,
+                status_sat="TIMBRADA",
+                estatus="pendiente",
+                concepto=(
+                    d["conceptos"][0]["descripcion"]
+                    if d.get("conceptos")
+                    else "Factura Libre"
+                ),
+                monto_total=Decimal(str(d.get("monto_total", 0))),
+                saldo_pendiente=Decimal(str(d.get("monto_total", 0))),
+                subtotal=Decimal(str(d.get("subtotal", 0))),
+                iva=Decimal(str(d.get("iva", 0))),
+                retenciones=Decimal(str(d.get("retenciones", 0))),
+                moneda=d.get("moneda", "MXN"),
+                fecha_emision=date.today(),
+                fecha_vencimiento=date.today(),
+                metodo_pago=d.get("metodo_pago", "PUE"),
+                forma_pago=d.get("forma_pago", "99"),
+                tipo_comprobante="I",
+                pdf_url=f"/api/sat/invoice/{uuid_timbrado}/pdf",
+                xml_url=f"/api/sat/invoice/{uuid_timbrado}/xml",
+            )
+            self.db.add(factura)
+            self.db.commit()
+            self.db.refresh(factura)
+            return factura
+
+        except Exception as e:
+            logger.error(f"Fallo en factura libre: {e}")
+            self.db.rollback()
+            raise
+
+    def _armar_xml_ingreso_libre(self, d: dict, folio: str, fecha: str) -> str:
+        conceptos_xml = ""
+        # Iteramos los conceptos que llegaron del Frontend
+        for c in d.get("conceptos", []):
+            # Calcula IVA del renglón (Asumimos 16%)
+            iva_renglon = float(c["importe"]) * 0.16
+            impuestos_xml = f'<cfdi:Impuestos><cfdi:Traslados><cfdi:Traslado Base="{c["importe"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_renglon:.2f}" /></cfdi:Traslados>'
+
+            # Si hay retención global, se la aplicamos proporcionalmente al renglón
+            if float(d.get("retenciones", 0)) > 0:
+                ret_renglon = float(c["importe"]) * 0.04
+                impuestos_xml += f'<cfdi:Retenciones><cfdi:Retencion Base="{c["importe"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{ret_renglon:.2f}" /></cfdi:Retenciones>'
+
+            impuestos_xml += "</cfdi:Impuestos>"
+            conceptos_xml += f'<cfdi:Concepto ClaveProdServ="{c["claveProdServ"]}" NoIdentificacion="{c.get("id", "01")}" Cantidad="{c["cantidad"]}" ClaveUnidad="{c["claveUnidad"]}" Unidad="UNIDAD" Descripcion="{c["descripcion"]}" ValorUnitario="{c["precioUnitario"]}" Importe="{c["importe"]}" ObjetoImp="02">{impuestos_xml}</cfdi:Concepto>'
+
+        # Bloque de Impuestos Globales
+        imp_global = f'<cfdi:Impuestos TotalImpuestosRetenidos="{d.get("retenciones", "0.00")}" TotalImpuestosTrasladados="{d.get("iva", "0.00")}"><cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d.get("retenciones", "0.00")}" /></cfdi:Retenciones><cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados></cfdi:Impuestos>'
+        if (
+            float(d.get("retenciones", 0)) == 0
+        ):  # Si no hay retención, el SAT prohíbe poner el nodo
+            imp_global = f'<cfdi:Impuestos TotalImpuestosTrasladados="{d.get("iva", "0.00")}"><cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados></cfdi:Impuestos>'
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="FAC" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="Contado" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['monto_total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">
+    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{d['cliente_rfc']}" Nombre="{d['cliente']}" DomicilioFiscalReceptor="{d['cp_receptor']}" RegimenFiscalReceptor="{d['regimen_fiscal_receptor']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Conceptos>{conceptos_xml}</cfdi:Conceptos>{imp_global}
+</cfdi:Comprobante>""".strip()

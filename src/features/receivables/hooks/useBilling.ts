@@ -1,7 +1,8 @@
-// src/hooks/useBilling.ts
+// src/features/receivables/hooks/useBilling.ts
 import { useState } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { billingService } from "@/features/settings/services/billingService";
+import axiosClient from "@/api/axiosClient";
 
 // Helper para limpiar los prefijos técnicos del backend y dejar solo el mensaje útil
 const parseBillingError = (error: any): string => {
@@ -84,9 +85,69 @@ export const useBilling = () => {
     }
   };
 
+  // 🚀 CARRIL 1: Motor 1 (Factura Directa con Viaje y Complemento Carta Porte)
+  const generateOneShotInvoice = async (
+    payload: any,
+    onSuccess?: (data: any) => void,
+  ) => {
+    setIsStamping(true);
+    try {
+      // Usamos el billingService que creamos
+      const response = await billingService.stampOneShot(payload);
+      toast({
+        title: "Factura Generada",
+        description: "La Factura se generó y timbró con éxito ante el SAT.",
+      });
+      if (onSuccess) onSuccess(response.data);
+      return response.data;
+    } catch (error: any) {
+      toast({
+        title: "Error al Facturar (SAT)",
+        description: parseBillingError(error),
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setIsStamping(false);
+    }
+  };
+
+  // 🚀 CARRIL 2: Motor de Factura Libre (Ingreso puro, Sin Viaje)
+  const generateFreeInvoice = async (
+    payload: any,
+    onSuccess?: (data: any) => void,
+  ) => {
+    setIsStamping(true);
+    try {
+      // APUNTA AL NUEVO ENDPOINT EXCLUSIVO PARA FACTURAS LIBRES
+      const response = await axiosClient.post(
+        "/api/sat/stamp/free-invoice",
+        payload,
+      );
+      toast({
+        title: "Factura Libre Generada",
+        description: "Tu CFDI se timbró exitosamente.",
+      });
+      if (onSuccess) onSuccess(response.data);
+      return response.data;
+    } catch (error: any) {
+      toast({
+        title: "Error al Facturar (SAT)",
+        description: parseBillingError(error),
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setIsStamping(false);
+    }
+  };
+
+  // 🚀 EXPORTAMOS TODAS LAS FUNCIONES (AQUÍ ESTABA TU ERROR)
   return {
     isStamping,
     handleStampNominal,
     handleStampFinal,
+    generateOneShotInvoice,
+    generateFreeInvoice,
   };
 };

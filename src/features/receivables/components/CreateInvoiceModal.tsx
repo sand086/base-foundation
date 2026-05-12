@@ -33,7 +33,6 @@ import {
   Plus,
   Trash2,
   FileText,
-  DollarSign,
   Loader2,
   Check,
   ChevronsUpDown,
@@ -46,8 +45,9 @@ import {
 } from "@/features/receivables/types";
 import { useClients } from "@/features/clients/hooks/useClients";
 
-// IMPORTAMOS TU HOOK DE CATÁLOGOS SAT
+// IMPORTAMOS LOS HOOKS
 import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
+import { useBilling } from "@/features/receivables/hooks/useBilling";
 
 interface SmartInvoiceConcept {
   id: string;
@@ -62,21 +62,7 @@ interface SmartInvoiceConcept {
 interface CreateInvoiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (
-    invoice: Omit<
-      ReceivableInvoice,
-      "id" | "folio_interno" | "payments" | "estatus"
-    > & {
-      uso_cfdi?: string;
-      regimen_fiscal_receptor?: string;
-      cp_receptor?: string;
-      metodo_pago?: string;
-      forma_pago?: string;
-      requiere_rep?: boolean;
-      cliente_email?: string;
-      conceptos: SmartInvoiceConcept[];
-    },
-  ) => void;
+  onSubmit: () => void; // Ya no requiere el payload porque lo gestiona el hook internamente
   importedServices?: FinalizableService[];
 }
 
@@ -88,7 +74,6 @@ const creditDaysOptions = [
   { value: 60, label: "60 días" },
 ];
 
-//   FIX: Lista Inteligente de Unidades de Medida SAT (Las más usadas en Logística y Transporte)
 const SAT_UNITS = [
   { clave: "E48", descripcion: "Unidad de servicio" },
   { clave: "ACT", descripcion: "Actividad" },
@@ -112,21 +97,21 @@ export function CreateInvoiceModal({
   importedServices,
 }: CreateInvoiceModalProps) {
   const { clients, isLoading: loadingClients } = useClients();
-
-  // Obtenemos los productos del SAT desde tu custom hook
   const { products: satProducts, loading: loadingSatProducts } =
     useSatCatalogs();
+
+  // 🚀 INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
+  const { generateOneShotInvoice, generateFreeInvoice, isStamping } =
+    useBilling();
 
   const [clienteId, setClienteId] = useState("");
   const [openCombobox, setOpenCombobox] = useState(false);
 
-  // Estados para controlar QUÉ renglón tiene el Popover abierto
   const [openSatPopoverId, setOpenSatPopoverId] = useState<string | null>(null);
   const [openUnidadPopoverId, setOpenUnidadPopoverId] = useState<string | null>(
     null,
   );
 
-  // Estados para Información Fiscal Editable (CFDI 4.0)
   const [razonSocialEditable, setRazonSocialEditable] = useState("");
   const [rfcEditable, setRfcEditable] = useState("");
   const [cpEditable, setCpEditable] = useState("");
@@ -283,7 +268,8 @@ export function CreateInvoiceModal({
     );
   };
 
-  const handleSubmit = () => {
+  // 🚀 EL RUTEADOR INTELIGENTE
+  const handleSubmit = async () => {
     if (
       !clienteId ||
       conceptos.length === 0 ||
@@ -302,7 +288,7 @@ export function CreateInvoiceModal({
       return;
     }
 
-    onSubmit({
+    const payload = {
       client_id: Number(clienteId),
       cliente: razonSocialEditable,
       cliente_rfc: rfcEditable,
@@ -315,18 +301,35 @@ export function CreateInvoiceModal({
       iva: iva,
       retenciones: retenciones,
       monto_total: montoTotal,
-      saldo_pendiente: montoTotal,
       moneda,
       fecha_emision: fechaEmision,
       fecha_vencimiento: fechaVencimiento,
       dias_credito: diasCredito,
       metodo_pago: metodoPago,
       forma_pago: formaPago,
-      servicios_relacionados: importedServices?.map((s) => s.id) || [],
-      requiere_rep: metodoPago === "PPD",
-    });
+    };
 
-    onOpenChange(false);
+    let result;
+
+    // Detectamos si la factura proviene de un viaje de logística (Carta Porte) o es libre
+    if (importedServices && importedServices.length > 0) {
+      // CARRIL 1: Factura One-Shot (Factura + Complemento Carta Porte)
+      const dataWithTrip = {
+        ...payload,
+        viaje_id: importedServices[0].id,
+        servicios_relacionados: importedServices.map((s) => s.id),
+      };
+      result = await generateOneShotInvoice(dataWithTrip);
+    } else {
+      // CARRIL 2: Factura Libre (Ingreso puro)
+      result = await generateFreeInvoice(payload);
+    }
+
+    // Si hubo éxito, cerramos y disparamos el refresh de la tabla
+    if (result) {
+      onSubmit();
+      onOpenChange(false);
+    }
   };
 
   return (
@@ -665,7 +668,6 @@ export function CreateInvoiceModal({
             </div>
           </div>
 
-          {/*   FIX FASE 4: LISTA DE CONCEPTOS INTELIGENTE (CON CLAVES Y UNIDADES SAT AUTOCOMPLETABLES) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
@@ -706,7 +708,6 @@ export function CreateInvoiceModal({
 
                   {/* Fila 1: Claves SAT y Descripción */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    {/* Buscador Inteligente Producto SAT */}
                     <div className="space-y-1.5 md:col-span-4">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
                         Clave Prod/Serv (SAT) *
@@ -752,7 +753,6 @@ export function CreateInvoiceModal({
                                       "claveProdServ",
                                       prod.clave,
                                     );
-                                    // Auto-rellenar descripción si está vacía
                                     if (!concepto.descripcion) {
                                       updateConcepto(
                                         concepto.id,
@@ -785,7 +785,6 @@ export function CreateInvoiceModal({
                       </Popover>
                     </div>
 
-                    {/* Buscador Inteligente Unidad SAT */}
                     <div className="space-y-1.5 md:col-span-2">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
                         Unidad SAT *
@@ -869,7 +868,6 @@ export function CreateInvoiceModal({
                     </div>
                   </div>
 
-                  {/* Fila 2: Cantidad y Precios */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-3">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
@@ -925,7 +923,6 @@ export function CreateInvoiceModal({
           </div>
         </div>
 
-        {/* FOOTER CON RESUMEN FINANCIERO */}
         <div className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0 space-y-4 z-10">
           <div className="flex flex-col sm:flex-row items-center justify-between bg-foreground rounded-2xl p-5 text-background shadow-xl ring-4 ring-background gap-4">
             <div className="flex flex-row sm:flex-col gap-4 sm:gap-1 text-xs opacity-80 font-mono font-medium justify-center w-full sm:w-auto">
@@ -996,6 +993,7 @@ export function CreateInvoiceModal({
                 !clienteId ||
                 montoTotal <= 0 ||
                 loadingClients ||
+                isStamping || // 🚀 SE BLOQUEA MIENTRAS TIMBRA
                 !razonSocialEditable ||
                 !rfcEditable ||
                 !cpEditable ||
@@ -1005,8 +1003,11 @@ export function CreateInvoiceModal({
               }
               className="w-full sm:w-auto haptic-press border-none text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
-              {loadingClients ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {isStamping ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> Timbrando
+                  SAT...
+                </>
               ) : (
                 "Generar Factura Directa"
               )}

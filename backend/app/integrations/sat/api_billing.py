@@ -57,6 +57,29 @@ def parse_sat_error(e: Exception) -> str:
     return str(e)
 
 
+@router.post("/stamp/free-invoice", response_model=dict)
+def generar_factura_libre(invoice_data: dict, db: Session = Depends(get_db)):
+    """
+    Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE).
+    Crea un CFDI 4.0 de Ingreso puro usando solo los datos del frontend.
+    """
+    service = BillingService(db)
+    try:
+        factura = service.generar_factura_libre(invoice_data)
+        return {
+            "status": "success",
+            "message": "Factura Libre generada exitosamente",
+            "data": {
+                "factura_id": factura.id,
+                "uuid": factura.uuid,
+                "xml_url": getattr(factura, "xml_url", None),
+            },
+        }
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
 @router.get("/test-invoice-pro")
 def test_invoice_pro():
     try:

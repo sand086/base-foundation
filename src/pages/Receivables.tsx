@@ -313,20 +313,12 @@ export default function Receivables() {
     toast.success("Archivo Excel generado exitosamente");
   };
 
-  const handleCreateInvoice = async (invoiceData: any) => {
-    try {
-      await axiosClient.post("/api/finance/receivables", invoiceData);
-      setIsCreateModalOpen(false);
-      setImportedServices(undefined);
-      toast.success("Factura generada y guardada exitosamente");
-      await refreshReceivables?.();
-    } catch (error: any) {
-      toast.error("Error al generar la factura", {
-        description:
-          error.response?.data?.detail ||
-          "Verifica la conexión con el servidor",
-      });
-    }
+  const handleCreateInvoice = async () => {
+    // Ya no hacemos el POST aquí porque el Modal y el SAT lo hacen directamente.
+    // Solo cerramos el modal, limpiamos y recargamos la tabla.
+    setIsCreateModalOpen(false);
+    setImportedServices(undefined);
+    await refreshReceivables?.();
   };
 
   const handleRegisterPayment = async (payload: any) => {
