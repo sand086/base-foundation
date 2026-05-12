@@ -1,5 +1,5 @@
 import { DefaultService } from "@/api/generated";
-
+import axiosClient from "@/api/axiosClient";
 export interface BillingResponse {
   status: string;
   message: string;
@@ -49,5 +49,12 @@ export const billingService = {
       }
       throw error;
     }
+  },
+
+  stampOneShot: async (payload: any): Promise<BillingResponse> => {
+    // Como usamos axiosClient, Axios ya empaqueta el error correctamente.
+    // Si falla, el error subirá automáticamente hasta tu useBilling.ts
+    const response = await axiosClient.post("/api/sat/stamp/one-shot", payload);
+    return response.data as BillingResponse;
   },
 };
