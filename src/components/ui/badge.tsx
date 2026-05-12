@@ -20,7 +20,7 @@ const badgeVariants = cva(
       variant: {
         // --- VARIANTES SÓLIDAS ---
         default:
-          "border-transparent bg-brand-red text-white shadow-lg shadow-brand-red/20 hover:bg-brand-red/90 hover:scale-[1.05]",
+          "border-transparent bg-brand-red text-white shadow-lg shadow-brand-red/20 hover:bg-brand-red/90 hover:text-white hover:scale-[1.05]",
         secondary:
           "border-transparent bg-brand-navy text-white dark:bg-slate-800 hover:bg-brand-navy/80 hover:scale-[1.05]",
 
