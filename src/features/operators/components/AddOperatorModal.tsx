@@ -110,7 +110,9 @@ export function AddOperatorModal({
           name: operatorToEdit.name,
           rfc: operatorToEdit.rfc || "XAXX010101000",
           license_number: operatorToEdit.license_number,
-          license_type_id: operatorToEdit.license_type_id,
+          license_type_id: operatorToEdit.license_type_id
+            ? String(operatorToEdit.license_type_id)
+            : "",
           license_expiry: operatorToEdit.license_expiry
             ? new Date(`${operatorToEdit.license_expiry}T12:00:00`)
             : undefined,
@@ -153,7 +155,7 @@ export function AddOperatorModal({
       name: data.name.trim(),
       rfc: data.rfc.trim().toUpperCase(),
       license_number: data.license_number.trim().toUpperCase(),
-      license_type: data.license_type_id,
+      license_type_id: parseInt(data.license_type_id, 10),
       license_expiry: format(data.license_expiry, "yyyy-MM-dd"),
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       phone: data.phone.trim(),
