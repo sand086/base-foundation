@@ -44,22 +44,14 @@ interface AccountStatementModalProps {
   open: boolean;
   onClose: () => void;
   invoices: ReceivableInvoice[];
-  initialClient?: string; // <-- AÑADIMOS EL PUENTE CON EL FILTRO EXTERNO
+  initialClient?: string;
+  bankAccounts?: any[]; // Recibimos los bancos reales desde la vista principal
 }
 
 const companyBankData = {
   razonSocial: "Transportes Rápidos 3T S.A. de C.V.",
   rfc: "TR3T850101ABC",
   cuentas: [
-    // Se comenta Banamex por petición del cliente (Fase 1)
-    /*
-    {
-      banco: "Banamex",
-      clabe: "002180700100000001",
-      cuenta: "70010000000",
-      titular: "Transportes Rápidos 3T S.A. de C.V.",
-    },
-    */
     {
       banco: "Banorte",
       clabe: "072180000000000001",
@@ -68,17 +60,24 @@ const companyBankData = {
     },
   ],
 };
+
 export function AccountStatementModal({
   open,
   onClose,
   invoices,
-  initialClient = "all", // <-- VALOR POR DEFECTO
+  initialClient = "all",
+  bankAccounts = [], // Lo inicializamos vacío por seguridad
 }: AccountStatementModalProps) {
   const [selectedClient, setSelectedClient] = useState<string>(initialClient);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
-  // <-- SINCRONIZA EL MODAL CON LA PANTALLA PRINCIPAL AL ABRIRSE
+  // Determinar qué lista de bancos usar
+  const displayBanks =
+    bankAccounts && bankAccounts.length > 0
+      ? bankAccounts
+      : companyBankData.cuentas;
+
   useEffect(() => {
     if (open) {
       setSelectedClient(initialClient);
@@ -173,7 +172,6 @@ export function AccountStatementModal({
         heightLeft -= pdfHeight;
       }
 
-      // Nombre del PDF adaptado al cliente seleccionado
       const fileNameClient =
         selectedClient === "all"
           ? "Todos_Los_Clientes"
@@ -209,7 +207,6 @@ export function AccountStatementModal({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="w-[95vw] sm:max-w-3xl flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/90 dark:bg-card/95 backdrop-blur-xl rounded-2xl print:bg-white print:shadow-none print:w-full print:max-w-none">
-        {/* CSS DE IMPRESIÓN */}
         <style media="print">{`
           @page { size: letter; margin: 15mm; }
           body * { visibility: hidden; }
@@ -262,9 +259,6 @@ export function AccountStatementModal({
             </div>
           </div>
 
-          {/* ========================================================= */}
-          {/* ÁREA DE IMPRESIÓN (PDF / PRINTER) */}
-          {/* ========================================================= */}
           <div
             id="print-area"
             ref={pdfRef}
@@ -414,13 +408,13 @@ export function AccountStatementModal({
                 <CreditCard className="h-4 w-4" /> Datos Bancarios para Depósito
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {companyBankData.cuentas.map((cuenta, idx) => (
+                {displayBanks.map((cuenta: any, idx: number) => (
                   <div
                     key={idx}
                     className="p-4 bg-muted/50 border border-border rounded-lg break-inside-avoid"
                   >
                     <p className="font-black text-primary mb-2">
-                      {cuenta.banco}
+                      {cuenta.banco || cuenta.bank_name || cuenta.nombre_banco}
                     </p>
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
@@ -432,13 +426,26 @@ export function AccountStatementModal({
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Cuenta:</span>
                         <span className="font-mono font-bold text-foreground">
-                          {cuenta.cuenta}
+                          {cuenta.cuenta ||
+                            cuenta.account_number ||
+                            cuenta.numero_cuenta}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Titular:</span>
-                        <span className="text-xs truncate max-w-[200px] font-bold text-foreground">
-                          {cuenta.titular}
+                        <span
+                          className="text-xs truncate max-w-[200px] font-bold text-foreground"
+                          title={
+                            cuenta.titular ||
+                            cuenta.account_name ||
+                            cuenta.nombre_titular ||
+                            companyBankData.razonSocial
+                          }
+                        >
+                          {cuenta.titular ||
+                            cuenta.account_name ||
+                            cuenta.nombre_titular ||
+                            companyBankData.razonSocial}
                         </span>
                       </div>
                     </div>
@@ -457,7 +464,6 @@ export function AccountStatementModal({
           </div>
         </div>
 
-        {/* CAPA 5: FOOTER */}
         <div className="p-6 sm:p-8 bg-card/80 dark:bg-card/80 backdrop-blur-xl border-t border-border shrink-0 z-10 print:hidden">
           <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
             <Button

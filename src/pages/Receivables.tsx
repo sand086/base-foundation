@@ -873,6 +873,7 @@ export default function Receivables() {
             onClose={() => setIsAccountStatementOpen(false)}
             invoices={formattedInvoices}
             initialClient={selectedClientName} // <-- 2. Se lo enviamos al Modal
+            bankAccounts={bankAccounts}
           />
         );
       })()}
