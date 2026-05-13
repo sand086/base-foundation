@@ -1535,6 +1535,12 @@ class ReceivableInvoicePayment(AuditMixin, Base):
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
+
+    # NUEVOS CAMPOS AGREGADOS PARA EL REP (Complemento de Pago)
+    parcialidad = Column(Integer, default=1, server_default="1")
+    saldo_anterior = Column(Float, nullable=True)
+    saldo_insoluto = Column(Float, nullable=True)
+
     metodo_pago = Column(String(50))
     referencia = Column(String(100))
     cuenta_deposito = Column(String(50))
