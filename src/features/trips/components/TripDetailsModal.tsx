@@ -208,7 +208,7 @@ export function TripDetailsModal({
     }).format(val || 0);
 
   // 🚀 LÓGICA BLINDADA DE EXTRACCIÓN DE UUIDS
-  const processUuids = (tripData: any) => {
+  /*   const processUuids = (tripData: any) => {
     if (!tripData) return;
     const facturas = tripData.receivable_invoices || tripData.invoices || [];
     const cp = facturas.find((f: any) => f.is_nominal === true && f.uuid);
@@ -228,6 +228,39 @@ export function TripDetailsModal({
     setUuidCartaPorte(cpId);
     setUuidFacturaFinal(finalId);
 
+    if (cpId) localStorage.setItem(`cp_uuid_${tripData.id}`, cpId);
+    if (finalId) localStorage.setItem(`final_uuid_${tripData.id}`, finalId);
+  }; */
+
+  const processUuids = (tripData: any) => {
+    if (!tripData) return;
+    const facturas = tripData.receivable_invoices || tripData.invoices || [];
+
+    // 🚀 FIX 1: Filtrar todas las Cartas Porte y ordenar por ID descendente para tomar SIEMPRE LA MÁS NUEVA
+    const cps = facturas.filter((f: any) => f.is_nominal === true && f.uuid);
+    const cp = cps.sort((a: any, b: any) => b.id - a.id)[0];
+
+    // Lo mismo para la factura final por seguridad
+    const ffs = facturas.filter((f: any) => f.is_nominal === false && f.uuid);
+    const ff = ffs.sort((a: any, b: any) => b.id - a.id)[0];
+
+    const cachedFinalUuid = localStorage.getItem(`final_uuid_${tripData.id}`);
+    const cachedCpUuid = localStorage.getItem(`cp_uuid_${tripData.id}`);
+
+    // 🚀 FIX 2: Prioridad ABSOLUTA a lo que viene de la BD, el caché es solo último recurso
+    const finalId =
+      ff?.uuid || tripData.uuid_factura_final || cachedFinalUuid || null;
+    let cpId = cp?.uuid || tripData.uuid_fiscal || cachedCpUuid || null;
+
+    // Evitar colisión si por error el uuid_fiscal guardó la factura final
+    if (cpId === finalId && cpId !== null) {
+      cpId = cp?.uuid || cachedCpUuid || null;
+    }
+
+    setUuidCartaPorte(cpId);
+    setUuidFacturaFinal(finalId);
+
+    // Actualizamos el caché con los UUIDs más nuevos
     if (cpId) localStorage.setItem(`cp_uuid_${tripData.id}`, cpId);
     if (finalId) localStorage.setItem(`final_uuid_${tripData.id}`, finalId);
   };

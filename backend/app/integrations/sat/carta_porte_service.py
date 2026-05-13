@@ -593,7 +593,9 @@ class CartaPorteService:
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
-            "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
+            "serie": "CP" if is_nominal else "F",
+            "folio": str(viaje.id),
+            "folio_interno": f"CP-{viaje.id}" if is_nominal else f"F-{viaje.id}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
@@ -798,7 +800,7 @@ class CartaPorteService:
         )
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
@@ -895,7 +897,9 @@ class CartaPorteService:
             "cp_emisor": self.emisor_cp,
             "regimen_emisor": self.emisor_regimen,
             "uuid": uuid,
-            "folio_interno": d["folio"],
+            "folio_interno": d.get(
+                "folio_interno", f"{d.get('serie', 'F')}-{d['folio']}"
+            ),
             "fecha_emision": d["fecha"],
             "logo_src": logo_src,
             "qr_src": qr_src,
@@ -970,6 +974,7 @@ class CartaPorteService:
             client_id=viaje.client_id,
             sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
             viaje_id=viaje.id,
+            folio_interno=data.get("folio_interno"),
             uuid=uuid_generado,
             is_nominal=True,
             status_sat="TIMBRADA",
@@ -1066,6 +1071,7 @@ class CartaPorteService:
                     client_id=viaje.client_id,
                     sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
                     viaje_id=viaje.id,
+                    folio_interno=data.get("folio_interno"),
                     uuid=uuid_generado,
                     is_nominal=False,
                     status_sat="TIMBRADA",

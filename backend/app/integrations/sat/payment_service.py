@@ -693,7 +693,7 @@ class PaymentComplementService:
         context = {
             **data,
             "uuid": uuid,
-            "folio_interno": data["folio"],
+            "folio_interno": f"COM-{data['folio']}",
             "fecha_emision": data["fecha"],
             "fecha_certificacion": fecha_certificacion,
             "cuenta_beneficiario": cuenta_benef,

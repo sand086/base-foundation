@@ -593,7 +593,9 @@ class BillingService:
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
-            "folio": f"CP-{viaje.id}{'N' if is_nominal else 'F'}",
+            "serie": "CP" if is_nominal else "F",
+            "folio": str(viaje.id),
+            "folio_interno": f"CP-{viaje.id}" if is_nominal else f"F-{viaje.id}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
@@ -810,7 +812,7 @@ class BillingService:
         )
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="CP" Folio="{d['folio']}" FormaPago="{d['forma_pago']}" CondicionesDePago="{d['condiciones_pago']}" SubTotal="{d['subtotal']}" Moneda="{d['moneda']}" TipoCambio="{d['tc']}" Total="{d['total']}" TipoDeComprobante="{d['tipo_comprobante']}" Exportacion="01" MetodoPago="{d['metodo_pago']}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d['forma_pago']}" CondicionesDePago="{d['condiciones_pago']}" SubTotal="{d['subtotal']}" Moneda="{d['moneda']}" TipoCambio="{d['tc']}" Total="{d['total']}" TipoDeComprobante="{d['tipo_comprobante']}" Exportacion="01" MetodoPago="{d['metodo_pago']}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
@@ -905,7 +907,9 @@ class BillingService:
             "cp_emisor": self.emisor_cp,
             "regimen_emisor": self.emisor_regimen,
             "uuid": uuid,
-            "folio_interno": d["folio"],
+            "folio_interno": d.get(
+                "folio_interno", f"{d.get('serie', 'F')}-{d['folio']}"
+            ),
             "fecha_emision": d["fecha"],
             "logo_src": logo_src,
             "qr_src": qr_src,
@@ -1037,10 +1041,11 @@ class BillingService:
                 # Fallback por si algo falló y no existe provisional
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+                    folio_interno=data.get("folio_interno"),
+                    sub_client_id=viaje.sub_client_id,
                     viaje_id=viaje.id,
                     uuid=uuid_generado,
-                    uuid_relacionado=uuid_relacionado_real,  # 🚀 GUARDAMOS EL UUID REAL
+                    uuid_relacionado=uuid_relacionado_real,
                     is_nominal=False,
                     status_sat="TIMBRADA",
                     estatus="pendiente",
@@ -1052,9 +1057,7 @@ class BillingService:
                     retenciones=Decimal(str(_clean_float(data["retenciones"]))),
                     moneda="MXN",
                     fecha_emision=date.today(),
-                    fecha_vencimiento=date.today()
-                    + timedelta(days=dias_credito),  # 🚀 INYECTADO
-                    # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",
@@ -1149,6 +1152,7 @@ class BillingService:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
                     sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+                    folio_interno=data.get("folio_interno"),
                     viaje_id=viaje.id,
                     uuid=uuid_generado,
                     is_nominal=False,
@@ -1333,6 +1337,7 @@ class BillingService:
             factura = ReceivableInvoice(
                 client_id=d.get("client_id"),
                 viaje_id=None,  # ES FACTURA LIBRE
+                folio_interno=data.get("folio_interno"),
                 uuid=uuid_timbrado,
                 is_nominal=False,
                 status_sat="TIMBRADA",
@@ -1390,7 +1395,7 @@ class BillingService:
             imp_global = f'<cfdi:Impuestos TotalImpuestosTrasladados="{d.get("iva", "0.00")}"><cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados></cfdi:Impuestos>'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="FAC" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="Contado" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['monto_total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="F" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="Contado" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['monto_total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['cliente_rfc']}" Nombre="{d['cliente']}" DomicilioFiscalReceptor="{d['cp_receptor']}" RegimenFiscalReceptor="{d['regimen_fiscal_receptor']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>{conceptos_xml}</cfdi:Conceptos>{imp_global}
