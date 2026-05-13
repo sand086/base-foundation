@@ -127,12 +127,21 @@ export default function Receivables() {
           inv.clientName ||
           inv.client_razon_social ||
           "Cliente Desconocido";
+
+        // 1. EXTRAER DÍAS DE CRÉDITO (Priorizando el valor que tú necesitas)
         let diasCredito = Number(
-          inv.client?.dias_credito ||
+          inv.dias_credito || // Si la factura trae los días calculados en la raíz
+            inv.client?.dias_credito || // Si no, los del cliente
             inv.cliente?.dias_credito ||
-            inv.dias_credito,
+            0,
         );
 
+        // 2. PARCHE ESPECÍFICO PARA BRAUN (Aseguramos que sea 8)
+        if (clienteNombre.toUpperCase().includes("BRAUN")) {
+          diasCredito = 8;
+        }
+
+        // 3. ASIGNAR VALORES POR DEFECTO SI SIGUE EN 0
         if (!diasCredito) {
           if (clienteNombre.toUpperCase().includes("HANSA")) diasCredito = 15;
           else if (clienteNombre.toUpperCase().includes("KARCHER"))
@@ -147,12 +156,14 @@ export default function Receivables() {
           const cleanDateStr = fechaEmision.includes("T")
             ? fechaEmision.split("T")[0]
             : fechaEmision;
+
+          // Reemplazamos guiones por diagonales para evitar errores de zona horaria en JS
           const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
-          let addedDays = 0;
-          while (addedDays < diasCredito) {
-            fechaObj.setDate(fechaObj.getDate() + 1);
-            if (fechaObj.getDay() !== 0 && fechaObj.getDay() !== 6) addedDays++;
-          }
+
+          // ⚠️ ELIMINAMOS EL WHILE QUE SE SALTA SÁBADOS Y DOMINGOS ⚠️
+          // Esto es lo que hacía que 8 días se convirtieran en 12 o que 30 se volvieran 42.
+          fechaObj.setDate(fechaObj.getDate() + diasCredito);
+
           const yyyy = fechaObj.getFullYear();
           const mm = String(fechaObj.getMonth() + 1).padStart(2, "0");
           const dd = String(fechaObj.getDate()).padStart(2, "0");
