@@ -673,6 +673,9 @@ class CartaPorteService:
             "municipio_destino": municipio_dest,
             "leyenda_legal": DEFAULT_LEYENDA,
             "ocultar_montos": False,
+            "contenedor_1": getattr(viaje, "contenedor_1", "") or "N/A",
+            "contenedor_2": getattr(viaje, "contenedor_2", "") or "N/A",
+            "referencia_cliente": getattr(viaje, "referencia", "") or "S/R",
         }
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
