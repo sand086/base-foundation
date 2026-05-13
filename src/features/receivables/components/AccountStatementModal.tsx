@@ -73,10 +73,17 @@ export function AccountStatementModal({
   const pdfRef = useRef<HTMLDivElement>(null);
 
   // Determinar qué lista de bancos usar
-  const displayBanks =
+  // Determinar qué lista de bancos usar y FILTRAR SOLO BANORTE
+  const displayBanks = (
     bankAccounts && bankAccounts.length > 0
       ? bankAccounts
-      : companyBankData.cuentas;
+      : companyBankData.cuentas
+  ).filter((cuenta: any) => {
+    const nombreBanco = String(
+      cuenta.banco || cuenta.bank_name || cuenta.nombre_banco || "",
+    ).toLowerCase();
+    return nombreBanco.includes("banorte");
+  });
 
   useEffect(() => {
     if (open) {
