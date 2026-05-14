@@ -1,3 +1,4 @@
+import traceback
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
@@ -163,7 +164,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
     1. Evita duplicados por UUID.
     2. Crea el proveedor automáticamente si no existe por RFC.
     3. Calcula fecha de vencimiento basada en días de crédito.
-    4. (NUEVO) Hereda automáticamente el Centro de Costos (CECO) asignado al proveedor.
+    4. Hereda automáticamente el Centro de Costos (CECO) asignado al proveedor.
     """
     facturas_creadas = 0
     proveedores_creados = 0
@@ -189,12 +190,12 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         if existing_invoice:
             continue  # Ya existe, nos la saltamos
 
-        # 2. GESTIÓN DEL PROVEEDOR
-        provider = (
-            db.query(models.Provider)
+        # 2. GESTIÓN DEL PROVEEDOR (FIX: El modelo correcto es Supplier)
+        supplier = (
+            db.query(models.Supplier)
             .filter(
-                models.Provider.rfc == rfc,
-                models.Provider.record_status != RecordStatus.ELIMINADO,
+                models.Supplier.rfc == rfc,
+                models.Supplier.record_status != RecordStatus.ELIMINADO,
             )
             .first()
         )
@@ -205,15 +206,15 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         except (ValueError, TypeError):
             dias_credito_excel = 0
 
-        if not provider:
-            # Crear proveedor al vuelo
-            provider = models.Provider(
+        if not supplier:
+            # Crear proveedor al vuelo usando el Enum correcto
+            supplier = models.Supplier(
                 razon_social=nombre,
                 rfc=rfc,
                 dias_credito=dias_credito_excel,
-                estatus="activo",
+                estatus=models.SupplierStatus.ACTIVO,  # FIX: Enum estricto
             )
-            db.add(provider)
+            db.add(supplier)
             db.flush()  # Guardar temporalmente para obtener el ID
             proveedores_creados += 1
 
@@ -221,7 +222,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         dias_finales = (
             dias_credito_excel
             if dias_credito_excel > 0
-            else (provider.dias_credito or 0)
+            else (supplier.dias_credito or 0)
         )
 
         # 3. GESTIÓN DE FECHAS
@@ -244,15 +245,13 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
         # ========================================================
         # NUEVO FASE 3.2: HERENCIA AUTOMÁTICA DEL CENTRO DE COSTOS
         # ========================================================
-        # Usamos getattr por seguridad, por si en alguna migración antigua
-        # el modelo Provider aún no tiene reflejada la columna.
-        ceco_heredado = getattr(provider, "cost_center_id", None)
+        ceco_heredado = getattr(supplier, "cost_center_id", None)
 
         # 5. CREACIÓN DE FACTURA (CXP)
         concepto = str(item.get("concepto") or "Factura importada del SAT")
 
         invoice = models.PayableInvoice(
-            supplier_id=provider.id,
+            supplier_id=supplier.id,
             cost_center_id=ceco_heredado,  # <--- INYECCIÓN DEL CECO AQUÍ
             uuid=uuid_fiscal,
             folio=str(item.get("folio") or ""),
@@ -262,7 +261,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
             fecha_emision=fecha_obj.date(),
             fecha_vencimiento=vencimiento.date(),
             moneda=str(item.get("moneda") or "MXN").strip()[:3],
-            estatus="pendiente",
+            estatus=models.InvoiceStatus.PENDIENTE,  # FIX: Enum Estricto
             clasificacion="gasto_indirecto_variable",  # Clasificación por defecto al subir
         )
         db.add(invoice)
@@ -385,6 +384,10 @@ def register_payable_payment(
     except Exception as e:
         # ATOMICIDAD: Si algo falla, echamos todo para atrás
         db.rollback()
+        print("\n" + "=" * 50)
+        print("💥 ERROR EN REGISTER_PAYABLE_PAYMENT 💥")
+        traceback.print_exc()
+        print("=" * 50 + "\n")
         raise e
 
 
@@ -902,7 +905,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             supplier = models.Supplier(
                 razon_social=nombre_emisor_original,
                 rfc=rfc_emisor,
-                estatus="activo",
+                estatus=models.SupplierStatus.ACTIVO,  # FIX: Enum estricto
                 dias_credito=datos_sugeridos["dias"],
             )
             db.add(supplier)
@@ -1064,212 +1067,232 @@ def delete_bank_movement(db: Session, movement_id: int):
      FIX: Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
     Si proviene de CxC o CxP, también revierte el pago en la factura y restaura su saldo.
     """
-    movement = (
-        db.query(models.BankMovement)
-        .filter(
-            models.BankMovement.id == movement_id,
-            models.BankMovement.record_status != RecordStatus.ELIMINADO,
-        )
-        .first()
-    )
-
-    if not movement:
-        return False
-
-    account = (
-        db.query(models.BankAccount)
-        .filter(models.BankAccount.id == movement.bank_account_id)
-        .with_for_update()
-        .first()
-    )
-
-    if account:
-        if movement.tipo == "ingreso":
-            account.saldo -= movement.monto
-        elif movement.tipo == "egreso":
-            account.saldo += movement.monto
-
-    # 1. ROLLBACK CxC
-    if movement.origen_modulo == "CxC":
-        pago_cxc = (
-            db.query(models.ReceivableInvoicePayment)
+    try:
+        movement = (
+            db.query(models.BankMovement)
             .filter(
-                models.ReceivableInvoicePayment.monto == movement.monto,
-                models.ReceivableInvoicePayment.cuenta_deposito
-                == str(movement.bank_account_id),
+                models.BankMovement.id == movement_id,
+                models.BankMovement.record_status != RecordStatus.ELIMINADO,
             )
-            .order_by(models.ReceivableInvoicePayment.id.desc())
             .first()
         )
-        if pago_cxc:
-            invoice = (
-                db.query(models.ReceivableInvoice)
-                .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
-                .first()
-            )
-            if invoice:
-                invoice.saldo_pendiente += pago_cxc.monto
-                if invoice.saldo_pendiente >= invoice.monto_total:
-                    invoice.estatus = "pendiente"
-                else:
-                    invoice.estatus = "pago_parcial"
-            db.delete(pago_cxc)
 
-    # 2. ROLLBACK CxP
-    elif movement.origen_modulo == "CxP":
-        pago_cxp = (
-            db.query(models.InvoicePayment)
-            .filter(
-                models.InvoicePayment.monto == movement.monto,
-                models.InvoicePayment.bank_account_id == movement.bank_account_id,
-            )
-            .order_by(models.InvoicePayment.id.desc())
+        if not movement:
+            return False
+
+        # FIX: Especificar "of=models.BankAccount" para que Postgres no truene por el Outer Join
+        account = (
+            db.query(models.BankAccount)
+            .filter(models.BankAccount.id == movement.bank_account_id)
+            .with_for_update(of=models.BankAccount)
             .first()
         )
-        if pago_cxp:
-            invoice = (
-                db.query(models.PayableInvoice)
-                .filter(models.PayableInvoice.id == pago_cxp.invoice_id)
+
+        if account:
+            if movement.tipo == "ingreso":
+                account.saldo -= movement.monto
+            elif movement.tipo == "egreso":
+                account.saldo += movement.monto
+
+        # 1. ROLLBACK CxC
+        if movement.origen_modulo == "CxC":
+            pago_cxc = (
+                db.query(models.ReceivableInvoicePayment)
+                .filter(
+                    models.ReceivableInvoicePayment.monto == movement.monto,
+                    models.ReceivableInvoicePayment.cuenta_deposito
+                    == str(movement.bank_account_id),
+                )
+                .order_by(models.ReceivableInvoicePayment.id.desc())
                 .first()
             )
-            if invoice:
-                invoice.saldo_pendiente += pago_cxp.monto
-                if invoice.saldo_pendiente >= invoice.monto_total:
-                    invoice.estatus = "pendiente"
-                else:
-                    invoice.estatus = "pago_parcial"
-            db.delete(pago_cxp)
+            if pago_cxc:
+                invoice = (
+                    db.query(models.ReceivableInvoice)
+                    .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
+                    .first()
+                )
+                if invoice:
+                    invoice.saldo_pendiente += pago_cxc.monto
+                    if invoice.saldo_pendiente >= invoice.monto_total:
+                        invoice.estatus = models.InvoiceStatus.PENDIENTE
+                    else:
+                        invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+                db.delete(pago_cxc)
 
-    movement.record_status = RecordStatus.ELIMINADO
-    db.commit()
-    return True
+        # 2. ROLLBACK CxP
+        elif movement.origen_modulo == "CxP":
+            pago_cxp = (
+                db.query(models.InvoicePayment)
+                .filter(
+                    models.InvoicePayment.monto == movement.monto,
+                    models.InvoicePayment.bank_account_id == movement.bank_account_id,
+                )
+                .order_by(models.InvoicePayment.id.desc())
+                .first()
+            )
+            if pago_cxp:
+                invoice = (
+                    db.query(models.PayableInvoice)
+                    .filter(models.PayableInvoice.id == pago_cxp.invoice_id)
+                    .first()
+                )
+                if invoice:
+                    invoice.saldo_pendiente += pago_cxp.monto
+                    if invoice.saldo_pendiente >= invoice.monto_total:
+                        invoice.estatus = models.InvoiceStatus.PENDIENTE
+                    else:
+                        invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+                db.delete(pago_cxp)
+
+        movement.record_status = RecordStatus.ELIMINADO
+        db.commit()
+        return True
+
+    except Exception as e:
+        db.rollback()
+        print("\n" + "=" * 50)
+        print("💥 ERROR EN DELETE_BANK_MOVEMENT 💥")
+        traceback.print_exc()
+        print("=" * 50 + "\n")
+        raise e
 
 
 def process_operator_settlement(
     db: Session, payload: schemas.OperatorSettlementPayload, user_id: int
 ):
-    # 1. UPSERT ATÓMICO del SettlementBatch (Evita error 500 por concurrencia del Frontend)
-    batch = (
-        db.query(models.SettlementBatch)
-        .filter(models.SettlementBatch.id == payload.batch_id)
-        .first()
-    )
-    if not batch:
-        batch = models.SettlementBatch(id=payload.batch_id, created_by_id=user_id)
-        db.add(batch)
-        try:
+    try:
+        # 1. UPSERT ATÓMICO del SettlementBatch (Evita error 500 por concurrencia del Frontend)
+        batch = (
+            db.query(models.SettlementBatch)
+            .filter(models.SettlementBatch.id == payload.batch_id)
+            .first()
+        )
+        if not batch:
+            batch = models.SettlementBatch(id=payload.batch_id, created_by_id=user_id)
+            db.add(batch)
+            try:
+                db.flush()
+            except Exception:
+                db.rollback()  # Si otra petición lo insertó justo antes, recuperamos ese batch
+                batch = (
+                    db.query(models.SettlementBatch)
+                    .filter(models.SettlementBatch.id == payload.batch_id)
+                    .one()
+                )
+
+        timestamp = datetime.utcnow()
+        viajes_a_facturar = set()
+
+        # 2. Iterar fases con VALIDACIÓN DE ESTADO
+        for leg_id in payload.legs:
+            # Buscamos solo fases que NO estén liquidadas (Evita doble pago al operador)
+            leg = (
+                db.query(models.TripLeg)
+                .filter(
+                    models.TripLeg.id == leg_id,
+                    models.TripLeg.record_status != RecordStatus.ELIMINADO,
+                )
+                .first()
+            )
+
+            if not leg or leg.status == models.TripStatus.LIQUIDADO:
+                continue  # Saltamos si ya se liquidó en otra petición del mismo lote
+
+            if not leg.diesel_audit_completed:
+                raise ValueError(
+                    f"Fase {leg.id} bloqueada: Falta dictamen de auditoría de diésel."
+                )
+
+            # Snapshot inmutable
+            settlement_detail = models.OperatorSettlement(
+                batch_id=batch.id,
+                trip_leg_id=leg.id,
+                operator_id=payload.operator_id,
+                snapshot_km=float(
+                    (leg.odometro_final or 0) - (leg.odometro_inicial or 0)
+                ),
+                snapshot_base_salary=leg.monto_sueldo,
+                created_at=timestamp,
+                created_by_id=user_id,
+            )
+            db.add(settlement_detail)
             db.flush()
-        except Exception:
-            db.rollback()  # Si otra petición lo insertó justo antes, recuperamos ese batch
-            batch = (
-                db.query(models.SettlementBatch)
-                .filter(models.SettlementBatch.id == payload.batch_id)
-                .one()
-            )
 
-    timestamp = datetime.utcnow()
-    viajes_a_facturar = set()
-
-    # 2. Iterar fases con VALIDACIÓN DE ESTADO
-    for leg_id in payload.legs:
-        # Buscamos solo fases que NO estén liquidadas (Evita doble pago al operador)
-        leg = (
-            db.query(models.TripLeg)
-            .filter(
-                models.TripLeg.id == leg_id,
-                models.TripLeg.record_status != RecordStatus.ELIMINADO,
-            )
-            .first()
-        )
-
-        if not leg or leg.status == "liquidado":
-            continue  # Saltamos si ya se liquidó en otra petición del mismo lote
-
-        if not leg.diesel_audit_completed:
-            raise ValueError(
-                f"Fase {leg.id} bloqueada: Falta dictamen de auditoría de diésel."
-            )
-
-        # Snapshot inmutable
-        settlement_detail = models.OperatorSettlement(
-            batch_id=batch.id,
-            trip_leg_id=leg.id,
-            operator_id=payload.operator_id,
-            snapshot_km=float((leg.odometro_final or 0) - (leg.odometro_inicial or 0)),
-            snapshot_base_salary=leg.monto_sueldo,
-            created_at=timestamp,
-            created_by_id=user_id,
-        )
-        db.add(settlement_detail)
-        db.flush()
-
-        # Inyectar conceptos automáticos
-        if leg.monto_sueldo > 0:
-            db.add(
-                models.OperatorSettlementConcept(
-                    operator_settlement_id=settlement_detail.id,
-                    descripcion="Sueldo Base Operativo",
-                    tipo=SettlementConceptType.INGRESO,
-                    amount=leg.monto_sueldo,
-                    is_automatic=True,  # CRÍTICO para filtro de PDF
-                )
-            )
-
-        leg.status = TripStatus.LIQUIDADO
-        if leg.leg_type == TripLegType.RUTA:
-            viajes_a_facturar.add(leg.trip_id)
-
-    # 3. Conceptos Manuales (Bolsa del operador)
-    if payload.manual_concepts and "settlement_detail" in locals():
-        for concept in payload.manual_concepts:
-            db.add(
-                models.OperatorSettlementConcept(
-                    operator_settlement_id=settlement_detail.id,
-                    descripcion=concept.descripcion,
-                    tipo=concept.tipo,
-                    amount=concept.amount,
-                    is_automatic=False,  # Se mostrará en el PDF
-                )
-            )
-
-    # 4. DISPARADOR DE CxC con VALIDACIÓN CRUZADA (Mundo Cliente)
-    for trip_id in viajes_a_facturar:
-        # Buscamos si el viaje ya tiene facturas (manuales 'MNL' o auto 'CXC') que no estén eliminadas
-        exists = (
-            db.query(models.ReceivableInvoice)
-            .filter(
-                models.ReceivableInvoice.viaje_id == trip_id,
-                models.ReceivableInvoice.record_status
-                != RecordStatus.ACTIVO,  # Filtro estricto
-            )
-            .first()
-        )
-
-        if not exists:
-            trip = db.query(models.Trip).get(trip_id)
-            if trip and trip.tarifa_base > 0:
-                # Lógica financiera pura (Mundo Cliente)
-                subtotal = trip.tarifa_base
-                iva = subtotal * 0.16
-                ret = subtotal * 0.04
-                total = subtotal + iva - ret
-
+            # Inyectar conceptos automáticos
+            if leg.monto_sueldo > 0:
                 db.add(
-                    models.ReceivableInvoice(
-                        client_id=trip.client_id,
-                        sub_client_id=trip.sub_client_id,
-                        viaje_id=trip.id,
-                        folio_interno=f"CXC-AUTO-{trip.id}",
-                        monto_total=total,
-                        saldo_pendiente=total,
-                        fecha_emision=date.today(),
-                        estatus=InvoiceStatus.PENDIENTE,
-                        created_by_id=user_id,
+                    models.OperatorSettlementConcept(
+                        operator_settlement_id=settlement_detail.id,
+                        descripcion="Sueldo Base Operativo",
+                        tipo=models.SettlementConceptType.INGRESO,
+                        amount=leg.monto_sueldo,
+                        is_automatic=True,  # CRÍTICO para filtro de PDF
                     )
                 )
 
-    db.commit()
-    return {"status": "success", "batch_id": batch.id}
+            leg.status = models.TripStatus.LIQUIDADO
+            if leg.leg_type == models.TripLegType.RUTA:
+                viajes_a_facturar.add(leg.trip_id)
+
+        # 3. Conceptos Manuales (Bolsa del operador)
+        if payload.manual_concepts and "settlement_detail" in locals():
+            for concept in payload.manual_concepts:
+                db.add(
+                    models.OperatorSettlementConcept(
+                        operator_settlement_id=settlement_detail.id,
+                        descripcion=concept.descripcion,
+                        tipo=concept.tipo,
+                        amount=concept.amount,
+                        is_automatic=False,  # Se mostrará en el PDF
+                    )
+                )
+
+        # 4. DISPARADOR DE CxC con VALIDACIÓN CRUZADA (Mundo Cliente)
+        for trip_id in viajes_a_facturar:
+            # Buscamos si el viaje ya tiene facturas (manuales 'MNL' o auto 'CXC') que no estén eliminadas
+            exists = (
+                db.query(models.ReceivableInvoice)
+                .filter(
+                    models.ReceivableInvoice.viaje_id == trip_id,
+                    models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                )
+                .first()
+            )
+
+            if not exists:
+                trip = db.query(models.Trip).get(trip_id)
+                if trip and trip.tarifa_base > 0:
+                    # Lógica financiera pura (Mundo Cliente)
+                    subtotal = trip.tarifa_base
+                    iva = subtotal * 0.16
+                    ret = subtotal * 0.04
+                    total = subtotal + iva - ret
+
+                    db.add(
+                        models.ReceivableInvoice(
+                            client_id=trip.client_id,
+                            sub_client_id=trip.sub_client_id,
+                            viaje_id=trip.id,
+                            folio_interno=f"CXC-AUTO-{trip.id}",
+                            monto_total=total,
+                            saldo_pendiente=total,
+                            fecha_emision=date.today(),
+                            estatus=models.InvoiceStatus.PENDIENTE,  # FIX: Enum
+                            created_by_id=user_id,
+                        )
+                    )
+
+        db.commit()
+        return {"status": "success", "batch_id": batch.id}
+
+    except Exception as e:
+        db.rollback()
+        print("\n" + "=" * 50)
+        print("💥 ERROR EN PROCESS_OPERATOR_SETTLEMENT 💥")
+        traceback.print_exc()
+        print("=" * 50 + "\n")
+        raise e
 
 
 # =========================================================
