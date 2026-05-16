@@ -130,7 +130,7 @@ def delete_supplier(db: Session, supplier_id: int):
 # =========================================================
 
 
-def get_invoices(db: Session, skip: int = 0, limit: int = 100):
+def get_invoices(db: Session, skip: int = 0, limit: int = 5000):
     invoices = (
         db.query(models.PayableInvoice)
         .options(
