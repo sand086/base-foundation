@@ -992,7 +992,7 @@ export default function Payables() {
           <div className="md:text-right border-t md:border-t-0 md:border-l border-emerald-200 dark:border-emerald-800/50 pt-3 md:pt-0 md:pl-5 shrink-0 flex items-center justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">
-                Monto Total a Pagar
+                Monto Total de Facturas Seleccionadas
               </p>
               <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none">
                 {formatMoney(selectedTotalAmount)}
