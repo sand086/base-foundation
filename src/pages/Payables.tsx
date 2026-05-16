@@ -140,6 +140,7 @@ export default function Payables() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [cecoFilter, setCecoFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("all"); // NUEVO ESTADO DE PROVEEDOR
 
   useEffect(() => {
     const fromPurchases = searchParams.get("fromPurchases");
@@ -191,6 +192,7 @@ export default function Payables() {
         inv.supplier?.razon_social ||
         inv.proveedor ||
         "Desconocido",
+      supplier_id: inv.supplier_id || inv.supplier?.id || null, // Aseguramos extraer el ID del proveedor
       saldo_pendiente: inv.saldo_pendiente || 0,
       monto_total: inv.monto_total || 0,
     })) as PayableInvoice[];
@@ -258,15 +260,33 @@ export default function Payables() {
         inv.fecha_emision?.startsWith(dateFilter) ||
         inv.fecha_vencimiento?.startsWith(dateFilter);
 
-      return matchesSearch && matchesStatus && matchesCeco && matchesDate;
+      // 5. Filtro de Proveedor
+      const matchesSupplier =
+        supplierFilter === "all" || String(inv.supplier_id) === supplierFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesCeco &&
+        matchesDate &&
+        matchesSupplier
+      );
     });
-  }, [normalizedInvoices, searchTerm, statusFilter, cecoFilter, dateFilter]);
+  }, [
+    normalizedInvoices,
+    searchTerm,
+    statusFilter,
+    cecoFilter,
+    dateFilter,
+    supplierFilter,
+  ]);
 
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setCecoFilter("all");
     setDateFilter("");
+    setSupplierFilter("all"); // Limpia el filtro de proveedor
   };
 
   const allPayments = useMemo(() => {
@@ -722,7 +742,7 @@ export default function Payables() {
       {/* ==========================================
           BARRA DE FILTROS SUPERIOR
           ========================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
         <div className="relative col-span-1 md:col-span-2 lg:col-span-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
@@ -732,6 +752,20 @@ export default function Payables() {
             className="pl-9 h-10 bg-white dark:bg-slate-950"
           />
         </div>
+
+        <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
+            <SelectValue placeholder="Proveedor" />
+          </SelectTrigger>
+          <SelectContent className="max-h-[300px]">
+            <SelectItem value="all">Todos los Proveedores</SelectItem>
+            {suppliers?.map((s: any) => (
+              <SelectItem key={s.id} value={String(s.id)}>
+                {s.razon_social}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
@@ -743,7 +777,6 @@ export default function Payables() {
             <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
             <SelectItem value="pagado">Pagado</SelectItem>
             <SelectItem value="cancelado">Cancelado</SelectItem>
-            {/* NUEVOS FILTROS */}
             <SelectItem value="vencido" className="text-brand-red font-bold">
               Vencido
             </SelectItem>
@@ -786,6 +819,42 @@ export default function Payables() {
         </Button>
       </div>
 
+      {/* NUEVO: PROYECCIÓN DINÁMICA DE PAGOS */}
+      {supplierFilter !== "all" && (
+        <div className="p-5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in zoom-in-95 duration-300 shadow-sm">
+          <div className="flex items-start md:items-center gap-4">
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Briefcase className="h-6 w-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-widest mb-1">
+                Proyección de Pago al Proveedor
+              </h4>
+              <p className="text-xs text-indigo-700 dark:text-indigo-400/80 font-medium leading-relaxed max-w-2xl">
+                Si decides liquidar a este proveedor hoy, el total vencido
+                actual es de{" "}
+                <b className="font-black text-indigo-800 dark:text-indigo-200">
+                  {formatMoney(kpis.totalVencido)}
+                </b>{" "}
+                y en los próximos 7 días vencerán{" "}
+                <b className="font-black text-indigo-800 dark:text-indigo-200">
+                  {formatMoney(kpis.compromisos7Dias)}
+                </b>{" "}
+                adicionales.
+              </p>
+            </div>
+          </div>
+          <div className="md:text-right border-t md:border-t-0 md:border-l border-indigo-200 dark:border-indigo-800/50 pt-4 md:pt-0 md:pl-6 shrink-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">
+              Total Sugerido a Pagar
+            </p>
+            <p className="text-2xl lg:text-3xl font-black text-indigo-700 dark:text-indigo-400 leading-none">
+              {formatMoney(kpis.totalVencido + kpis.compromisos7Dias)}
+            </p>
+          </div>
+        </div>
+      )}
+
       <Tabs defaultValue="cuentas" className="w-full space-y-6">
         <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
           <TabsList className="bg-slate-100/50 dark:bg-slate-900/50 backdrop-blur-md p-1 h-14 rounded-xl border border-slate-200/50 dark:border-white/10 inline-flex min-w-max sm:w-auto">
@@ -826,10 +895,7 @@ export default function Payables() {
                   Total Vencido
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-rose-600 dark:text-rose-400">
-                  $
-                  {kpis.totalVencido.toLocaleString("es-MX", {
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatMoney(kpis.totalVencido)}
                 </p>
               </div>
             </Card>
@@ -843,10 +909,7 @@ export default function Payables() {
                   Por Pagar (Vigente)
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-amber-600 dark:text-amber-400">
-                  $
-                  {kpis.totalPorPagar.toLocaleString("es-MX", {
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatMoney(kpis.totalPorPagar)}
                 </p>
               </div>
             </Card>
@@ -860,10 +923,7 @@ export default function Payables() {
                   Pagos Parciales
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-blue-600 dark:text-blue-400">
-                  $
-                  {kpis.totalParcial.toLocaleString("es-MX", {
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatMoney(kpis.totalParcial)}
                 </p>
               </div>
             </Card>
@@ -881,10 +941,7 @@ export default function Payables() {
                   A Vencer (7 Días)
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-indigo-600 dark:text-indigo-400">
-                  $
-                  {kpis.compromisos7Dias.toLocaleString("es-MX", {
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatMoney(kpis.compromisos7Dias)}
                 </p>
               </div>
             </Card>
