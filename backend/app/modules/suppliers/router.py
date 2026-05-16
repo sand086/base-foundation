@@ -21,7 +21,7 @@ router = APIRouter(tags=["Suppliers"])
 
 
 @router.get("/invoices", response_model=List[schemas.PayableInvoiceResponse])
-def read_invoices(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_invoices(skip: int = 0, limit: int = 5000, db: Session = Depends(get_db)):
     """
     Obtiene el listado de Cuentas por Pagar (Facturas de Proveedores).
     """
