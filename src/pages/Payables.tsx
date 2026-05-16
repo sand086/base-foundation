@@ -960,7 +960,7 @@ export default function Payables() {
           </div>
           <div className="md:text-right border-t md:border-t-0 md:border-l border-indigo-200 dark:border-indigo-800/50 pt-4 md:pt-0 md:pl-6 shrink-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">
-              Total Sugerido a Pagar
+              Total a Pagar a proveedor seleccionado
             </p>
             <p className="text-2xl lg:text-3xl font-black text-indigo-700 dark:text-indigo-400 leading-none">
               {formatMoney(kpis.totalVencido + kpis.compromisos7Dias)}
