@@ -18,6 +18,9 @@ import {
   Loader2,
   Briefcase,
   FilterX,
+  Check,
+  ChevronsUpDown,
+  CheckSquare,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
@@ -56,6 +59,21 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
+
+// NUEVOS COMPONENTES IMPORTADOS PARA EL BUSCADOR Y CHECKBOX
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -134,13 +152,17 @@ export default function Payables() {
   const [prefillData, setPrefillData] = useState<LocalPrefillData | null>(null);
 
   // ==========================================
-  // ESTADOS PARA LOS FILTROS SUPERIORES
+  // ESTADOS PARA LOS FILTROS Y SELECCIÓN
   // ==========================================
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [cecoFilter, setCecoFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
-  const [supplierFilter, setSupplierFilter] = useState("all"); // NUEVO ESTADO DE PROVEEDOR
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [openSupplierCombo, setOpenSupplierCombo] = useState(false); // Dropdown buscador
+
+  // ESTADO PARA CHECKBOXES
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<number[]>([]);
 
   useEffect(() => {
     const fromPurchases = searchParams.get("fromPurchases");
@@ -192,7 +214,7 @@ export default function Payables() {
         inv.supplier?.razon_social ||
         inv.proveedor ||
         "Desconocido",
-      supplier_id: inv.supplier_id || inv.supplier?.id || null, // Aseguramos extraer el ID del proveedor
+      supplier_id: inv.supplier_id || inv.supplier?.id || null,
       saldo_pendiente: inv.saldo_pendiente || 0,
       monto_total: inv.monto_total || 0,
     })) as PayableInvoice[];
@@ -215,7 +237,6 @@ export default function Payables() {
   }, [normalizedInvoices]);
 
   const filteredInvoices = useMemo(() => {
-    // Definimos hoy y la ventana de 5 días para "Por Vencer"
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
@@ -223,7 +244,6 @@ export default function Payables() {
     en5Dias.setDate(hoy.getDate() + 5);
 
     return normalizedInvoices.filter((inv: any) => {
-      // 1. Buscador (Folio, Proveedor, UUID o Concepto)
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch =
         !searchTerm ||
@@ -232,7 +252,6 @@ export default function Payables() {
         inv.uuid?.toLowerCase().includes(searchLower) ||
         inv.concepto?.toLowerCase().includes(searchLower);
 
-      // 2. Filtro de Estatus (INTEGRADO CON VENCIDO Y POR VENCER)
       let matchesStatus = false;
       const isActiva = inv.estatus !== "pagado" && inv.estatus !== "cancelado";
       const fechaVencimiento = new Date(inv.fecha_vencimiento);
@@ -250,17 +269,14 @@ export default function Payables() {
           inv.estatus?.toLowerCase() === statusFilter.toLowerCase();
       }
 
-      // 3. Filtro de CECO
       const matchesCeco =
         cecoFilter === "all" || String(inv.cost_center_id) === cecoFilter;
 
-      // 4. Filtro de Fecha (Emisión o Vencimiento)
       const matchesDate =
         !dateFilter ||
         inv.fecha_emision?.startsWith(dateFilter) ||
         inv.fecha_vencimiento?.startsWith(dateFilter);
 
-      // 5. Filtro de Proveedor
       const matchesSupplier =
         supplierFilter === "all" || String(inv.supplier_id) === supplierFilter;
 
@@ -286,7 +302,8 @@ export default function Payables() {
     setStatusFilter("all");
     setCecoFilter("all");
     setDateFilter("");
-    setSupplierFilter("all"); // Limpia el filtro de proveedor
+    setSupplierFilter("all");
+    setSelectedInvoiceIds([]); // Limpiar selección al quitar filtros
   };
 
   const allPayments = useMemo(() => {
@@ -317,7 +334,9 @@ export default function Payables() {
     });
   }, [filteredInvoices]);
 
-  // KPIs Dinámicos basados en la tabla FILTRADA
+  // ==========================================
+  // KPIs DINÁMICOS Y CÁLCULO DE CHECKBOXES
+  // ==========================================
   const kpis = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -344,7 +363,6 @@ export default function Payables() {
       .filter((inv) => inv.estatus === "pago_parcial")
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    // NUEVO KPI DE VALOR AGREGADO: Flujo de caja requerido a 7 días
     const compromisos7Dias = filteredInvoices
       .filter((inv) => {
         if (
@@ -361,6 +379,17 @@ export default function Payables() {
 
     return { totalVencido, totalPorPagar, totalParcial, compromisos7Dias };
   }, [filteredInvoices]);
+
+  // CÁLCULO DE LO QUE HAS SELECCIONADO CON LOS CHECKBOXES
+  const selectedTotalAmount = useMemo(() => {
+    const selectedInvoicesData = filteredInvoices.filter((inv) =>
+      selectedInvoiceIds.includes(inv.id),
+    );
+    return selectedInvoicesData.reduce(
+      (sum, inv) => sum + (inv.saldo_pendiente || 0),
+      0,
+    );
+  }, [filteredInvoices, selectedInvoiceIds]);
 
   const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     const payloadConDefaults = {
@@ -409,6 +438,8 @@ export default function Payables() {
     if (ok) {
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
+      // Limpiamos el ID seleccionado para que no se quede atascado en el panel de Checkboxes
+      setSelectedInvoiceIds((prev) => prev.filter((id) => id !== invoiceId));
       await Promise.all([refreshInvoices?.(), refreshBankAccounts?.()]);
     }
   };
@@ -422,10 +453,41 @@ export default function Payables() {
   };
 
   // ==========================================
-  // COLUMNAS ACTUALIZADAS
+  // COLUMNAS (AÑADIDA COLUMNA DE SELECCIÓN)
   // ==========================================
   const payablesColumns: ColumnDef<PayableInvoice>[] = useMemo(
     () => [
+      {
+        key: "select",
+        header: "Sel.",
+        sortable: false,
+        render: (_, row) => {
+          // Desactivamos el checkbox si la factura ya está pagada o cancelada
+          const isDisabled =
+            row.estatus === "pagado" ||
+            row.estatus === "cancelado" ||
+            row.saldo_pendiente === 0;
+          return (
+            <div className="flex justify-center items-center h-full">
+              <Checkbox
+                checked={selectedInvoiceIds.includes(row.id)}
+                disabled={isDisabled}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setSelectedInvoiceIds((prev) => [...prev, row.id]);
+                  } else {
+                    setSelectedInvoiceIds((prev) =>
+                      prev.filter((id) => id !== row.id),
+                    );
+                  }
+                }}
+                aria-label={`Seleccionar factura ${row.folio_interno || row.id}`}
+                className={cn(isDisabled && "opacity-50")}
+              />
+            </div>
+          );
+        },
+      },
       {
         key: "folio_interno",
         header: "Folio / ID",
@@ -615,7 +677,7 @@ export default function Payables() {
         ),
       },
     ],
-    [],
+    [selectedInvoiceIds], // ← IMPORTANTE: Agregado como dependencia
   );
 
   const paymentsColumns: ColumnDef<any>[] = useMemo(
@@ -742,8 +804,8 @@ export default function Payables() {
       {/* ==========================================
           BARRA DE FILTROS SUPERIOR
           ========================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
-        <div className="relative col-span-1 md:col-span-2 lg:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
+        <div className="relative col-span-1 md:col-span-3 lg:col-span-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Buscar folio o proveedor..."
@@ -753,19 +815,69 @@ export default function Payables() {
           />
         </div>
 
-        <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
-            <SelectValue placeholder="Proveedor" />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            <SelectItem value="all">Todos los Proveedores</SelectItem>
-            {suppliers?.map((s: any) => (
-              <SelectItem key={s.id} value={String(s.id)}>
-                {s.razon_social}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* COMBOBOX DE PROVEEDORES (BUSCADOR INTERNO) */}
+        <Popover open={openSupplierCombo} onOpenChange={setOpenSupplierCombo}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={openSupplierCombo}
+              className="h-10 justify-between bg-white dark:bg-slate-950 w-full font-normal overflow-hidden"
+            >
+              <span className="truncate">
+                {supplierFilter === "all"
+                  ? "Todos los Proveedores"
+                  : suppliers?.find((s: any) => String(s.id) === supplierFilter)
+                      ?.razon_social || "Proveedor"}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[300px] p-0 max-h-[300px] overflow-hidden bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xl z-50">
+            <Command>
+              <CommandInput placeholder="Buscar proveedor..." />
+              <CommandEmpty>No se encontró el proveedor.</CommandEmpty>
+              <CommandGroup className="max-h-[250px] overflow-y-auto">
+                <CommandItem
+                  onSelect={() => {
+                    setSupplierFilter("all");
+                    setOpenSupplierCombo(false);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      supplierFilter === "all" ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  Todos los Proveedores
+                </CommandItem>
+                {suppliers?.map((s: any) => (
+                  <CommandItem
+                    key={s.id}
+                    value={s.razon_social} // Usado por CommandInput para filtrar
+                    onSelect={() => {
+                      setSupplierFilter(String(s.id));
+                      setOpenSupplierCombo(false);
+                    }}
+                    className="cursor-pointer text-xs"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        supplierFilter === String(s.id)
+                          ? "opacity-100"
+                          : "opacity-0",
+                      )}
+                    />
+                    {s.razon_social}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
@@ -819,7 +931,9 @@ export default function Payables() {
         </Button>
       </div>
 
-      {/* NUEVO: PROYECCIÓN DINÁMICA DE PAGOS */}
+      {/* ==========================================
+          PROYECCIÓN DINÁMICA DE PROVEEDOR
+          ========================================== */}
       {supplierFilter !== "all" && (
         <div className="p-5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in zoom-in-95 duration-300 shadow-sm">
           <div className="flex items-start md:items-center gap-4">
@@ -851,6 +965,47 @@ export default function Payables() {
             <p className="text-2xl lg:text-3xl font-black text-indigo-700 dark:text-indigo-400 leading-none">
               {formatMoney(kpis.totalVencido + kpis.compromisos7Dias)}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          BANNER DE FACTURAS SELECCIONADAS CON CHECKBOXES
+          ========================================== */}
+      {selectedInvoiceIds.length > 0 && (
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in slide-in-from-bottom-4 duration-300 shadow-lg relative z-20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
+              <CheckSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-widest">
+                Facturas Seleccionadas ({selectedInvoiceIds.length})
+              </h4>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400/80 font-medium">
+                Has palomeado {selectedInvoiceIds.length} documento
+                {selectedInvoiceIds.length > 1 ? "s" : ""} para analizar o
+                liquidar.
+              </p>
+            </div>
+          </div>
+          <div className="md:text-right border-t md:border-t-0 md:border-l border-emerald-200 dark:border-emerald-800/50 pt-3 md:pt-0 md:pl-5 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">
+                Monto Total a Pagar
+              </p>
+              <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none">
+                {formatMoney(selectedTotalAmount)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedInvoiceIds([])}
+              className="text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-900"
+            >
+              Desmarcar Todo
+            </Button>
           </div>
         </div>
       )}
@@ -928,7 +1083,6 @@ export default function Payables() {
               </div>
             </Card>
 
-            {/* KPI DE VALOR AGREGADO: Proyección a 7 Días */}
             <Card className="p-6 flex items-center gap-5 group hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all cursor-default relative overflow-hidden">
               <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-indigo-600 dark:text-indigo-400">
                 <Clock className="h-6 w-6" />
