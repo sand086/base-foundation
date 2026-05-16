@@ -140,7 +140,6 @@ def get_invoices(db: Session, skip: int = 0, limit: int = 5000):
         .filter(models.PayableInvoice.record_status != RecordStatus.ELIMINADO)
         .order_by(models.PayableInvoice.fecha_vencimiento.asc())
         .offset(skip)
-        .limit(limit)
         .all()
     )
 
