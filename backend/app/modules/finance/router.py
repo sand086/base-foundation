@@ -335,7 +335,7 @@ async def bulk_upload_invoices(
 
 @router.get("/receivables")
 def get_receivable_invoices(
-    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+    skip: int = 0, limit: int = 5000, db: Session = Depends(get_db)
 ):
     try:
         invoices = (
