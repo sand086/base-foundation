@@ -576,12 +576,13 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
 
 
 @router.post("/stamp/payment", summary="Generar Complemento de Pago")
+@router.post("/stamp/payment", summary="Generar Complemento de Pago")
 def registrar_pago_multiple(
     payload: RegistroPagoPayload, db: Session = Depends(get_db)
 ):
     """
-    Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-    el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA BLINDADO PARA BANCOS 1 A 1)
+    Endpoint Fase 3.2: Registra el pago y genera el Complemento (REP).
+    (Bypass desactivado para ver el error real del SAT)
     """
     import uuid
     from datetime import datetime
@@ -599,10 +600,8 @@ def registrar_pago_multiple(
         if factura and factura.uuid:
             clean_uuid = factura.uuid.strip()
             if len(clean_uuid) != 36:
-                # Ya no lanzamos error, solo lo limpiamos o lo dejamos pasar para el bypass
                 pass
 
-    # AQUI INICIA TU SERVICIO (DEBE ESTAR IMPORTADO ARRIBA EN EL ARCHIVO)
     service = PaymentComplementService(db)
 
     try:
@@ -614,112 +613,12 @@ def registrar_pago_multiple(
             fecha_pago=payload.fecha_pago,
             referencia=payload.referencia,
             cuenta_deposito=payload.cuenta_deposito,
-            user_id=1,  # Opcional: El ID de tu usuario logueado
+            user_id=1,
         )
         return resultado
 
     except Exception as e:
-        #   2. BYPASS DE EMERGENCIA: Si el SAT lo rebota,
-        # descontamos CxC, registramos el pago y metemos el dinero al Banco localmente (1 a 1).
-
-        print(f"Bypass activado por error de SAT: {str(e)}")
-
-        fake_uuid = str(uuid.uuid4()).upper()
-
-        try:
-            # A. GARANTIZAMOS QUE HAYA UNA CUENTA BANCARIA PARA EL REPORTE
-            bank_account_id = payload.cuenta_deposito
-            if not bank_account_id:
-                caja_general = (
-                    db.query(models.BankAccount)
-                    .filter(
-                        models.BankAccount.alias == "Caja General Virtual",
-                        models.BankAccount.record_status
-                        != models.RecordStatus.ELIMINADO,
-                    )
-                    .first()
-                )
-                if not caja_general:
-                    caja_general = models.BankAccount(
-                        banco="Efectivo / Virtual",
-                        numero_cuenta="0000000000",
-                        alias="Caja General Virtual",
-                        tipo_cuenta="virtual",
-                        saldo=0.0,
-                        created_by_id=1,
-                    )
-                    db.add(caja_general)
-                    db.flush()
-                bank_account_id = caja_general.id
-
-            # B. ACTUALIZAMOS FACTURAS Y GUARDAMOS MOVIMIENTOS 1 a 1
-            for pago in payload.pagos:
-                factura = (
-                    db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.id == pago.invoice_id)
-                    .first()
-                )
-                if factura:
-                    # Restamos el pago del saldo pendiente
-                    factura.saldo_pendiente -= pago.monto_pagado
-                    if factura.saldo_pendiente <= 0.01:
-                        factura.saldo_pendiente = 0
-                        factura.estatus = "pagado"
-                    else:
-                        factura.estatus = "pago_parcial"
-
-                    # Extraemos la fecha de forma segura
-                    fecha_pago_clean = (
-                        str(payload.fecha_pago).replace("Z", "").split("T")[0]
-                    )
-                    try:
-                        fecha_pago_date = datetime.strptime(
-                            fecha_pago_clean, "%Y-%m-%d"
-                        ).date()
-                    except Exception:
-                        fecha_pago_date = datetime.now().date()
-
-                    # 1. Guardamos la tablilla del pago en CxC
-                    nuevo_pago = models.ReceivableInvoicePayment(
-                        invoice_id=factura.id,
-                        bank_account_id=int(bank_account_id),
-                        fecha_pago=fecha_pago_date,
-                        monto=pago.monto_pagado,
-                        metodo_pago=payload.forma_pago,
-                        referencia=payload.referencia or "",
-                        cuenta_deposito=(
-                            str(payload.cuenta_deposito)
-                            if payload.cuenta_deposito
-                            else ""
-                        ),
-                        complemento_uuid=fake_uuid,
-                    )
-                    db.add(nuevo_pago)
-
-                    # 2. Cremos el movimiento individual en el Banco
-                    if pago.monto_pagado > 0:
-                        mov_schema = finance_schemas.BankMovementCreate(
-                            bank_account_id=int(bank_account_id),
-                            tipo="ingreso",
-                            monto=pago.monto_pagado,
-                            concepto=f"CXC {factura.folio_interno or factura.id}",
-                            referencia=(payload.referencia or f"BYP {fake_uuid[:8]}")[
-                                :100
-                            ],
-                        )
-                        create_bank_movement(db, mov_schema, current_user_id=1)
-
-            db.commit()
-
-            # Retornamos una respuesta falsa pero exitosa al frontend
-            return {
-                "status": "success",
-                "message": "Pago y movimiento bancario registrados internamente (Simulación REP 1 a 1).",
-                "data": {"rep_uuid": fake_uuid},
-            }
-
-        except Exception as inner_e:
-            db.rollback()
-            raise HTTPException(
-                status_code=500, detail=f"Error en bypass de tesorería: {str(inner_e)}"
-            )
+        # 🚀 TRUCO DE DEBUG: Lanzamos el error directo a la pantalla
+        raise HTTPException(
+            status_code=400, detail=f"EL SAT RECHAZÓ EL PAGO. Motivo exacto: {str(e)}"
+        )
