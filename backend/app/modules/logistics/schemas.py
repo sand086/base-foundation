@@ -466,6 +466,7 @@ class TripResponse(TripBase):
     motogenerator_2_unit: Optional[UnitResponse] = None
 
     legs: List[TripLegResponse] = Field(default_factory=list)
+    receivable_invoices: List[Any] = Field(default_factory=list)
 
     record_status: RecordStatus
     created_at: Optional[datetime] = None

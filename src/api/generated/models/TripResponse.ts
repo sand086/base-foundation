@@ -67,6 +67,7 @@ export type TripResponse = {
     motogenerator_1_unit?: (UnitResponse | null);
     motogenerator_2_unit?: (UnitResponse | null);
     legs?: Array<TripLegResponse>;
+    receivable_invoices?: Array<any>;
     record_status: RecordStatus;
     created_at?: (string | null);
     updated_at?: (string | null);

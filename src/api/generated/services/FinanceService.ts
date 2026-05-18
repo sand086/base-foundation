@@ -20,8 +20,7 @@ import { request as __request } from '../core/request';
 export class FinanceService {
     /**
      * Read Cost Centers
-     * Obtiene los Centros de Costos creados por la importación masiva del SAT
-     * o creados manualmente, para mostrarlos en el frontend.
+     * Obtiene los Centros de Costos activos.
      * @returns app__modules__finance__schemas__CostCenterResponse Successful Response
      * @throws ApiError
      */
@@ -44,7 +43,6 @@ export class FinanceService {
     }
     /**
      * Create Bank Account
-     * Crea una nueva cuenta bancaria en Tesorería
      * @param requestBody
      * @returns BankAccountResponse Successful Response
      * @throws ApiError
@@ -64,7 +62,6 @@ export class FinanceService {
     }
     /**
      * Update Bank Account
-     * Edita la cuenta bancaria. Permite ajuste de saldo si se autorizó en el front.
      * @param accountId
      * @param requestBody
      * @returns BankAccountResponse Successful Response
@@ -89,7 +86,6 @@ export class FinanceService {
     }
     /**
      * Delete Bank Account
-     * Aplica un Soft Delete a la cuenta para proteger la integridad contable.
      * @param accountId
      * @returns any Successful Response
      * @throws ApiError
@@ -121,7 +117,6 @@ export class FinanceService {
     }
     /**
      * Create Manual Movement
-     * Crea un movimiento manual (Ingreso o Egreso) afectando el saldo directamente.
      * @param requestBody
      * @returns BankMovementResponse Successful Response
      * @throws ApiError
@@ -141,7 +136,6 @@ export class FinanceService {
     }
     /**
      * Conciliate Movement
-     * Marca un movimiento bancario como conciliado (Verificado contra el banco).
      * @param movementId
      * @returns BankMovementResponse Successful Response
      * @throws ApiError
@@ -162,7 +156,6 @@ export class FinanceService {
     }
     /**
      * Delete Bank Movement
-     * Elimina un movimiento bancario y restaura el saldo de la cuenta.
      * @param movementId
      * @returns any Successful Response
      * @throws ApiError
@@ -183,9 +176,6 @@ export class FinanceService {
     }
     /**
      * Bulk Upload Invoices
-     * Endpoint robusto para procesar el reporte SAT.
-     * 1. Guarda el archivo original en el servidor para auditoría.
-     * 2. Procesa los registros evitando duplicados por UUID.
      * @param formData
      * @returns any Successful Response
      * @throws ApiError
@@ -212,7 +202,7 @@ export class FinanceService {
      */
     public static getReceivableInvoicesApiFinanceReceivablesGet(
         skip?: number,
-        limit: number = 100,
+        limit: number = 5000,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'GET',
@@ -228,7 +218,6 @@ export class FinanceService {
     }
     /**
      * Create Manual Receivable
-     * Endpoint para crear una factura manual (CxC) generada por el usuario.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -268,7 +257,6 @@ export class FinanceService {
     }
     /**
      * Register Receivable Payment
-     * CAMBIO CLAVE: Cobra una factura de cliente e ingresa el dinero a Tesorería.
      * @param invoiceId
      * @param requestBody
      * @returns any Successful Response
@@ -293,7 +281,6 @@ export class FinanceService {
     }
     /**
      * Upload Payment Xml
-     * CAMBIO CLAVE: Si subes el XML del REP, busca/crea una cuenta puente y hace el ingreso en tesorería.
      * @param formData
      * @returns any Successful Response
      * @throws ApiError
@@ -313,8 +300,6 @@ export class FinanceService {
     }
     /**
      * Fix Orphan Payments
-     * Busca los pagos antiguos que decían "cuenta_deposito: '' " (o null)
-     * y los inserta oficialmente en la cuenta bancaria de Tesorería que le mandes.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -334,7 +319,6 @@ export class FinanceService {
     }
     /**
      * Register Petty Cash
-     * Registra un gasto de Caja Chica (Sin XML) afectando directo la Tesorería.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -354,8 +338,6 @@ export class FinanceService {
     }
     /**
      * Reopen Receivable Invoice
-     * Restaura una cuenta por cobrar a su estado financiero original (Pendiente).
-     * Respeta la verdad absoluta del SAT sin hacer "trampas" en los estatus.
      * @param invoiceId
      * @returns any Successful Response
      * @throws ApiError
@@ -376,8 +358,6 @@ export class FinanceService {
     }
     /**
      * Process Settlement For Operator
-     * Procesa la liquidación de un Operador específico dentro de un Lote (Batch).
-     * Respeta la inmutabilidad de datos y dispara la creación de CxC automáticamente.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -397,7 +377,6 @@ export class FinanceService {
     }
     /**
      * Read Indirect Categories
-     * Obtiene el listado de categorías para gastos indirectos
      * @returns IndirectCategoryResponse Successful Response
      * @throws ApiError
      */
@@ -409,7 +388,6 @@ export class FinanceService {
     }
     /**
      * Create Indirect Category
-     * Crea una nueva categoría de gasto indirecto
      * @param requestBody
      * @returns IndirectCategoryResponse Successful Response
      * @throws ApiError
@@ -429,7 +407,6 @@ export class FinanceService {
     }
     /**
      * Update Indirect Category
-     * Actualiza una categoría existente
      * @param catId
      * @param requestBody
      * @returns IndirectCategoryResponse Successful Response
@@ -454,7 +431,6 @@ export class FinanceService {
     }
     /**
      * Delete Indirect Category
-     * Realiza un borrado lógico de la categoría
      * @param catId
      * @returns any Successful Response
      * @throws ApiError

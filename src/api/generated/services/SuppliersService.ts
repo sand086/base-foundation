@@ -22,7 +22,7 @@ export class SuppliersService {
      */
     public static readInvoicesApiSuppliersInvoicesGet(
         skip?: number,
-        limit: number = 100,
+        limit: number = 5000,
     ): CancelablePromise<Array<PayableInvoiceResponse>> {
         return __request(OpenAPI, {
             method: 'GET',

@@ -708,6 +708,7 @@ class Trip(AuditMixin, Base):
     motogenerator_2_unit = relationship(
         "Unit", foreign_keys=[motogenerator_2_id], viewonly=True
     )
+    receivable_invoices = relationship("ReceivableInvoice", back_populates="trip")
 
 
 class TripLeg(AuditMixin, Base):
@@ -1511,7 +1512,7 @@ class ReceivableInvoice(AuditMixin, Base):
     tipo_comprobante = Column(String(5), nullable=True)  # I, E, P
 
     sub_client = relationship("SubClient")
-    trip = relationship("Trip")
+    trip = relationship("Trip", back_populates="receivable_invoices")
     payments = relationship(
         "ReceivableInvoicePayment",
         back_populates="invoice",

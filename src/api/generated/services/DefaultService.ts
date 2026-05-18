@@ -680,6 +680,27 @@ export class DefaultService {
         });
     }
     /**
+     * Generar Factura Libre
+     * Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE).
+     * Crea un CFDI 4.0 de Ingreso puro usando solo los datos del frontend.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static generarFacturaLibreApiSatStampFreeInvoicePost(
+        requestBody: Record<string, any>,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/free-invoice',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Test Invoice Pro
      * @returns any Successful Response
      * @throws ApiError
