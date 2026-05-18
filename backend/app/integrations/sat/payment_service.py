@@ -618,7 +618,8 @@ class PaymentComplementService:
         if retenciones_p_xml or traslados_p_xml:
             impuestos_p_xml = f"<pago20:ImpuestosP>{retenciones_p_xml}{traslados_p_xml}</pago20:ImpuestosP>"
 
-        pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
+        # pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
+        pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}"'
 
         if d.get("banco_ordenante"):
             pago_attrs += f' NomBancoOrdExt="{d["banco_ordenante"]}"'
@@ -628,7 +629,7 @@ class PaymentComplementService:
             pago_attrs += f' CtaBeneficiario="{d["cuenta_beneficiario"]}"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="{self.emisor_cp}">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="{self.emisor_cp}">
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
