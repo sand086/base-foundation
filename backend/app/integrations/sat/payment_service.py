@@ -163,7 +163,10 @@ class PaymentComplementService:
         self.emisor_nombre = (
             "TRANSPORTES RAPIDOS 3T"
             if self.emisor_rfc == "EKU9003173C9"
-            else raw_emisor.upper().replace(" S.A. DE C.V.", "").strip()
+            else raw_emisor.upper()
+            .replace(" S.A. DE C.V.", "")
+            .replace(" SA DE CV", "")
+            .strip()
         )
         self.emisor_regimen = (
             regimen_conf.value if regimen_conf and regimen_conf.value else "624"
