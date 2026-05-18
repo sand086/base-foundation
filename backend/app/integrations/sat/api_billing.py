@@ -334,38 +334,29 @@ def generar_factura_final(
 
 @router.get("/invoice/{uuid}/pdf", response_class=FileResponse)
 def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
-    """
-    Busca el archivo PDF generado en el disco y lo descarga,
-    soportando prefijos del frontend (ej. CFDI_Final_UUID).
-    """
     import re
+    from pathlib import Path
 
+    # Limpiamos el UUID
     match = re.search(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         str(uuid),
     )
-    clean_uuid = match.group(0) if match else str(uuid)
+    clean_uuid = match.group(0).upper() if match else str(uuid).upper()
 
-    service = CartaPorteService(
-        db
-    )  # Aquí cualquiera de los dos funciona (solo leemos disco)
+    # Buscamos la ruta absoluta y segura
+    base_path = Path(__file__).resolve().parents[3]
+    pdf_path = base_path / "storage" / "xml_timbrados" / f"{clean_uuid}.pdf"
 
-    pdf_path_upper = service.storage_dir / f"{clean_uuid.upper()}.pdf"
-    pdf_path_lower = service.storage_dir / f"{clean_uuid.lower()}.pdf"
-
-    if pdf_path_upper.exists():
-        pdf_path = pdf_path_upper
-    elif pdf_path_lower.exists():
-        pdf_path = pdf_path_lower
-    else:
+    if not pdf_path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"El PDF del documento {clean_uuid} no se encontró en el servidor.",
+            detail="El PDF no existe. Si este fue un pago con 'Bypass de Emergencia', significa que el SAT rechazó el timbrado original y el archivo físico nunca se generó. Revisa la consola de tu servidor.",
         )
 
     return FileResponse(
         path=str(pdf_path),
-        filename=f"{uuid}.pdf",
+        filename=f"CFDI_{clean_uuid}.pdf",
         media_type="application/pdf",
         content_disposition_type="attachment",
     )
@@ -373,36 +364,27 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
 
 @router.get("/invoice/{uuid}/xml", response_class=FileResponse)
 def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
-    """
-    Busca el archivo XML timbrado en el disco y lo descarga,
-    soportando prefijos del frontend.
-    """
     import re
+    from pathlib import Path
 
     match = re.search(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         str(uuid),
     )
-    clean_uuid = match.group(0) if match else str(uuid)
+    clean_uuid = match.group(0).upper() if match else str(uuid).upper()
 
-    service = CartaPorteService(db)
+    base_path = Path(__file__).resolve().parents[3]
+    xml_path = base_path / "storage" / "xml_timbrados" / f"{clean_uuid}.xml"
 
-    xml_path_upper = service.storage_dir / f"{clean_uuid.upper()}.xml"
-    xml_path_lower = service.storage_dir / f"{clean_uuid.lower()}.xml"
-
-    if xml_path_upper.exists():
-        xml_path = xml_path_upper
-    elif xml_path_lower.exists():
-        xml_path = xml_path_lower
-    else:
+    if not xml_path.exists():
         raise HTTPException(
             status_code=404,
-            detail=f"El XML del documento {clean_uuid} no se encontró en el servidor.",
+            detail="El XML no existe. Si este fue un pago con 'Bypass de Emergencia', significa que el SAT rechazó el timbrado original y el archivo físico nunca se generó.",
         )
 
     return FileResponse(
         path=str(xml_path),
-        filename=f"{uuid}.xml",
+        filename=f"CFDI_{clean_uuid}.xml",
         media_type="application/xml",
         content_disposition_type="attachment",
     )
