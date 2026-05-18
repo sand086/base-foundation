@@ -1042,6 +1042,7 @@ class CartaPorteService:
                     ReceivableInvoice.is_nominal == False,
                     ReceivableInvoice.record_status != "E",
                 )
+                .order_by(ReceivableInvoice.id.desc())
                 .first()
             )
 

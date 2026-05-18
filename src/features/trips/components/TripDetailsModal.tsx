@@ -207,36 +207,11 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  // 🚀 LÓGICA BLINDADA DE EXTRACCIÓN DE UUIDS
-  /*   const processUuids = (tripData: any) => {
-    if (!tripData) return;
-    const facturas = tripData.receivable_invoices || tripData.invoices || [];
-    const cp = facturas.find((f: any) => f.is_nominal === true && f.uuid);
-    const ff = facturas.find((f: any) => f.is_nominal === false && f.uuid);
-
-    const cachedFinalUuid = localStorage.getItem(`final_uuid_${tripData.id}`);
-    const cachedCpUuid = localStorage.getItem(`cp_uuid_${tripData.id}`);
-
-    const finalId =
-      ff?.uuid || tripData.uuid_factura_final || cachedFinalUuid || null;
-    let cpId = cp?.uuid || cachedCpUuid || null;
-
-    if (!cpId && tripData.uuid_fiscal && tripData.uuid_fiscal !== finalId) {
-      cpId = tripData.uuid_fiscal;
-    }
-
-    setUuidCartaPorte(cpId);
-    setUuidFacturaFinal(finalId);
-
-    if (cpId) localStorage.setItem(`cp_uuid_${tripData.id}`, cpId);
-    if (finalId) localStorage.setItem(`final_uuid_${tripData.id}`, finalId);
-  }; */
-
   const processUuids = (tripData: any) => {
     if (!tripData) return;
     const facturas = tripData.receivable_invoices || tripData.invoices || [];
 
-    // 🚀 FIX 1: Filtrar todas las Cartas Porte y ordenar por ID descendente para tomar SIEMPRE LA MÁS NUEVA
+    // Filtrar todas las Cartas Porte y tomar SIEMPRE LA MÁS NUEVA
     const cps = facturas.filter((f: any) => f.is_nominal === true && f.uuid);
     const cp = cps.sort((a: any, b: any) => b.id - a.id)[0];
 
@@ -244,25 +219,17 @@ export function TripDetailsModal({
     const ffs = facturas.filter((f: any) => f.is_nominal === false && f.uuid);
     const ff = ffs.sort((a: any, b: any) => b.id - a.id)[0];
 
-    const cachedFinalUuid = localStorage.getItem(`final_uuid_${tripData.id}`);
-    const cachedCpUuid = localStorage.getItem(`cp_uuid_${tripData.id}`);
-
-    // 🚀 FIX 2: Prioridad ABSOLUTA a lo que viene de la BD, el caché es solo último recurso
-    const finalId =
-      ff?.uuid || tripData.uuid_factura_final || cachedFinalUuid || null;
-    let cpId = cp?.uuid || tripData.uuid_fiscal || cachedCpUuid || null;
+    // Prioridad ABSOLUTA a lo que viene de la BD (Cero localStorage)
+    const finalId = ff?.uuid || tripData.uuid_factura_final || null;
+    let cpId = cp?.uuid || tripData.uuid_fiscal || null;
 
     // Evitar colisión si por error el uuid_fiscal guardó la factura final
     if (cpId === finalId && cpId !== null) {
-      cpId = cp?.uuid || cachedCpUuid || null;
+      cpId = cp?.uuid || null;
     }
 
     setUuidCartaPorte(cpId);
     setUuidFacturaFinal(finalId);
-
-    // Actualizamos el caché con los UUIDs más nuevos
-    if (cpId) localStorage.setItem(`cp_uuid_${tripData.id}`, cpId);
-    if (finalId) localStorage.setItem(`final_uuid_${tripData.id}`, finalId);
   };
 
   useEffect(() => {
@@ -283,6 +250,33 @@ export function TripDetailsModal({
       setIsEditing(false);
     }
   }, [open, initialTrip]);
+
+  useEffect(() => {
+    try {
+      const keysToRemove: string[] = [];
+      // Buscar solo la basura específica
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key &&
+          (key.startsWith("cp_uuid_") || key.startsWith("final_uuid_"))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      // Eliminar solo esa basura
+      keysToRemove.forEach((key) => {
+        localStorage.removeItem(key);
+      });
+      if (keysToRemove.length > 0) {
+        console.log(
+          `🧹 Limpieza automática: ${keysToRemove.length} UUIDs fantasma eliminados.`,
+        );
+      }
+    } catch (error) {
+      console.error("Error limpiando caché:", error);
+    }
+  }, []);
 
   const refreshLocalTrip = async () => {
     if (!localTrip?.id) return;
