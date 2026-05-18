@@ -115,11 +115,9 @@ export default function Receivables() {
 
     return dataArray
       .filter((inv: any) => {
-        const montoValido = Number(inv.monto_total) !== 1.12;
-        const folioValido =
-          inv.folio_interno === null ||
-          inv.folio_interno !== "folio interno bueno";
-        return montoValido && folioValido;
+        // 🚀 FIX: El Backend ya ocultó las Cartas Porte.
+        // Dejamos pasar TODAS las facturas reales (F-X, CXC-X) sin importar el monto.
+        return inv.folio_interno !== "folio interno bueno";
       })
       .map((inv: any) => {
         const clienteNombre =
