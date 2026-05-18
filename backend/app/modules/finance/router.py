@@ -356,7 +356,7 @@ def get_receivable_invoices(
 
         response = []
         for inv in invoices:
-            if inv.monto_total and float(inv.monto_total) == 1.12:
+            if getattr(inv, "is_nominal", False) == True:
                 continue
 
             pagos_list = [
