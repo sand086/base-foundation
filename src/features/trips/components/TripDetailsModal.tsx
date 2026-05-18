@@ -207,29 +207,52 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
+  // 🚀 FIX: Lógica blindada con Memoria de Estado y Caché Seguro V2
   const processUuids = (tripData: any) => {
     if (!tripData) return;
     const facturas = tripData.receivable_invoices || tripData.invoices || [];
 
-    // Filtrar todas las Cartas Porte y tomar SIEMPRE LA MÁS NUEVA
+    // 1. Intentar sacar los datos directos de la BD (si vienen)
     const cps = facturas.filter((f: any) => f.is_nominal === true && f.uuid);
-    const cp = cps.sort((a: any, b: any) => b.id - a.id)[0];
+    const dbCpId = cps.sort((a: any, b: any) => b.id - a.id)[0]?.uuid || null;
 
-    // Lo mismo para la factura final por seguridad
     const ffs = facturas.filter((f: any) => f.is_nominal === false && f.uuid);
-    const ff = ffs.sort((a: any, b: any) => b.id - a.id)[0];
+    const dbFinalId =
+      ffs.sort((a: any, b: any) => b.id - a.id)[0]?.uuid || null;
 
-    // Prioridad ABSOLUTA a lo que viene de la BD (Cero localStorage)
-    const finalId = ff?.uuid || tripData.uuid_factura_final || null;
-    let cpId = cp?.uuid || tripData.uuid_fiscal || null;
-
-    // Evitar colisión si por error el uuid_fiscal guardó la factura final
-    if (cpId === finalId && cpId !== null) {
-      cpId = cp?.uuid || null;
+    // 2. Leer del nuevo caché blindado (V2)
+    let cachedCpId = null;
+    let cachedFinalId = null;
+    try {
+      const cacheStr = localStorage.getItem(`uuids_v2_${tripData.id}`);
+      if (cacheStr) {
+        const cache = JSON.parse(cacheStr);
+        // Validamos estrictamente que el caché pertenece a este viaje
+        if (cache.trip_id === tripData.id) {
+          cachedCpId = cache.cp;
+          cachedFinalId = cache.final;
+        }
+      }
+    } catch (e) {
+      // Silenciamos el error: Si no hay caché o no es un JSON válido, simplemente lo ignoramos
+      console.warn("No se pudo leer el caché local de UUIDs", e);
     }
 
-    setUuidCartaPorte(cpId);
-    setUuidFacturaFinal(finalId);
+    // 3. Actualizamos los estados sin borrar lo que ya sabemos que funciona
+    setUuidFacturaFinal((prev) => {
+      // Prioridad: 1. BD, 2. Caché Seguro, 3. Lo que ya tenía React en memoria
+      return dbFinalId || cachedFinalId || prev;
+    });
+
+    setUuidCartaPorte((prev) => {
+      const resolvedCp =
+        dbCpId || cachedCpId || prev || tripData.uuid_fiscal || null;
+      // Evitar que la Carta Porte se robe el UUID de la Factura Final
+      if (resolvedCp === (dbFinalId || cachedFinalId)) {
+        return prev;
+      }
+      return resolvedCp;
+    });
   };
 
   useEffect(() => {
@@ -251,10 +274,10 @@ export function TripDetailsModal({
     }
   }, [open, initialTrip]);
 
+  // 🧹 EFECTO BARRENDERO: Limpia la basura vieja (cruces de clientes)
   useEffect(() => {
     try {
       const keysToRemove: string[] = [];
-      // Buscar solo la basura específica
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (
@@ -264,7 +287,6 @@ export function TripDetailsModal({
           keysToRemove.push(key);
         }
       }
-      // Eliminar solo esa basura
       keysToRemove.forEach((key) => {
         localStorage.removeItem(key);
       });
@@ -745,13 +767,21 @@ export function TripDetailsModal({
                       handleDownloadPDF(uuidCartaPorte);
                     } else {
                       handleStampNominal(localTrip.id, async (responseData) => {
-                        const generatedUuid = responseData?.data?.uuid;
+                        const generatedUuid =
+                          responseData?.data?.uuid || responseData?.uuid;
                         if (generatedUuid) {
                           setUuidCartaPorte(generatedUuid);
+
+                          // 🚀 NUEVO: Guardar en Caché Seguro V2
                           localStorage.setItem(
-                            `cp_uuid_${localTrip.id}`,
-                            generatedUuid,
+                            `uuids_v2_${localTrip.id}`,
+                            JSON.stringify({
+                              cp: generatedUuid,
+                              final: uuidFacturaFinal,
+                              trip_id: localTrip.id,
+                            }),
                           );
+
                           handleDownloadBothFiles(generatedUuid, false);
                           toast.success(
                             "¡CARTA PORTE BYPASS GENERADA Y DESCARGADA!",
@@ -1108,43 +1138,43 @@ export function TripDetailsModal({
                                       })()}
                                     </div>
                                   </div>
-                                  {leg.status === "liquidado" && (
-                                    <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-6 items-center justify-between shadow-sm">
-                                      <div className="space-y-1">
-                                        <span className="text-[9px] font-black uppercase text-emerald-600/80 dark:text-emerald-400/80 tracking-widest">
-                                          Total Liquidado a Operador
+                                </div>
+                                {leg.status === "liquidado" && (
+                                  <div className="mt-4 p-4 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30 flex flex-wrap gap-6 items-center justify-between shadow-sm">
+                                    <div className="space-y-1">
+                                      <span className="text-[9px] font-black uppercase text-emerald-600/80 dark:text-emerald-400/80 tracking-widest">
+                                        Total Liquidado a Operador
+                                      </span>
+                                      <p className="text-lg font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                        {formatCurrency(
+                                          leg.monto_neto_pagado || 0,
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div className="flex gap-6 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                      <div className="flex flex-col">
+                                        <span className="uppercase text-[8px] text-slate-400">
+                                          Base / Bono
                                         </span>
-                                        <p className="text-lg font-mono font-black text-emerald-700 dark:text-emerald-400">
+                                        <span className="font-mono text-slate-600 dark:text-slate-300">
                                           {formatCurrency(
-                                            leg.monto_neto_pagado || 0,
+                                            leg.monto_sueldo || 0,
                                           )}
-                                        </p>
+                                        </span>
                                       </div>
-                                      <div className="flex gap-6 text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                        <div className="flex flex-col">
-                                          <span className="uppercase text-[8px] text-slate-400">
-                                            Base / Bono
-                                          </span>
-                                          <span className="font-mono text-slate-600 dark:text-slate-300">
-                                            {formatCurrency(
-                                              leg.monto_sueldo || 0,
-                                            )}
-                                          </span>
-                                        </div>
-                                        <div className="flex flex-col">
-                                          <span className="uppercase text-[8px] text-slate-400">
-                                            Maniobras
-                                          </span>
-                                          <span className="font-mono text-slate-600 dark:text-slate-300">
-                                            {formatCurrency(
-                                              leg.monto_maniobras || 0,
-                                            )}
-                                          </span>
-                                        </div>
+                                      <div className="flex flex-col">
+                                        <span className="uppercase text-[8px] text-slate-400">
+                                          Maniobras
+                                        </span>
+                                        <span className="font-mono text-slate-600 dark:text-slate-300">
+                                          {formatCurrency(
+                                            leg.monto_maniobras || 0,
+                                          )}
+                                        </span>
                                       </div>
                                     </div>
-                                  )}
-                                </div>
+                                  </div>
+                                )}
                               </CardContent>
                             </Card>
                           );
@@ -1172,23 +1202,7 @@ export function TripDetailsModal({
                           </CardTitle>
                           {!isEditing ? (
                             <div className="flex gap-3">
-                              {/* <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleManualSync}
-                                disabled={isSyncing}
-                                className="h-9 font-black uppercase tracking-widest text-[9px] shadow-sm bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
-                              >
-                                <History className="h-3.5 w-3.5 mr-1.5" /> Sync
-                              </Button>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => setIsEditing(true)}
-                                className="h-9 font-black uppercase tracking-widest text-[9px] shadow-md bg-brand-navy hover:bg-slate-800 text-white"
-                              >
-                                <Edit2 className="h-3.5 w-3.5 mr-1.5" /> Editar
-                              </Button> */}
+                              {/* Botón opcional comentado por usuario */}
                             </div>
                           ) : (
                             <div className="flex gap-3">
@@ -1385,9 +1399,15 @@ export function TripDetailsModal({
                                               setUuidFacturaFinal(
                                                 generatedFinalUuid,
                                               );
+
+                                              // 🚀 NUEVO: Guardar en Caché Seguro V2
                                               localStorage.setItem(
-                                                `final_uuid_${localTrip.id}`,
-                                                generatedFinalUuid,
+                                                `uuids_v2_${localTrip.id}`,
+                                                JSON.stringify({
+                                                  cp: uuidCartaPorte,
+                                                  final: generatedFinalUuid,
+                                                  trip_id: localTrip.id,
+                                                }),
                                               );
 
                                               toast.success(
