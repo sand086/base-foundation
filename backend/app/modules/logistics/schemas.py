@@ -452,6 +452,20 @@ class TariffBasicInfo(ORMBase):
     tipo_unidad: str
 
 
+class ReceivableInvoiceLite(ORMBase):
+    id: int
+    viaje_id: Optional[int] = None
+    uuid: Optional[str] = None
+    folio_interno: Optional[str] = None
+    is_nominal: Optional[bool] = False
+    monto_total: float = 0.0
+    saldo_pendiente: float = 0.0
+    status_sat: Optional[str] = None
+    estatus: Optional[str] = None
+    pdf_url: Optional[str] = None
+    xml_url: Optional[str] = None
+
+
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
@@ -466,7 +480,7 @@ class TripResponse(TripBase):
     motogenerator_2_unit: Optional[UnitResponse] = None
 
     legs: List[TripLegResponse] = Field(default_factory=list)
-    receivable_invoices: List[Any] = Field(default_factory=list)
+    receivable_invoices: List[ReceivableInvoiceLite] = Field(default_factory=list)
 
     record_status: RecordStatus
     created_at: Optional[datetime] = None
