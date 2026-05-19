@@ -142,7 +142,7 @@ export default function Payables() {
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
 
-  // NUEVOS ESTADOS PARA CANCELAR Y REABRIR
+  // ESTADOS PARA CANCELAR Y REABRIR
   const [isCancelInvoiceOpen, setIsCancelInvoiceOpen] = useState(false);
   const [isReopenInvoiceOpen, setIsReopenInvoiceOpen] = useState(false);
   const [invoiceToCancel, setInvoiceToCancel] = useState<PayableInvoice | null>(
@@ -169,9 +169,12 @@ export default function Payables() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [cecoFilter, setCecoFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("all");
-  const [openSupplierCombo, setOpenSupplierCombo] = useState(false); // Dropdown buscador
+  const [openSupplierCombo, setOpenSupplierCombo] = useState(false);
+
+  // 🚀 NUEVO: FILTROS DE RANGO DE FECHAS
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   // ESTADO PARA CHECKBOXES
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<number[]>([]);
@@ -248,6 +251,7 @@ export default function Payables() {
     }));
   }, [normalizedInvoices]);
 
+  // 🚀 SE ACTUALIZÓ PARA INCLUIR EL RANGO DE FECHAS
   const filteredInvoices = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -284,20 +288,30 @@ export default function Payables() {
       const matchesCeco =
         cecoFilter === "all" || String(inv.cost_center_id) === cecoFilter;
 
-      const matchesDate =
-        !dateFilter ||
-        inv.fecha_emision?.startsWith(dateFilter) ||
-        inv.fecha_vencimiento?.startsWith(dateFilter);
-
       const matchesSupplier =
         supplierFilter === "all" || String(inv.supplier_id) === supplierFilter;
+
+      // 🚀 NUEVO: Lógica de Filtro por Rango de Fechas (Basado en Emisión o Vencimiento, según necesites, aquí es por Emisión)
+      let matchesDate = true;
+      if (startDate || endDate) {
+        if (!inv.fecha_emision) {
+          matchesDate = false;
+        } else {
+          const emision = inv.fecha_emision.includes("T")
+            ? inv.fecha_emision.split("T")[0]
+            : inv.fecha_emision;
+
+          if (startDate && emision < startDate) matchesDate = false;
+          if (endDate && emision > endDate) matchesDate = false;
+        }
+      }
 
       return (
         matchesSearch &&
         matchesStatus &&
         matchesCeco &&
-        matchesDate &&
-        matchesSupplier
+        matchesSupplier &&
+        matchesDate
       );
     });
   }, [
@@ -305,17 +319,19 @@ export default function Payables() {
     searchTerm,
     statusFilter,
     cecoFilter,
-    dateFilter,
     supplierFilter,
+    startDate,
+    endDate,
   ]);
 
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setCecoFilter("all");
-    setDateFilter("");
     setSupplierFilter("all");
-    setSelectedInvoiceIds([]); // Limpiar selección al quitar filtros
+    setStartDate("");
+    setEndDate("");
+    setSelectedInvoiceIds([]);
   };
 
   const allPayments = useMemo(() => {
@@ -392,7 +408,6 @@ export default function Payables() {
     return { totalVencido, totalPorPagar, totalParcial, compromisos7Dias };
   }, [filteredInvoices]);
 
-  // CÁLCULO DE LO QUE HAS SELECCIONADO CON LOS CHECKBOXES
   const selectedTotalAmount = useMemo(() => {
     const selectedInvoicesData = filteredInvoices.filter((inv) =>
       selectedInvoiceIds.includes(inv.id),
@@ -435,7 +450,6 @@ export default function Payables() {
     }
   };
 
-  // NUEVOS HANDLERS PARA CANCELAR Y REABRIR
   const handleConfirmCancelInvoice = async () => {
     if (!invoiceToCancel) return;
     const ok = await updateInvoice(invoiceToCancel.id, {
@@ -477,7 +491,6 @@ export default function Payables() {
     if (ok) {
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
-      // Limpiamos el ID seleccionado para que no se quede atascado en el panel de Checkboxes
       setSelectedInvoiceIds((prev) => prev.filter((id) => id !== invoiceId));
       await Promise.all([refreshInvoices?.(), refreshBankAccounts?.()]);
     }
@@ -501,7 +514,6 @@ export default function Payables() {
         header: "Sel.",
         sortable: false,
         render: (_, row) => {
-          // Desactivamos el checkbox si la factura ya está pagada o cancelada
           const isDisabled =
             row.estatus === "pagado" ||
             row.estatus === "cancelado" ||
@@ -704,7 +716,6 @@ export default function Payables() {
                   <CreditCard className="h-4 w-4 mr-2" /> Registrar Pago
                 </DropdownMenuItem>
 
-                {/* NUEVO: Botón de Cancelar */}
                 {row.estatus !== "pagado" && row.estatus !== "cancelado" && (
                   <DropdownMenuItem
                     onClick={() => {
@@ -717,7 +728,6 @@ export default function Payables() {
                   </DropdownMenuItem>
                 )}
 
-                {/* NUEVO: Botón de Reabrir */}
                 {row.estatus === "cancelado" && (
                   <DropdownMenuItem
                     onClick={() => {
@@ -874,8 +884,8 @@ export default function Payables() {
       {/* ==========================================
           BARRA DE FILTROS SUPERIOR
           ========================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
-        <div className="relative col-span-1 md:col-span-3 lg:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
+        <div className="relative col-span-1 lg:col-span-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Buscar folio o proveedor..."
@@ -885,7 +895,7 @@ export default function Payables() {
           />
         </div>
 
-        {/* COMBOBOX DE PROVEEDORES (BUSCADOR INTERNO) */}
+        {/* COMBOBOX DE PROVEEDORES */}
         <Popover open={openSupplierCombo} onOpenChange={setOpenSupplierCombo}>
           <PopoverTrigger asChild>
             <Button
@@ -926,7 +936,7 @@ export default function Payables() {
                 {suppliers?.map((s: any) => (
                   <CommandItem
                     key={s.id}
-                    value={s.razon_social} // Usado por CommandInput para filtrar
+                    value={s.razon_social}
                     onSelect={() => {
                       setSupplierFilter(String(s.id));
                       setOpenSupplierCombo(false);
@@ -949,56 +959,74 @@ export default function Payables() {
           </PopoverContent>
         </Popover>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
-            <SelectValue placeholder="Estatus" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los Estatus</SelectItem>
-            <SelectItem value="pendiente">Pendiente</SelectItem>
-            <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
-            <SelectItem value="pagado">Pagado</SelectItem>
-            <SelectItem value="cancelado">Cancelado</SelectItem>
-            <SelectItem value="vencido" className="text-brand-red font-bold">
-              Vencido
-            </SelectItem>
-            <SelectItem value="por_vencer" className="text-amber-600 font-bold">
-              Por Vencer (5 días)
-            </SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={cecoFilter} onValueChange={setCecoFilter}>
-          <SelectTrigger className="h-10 bg-white dark:bg-slate-950">
-            <SelectValue placeholder="Centro de Costos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los CECOs</SelectItem>
-            {uniqueCecos.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.nombre}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="relative">
+        {/* 🚀 FILTRO RANGO DE FECHAS */}
+        <div className="flex items-center bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm col-span-1 lg:col-span-1 xl:col-span-2">
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-2">
+            De:
+          </span>
           <Input
             type="date"
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="h-10 bg-white dark:bg-slate-950 w-full text-sm text-slate-700 dark:text-slate-300"
-            title="Filtrar por Fecha de Emisión"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-7 w-[130px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
+          />
+          <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-2"></div>
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-2">
+            A:
+          </span>
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-7 w-[130px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
           />
         </div>
 
-        <Button
-          variant="ghost"
-          onClick={clearFilters}
-          className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-xs uppercase tracking-widest"
-        >
-          <FilterX className="h-4 w-4" /> Limpiar
-        </Button>
+        <div className="flex col-span-1 md:col-span-3 lg:col-span-4 gap-3 justify-end border-t border-slate-200 dark:border-slate-800 pt-3 mt-1">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-[180px]">
+              <SelectValue placeholder="Estatus" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los Estatus</SelectItem>
+              <SelectItem value="pendiente">Pendiente</SelectItem>
+              <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
+              <SelectItem value="pagado">Pagado</SelectItem>
+              <SelectItem value="cancelado">Cancelado</SelectItem>
+              <SelectItem value="vencido" className="text-brand-red font-bold">
+                Vencido
+              </SelectItem>
+              <SelectItem
+                value="por_vencer"
+                className="text-amber-600 font-bold"
+              >
+                Por Vencer (5 días)
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={cecoFilter} onValueChange={setCecoFilter}>
+            <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-[180px]">
+              <SelectValue placeholder="Centro de Costos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los CECOs</SelectItem>
+              {uniqueCecos.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="ghost"
+            onClick={clearFilters}
+            className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-xs uppercase tracking-widest ml-auto"
+          >
+            <FilterX className="h-4 w-4" /> Limpiar
+          </Button>
+        </div>
       </div>
 
       {/* ==========================================
