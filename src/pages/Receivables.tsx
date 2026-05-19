@@ -16,6 +16,7 @@ import {
   Filter,
   FileText,
   AlertTriangle,
+  FilterX,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input"; // 🚀 Importación de Input
 
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
@@ -93,8 +95,10 @@ export default function Receivables() {
 
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
 
-  // Filtro por cliente
+  // 🚀 NUEVOS: Estados para filtros
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   // Selección de Facturas
   const [selectedInvoice, setSelectedInvoice] =
@@ -210,12 +214,40 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
+  // 🚀 LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + RANGO DE FECHAS)
   const filteredInvoices = useMemo(() => {
-    if (selectedClientId === "all") return formattedInvoices;
-    return formattedInvoices.filter(
-      (inv) => String(inv.client_id) === selectedClientId,
-    );
-  }, [formattedInvoices, selectedClientId]);
+    let filtered = formattedInvoices;
+
+    // Filtro por Cliente
+    if (selectedClientId !== "all") {
+      filtered = filtered.filter(
+        (inv) => String(inv.client_id) === selectedClientId,
+      );
+    }
+
+    // Filtro por Rango de Fechas (Fecha Emisión)
+    if (startDate) {
+      filtered = filtered.filter((inv) => {
+        if (!inv.fecha_emision) return false;
+        const emision = inv.fecha_emision.includes("T")
+          ? inv.fecha_emision.split("T")[0]
+          : inv.fecha_emision;
+        return emision >= startDate;
+      });
+    }
+
+    if (endDate) {
+      filtered = filtered.filter((inv) => {
+        if (!inv.fecha_emision) return false;
+        const emision = inv.fecha_emision.includes("T")
+          ? inv.fecha_emision.split("T")[0]
+          : inv.fecha_emision;
+        return emision <= endDate;
+      });
+    }
+
+    return filtered;
+  }, [formattedInvoices, selectedClientId, startDate, endDate]);
 
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
@@ -349,12 +381,9 @@ export default function Receivables() {
     }
   };
 
-  // 🚀 NUEVA FUNCIÓN: Llama al Backend mandando el parámetro "cascade"
   const handleCancelInvoice = async (cascade: boolean) => {
     if (!invoiceToCancel) return;
     try {
-      // ⚠️ AQUÍ DEBES ASEGURARTE DE QUE TU HOOK `useReceivables` TENGA ESTA FUNCIÓN LISTA PARA RECIBIR OPCIONES
-      // Si tu hook actual no soporta el segundo parámetro, tendremos que modificar `useReceivables.ts`
       const success = await deleteReceivable(invoiceToCancel.id, { cascade });
       if (success) {
         setIsCancelModalOpen(false);
@@ -686,7 +715,7 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* BOTÓN VIEJO: ELIMINAR (Dejamos el viejo solo por compatibilidad, pero podemos ocultarlo luego) */}
+                {/* BOTÓN VIEJO: ELIMINAR */}
                 {!hasPayments && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -730,31 +759,76 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm">
-            <Filter className="h-4 w-4 text-slate-400 mr-2" />
-            <Select
-              value={selectedClientId}
-              onValueChange={setSelectedClientId}
-            >
-              <SelectTrigger className="w-[200px] border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
-                <SelectValue placeholder="Todos los clientes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="font-bold text-xs">
-                  Todos los clientes
-                </SelectItem>
-                {uniqueClients.map((client) => (
-                  <SelectItem
-                    key={client.id}
-                    value={client.id}
-                    className="text-xs uppercase"
-                  >
-                    {client.name}
+          {/* ======================================= */}
+          {/* 🚀 BARRA DE FILTROS ACTUALIZADA (CLIENTE + RANGO DE FECHAS) */}
+          {/* ======================================= */}
+          <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
+            {/* Filtro Cliente */}
+            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[220px]">
+              <Filter className="h-4 w-4 text-slate-400 mr-2" />
+              <Select
+                value={selectedClientId}
+                onValueChange={setSelectedClientId}
+              >
+                <SelectTrigger className="w-full border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <SelectValue placeholder="Todos los clientes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="font-bold text-xs">
+                    Todos los clientes
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  {uniqueClients.map((client) => (
+                    <SelectItem
+                      key={client.id}
+                      value={client.id}
+                      className="text-xs uppercase"
+                    >
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 🚀 Filtro Rango de Fechas */}
+            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm gap-2">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                De:
+              </span>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
+              />
+              <div className="h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                A:
+              </span>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
+              />
+            </div>
+
+            {/* 🚀 Botón Limpiar (Solo aparece si hay algún filtro activo) */}
+            {(selectedClientId !== "all" || startDate || endDate) && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSelectedClientId("all");
+                  setStartDate("");
+                  setEndDate("");
+                }}
+                className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest"
+              >
+                <FilterX className="h-4 w-4" /> Limpiar
+              </Button>
+            )}
           </div>
+          {/* ======================================= */}
 
           <Button
             variant="outline"
