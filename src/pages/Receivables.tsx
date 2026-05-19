@@ -1055,12 +1055,11 @@ export default function Receivables() {
                     <ul className="list-disc pl-5 mt-2 space-y-1">
                       <li>La factura (CxC)</li>
                       <li>El viaje completo (Operaciones)</li>
-                      <li>La liquidación del operador (RRHH)</li>
+                      <li>La liquidación del operador</li>
+                      <li>
+                        Cualquier ticket, monitoreo o conciliación relacionada
+                      </li>
                     </ul>
-                    <p className="mt-2 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] uppercase tracking-wider">
-                      * Nota: Los vales de diésel serán rescatados para usarse
-                      de nuevo.
-                    </p>
                   </div>
                   <Button
                     onClick={() => {

@@ -470,7 +470,7 @@ def get_receivable_invoices(
 def delete_receivable_invoice(
     invoice_id: int, cascade: bool = False, db: Session = Depends(get_db)
 ):
-    """🚀 FIX: ELIMINACIÓN SEGURA Y RESCATE DE VALES DE DIÉSEL"""
+    """🚀 FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)
@@ -486,22 +486,22 @@ def delete_receivable_invoice(
                 detail="Bloqueo de Tesorería: No se puede eliminar ni cancelar una factura que ya tiene cobros registrados. Anula los cobros primero.",
             )
 
-        # 1. ACCIÓN PRINCIPAL (Aplica para ambos casos)
+        # 1. ACCIÓN PRINCIPAL: Cancelar Factura
         invoice.estatus = models.InvoiceStatus.CANCELADO
-        invoice.record_status = models.RecordStatus.ELIMINADO  # Borrado lógico real
+        invoice.record_status = models.RecordStatus.ELIMINADO
 
         # RESPALDO DEL VIAJE Y LIBERACIÓN
         trip_id_respaldo = invoice.viaje_id
         invoice.viaje_id = None  # Liberamos el viaje para poder refacturarlo
 
-        # Si NO es cascada, terminamos aquí. El viaje queda intacto y listo para facturar.
+        # Si NO es cascada, terminamos aquí.
         if not cascade:
             db.commit()
             return {
                 "message": "Factura eliminada. El viaje ha sido liberado para volver a liquidarse."
             }
 
-        # 2. 🔴 DESTRUCCIÓN EN CASCADA (Si cascade == True)
+        # 2. 🔴 DESTRUCCIÓN EN CASCADA ABSOLUTA (Si cascade == True)
         if trip_id_respaldo:
             trip = (
                 db.query(models.Trip).filter(models.Trip.id == trip_id_respaldo).first()
@@ -520,7 +520,7 @@ def delete_receivable_invoice(
                 for leg in legs:
                     leg.record_status = models.RecordStatus.ELIMINADO
 
-                    # Liberar Unidad (Si estaba en ruta)
+                    # --- Liberar Unidad (Si estaba en ruta) ---
                     if leg.unit_id:
                         unit = (
                             db.query(models.Unit)
@@ -530,7 +530,7 @@ def delete_receivable_invoice(
                         if unit and unit.status == models.UnitStatus.EN_RUTA:
                             unit.status = models.UnitStatus.DISPONIBLE
 
-                    # Liberar Operador (Si estaba en ruta)
+                    # --- Liberar Operador (Si estaba en ruta) ---
                     if leg.operator_id:
                         operator = (
                             db.query(models.Operator)
@@ -543,24 +543,35 @@ def delete_receivable_invoice(
                         ):
                             operator.status = models.OperatorStatus.ACTIVO
 
-                    # C. 🛡️ ASEGURAR / RESCATAR VALES DE DIÉSEL
+                    # --- 💥 TRAZABILIDAD (TIMELINE) ---
+                    # Apagamos los eventos de rastreo para que no queden flotando
+                    timeline_events = (
+                        db.query(models.TripTimelineEvent)
+                        .filter(models.TripTimelineEvent.trip_leg_id == leg.id)
+                        .all()
+                    )
+                    for event in timeline_events:
+                        event.record_status = models.RecordStatus.ELIMINADO
+
+                    # --- 💥 VALES DE DIÉSEL Y CONCILIACIÓN ---
                     fuel_logs = (
                         db.query(models.FuelLog)
                         .filter(models.FuelLog.trip_leg_id == leg.id)
                         .all()
                     )
                     for fuel in fuel_logs:
-                        # En lugar de ELIMINAR, los liberamos para regresarlos al Pool
+                        # Borrado lógico: desaparece del módulo
+                        fuel.record_status = models.RecordStatus.ELIMINADO
                         fuel.trip_leg_id = None
+                        # Limpiamos todo rastro de la conciliación
                         fuel.is_conciliated = False
-                        # Limpiamos cálculos de conciliación
                         fuel.km_sm = None
                         fuel.litros_sm = None
                         fuel.rendimiento_sm = None
                         fuel.diferencia_litros = None
                         fuel.rendimiento_real = None
 
-                    # D. Eliminar Liquidaciones del Operador
+                    # --- 💥 LIQUIDACIÓN DEL OPERADOR Y SUS DESGLOSES ---
                     settlements = (
                         db.query(models.OperatorSettlement)
                         .filter(models.OperatorSettlement.trip_leg_id == leg.id)
@@ -569,9 +580,21 @@ def delete_receivable_invoice(
                     for st in settlements:
                         st.record_status = models.RecordStatus.ELIMINADO
 
+                        # También apagamos los conceptos internos (sueldo base, maniobras, etc)
+                        concepts = (
+                            db.query(models.OperatorSettlementConcept)
+                            .filter(
+                                models.OperatorSettlementConcept.operator_settlement_id
+                                == st.id
+                            )
+                            .all()
+                        )
+                        for concept in concepts:
+                            concept.record_status = models.RecordStatus.ELIMINADO
+
         db.commit()
         return {
-            "message": "Factura y viaje eliminados en cascada. Los vales de diésel fueron rescatados."
+            "message": "Factura, viaje, diésel, liquidación y trazabilidad eliminados. Todo ha vuelto a su estado original."
         }
 
     except HTTPException:
