@@ -12,10 +12,15 @@ export const receivableService = {
     return data as ReceivableInvoice[];
   },
 
-  deleteInvoice: async (id: number | string) => {
-    return await FinanceService.deleteReceivableInvoiceApiFinanceReceivablesInvoiceIdDelete(
-      Number(id),
+  // 🚀 FIX: Modificado para usar AxiosClient directo y soportar la query string ?cascade=true
+  deleteInvoice: async (id: number | string, cascade?: boolean) => {
+    const { data } = await axiosClient.delete(
+      `/api/finance/receivables/${id}`,
+      {
+        params: cascade !== undefined ? { cascade } : undefined,
+      },
     );
+    return data;
   },
 
   registerPayment: async (invoiceId: number | string, paymentData: any) => {

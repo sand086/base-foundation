@@ -1,4 +1,3 @@
-// src/features/receivables/hooks/useReceivables.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { receivableService } from "@/features/receivables/services/receivableService";
@@ -25,12 +24,13 @@ export const useReceivables = () => {
     refetchOnWindowFocus: true, // Recarga si cambias de ventana y regresas a tu app
   });
 
-  // 2. MUTACIÓN: Eliminar factura
+  // 2. MUTACIÓN: Eliminar o Cancelar factura (Soporta Cascada)
   const deleteReceivableMut = useMutation({
-    mutationFn: (id: number) => receivableService.deleteInvoice(id),
+    mutationFn: ({ id, cascade }: { id: number; cascade?: boolean }) =>
+      receivableService.deleteInvoice(id, cascade),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receivables"] });
-      toast.success("Factura eliminada correctamente");
+      // El toast de éxito ahora lo maneja la interfaz (Receivables.tsx) para dar mensajes más exactos
     },
   });
 
@@ -87,12 +87,18 @@ export const useReceivables = () => {
     refreshReceivables: receivablesQuery.refetch,
 
     // ACCIONES
-    deleteReceivable: async (id: number) => {
+    // 🚀 Acepta un segundo parámetro { cascade } para la eliminación avanzada
+    deleteReceivable: async (id: number, options?: { cascade?: boolean }) => {
       try {
-        await deleteReceivableMut.mutateAsync(id);
+        await deleteReceivableMut.mutateAsync({
+          id,
+          cascade: options?.cascade,
+        });
         return true;
       } catch (error: any) {
-        toast.error("Error al eliminar la factura");
+        toast.error(
+          getErrorMessage(error, "Error al eliminar/cancelar la factura"),
+        );
         return false;
       }
     },

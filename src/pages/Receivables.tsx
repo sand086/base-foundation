@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Eye,
@@ -14,6 +15,7 @@ import {
   FileSignature,
   Filter,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,20 +86,29 @@ export default function Receivables() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  // Modales de Eliminación/Cancelación
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
 
-  // NUEVO: Estado para el filtro por cliente
+  // Filtro por cliente
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
 
+  // Selección de Facturas
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
   const [invoicesToPay, setInvoicesToPay] = useState<ReceivableInvoice[]>([]);
   const [importedServices, setImportedServices] = useState<
     FinalizableService[] | undefined
   >();
+
   const [invoiceToDelete, setInvoiceToDelete] =
     useState<ReceivableInvoice | null>(null);
+  const [invoiceToCancel, setInvoiceToCancel] =
+    useState<ReceivableInvoice | null>(null);
+
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // FORMATEO DE DATOS DE LA API
@@ -115,9 +126,11 @@ export default function Receivables() {
 
     return dataArray
       .filter((inv: any) => {
-        // 🚀 FIX: El Backend ya ocultó las Cartas Porte.
-        // Dejamos pasar TODAS las facturas reales (F-X, CXC-X) sin importar el monto.
-        return inv.folio_interno !== "folio interno bueno";
+        // Dejamos pasar TODAS las facturas reales
+        return (
+          inv.folio_interno !== "folio interno bueno" &&
+          inv.estatus !== "cancelado"
+        );
       })
       .map((inv: any) => {
         const clienteNombre =
@@ -126,20 +139,17 @@ export default function Receivables() {
           inv.client_razon_social ||
           "Cliente Desconocido";
 
-        // 1. EXTRAER DÍAS DE CRÉDITO (Priorizando el valor que tú necesitas)
         let diasCredito = Number(
-          inv.dias_credito || // Si la factura trae los días calculados en la raíz
-            inv.client?.dias_credito || // Si no, los del cliente
+          inv.dias_credito ||
+            inv.client?.dias_credito ||
             inv.cliente?.dias_credito ||
             0,
         );
 
-        // 2. PARCHE ESPECÍFICO PARA BRAUN (Aseguramos que sea 8)
         if (clienteNombre.toUpperCase().includes("BRAUN")) {
           diasCredito = 8;
         }
 
-        // 3. ASIGNAR VALORES POR DEFECTO SI SIGUE EN 0
         if (!diasCredito) {
           if (clienteNombre.toUpperCase().includes("HANSA")) diasCredito = 15;
           else if (clienteNombre.toUpperCase().includes("KARCHER"))
@@ -155,11 +165,7 @@ export default function Receivables() {
             ? fechaEmision.split("T")[0]
             : fechaEmision;
 
-          // Reemplazamos guiones por diagonales para evitar errores de zona horaria en JS
           const fechaObj = new Date(cleanDateStr.replace(/-/g, "/"));
-
-          // ⚠️ ELIMINAMOS EL WHILE QUE SE SALTA SÁBADOS Y DOMINGOS ⚠️
-          // Esto es lo que hacía que 8 días se convirtieran en 12 o que 30 se volvieran 42.
           fechaObj.setDate(fechaObj.getDate() + diasCredito);
 
           const yyyy = fechaObj.getFullYear();
@@ -192,7 +198,6 @@ export default function Receivables() {
       }) as ReceivableInvoice[];
   }, [receivables]);
 
-  // NUEVO: Extraemos los clientes únicos para el filtro
   const uniqueClients = useMemo(() => {
     const map = new Map<string, string>();
     formattedInvoices.forEach((inv) => {
@@ -205,7 +210,6 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
-  // NUEVO: Filtramos las facturas según el cliente seleccionado
   const filteredInvoices = useMemo(() => {
     if (selectedClientId === "all") return formattedInvoices;
     return formattedInvoices.filter(
@@ -213,7 +217,6 @@ export default function Receivables() {
     );
   }, [formattedInvoices, selectedClientId]);
 
-  // NUEVO: El resumen financiero ahora es REACTIVO a las facturas filtradas
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
     let totalCobrado = 0;
@@ -343,6 +346,27 @@ export default function Receivables() {
     if (success) {
       setIsDeleteDialogOpen(false);
       setInvoiceToDelete(null);
+    }
+  };
+
+  // 🚀 NUEVA FUNCIÓN: Llama al Backend mandando el parámetro "cascade"
+  const handleCancelInvoice = async (cascade: boolean) => {
+    if (!invoiceToCancel) return;
+    try {
+      // ⚠️ AQUÍ DEBES ASEGURARTE DE QUE TU HOOK `useReceivables` TENGA ESTA FUNCIÓN LISTA PARA RECIBIR OPCIONES
+      // Si tu hook actual no soporta el segundo parámetro, tendremos que modificar `useReceivables.ts`
+      const success = await deleteReceivable(invoiceToCancel.id, { cascade });
+      if (success) {
+        setIsCancelModalOpen(false);
+        setInvoiceToCancel(null);
+        toast.success(
+          cascade
+            ? "Factura y Operaciones eliminadas"
+            : "Factura cancelada lógicamente",
+        );
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -525,7 +549,6 @@ export default function Receivables() {
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
           const isProvisional = row.status_sat === "PROVISIONAL";
 
-          // 🚀 Detectamos si la factura ya está timbrada (tiene UUID)
           const isStamped = !!row.uuid && row.status_sat === "TIMBRADA";
 
           return (
@@ -539,7 +562,7 @@ export default function Receivables() {
                     "h-8 w-8 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10",
                     isSelectionActive
                       ? "opacity-40 cursor-not-allowed bg-slate-100 dark:bg-slate-800"
-                      : "hover:bg-slate-100 dark:hover:bg-slate-800 bg-white/50 dark:bg-slate-900/50",
+                      : "hover:bg-slate-100 dark:bg-slate-800 bg-white/50 dark:bg-slate-900/50",
                   )}
                 >
                   <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
@@ -560,7 +583,6 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {/* 🚀 BOTONES DE DESCARGA SIEMPRE DISPONIBLES SI ESTÁ TIMBRADA */}
                 {isStamped && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -647,6 +669,38 @@ export default function Receivables() {
                     </DropdownMenuItem>
                   </>
                 )}
+
+                {/* 🚀 NUEVO BOTÓN: Cancelar Factura */}
+                {!hasPayments && row.estatus !== "cancelado" && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setInvoiceToCancel(row);
+                        setIsCancelModalOpen(true);
+                      }}
+                      className="gap-2 font-bold text-xs uppercase tracking-tight text-orange-600 dark:text-orange-500 cursor-pointer dark:focus:bg-orange-950/30"
+                    >
+                      <Ban className="h-4 w-4 mr-2" /> Cancelar Factura
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/* BOTÓN VIEJO: ELIMINAR (Dejamos el viejo solo por compatibilidad, pero podemos ocultarlo luego) */}
+                {!hasPayments && (
+                  <>
+                    <DropdownMenuSeparator className="dark:bg-white/10" />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setInvoiceToDelete(row);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar (Legacy)
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -664,7 +718,6 @@ export default function Receivables() {
     );
   }
 
-  // Nombre del cliente seleccionado para pasar al Modal de Estado de Cuenta
   const selectedClientName =
     selectedClientId === "all"
       ? "Todos los Clientes"
@@ -677,7 +730,6 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* NUEVO: Select dinámico de Clientes */}
           <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm">
             <Filter className="h-4 w-4 text-slate-400 mr-2" />
             <Select
@@ -704,7 +756,6 @@ export default function Receivables() {
             </Select>
           </div>
 
-          {/* NUEVO: Botón de Estado de Cuenta */}
           <Button
             variant="outline"
             className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-200 font-bold"
@@ -859,22 +910,128 @@ export default function Receivables() {
       />
 
       {(() => {
-        const selectedClientName =
+        const clientName =
           selectedClientId === "all"
             ? "all"
             : uniqueClients.find((c) => c.id === selectedClientId)?.name ||
               "all";
-
         return (
           <AccountStatementModal
             open={isAccountStatementOpen}
             onClose={() => setIsAccountStatementOpen(false)}
             invoices={formattedInvoices}
-            initialClient={selectedClientName} // <-- 2. Se lo enviamos al Modal
+            initialClient={clientName}
             bankAccounts={bankAccounts}
           />
         );
       })()}
+
+      {/* ================================================== */}
+      {/* 🔴 MODAL DE CANCELACIÓN (OPCIONES MÚLTIPLES)         */}
+      {/* ================================================== */}
+      <AlertDialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 dark:from-orange-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shadow-inner shrink-0 border border-orange-200 dark:border-orange-500/20">
+                <Ban className="h-7 w-7 sm:h-8 sm:w-8 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-xl sm:text-2xl font-black uppercase tracking-tighter text-orange-600 dark:text-orange-500 heading-crisp leading-none">
+                  Opciones de Cancelación
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Acción Delicada • Cuentas por Cobrar
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de intervenir la factura con folio{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
+                  {invoiceToCancel?.folio_interno || invoiceToCancel?.id}
+                </b>
+                . ¿Qué deseas hacer exactamente?
+              </p>
+
+              <div className="grid gap-4 mt-6">
+                <div className="p-5 bg-white dark:bg-slate-800 border-l-4 border-orange-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    <h4 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
+                      1. Solo Ocultar / Cancelar Factura
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 mb-4">
+                    La factura desaparecerá de tu cartera de cobranza, pero{" "}
+                    <b>
+                      el Viaje y la Liquidación del operador se mantendrán
+                      activos
+                    </b>{" "}
+                    y registrados en el sistema.
+                  </p>
+                  <Button
+                    onClick={() => handleCancelInvoice(false)}
+                    className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 dark:text-orange-300 font-bold shadow-none"
+                  >
+                    Solo cancelar factura
+                  </Button>
+                </div>
+
+                <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                    <h4 className="text-xs sm:text-sm font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                      2. Eliminar todo en Cascada (El viaje no se hizo)
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 mb-4 font-medium">
+                    Esta acción es{" "}
+                    <b className="uppercase underline">crítica</b> e
+                    irreversible. Destruirá por completo:
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                      <li>La factura (CxC)</li>
+                      <li>El viaje completo (Operaciones)</li>
+                      <li>La liquidación del operador (RRHH)</li>
+                      <li>Los vales de diésel (Flota)</li>
+                    </ul>
+                  </p>
+                  <Button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "¿ESTÁS ABSOLUTAMENTE SEGURO? Esta acción borrará el viaje, el diésel y la liquidación.",
+                        )
+                      ) {
+                        handleCancelInvoice(true);
+                      }
+                    }}
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-rose-600/20"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" /> Eliminar todo el
+                    registro
+                  </Button>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-4 sm:p-6 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10 flex justify-center">
+            <AlertDialogCancel
+              onClick={() => setIsCancelModalOpen(false)}
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
+            >
+              Cerrar y no hacer nada
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MODAL VIEJO DE ELIMINAR (Dejamos la carcasa por si lo sigues usando en otro lado, pero ya lo movimos al principal) */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
@@ -895,23 +1052,13 @@ export default function Receivables() {
           </AlertDialogHeader>
           <div className="p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 text-sm font-medium">
-              {invoiceToDelete &&
-              (invoiceToDelete.saldo_pendiente || 0) <
-                (invoiceToDelete.monto_total || 0) ? (
-                <span className="text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-950/30 p-3 rounded-lg block mt-2 border border-red-200 dark:border-red-900/50">
-                  Error: Esta factura ya tiene abonos/pagos registrados. Por
-                  auditoría fiscal, no es posible eliminarla. Cancele los pagos
-                  primero.
-                </span>
-              ) : (
-                <span className="block mt-2">
-                  Esta acción no se puede deshacer. Se eliminará la factura{" "}
-                  <strong>
-                    {invoiceToDelete?.uuid || invoiceToDelete?.folio_interno}
-                  </strong>{" "}
-                  del sistema.
-                </span>
-              )}
+              <span className="block mt-2">
+                Esta acción no se puede deshacer. Se eliminará la factura{" "}
+                <strong>
+                  {invoiceToDelete?.uuid || invoiceToDelete?.folio_interno}
+                </strong>{" "}
+                del sistema.
+              </span>
             </AlertDialogDescription>
           </div>
           <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
@@ -919,16 +1066,12 @@ export default function Receivables() {
               <AlertDialogCancel className="haptic-press font-black uppercase tracking-widest text-[10px]">
                 Cancelar
               </AlertDialogCancel>
-              {invoiceToDelete &&
-                (invoiceToDelete.saldo_pendiente || 0) ===
-                  (invoiceToDelete.monto_total || 0) && (
-                  <AlertDialogAction
-                    onClick={handleDeleteInvoice}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] haptic-press shadow-rose-600/20"
-                  >
-                    Sí, Eliminar
-                  </AlertDialogAction>
-                )}
+              <AlertDialogAction
+                onClick={handleDeleteInvoice}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] haptic-press shadow-rose-600/20"
+              >
+                Sí, Eliminar
+              </AlertDialogAction>
             </div>
           </AlertDialogFooter>
         </AlertDialogContent>

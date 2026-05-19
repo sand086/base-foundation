@@ -467,8 +467,10 @@ def get_receivable_invoices(
 
 
 @router.delete("/receivables/{invoice_id}")
-def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    """🚀 FIX: ELIMINACIÓN SEGURA CON CANDADO DE AUDITORÍA"""
+def delete_receivable_invoice(
+    invoice_id: int, cascade: bool = False, db: Session = Depends(get_db)
+):
+    """🚀 FIX: ELIMINACIÓN SEGURA CON CANDADO DE AUDITORÍA Y BORRADO EN CASCADA INTELIGENTE"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)
@@ -481,53 +483,84 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
         if invoice.saldo_pendiente < invoice.monto_total:
             raise HTTPException(
                 status_code=400,
-                detail="Bloqueo de Tesorería: No se puede eliminar una factura que ya tiene cobros registrados. Anula los cobros primero.",
+                detail="Bloqueo de Tesorería: No se puede eliminar ni cancelar una factura que ya tiene cobros registrados. Anula los cobros primero.",
             )
 
+        # 1. ACCIÓN PRINCIPAL (Aplica para ambos casos: Cancelar u Ocultar)
+        invoice.estatus = models.InvoiceStatus.CANCELADO
+
+        # Si NO es cascada, solo "ocultamos/cancelamos" la factura (Cancelación Lógica Simple)
+        if not cascade:
+            db.commit()
+            return {"message": "Factura cancelada lógicamente (Operaciones intactas)"}
+
+        # 2. 🔴 DESTRUCCIÓN EN CASCADA (Si cascade == True)
         invoice.record_status = models.RecordStatus.ELIMINADO
-        invoice.estatus = models.InvoiceStatus.CANCELADO
-        db.commit()
-        return {"message": "Factura eliminada definitivamente (Soft Delete)"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        error_details = traceback.format_exc()
-        print(
-            "\n"
-            + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN delete_receivable_invoice 💥\n"
-            + error_details
-            + "\n"
-            + "=" * 50
-            + "\n"
-        )
-        raise HTTPException(
-            status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
-        )
 
-
-@router.patch("/receivables/{invoice_id}/cancel")
-def cancel_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
-    """🚀 NUEVO ENDPOINT: CANCELACIÓN LÓGICA"""
-    try:
-        invoice = (
-            db.query(models.ReceivableInvoice)
-            .filter(models.ReceivableInvoice.id == invoice_id)
-            .first()
-        )
-        if not invoice:
-            raise HTTPException(status_code=404, detail="Factura no encontrada")
-
-        if invoice.saldo_pendiente < invoice.monto_total:
-            raise HTTPException(
-                status_code=400,
-                detail="Bloqueo de Tesorería: No se puede cancelar una factura que ya tiene cobros. Anula los cobros primero.",
+        if invoice.viaje_id:
+            trip = (
+                db.query(models.Trip).filter(models.Trip.id == invoice.viaje_id).first()
             )
+            if trip:
+                # A. Eliminar el Viaje principal
+                trip.record_status = models.RecordStatus.ELIMINADO
+                trip.status = models.TripStatus.CERRADO
 
-        invoice.estatus = models.InvoiceStatus.CANCELADO
+                # B. Recorrer tramos (legs) del viaje
+                legs = (
+                    db.query(models.TripLeg)
+                    .filter(models.TripLeg.trip_id == trip.id)
+                    .all()
+                )
+                for leg in legs:
+                    leg.record_status = models.RecordStatus.ELIMINADO
+
+                    # Liberar Unidad (Si estaba en ruta)
+                    if leg.unit_id:
+                        unit = (
+                            db.query(models.Unit)
+                            .filter(models.Unit.id == leg.unit_id)
+                            .first()
+                        )
+                        if unit and unit.status == models.UnitStatus.EN_RUTA:
+                            unit.status = models.UnitStatus.DISPONIBLE
+
+                    # Liberar Operador (Si estaba en ruta)
+                    if leg.operator_id:
+                        operator = (
+                            db.query(models.Operator)
+                            .filter(models.Operator.id == leg.operator_id)
+                            .first()
+                        )
+                        if (
+                            operator
+                            and operator.status == models.OperatorStatus.EN_RUTA
+                        ):
+                            operator.status = models.OperatorStatus.ACTIVO
+
+                    # C. Eliminar Vales de Diésel del tramo
+                    fuel_logs = (
+                        db.query(models.FuelLog)
+                        .filter(models.FuelLog.trip_leg_id == leg.id)
+                        .all()
+                    )
+                    for fuel in fuel_logs:
+                        fuel.record_status = models.RecordStatus.ELIMINADO
+
+                    # D. Eliminar Liquidaciones del Operador
+                    settlements = (
+                        db.query(models.OperatorSettlement)
+                        .filter(models.OperatorSettlement.trip_leg_id == leg.id)
+                        .all()
+                    )
+                    for st in settlements:
+                        st.record_status = models.RecordStatus.ELIMINADO
+
         db.commit()
-        return {"message": "Factura cancelada lógicamente"}
+        return {
+            "message": "Factura y operaciones vinculadas eliminadas en cascada exitosamente"
+        }
+
     except HTTPException:
         raise
     except Exception as e:
@@ -536,7 +569,7 @@ def cancel_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN cancel_receivable_invoice 💥\n"
+            + "\n💥 ERROR CRÍTICO EN delete_receivable_invoice (CASCADE) 💥\n"
             + error_details
             + "\n"
             + "=" * 50
