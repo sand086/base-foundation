@@ -884,148 +884,215 @@ export default function Payables() {
       {/* ==========================================
           BARRA DE FILTROS SUPERIOR
           ========================================== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10">
-        <div className="relative col-span-1 lg:col-span-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Buscar folio o proveedor..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 h-10 bg-white dark:bg-slate-950"
-          />
-        </div>
-
-        {/* COMBOBOX DE PROVEEDORES */}
-        <Popover open={openSupplierCombo} onOpenChange={setOpenSupplierCombo}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              aria-expanded={openSupplierCombo}
-              className="h-10 justify-between bg-white dark:bg-slate-950 w-full font-normal overflow-hidden"
-            >
-              <span className="truncate">
-                {supplierFilter === "all"
-                  ? "Todos los Proveedores"
-                  : suppliers?.find((s: any) => String(s.id) === supplierFilter)
-                      ?.razon_social || "Proveedor"}
-              </span>
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[300px] p-0 max-h-[300px] overflow-hidden bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xl z-50">
-            <Command>
-              <CommandInput placeholder="Buscar proveedor..." />
-              <CommandEmpty>No se encontró el proveedor.</CommandEmpty>
-              <CommandGroup className="max-h-[250px] overflow-y-auto">
-                <CommandItem
-                  onSelect={() => {
-                    setSupplierFilter("all");
-                    setOpenSupplierCombo(false);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      supplierFilter === "all" ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  Todos los Proveedores
-                </CommandItem>
-                {suppliers?.map((s: any) => (
-                  <CommandItem
-                    key={s.id}
-                    value={s.razon_social}
-                    onSelect={() => {
-                      setSupplierFilter(String(s.id));
-                      setOpenSupplierCombo(false);
-                    }}
-                    className="cursor-pointer text-xs"
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        supplierFilter === String(s.id)
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                    />
-                    {s.razon_social}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </Command>
-          </PopoverContent>
-        </Popover>
-
-        {/* 🚀 FILTRO RANGO DE FECHAS */}
-        <div className="flex items-center bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm col-span-1 lg:col-span-1 xl:col-span-2">
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-2">
-            De:
-          </span>
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-7 w-[130px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
-          />
-          <div className="h-4 w-px bg-slate-300 dark:bg-slate-700 mx-2"></div>
-          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mr-2">
-            A:
-          </span>
-          <Input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="h-7 w-[130px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
-          />
-        </div>
-
-        <div className="flex col-span-1 md:col-span-3 lg:col-span-4 gap-3 justify-end border-t border-slate-200 dark:border-slate-800 pt-3 mt-1">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-[180px]">
-              <SelectValue placeholder="Estatus" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los Estatus</SelectItem>
-              <SelectItem value="pendiente">Pendiente</SelectItem>
-              <SelectItem value="pago_parcial">Pago Parcial</SelectItem>
-              <SelectItem value="pagado">Pagado</SelectItem>
-              <SelectItem value="cancelado">Cancelado</SelectItem>
-              <SelectItem value="vencido" className="text-brand-red font-bold">
-                Vencido
-              </SelectItem>
-              <SelectItem
-                value="por_vencer"
-                className="text-amber-600 font-bold"
-              >
-                Por Vencer (5 días)
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={cecoFilter} onValueChange={setCecoFilter}>
-            <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-[180px]">
-              <SelectValue placeholder="Centro de Costos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los CECOs</SelectItem>
-              {uniqueCecos.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nombre}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="bg-white dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm flex flex-col gap-5 relative z-10 transition-all">
+        {/* ENCABEZADO DE FILTROS Y BOTÓN LIMPIAR */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <Filter className="h-4 w-4 text-brand-blue" />
+            <h3 className="font-black text-xs uppercase tracking-widest text-slate-600 dark:text-slate-300">
+              Filtros de Búsqueda
+            </h3>
+          </div>
 
           <Button
             variant="ghost"
+            size="sm"
             onClick={clearFilters}
-            className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-xs uppercase tracking-widest ml-auto"
+            className="h-8 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:hover:text-red-400 flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest transition-colors rounded-lg"
           >
-            <FilterX className="h-4 w-4" /> Limpiar
+            <FilterX className="h-3 w-3" /> Limpiar todo
           </Button>
+        </div>
+
+        {/* GRID DE FILTROS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {/* BÚSQUEDA GENERAL */}
+          <div className="relative group col-span-1 md:col-span-2 xl:col-span-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand-blue transition-colors" />
+            <Input
+              placeholder="Buscar folio, UUID o concepto..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus-visible:ring-brand-blue/30 focus-visible:bg-white dark:focus-visible:bg-slate-900 transition-all rounded-xl"
+            />
+          </div>
+
+          {/* COMBOBOX PROVEEDORES */}
+          <div className="col-span-1">
+            <Popover
+              open={openSupplierCombo}
+              onOpenChange={setOpenSupplierCombo}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSupplierCombo}
+                  className="h-10 justify-between bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-900 w-full font-medium overflow-hidden rounded-xl transition-all"
+                >
+                  <span className="truncate text-slate-600 dark:text-slate-300 text-sm">
+                    {supplierFilter === "all"
+                      ? "Todos los Proveedores"
+                      : suppliers?.find(
+                          (s: any) => String(s.id) === supplierFilter,
+                        )?.razon_social || "Proveedor"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 max-h-[300px] overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-xl z-50">
+                <Command>
+                  <CommandInput
+                    placeholder="Buscar proveedor..."
+                    className="h-10 text-sm"
+                  />
+                  <CommandEmpty className="p-4 text-sm text-center text-slate-500">
+                    No se encontró el proveedor.
+                  </CommandEmpty>
+                  <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                    <CommandItem
+                      onSelect={() => {
+                        setSupplierFilter("all");
+                        setOpenSupplierCombo(false);
+                      }}
+                      className="cursor-pointer font-bold text-xs uppercase tracking-tight"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 text-brand-blue",
+                          supplierFilter === "all"
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      Todos los Proveedores
+                    </CommandItem>
+                    {suppliers?.map((s: any) => (
+                      <CommandItem
+                        key={s.id}
+                        value={s.razon_social}
+                        onSelect={() => {
+                          setSupplierFilter(String(s.id));
+                          setOpenSupplierCombo(false);
+                        }}
+                        className="cursor-pointer text-xs uppercase tracking-tight"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 text-brand-blue",
+                            supplierFilter === String(s.id)
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        {s.razon_social}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* ESTATUS */}
+          <div className="col-span-1">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus:ring-brand-blue/30 rounded-xl text-slate-600 dark:text-slate-300 font-medium">
+                <SelectValue placeholder="Filtrar por Estatus" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-xl border-slate-200 dark:border-white/10">
+                <SelectItem value="all" className="font-bold text-xs uppercase">
+                  Todos los Estatus
+                </SelectItem>
+                <SelectItem value="pendiente" className="text-xs uppercase">
+                  Pendiente
+                </SelectItem>
+                <SelectItem value="pago_parcial" className="text-xs uppercase">
+                  Pago Parcial
+                </SelectItem>
+                <SelectItem
+                  value="pagado"
+                  className="text-xs uppercase text-emerald-600 dark:text-emerald-400 font-bold"
+                >
+                  Pagado
+                </SelectItem>
+                <SelectItem
+                  value="cancelado"
+                  className="text-xs uppercase text-slate-500"
+                >
+                  Cancelado
+                </SelectItem>
+                <SelectItem
+                  value="vencido"
+                  className="text-xs uppercase text-rose-600 dark:text-rose-400 font-bold"
+                >
+                  Vencido
+                </SelectItem>
+                <SelectItem
+                  value="por_vencer"
+                  className="text-xs uppercase text-amber-600 dark:text-amber-500 font-bold"
+                >
+                  Por Vencer (5 días)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* CECO (CENTRO DE COSTOS) */}
+          <div className="col-span-1">
+            <Select value={cecoFilter} onValueChange={setCecoFilter}>
+              <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus:ring-brand-blue/30 rounded-xl text-slate-600 dark:text-slate-300 font-medium">
+                <SelectValue placeholder="Centro de Costos (CECO)" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-xl border-slate-200 dark:border-white/10">
+                <SelectItem value="all" className="font-bold text-xs uppercase">
+                  Todos los CECOs
+                </SelectItem>
+                {uniqueCecos.map((c) => (
+                  <SelectItem
+                    key={c.id}
+                    value={c.id}
+                    className="text-xs uppercase"
+                  >
+                    {c.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* RANGO DE FECHAS (UNIFICADO EN ESTILO "PÍLDORA" COMPARTIDA) */}
+          <div className="col-span-1 md:col-span-2 xl:col-span-4 mt-1">
+            <div className="flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 h-11 shadow-inner focus-within:ring-2 focus-within:ring-brand-blue/20 transition-all w-full max-w-2xl group">
+              <Calendar className="h-4 w-4 text-slate-400 group-focus-within:text-brand-blue transition-colors mr-3 shrink-0" />
+
+              <div className="flex items-center flex-1">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">
+                  De
+                </span>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-8 flex-1 text-sm border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300 font-medium"
+                />
+              </div>
+
+              <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 mx-4"></div>
+
+              <div className="flex items-center flex-1">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">
+                  Hasta
+                </span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-8 flex-1 text-sm border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300 font-medium"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

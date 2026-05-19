@@ -714,22 +714,6 @@ export default function Receivables() {
                     </DropdownMenuItem>
                   </>
                 )}
-
-                {/* BOTÓN VIEJO: ELIMINAR */}
-                {!hasPayments && (
-                  <>
-                    <DropdownMenuSeparator className="dark:bg-white/10" />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setInvoiceToDelete(row);
-                        setIsDeleteDialogOpen(true);
-                      }}
-                      className="gap-2 font-bold text-xs uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar (Legacy)
-                    </DropdownMenuItem>
-                  </>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -791,7 +775,7 @@ export default function Receivables() {
             </div>
 
             {/* 🚀 Filtro Rango de Fechas */}
-            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm gap-2">
+            {/*             <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm gap-2">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 De:
               </span>
@@ -811,7 +795,7 @@ export default function Receivables() {
                 onChange={(e) => setEndDate(e.target.value)}
                 className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
               />
-            </div>
+            </div> */}
 
             {/* 🚀 Botón Limpiar (Solo aparece si hay algún filtro activo) */}
             {(selectedClientId !== "all" || startDate || endDate) && (
@@ -1037,22 +1021,23 @@ export default function Receivables() {
                   <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                     <h4 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
-                      1. Solo Ocultar / Cancelar Factura
+                      1. Solo Eliminar Factura (Liberar Viaje)
                     </h4>
                   </div>
                   <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 mb-4">
-                    La factura desaparecerá de tu cartera de cobranza, pero{" "}
+                    La factura se eliminará de tu cartera. Las operaciones
+                    (vales y conciliaciones) se mantienen intactas, pero el
+                    viaje quedará libre.{" "}
                     <b>
-                      el Viaje y la Liquidación del operador se mantendrán
-                      activos
-                    </b>{" "}
-                    y registrados en el sistema.
+                      Para generar de nuevo la factura, el usuario tendrá que
+                      volver a liquidar el viaje.
+                    </b>
                   </p>
                   <Button
                     onClick={() => handleCancelInvoice(false)}
                     className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 dark:text-orange-300 font-bold shadow-none"
                   >
-                    Solo cancelar factura
+                    Solo eliminar factura
                   </Button>
                 </div>
 
@@ -1063,7 +1048,7 @@ export default function Receivables() {
                       2. Eliminar todo en Cascada (El viaje no se hizo)
                     </h4>
                   </div>
-                  <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 mb-4 font-medium">
+                  <div className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 mb-4 font-medium">
                     Esta acción es{" "}
                     <b className="uppercase underline">crítica</b> e
                     irreversible. Destruirá por completo:
@@ -1071,14 +1056,17 @@ export default function Receivables() {
                       <li>La factura (CxC)</li>
                       <li>El viaje completo (Operaciones)</li>
                       <li>La liquidación del operador (RRHH)</li>
-                      <li>Los vales de diésel (Flota)</li>
                     </ul>
-                  </p>
+                    <p className="mt-2 text-emerald-600 dark:text-emerald-400 font-bold text-[11px] uppercase tracking-wider">
+                      * Nota: Los vales de diésel serán rescatados para usarse
+                      de nuevo.
+                    </p>
+                  </div>
                   <Button
                     onClick={() => {
                       if (
                         window.confirm(
-                          "¿ESTÁS ABSOLUTAMENTE SEGURO? Esta acción borrará el viaje, el diésel y la liquidación.",
+                          "¿ESTÁS ABSOLUTAMENTE SEGURO? Esta acción borrará el viaje y la liquidación de forma irreversible.",
                         )
                       ) {
                         handleCancelInvoice(true);
@@ -1101,52 +1089,6 @@ export default function Receivables() {
             >
               Cerrar y no hacer nada
             </AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* MODAL VIEJO DE ELIMINAR (Dejamos la carcasa por si lo sigues usando en otro lado, pero ya lo movimos al principal) */}
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent className="w-[95vw] sm:max-w-md flex-col overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
-            <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
-            <div className="relative z-10 flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center shadow-inner shrink-0 border border-rose-200 dark:border-rose-500/20">
-                <AlertCircle className="h-7 w-7 text-rose-600 dark:text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]" />
-              </div>
-              <div className="flex flex-col gap-1 text-left">
-                <AlertDialogTitle className="text-xl font-black uppercase tracking-tighter text-rose-600 dark:text-rose-500 heading-crisp leading-none">
-                  ¿Eliminar Factura?
-                </AlertDialogTitle>
-              </div>
-            </div>
-          </AlertDialogHeader>
-          <div className="p-6 sm:p-8 bg-slate-50/50 dark:bg-transparent">
-            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 text-sm font-medium">
-              <span className="block mt-2">
-                Esta acción no se puede deshacer. Se eliminará la factura{" "}
-                <strong>
-                  {invoiceToDelete?.uuid || invoiceToDelete?.folio_interno}
-                </strong>{" "}
-                del sistema.
-              </span>
-            </AlertDialogDescription>
-          </div>
-          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
-            <div className="flex w-full gap-3 justify-end">
-              <AlertDialogCancel className="haptic-press font-black uppercase tracking-widest text-[10px]">
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDeleteInvoice}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px] haptic-press shadow-rose-600/20"
-              >
-                Sí, Eliminar
-              </AlertDialogAction>
-            </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

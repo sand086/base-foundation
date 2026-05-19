@@ -470,7 +470,7 @@ def get_receivable_invoices(
 def delete_receivable_invoice(
     invoice_id: int, cascade: bool = False, db: Session = Depends(get_db)
 ):
-    """🚀 FIX: ELIMINACIÓN SEGURA CON CANDADO DE AUDITORÍA Y BORRADO EN CASCADA INTELIGENTE"""
+    """🚀 FIX: ELIMINACIÓN SEGURA Y RESCATE DE VALES DE DIÉSEL"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)
@@ -486,20 +486,25 @@ def delete_receivable_invoice(
                 detail="Bloqueo de Tesorería: No se puede eliminar ni cancelar una factura que ya tiene cobros registrados. Anula los cobros primero.",
             )
 
-        # 1. ACCIÓN PRINCIPAL (Aplica para ambos casos: Cancelar u Ocultar)
+        # 1. ACCIÓN PRINCIPAL (Aplica para ambos casos)
         invoice.estatus = models.InvoiceStatus.CANCELADO
+        invoice.record_status = models.RecordStatus.ELIMINADO  # Borrado lógico real
 
-        # Si NO es cascada, solo "ocultamos/cancelamos" la factura (Cancelación Lógica Simple)
+        # RESPALDO DEL VIAJE Y LIBERACIÓN
+        trip_id_respaldo = invoice.viaje_id
+        invoice.viaje_id = None  # Liberamos el viaje para poder refacturarlo
+
+        # Si NO es cascada, terminamos aquí. El viaje queda intacto y listo para facturar.
         if not cascade:
             db.commit()
-            return {"message": "Factura cancelada lógicamente (Operaciones intactas)"}
+            return {
+                "message": "Factura eliminada. El viaje ha sido liberado para volver a liquidarse."
+            }
 
         # 2. 🔴 DESTRUCCIÓN EN CASCADA (Si cascade == True)
-        invoice.record_status = models.RecordStatus.ELIMINADO
-
-        if invoice.viaje_id:
+        if trip_id_respaldo:
             trip = (
-                db.query(models.Trip).filter(models.Trip.id == invoice.viaje_id).first()
+                db.query(models.Trip).filter(models.Trip.id == trip_id_respaldo).first()
             )
             if trip:
                 # A. Eliminar el Viaje principal
@@ -538,14 +543,22 @@ def delete_receivable_invoice(
                         ):
                             operator.status = models.OperatorStatus.ACTIVO
 
-                    # C. Eliminar Vales de Diésel del tramo
+                    # C. 🛡️ ASEGURAR / RESCATAR VALES DE DIÉSEL
                     fuel_logs = (
                         db.query(models.FuelLog)
                         .filter(models.FuelLog.trip_leg_id == leg.id)
                         .all()
                     )
                     for fuel in fuel_logs:
-                        fuel.record_status = models.RecordStatus.ELIMINADO
+                        # En lugar de ELIMINAR, los liberamos para regresarlos al Pool
+                        fuel.trip_leg_id = None
+                        fuel.is_conciliated = False
+                        # Limpiamos cálculos de conciliación
+                        fuel.km_sm = None
+                        fuel.litros_sm = None
+                        fuel.rendimiento_sm = None
+                        fuel.diferencia_litros = None
+                        fuel.rendimiento_real = None
 
                     # D. Eliminar Liquidaciones del Operador
                     settlements = (
@@ -558,18 +571,20 @@ def delete_receivable_invoice(
 
         db.commit()
         return {
-            "message": "Factura y operaciones vinculadas eliminadas en cascada exitosamente"
+            "message": "Factura y viaje eliminados en cascada. Los vales de diésel fueron rescatados."
         }
 
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
+        import traceback
+
         error_details = traceback.format_exc()
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN delete_receivable_invoice (CASCADE) 💥\n"
+            + "\n💥 ERROR CRÍTICO EN delete_receivable_invoice 💥\n"
             + error_details
             + "\n"
             + "=" * 50
