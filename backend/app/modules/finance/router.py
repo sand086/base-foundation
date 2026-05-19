@@ -468,6 +468,7 @@ def get_receivable_invoices(
 
 @router.delete("/receivables/{invoice_id}")
 def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    """🚀 FIX: ELIMINACIÓN SEGURA CON CANDADO DE AUDITORÍA"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)
@@ -480,13 +481,13 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
         if invoice.saldo_pendiente < invoice.monto_total:
             raise HTTPException(
                 status_code=400,
-                detail="No se puede eliminar una factura con pagos registrados",
+                detail="Bloqueo de Tesorería: No se puede eliminar una factura que ya tiene cobros registrados. Anula los cobros primero.",
             )
 
         invoice.record_status = models.RecordStatus.ELIMINADO
         invoice.estatus = models.InvoiceStatus.CANCELADO
         db.commit()
-        return {"message": "Factura eliminada (Soft Delete)"}
+        return {"message": "Factura eliminada definitivamente (Soft Delete)"}
     except HTTPException:
         raise
     except Exception as e:
@@ -496,6 +497,46 @@ def delete_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
             "\n"
             + "=" * 50
             + "\n💥 ERROR CRÍTICO EN delete_receivable_invoice 💥\n"
+            + error_details
+            + "\n"
+            + "=" * 50
+            + "\n"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
+        )
+
+
+@router.patch("/receivables/{invoice_id}/cancel")
+def cancel_receivable_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    """🚀 NUEVO ENDPOINT: CANCELACIÓN LÓGICA"""
+    try:
+        invoice = (
+            db.query(models.ReceivableInvoice)
+            .filter(models.ReceivableInvoice.id == invoice_id)
+            .first()
+        )
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+        if invoice.saldo_pendiente < invoice.monto_total:
+            raise HTTPException(
+                status_code=400,
+                detail="Bloqueo de Tesorería: No se puede cancelar una factura que ya tiene cobros. Anula los cobros primero.",
+            )
+
+        invoice.estatus = models.InvoiceStatus.CANCELADO
+        db.commit()
+        return {"message": "Factura cancelada lógicamente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        error_details = traceback.format_exc()
+        print(
+            "\n"
+            + "=" * 50
+            + "\n💥 ERROR CRÍTICO EN cancel_receivable_invoice 💥\n"
             + error_details
             + "\n"
             + "=" * 50
@@ -835,6 +876,7 @@ def reopen_receivable_invoice(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
+    """🚀 FIX CRÍTICO TESORERÍA: Revertir cobros antes de reabrir factura"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)
@@ -850,10 +892,42 @@ def reopen_receivable_invoice(
                 detail="Operación denegada: Esta factura está oficialmente CANCELADA ante el SAT. No puedes reabrirla para cobro, debes emitir una nueva.",
             )
 
-        db.query(models.ReceivableInvoicePayment).filter(
-            models.ReceivableInvoicePayment.invoice_id == invoice.id
-        ).delete()
+        # 1. Buscamos todos los pagos hechos a esta factura
+        pagos = (
+            db.query(models.ReceivableInvoicePayment)
+            .filter(models.ReceivableInvoicePayment.invoice_id == invoice.id)
+            .all()
+        )
 
+        for pago in pagos:
+            # 2. Revertimos el dinero del banco
+            if pago.cuenta_deposito:
+                cuenta = (
+                    db.query(models.BankAccount)
+                    .filter(models.BankAccount.id == int(pago.cuenta_deposito))
+                    .with_for_update()
+                    .first()
+                )
+                if cuenta:
+                    cuenta.saldo -= pago.monto
+
+                    # Dejamos huella de auditoría en la cuenta
+                    reverso = models.BankMovement(
+                        bank_account_id=cuenta.id,
+                        tipo="egreso",
+                        monto=pago.monto,
+                        concepto=f"Reverso de Cobro Anulado - Fra {invoice.folio_interno or invoice.id}",
+                        referencia=f"CANC-COBRO-{pago.id}",
+                        origen_modulo="CxC",
+                        created_by_id=current_user.id,
+                        fecha=datetime.now(),
+                    )
+                    db.add(reverso)
+
+            # 3. Borramos el recibo de pago
+            db.delete(pago)
+
+        # 4. Restauramos el saldo de la factura
         invoice.saldo_pendiente = invoice.monto_total
         invoice.estatus = models.InvoiceStatus.PENDIENTE
 
@@ -864,7 +938,7 @@ def reopen_receivable_invoice(
         db.refresh(invoice)
 
         return {
-            "message": "Factura reabierta financieramente. Saldo restaurado y lista para procesarse."
+            "message": "Factura reabierta financieramente. El cobro fue anulado y el dinero se descontó del banco exitosamente."
         }
     except HTTPException:
         raise

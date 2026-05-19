@@ -303,6 +303,12 @@ def register_payable_payment(
         if not invoice:
             raise ValueError("Factura no encontrada.")
 
+        # 🚀 FIX SEGURIDAD: Bloqueo para no inyectar pagos a facturas canceladas
+        if invoice.estatus == models.InvoiceStatus.CANCELADO:
+            raise ValueError(
+                "No puedes registrar pagos a una factura que ha sido Cancelada."
+            )
+
         monto_pago = float(payment_data.get("monto", 0))
         if monto_pago <= 0 or monto_pago > invoice.saldo_pendiente:
             raise ValueError("El monto es inválido o supera el saldo pendiente.")
@@ -1110,6 +1116,7 @@ def delete_bank_movement(db: Session, movement_id: int):
                 invoice = (
                     db.query(models.ReceivableInvoice)
                     .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
+                    .with_for_update()  # 🚀 FIX: ATOMICIDAD
                     .first()
                 )
                 if invoice:
@@ -1135,6 +1142,7 @@ def delete_bank_movement(db: Session, movement_id: int):
                 invoice = (
                     db.query(models.PayableInvoice)
                     .filter(models.PayableInvoice.id == pago_cxp.invoice_id)
+                    .with_for_update()  # 🚀 FIX: ATOMICIDAD
                     .first()
                 )
                 if invoice:

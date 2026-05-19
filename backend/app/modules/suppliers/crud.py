@@ -215,6 +215,87 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def update_invoice(db: Session, invoice_id: int, payload: schemas.PayableInvoiceUpdate):
+    """
+    Actualiza la factura. Aquí inyectamos la lógica de Cancelación Lógica y Reapertura.
+    """
+    invoice = (
+        db.query(models.PayableInvoice)
+        .filter(
+            models.PayableInvoice.id == invoice_id,
+            models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+    if not invoice:
+        return None
+
+    data = payload.model_dump(exclude_unset=True)
+
+    # 🚀 ==========================================
+    # LÓGICA DE CANCELACIÓN Y REAPERTURA
+    # ==========================================
+    if "estatus" in data:
+        nuevo_estatus = data["estatus"]
+
+        # Convertir Enum a string si es necesario
+        estatus_str = (
+            nuevo_estatus.value
+            if hasattr(nuevo_estatus, "value")
+            else str(nuevo_estatus)
+        )
+        estatus_str = estatus_str.lower()
+
+        if estatus_str == "cancelado":
+            # BLOQUEO AUDITORÍA: Si ya tiene pagos (saldo < total), prohibir cancelación.
+            if invoice.saldo_pendiente < invoice.monto_total:
+                raise ValueError(
+                    "No se puede cancelar una factura que ya tiene pagos. Anula los pagos en Tesorería primero."
+                )
+            invoice.estatus = models.InvoiceStatus.CANCELADO
+
+        elif estatus_str == "pendiente":
+            # REABRIR: Restaura el saldo y la pone pendiente
+            invoice.estatus = models.InvoiceStatus.PENDIENTE
+            invoice.saldo_pendiente = invoice.monto_total
+        else:
+            invoice.estatus = nuevo_estatus
+
+        # Sacamos el estatus del dict para que el bucle de abajo no lo sobreescriba con un string puro
+        data.pop("estatus")
+
+    for key, value in data.items():
+        setattr(invoice, key, value)
+
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
+def delete_invoice(db: Session, invoice_id: int):
+    """
+    Eliminación definitiva (oculta de todo el sistema).
+    """
+    invoice = (
+        db.query(models.PayableInvoice)
+        .filter(models.PayableInvoice.id == invoice_id)
+        .first()
+    )
+    if not invoice:
+        return False
+
+    # 🚀 BLOQUEO DE AUDITORÍA
+    if invoice.saldo_pendiente < invoice.monto_total:
+        raise ValueError(
+            "Bloqueo de Auditoría: No se puede eliminar una factura que ya tiene abonos o pagos registrados."
+        )
+
+    invoice.record_status = RecordStatus.ELIMINADO
+    invoice.estatus = models.InvoiceStatus.CANCELADO
+    db.commit()
+    return True
+
+
 # =========================================================
 # PAYMENTS (Tesorería Integrada)
 # =========================================================
@@ -239,6 +320,12 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
     if not invoice:
         raise HTTPException(
             status_code=404, detail="Factura no encontrada o ya eliminada."
+        )
+
+    # 🚀 NUEVO CANDADO: Evitar pagar facturas canceladas
+    if invoice.estatus == models.InvoiceStatus.CANCELADO:
+        raise ValueError(
+            "No puedes registrar pagos a una factura que ha sido Cancelada."
         )
 
     try:

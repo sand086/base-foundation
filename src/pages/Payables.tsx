@@ -21,6 +21,8 @@ import {
   Check,
   ChevronsUpDown,
   CheckSquare,
+  Ban,
+  RefreshCcw,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
@@ -139,6 +141,16 @@ export default function Payables() {
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
+
+  // NUEVOS ESTADOS PARA CANCELAR Y REABRIR
+  const [isCancelInvoiceOpen, setIsCancelInvoiceOpen] = useState(false);
+  const [isReopenInvoiceOpen, setIsReopenInvoiceOpen] = useState(false);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<PayableInvoice | null>(
+    null,
+  );
+  const [invoiceToReopen, setInvoiceToReopen] = useState<PayableInvoice | null>(
+    null,
+  );
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
     null,
@@ -423,6 +435,33 @@ export default function Payables() {
     }
   };
 
+  // NUEVOS HANDLERS PARA CANCELAR Y REABRIR
+  const handleConfirmCancelInvoice = async () => {
+    if (!invoiceToCancel) return;
+    const ok = await updateInvoice(invoiceToCancel.id, {
+      estatus: "cancelado",
+    });
+    if (ok) {
+      setIsCancelInvoiceOpen(false);
+      setInvoiceToCancel(null);
+      toast.success("Factura cancelada correctamente.");
+      await refreshInvoices?.();
+    }
+  };
+
+  const handleConfirmReopenInvoice = async () => {
+    if (!invoiceToReopen) return;
+    const ok = await updateInvoice(invoiceToReopen.id, {
+      estatus: "pendiente",
+    });
+    if (ok) {
+      setIsReopenInvoiceOpen(false);
+      setInvoiceToReopen(null);
+      toast.success("Factura reabierta exitosamente.");
+      await refreshInvoices?.();
+    }
+  };
+
   const handleConfirmDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
     const ok = await deleteInvoice(invoiceToDelete.id);
@@ -646,22 +685,53 @@ export default function Payables() {
                   <Edit className="h-4 w-4 mr-2 text-brand-green" /> Editar
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="dark:bg-white/10" />
+
                 <DropdownMenuItem
                   onClick={() => {
                     setSelectedInvoice(row);
                     setIsPaymentModalOpen(true);
                   }}
-                  disabled={row.saldo_pendiente === 0}
+                  disabled={
+                    row.saldo_pendiente === 0 || row.estatus === "cancelado"
+                  }
                   className={cn(
                     "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                    row.saldo_pendiente > 0
+                    row.saldo_pendiente > 0 && row.estatus !== "cancelado"
                       ? "text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/30"
                       : "opacity-50",
                   )}
                 >
                   <CreditCard className="h-4 w-4 mr-2" /> Registrar Pago
                 </DropdownMenuItem>
+
+                {/* NUEVO: Botón de Cancelar */}
+                {row.estatus !== "pagado" && row.estatus !== "cancelado" && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setInvoiceToCancel(row);
+                      setIsCancelInvoiceOpen(true);
+                    }}
+                    className="gap-2 font-bold text-xs uppercase tracking-tight text-orange-600 cursor-pointer dark:focus:bg-orange-950/30"
+                  >
+                    <Ban className="h-4 w-4 mr-2" /> Cancelar Factura
+                  </DropdownMenuItem>
+                )}
+
+                {/* NUEVO: Botón de Reabrir */}
+                {row.estatus === "cancelado" && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setInvoiceToReopen(row);
+                      setIsReopenInvoiceOpen(true);
+                    }}
+                    className="gap-2 font-bold text-xs uppercase tracking-tight text-emerald-600 cursor-pointer dark:focus:bg-emerald-950/30"
+                  >
+                    <RefreshCcw className="h-4 w-4 mr-2" /> Reabrir Factura
+                  </DropdownMenuItem>
+                )}
+
                 <DropdownMenuSeparator className="dark:bg-white/10" />
+
                 <DropdownMenuItem
                   onClick={() => {
                     setInvoiceToDelete(row);
@@ -677,7 +747,7 @@ export default function Payables() {
         ),
       },
     ],
-    [selectedInvoiceIds], // ← IMPORTANTE: Agregado como dependencia
+    [selectedInvoiceIds],
   );
 
   const paymentsColumns: ColumnDef<any>[] = useMemo(
@@ -1175,6 +1245,186 @@ export default function Payables() {
         onDelete={deleteIndirectCategory}
       />
 
+      {/* ================================================== */}
+      {/* NUEVO MODAL: CANCELAR FACTURA */}
+      {/* ================================================== */}
+      <AlertDialog
+        open={isCancelInvoiceOpen}
+        onOpenChange={setIsCancelInvoiceOpen}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 dark:from-orange-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shadow-inner shrink-0 border border-orange-200 dark:border-orange-500/20">
+                <Ban className="h-7 w-7 sm:h-8 sm:w-8 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-orange-600 dark:text-orange-500 heading-crisp leading-none">
+                  ¿Cancelar Factura?
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Cancelación Lógica • Cuentas por Pagar
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de cancelar la factura con folio{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
+                  {invoiceToCancel?.folio_interno || invoiceToCancel?.id}
+                </b>
+                .
+              </p>
+
+              {invoiceToCancel &&
+              (invoiceToCancel.saldo_pendiente || 0) <
+                (invoiceToCancel.monto_total || 0) ? (
+                <div className="p-5 bg-orange-50 dark:bg-orange-950/20 border-l-4 border-orange-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-orange-800 dark:text-orange-400 uppercase tracking-widest">
+                      BLOQUEO POR AUDITORÍA (TESORERÍA)
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-orange-900 dark:text-orange-200/80 font-bold">
+                    Esta factura no se puede cancelar porque ya tiene abonos o
+                    pagos registrados en los bancos. <br />
+                    <br />
+                    Si necesitas cancelarla,{" "}
+                    <span className="underline">
+                      primero debes ir al módulo de Tesorería y anular el pago
+                    </span>{" "}
+                    para que el dinero regrese a la cuenta.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border-l-4 border-orange-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
+                      Efecto de la Cancelación
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                    La factura cambiará a estatus <b>Cancelado</b> y dejará de
+                    sumar a tu deuda total en las proyecciones. El registro
+                    original <b>se conservará intacto</b> en la base de datos
+                    para fines de auditoría, y podrás reabrirla posteriormente
+                    si es necesario.
+                  </p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setInvoiceToCancel(null)}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cerrar
+              </AlertDialogCancel>
+
+              {(!invoiceToCancel ||
+                (invoiceToCancel.saldo_pendiente || 0) ===
+                  (invoiceToCancel.monto_total || 0)) && (
+                <AlertDialogAction
+                  size="lg"
+                  onClick={handleConfirmCancelInvoice}
+                  className="w-full sm:w-auto haptic-press shadow-orange-600/10 flex-shrink-0 border-none bg-orange-600 hover:bg-orange-700 text-white font-black uppercase tracking-widest text-[10px]"
+                >
+                  Confirmar Cancelación
+                </AlertDialogAction>
+              )}
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ================================================== */}
+      {/* NUEVO MODAL: REABRIR FACTURA */}
+      {/* ================================================== */}
+      <AlertDialog
+        open={isReopenInvoiceOpen}
+        onOpenChange={setIsReopenInvoiceOpen}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 dark:from-emerald-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0 border border-emerald-200 dark:border-emerald-500/20">
+                <RefreshCcw className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-600 dark:text-emerald-500 heading-crisp leading-none">
+                  ¿Reabrir Factura?
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Reactivación • Cuentas por Pagar
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de reabrir la factura con folio{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
+                  {invoiceToReopen?.folio_interno || invoiceToReopen?.id}
+                </b>
+                .
+              </p>
+
+              <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border-l-4 border-emerald-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
+                    Efecto de la Reapertura
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                  La factura regresará al estatus <b>Pendiente</b> y volverá a
+                  ser calculada en tu deuda total. Su saldo pendiente se
+                  restaurará al monto total de la factura.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setInvoiceToReopen(null)}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+
+              <AlertDialogAction
+                size="lg"
+                onClick={handleConfirmReopenInvoice}
+                className="w-full sm:w-auto haptic-press shadow-emerald-600/10 flex-shrink-0 border-none bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                Sí, Reabrir
+              </AlertDialogAction>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ================================================== */}
+      {/* MODAL ORIGINAL: ELIMINAR FACTURA DEFINITIVAMENTE   */}
+      {/* ================================================== */}
       <AlertDialog
         open={isDeleteInvoiceOpen}
         onOpenChange={setIsDeleteInvoiceOpen}
@@ -1241,7 +1491,8 @@ export default function Payables() {
                     <b className="font-black underline">
                       borrará permanentemente el registro
                     </b>
-                    .
+                    . Considera usar la opción "Cancelar Factura" si solo
+                    quieres ocultarla de los reportes.
                   </p>
                 </div>
               )}
@@ -1256,7 +1507,7 @@ export default function Payables() {
                 onClick={() => setInvoiceToDelete(null)}
                 className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
               >
-                Cancelar
+                Cerrar
               </AlertDialogCancel>
 
               {(!invoiceToDelete ||
@@ -1268,7 +1519,7 @@ export default function Payables() {
                   onClick={handleConfirmDeleteInvoice}
                   className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
                 >
-                  Sí, eliminar
+                  Sí, eliminar definitivamente
                 </AlertDialogAction>
               )}
             </div>
