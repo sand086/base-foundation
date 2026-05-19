@@ -296,15 +296,16 @@ export default function Payables() {
       // 🚀 NUEVO: Lógica de Filtro por Rango de Fechas (Basado en Emisión o Vencimiento, según necesites, aquí es por Emisión)
       let matchesDate = true;
       if (startDate || endDate) {
-        if (!inv.fecha_emision) {
+        if (!inv.fecha_vencimiento) {
+          // Si estamos filtrando por fecha y la factura no tiene fecha de vencimiento, la ocultamos
           matchesDate = false;
         } else {
-          const emision = inv.fecha_emision.includes("T")
-            ? inv.fecha_emision.split("T")[0]
-            : inv.fecha_emision;
+          const vencimiento = inv.fecha_vencimiento.includes("T")
+            ? inv.fecha_vencimiento.split("T")[0]
+            : inv.fecha_vencimiento;
 
-          if (startDate && emision < startDate) matchesDate = false;
-          if (endDate && emision > endDate) matchesDate = false;
+          if (startDate && vencimiento < startDate) matchesDate = false;
+          if (endDate && vencimiento > endDate) matchesDate = false;
         }
       }
 
