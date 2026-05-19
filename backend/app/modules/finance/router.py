@@ -905,7 +905,7 @@ def reopen_receivable_invoice(
                 cuenta = (
                     db.query(models.BankAccount)
                     .filter(models.BankAccount.id == int(pago.cuenta_deposito))
-                    .with_for_update()
+                    .with_for_update(of=models.BankAccount)
                     .first()
                 )
                 if cuenta:

@@ -297,7 +297,7 @@ def register_payable_payment(
                 models.PayableInvoice.id == invoice_id,
                 models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
             )
-            .with_for_update()
+            .with_for_update(of=models.PayableInvoice)
             .first()
         )
         if not invoice:
@@ -1116,7 +1116,7 @@ def delete_bank_movement(db: Session, movement_id: int):
                 invoice = (
                     db.query(models.ReceivableInvoice)
                     .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
-                    .with_for_update()  # 🚀 FIX: ATOMICIDAD
+                    .with_for_update(of=models.ReceivableInvoice)  # 🚀 FIX: ATOMICIDAD
                     .first()
                 )
                 if invoice:
@@ -1142,7 +1142,7 @@ def delete_bank_movement(db: Session, movement_id: int):
                 invoice = (
                     db.query(models.PayableInvoice)
                     .filter(models.PayableInvoice.id == pago_cxp.invoice_id)
-                    .with_for_update()  # 🚀 FIX: ATOMICIDAD
+                    .with_for_update(of=models.PayableInvoice)  # 🚀 FIX: ATOMICIDAD
                     .first()
                 )
                 if invoice:
