@@ -19,6 +19,8 @@ import {
   Briefcase,
   FilterX,
   Check,
+  Filter,
+  Calendar,
   ChevronsUpDown,
   CheckSquare,
   Ban,
