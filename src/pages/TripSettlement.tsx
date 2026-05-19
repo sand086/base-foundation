@@ -106,9 +106,12 @@ export default function TripSettlement() {
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("");
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
+
+  // 🚀 ESTADOS PARA OPTIMISTIC UI (Actualización instantánea)
   const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
     [],
   );
+  const [locallyReopenedIds, setLocallyReopenedIds] = useState<string[]>([]);
 
   // ⚡ ESTADOS FINANCIEROS Y DE COBRO
   const [sueldoBasePactado, setSueldoBasePactado] = useState<number>(0);
@@ -164,25 +167,29 @@ export default function TripSettlement() {
     );
   }, [trips, clients]);
 
+  // 🚀 LÓGICA ACTUALIZADA PARA MOVER A PENDIENTES INSTANTÁNEAMENTE
   const pendingLegs = useMemo(
     () =>
       allLegs.filter(
         (l) =>
-          ["entregado", "cerrado"].includes(String(l.status).toLowerCase()) &&
+          (["entregado", "cerrado"].includes(String(l.status).toLowerCase()) ||
+            locallyReopenedIds.includes(String(l.id))) &&
           !locallyLiquidatedIds.includes(String(l.id)),
       ),
-    [allLegs, locallyLiquidatedIds],
+    [allLegs, locallyLiquidatedIds, locallyReopenedIds],
   );
 
+  // 🚀 LÓGICA ACTUALIZADA PARA QUITAR DEL HISTORIAL INSTANTÁNEAMENTE
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
         (l) =>
           (String(l.status).toLowerCase() === "liquidado" ||
             locallyLiquidatedIds.includes(String(l.id))) &&
+          !locallyReopenedIds.includes(String(l.id)) &&
           !hiddenHistoryIds.includes(String(l.id)),
       ),
-    [allLegs, hiddenHistoryIds, locallyLiquidatedIds],
+    [allLegs, hiddenHistoryIds, locallyLiquidatedIds, locallyReopenedIds],
   );
 
   const operatorsWithPending = useMemo(() => {
@@ -540,7 +547,6 @@ export default function TripSettlement() {
     });
   }, [selectedLegsData]);
 
-  // Extraer las multas exactamente como se escribieron en la bitácora
   const joinedLegIds = selectedLegIds.join(",");
 
   useEffect(() => {
@@ -811,6 +817,11 @@ export default function TripSettlement() {
 
       setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
+      // 🚀 NUEVO: Asegurarnos de quitar los IDs si estaban en "Reabiertos"
+      setLocallyReopenedIds((prev) =>
+        prev.filter((id) => !selectedLegIds.includes(id)),
+      );
+
       await axiosClient.post("/api/logistics/trips/legs/settle-batch", payload);
 
       toast.success("Liquidación Emitida Exitosamente", {
@@ -917,6 +928,9 @@ export default function TripSettlement() {
         setLocallyLiquidatedIds((prev) =>
           prev.filter((id) => id !== String(actionModal.leg.id)),
         );
+
+        // 🚀 NUEVO: Agregar a la lista de reabiertos para actualizar la UI al instante
+        setLocallyReopenedIds((prev) => [...prev, String(actionModal.leg.id)]);
 
         toast.success("Liquidación anulada y reabierta.");
         if (refresh) refresh();
