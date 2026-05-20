@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { SuppliersService } from "@/api/generated/services/SuppliersService";
 
 export function usePayables() {
+  //
   // Usamos "any[]" temporalmente para que no tengas problemas con el nombre largo del Schema
   const [invoices, setInvoices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -1,6 +1,6 @@
 // src/features/treasury/components/TreasuryFlowTab.tsx
-import { useMemo } from "react";
-import { Card, CardTitle } from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +20,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Landmark,
   TrendingUp,
   TrendingDown,
@@ -34,6 +41,8 @@ import {
   Calculator,
   CheckCircle2,
   Wallet,
+  Filter,
+  FilterX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
@@ -70,13 +79,86 @@ export function TreasuryFlowTab({
   onViewMovement,
   onDeleteMovement,
 }: TreasuryFlowTabProps) {
-  // Cálculo rápido del Flujo Neto para las Cards
-  const flujoNeto = (stats.total_ingresos || 0) - (stats.total_egresos || 0);
+  // =========================================================
+  // ESTADOS LOCALES PARA NUEVOS FILTROS
+  // =========================================================
+  const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  // =========================================================
+  // EXTRACCIÓN DE CUENTAS ÚNICAS PARA EL SELECT
+  // =========================================================
+  const uniqueAccounts = useMemo(() => {
+    const map = new Map<string, string>();
+    movimientos.forEach((mov) => {
+      const bankName = mov.banco
+        ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
+        : "Desconocido";
+      if (bankName) map.set(bankName, bankName);
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [movimientos]);
+
+  // =========================================================
+  // LÓGICA DE FILTRADO LOCAL
+  // =========================================================
+  const filteredMovimientos = useMemo(() => {
+    return movimientos.filter((mov) => {
+      // 1. Filtro por Cuenta Bancaria (Select)
+      if (selectedAccount !== "all") {
+        const bankName = mov.banco
+          ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
+          : "Desconocido";
+        if (bankName !== selectedAccount) return false;
+      }
+
+      // 2. Filtro por Rango de Fechas
+      if (startDate || endDate) {
+        const movDate = mov.fecha ? mov.fecha.split("T")[0] : "";
+        if (startDate && movDate < startDate) return false;
+        if (endDate && movDate > endDate) return false;
+      }
+
+      return true;
+    });
+  }, [movimientos, selectedAccount, startDate, endDate]);
+
+  // =========================================================
+  // RECALCULAR KPIs BASADO EN LO FILTRADO
+  // =========================================================
+  const dynamicStats = useMemo(() => {
+    // Si no hay filtros locales activos, usamos los stats globales que vienen del backend
+    if (selectedAccount === "all" && !startDate && !endDate) {
+      return stats;
+    }
+
+    // Si hay filtros, recalculamos sumando lo que quedó en la tabla
+    let total_ingresos = 0;
+    let total_egresos = 0;
+    filteredMovimientos.forEach((mov) => {
+      if (mov.tipo === "ingreso") total_ingresos += Number(mov.monto) || 0;
+      if (mov.tipo === "egreso") total_egresos += Number(mov.monto) || 0;
+    });
+
+    return { total_ingresos, total_egresos };
+  }, [filteredMovimientos, stats, selectedAccount, startDate, endDate]);
+
+  const flujoNeto =
+    (dynamicStats.total_ingresos || 0) - (dynamicStats.total_egresos || 0);
+
+  const clearFilters = () => {
+    setSelectedAccount("all");
+    setStartDate("");
+    setEndDate("");
+    setSearchTerm("");
+    setMovementFilter("all");
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
       {/* ========================================================= */}
-      {/* CARDS KPI: RESUMEN FINANCIERO                             */}
+      {/* CARDS KPI: RESUMEN FINANCIERO DINÁMICO                    */}
       {/* ========================================================= */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6 relative overflow-hidden group hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-all cursor-default bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-sm hover:shadow-md">
@@ -91,7 +173,9 @@ export function TreasuryFlowTab({
               </p>
             </div>
             <p className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tighter">
-              {showBalances ? formatCurrency(stats.total_ingresos) : "••••••••"}
+              {showBalances
+                ? formatCurrency(dynamicStats.total_ingresos)
+                : "••••••••"}
             </p>
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
               Ingresos reales en cuentas
@@ -111,7 +195,9 @@ export function TreasuryFlowTab({
               </p>
             </div>
             <p className="text-3xl font-black text-slate-800 dark:text-white font-mono tracking-tighter">
-              {showBalances ? formatCurrency(stats.total_egresos) : "••••••••"}
+              {showBalances
+                ? formatCurrency(dynamicStats.total_egresos)
+                : "••••••••"}
             </p>
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
               Pagos y salidas operativas
@@ -146,23 +232,104 @@ export function TreasuryFlowTab({
       </div>
 
       {/* ========================================================= */}
-      {/* TOOLBAR DEL ESTADO DE CUENTA                              */}
+      {/* TOOLBAR AVANZADO DE FILTROS                               */}
       {/* ========================================================= */}
-      <div className="flex flex-col lg:flex-row gap-4 justify-between items-center bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
-        <div className="relative flex-1 w-full lg:w-1/3 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
-          <Input
-            placeholder="Buscar concepto, banco, referencia..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-11 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-mono text-sm"
-          />
+      <div className="flex flex-col gap-4 bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* 1. Búsqueda por Nombre / Concepto */}
+          <div className="relative flex-1 min-w-[220px]">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <Input
+              placeholder="Buscar concepto, referencia..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 h-10 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-mono text-xs"
+            />
+          </div>
+
+          {/* 2. Select Option de Cuenta Bancaria */}
+          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[200px]">
+            <Filter className="h-4 w-4 text-slate-400 mr-2" />
+            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+              <SelectTrigger className="w-full border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
+                <SelectValue placeholder="Todas las cuentas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="font-bold text-xs">
+                  Todas las cuentas
+                </SelectItem>
+                {uniqueAccounts.map((acc, index) => (
+                  <SelectItem
+                    key={index}
+                    value={acc}
+                    className="text-xs uppercase"
+                  >
+                    {acc}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 3. Rango de Fechas (De - A) */}
+          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm gap-2">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              De:
+            </span>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
+            />
+            <div className="h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              A:
+            </span>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
+            />
+          </div>
+
+          {/* 4. Botón de Limpiar Filtros */}
+          {(selectedAccount !== "all" ||
+            startDate ||
+            endDate ||
+            searchTerm) && (
+            <Button
+              variant="ghost"
+              onClick={clearFilters}
+              className="h-10 text-slate-500 hover:text-brand-red flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest"
+            >
+              <FilterX className="h-4 w-4" /> Limpiar
+            </Button>
+          )}
+
+          {/* 5. Botón de Actualizar (fetch) */}
+          <Button
+            variant="outline"
+            className="h-10 w-10 ml-auto p-0 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10"
+            onClick={fetchMovements}
+            disabled={isMovementsLoading}
+          >
+            <RefreshCw
+              className={cn(
+                "h-4 w-4 text-slate-600 dark:text-slate-300",
+                isMovementsLoading && "animate-spin",
+              )}
+            />
+          </Button>
         </div>
-        <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
+
+        {/* Opciones de tipo de movimiento */}
+        <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-xl w-full sm:w-auto overflow-x-auto self-start">
           <button
             onClick={() => setMovementFilter("all")}
             className={cn(
-              "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+              "px-5 py-2.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap",
               movementFilter === "all"
                 ? "bg-white dark:bg-slate-700 text-brand-navy dark:text-white shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
@@ -173,7 +340,7 @@ export function TreasuryFlowTab({
           <button
             onClick={() => setMovementFilter("egreso")}
             className={cn(
-              "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex gap-2 transition-all",
+              "px-5 py-2.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest flex gap-2 transition-all whitespace-nowrap",
               movementFilter === "egreso"
                 ? "bg-white dark:bg-slate-700 text-rose-600 dark:text-rose-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
@@ -184,7 +351,7 @@ export function TreasuryFlowTab({
           <button
             onClick={() => setMovementFilter("ingreso")}
             className={cn(
-              "px-5 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex gap-2 transition-all",
+              "px-5 py-2.5 rounded-lg text-[10px] sm:text-xs font-black uppercase tracking-widest flex gap-2 transition-all whitespace-nowrap",
               movementFilter === "ingreso"
                 ? "bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
@@ -193,16 +360,6 @@ export function TreasuryFlowTab({
             Solo Abonos (+)
           </button>
         </div>
-        <Button
-          variant="outline"
-          className="h-11 w-full sm:w-11 rounded-xl"
-          onClick={fetchMovements}
-          disabled={isMovementsLoading}
-        >
-          <RefreshCw
-            className={cn("h-4 w-4", isMovementsLoading && "animate-spin")}
-          />
-        </Button>
       </div>
 
       {/* ========================================================= */}
@@ -216,7 +373,8 @@ export function TreasuryFlowTab({
               Libro Mayor de Tesorería
             </h3>
             <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500">
-              Registro contable detallado
+              Registro contable detallado ({filteredMovimientos.length}{" "}
+              movimientos)
             </p>
           </div>
         </div>
@@ -237,7 +395,6 @@ export function TreasuryFlowTab({
                 <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 dark:text-slate-300 h-12 w-[180px]">
                   Cuenta
                 </TableHead>
-                {/* COLUMNAS SEPARADAS TIPO ESTADO DE CUENTA */}
                 <TableHead className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-600 dark:text-rose-400 text-right h-12 w-[140px] bg-rose-50/50 dark:bg-rose-950/20">
                   Cargos (-)
                 </TableHead>
@@ -256,18 +413,18 @@ export function TreasuryFlowTab({
                     <Loader2 className="h-8 w-8 mx-auto animate-spin text-brand-navy/50 dark:text-blue-400" />
                   </TableCell>
                 </TableRow>
-              ) : movimientos.length === 0 ? (
+              ) : filteredMovimientos.length === 0 ? (
                 <TableRow>
                   <TableCell
                     colSpan={7}
                     className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                   >
                     <Landmark className="h-10 w-10 mx-auto opacity-20 mb-2" />
-                    El estado de cuenta está vacío.
+                    No se encontraron movimientos para estos filtros.
                   </TableCell>
                 </TableRow>
               ) : (
-                movimientos.map((mov) => {
+                filteredMovimientos.map((mov) => {
                   const logoSvg = getBankLogo(mov.banco);
                   const bankNameClean = mov.banco
                     ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
@@ -281,7 +438,7 @@ export function TreasuryFlowTab({
                       className={cn(
                         "border-b border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150",
                         mov.conciliado &&
-                          "bg-slate-50/50 dark:bg-slate-900/30 opacity-70", // Lo conciliado se ve más "apagado" como ya revisado
+                          "bg-slate-50/50 dark:bg-slate-900/30 opacity-70",
                       )}
                     >
                       <TableCell className="w-14 pl-6 align-top pt-4">
@@ -328,7 +485,6 @@ export function TreasuryFlowTab({
                         </div>
                       </TableCell>
 
-                      {/* COLUMNA DE CARGOS (EGRESOS) */}
                       <TableCell className="align-top pt-4 text-right bg-rose-50/20 dark:bg-rose-950/10 border-l border-r border-slate-100 dark:border-white/5">
                         {esCargo ? (
                           <span className="font-black font-mono text-sm text-slate-800 dark:text-white">
@@ -341,7 +497,6 @@ export function TreasuryFlowTab({
                         )}
                       </TableCell>
 
-                      {/* COLUMNA DE ABONOS (INGRESOS) */}
                       <TableCell className="align-top pt-4 text-right bg-emerald-50/20 dark:bg-emerald-950/10 border-r border-slate-100 dark:border-white/5">
                         {esAbono ? (
                           <span className="font-black font-mono text-sm text-slate-800 dark:text-white">
