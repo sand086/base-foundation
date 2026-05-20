@@ -95,7 +95,7 @@ export function TreasuryFlowTab({
   const [endDate, setEndDate] = useState<string>("");
 
   // =========================================================
-  // EXTRACCIÓN DE CUENTAS ÚNICAS PARA EL SELECT
+  // EXTRACCIÓN DE CUENTAS ÚNICAS PARA EL COMBOBOX
   // =========================================================
   const uniqueAccounts = useMemo(() => {
     const map = new Map<string, string>();
@@ -113,7 +113,7 @@ export function TreasuryFlowTab({
   // =========================================================
   const filteredMovimientos = useMemo(() => {
     return movimientos.filter((mov) => {
-      // 1. Filtro por Cuenta Bancaria (Select/Search)
+      // 1. Filtro por Cuenta Bancaria (Combobox/Select+Search)
       if (selectedAccount !== "all") {
         const bankName = mov.banco
           ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
@@ -136,12 +136,12 @@ export function TreasuryFlowTab({
   // RECALCULAR KPIs BASADO EN LO FILTRADO
   // =========================================================
   const dynamicStats = useMemo(() => {
-    // Si no hay filtros locales activos, usamos los stats globales que vienen del backend
+    // Si no hay filtros locales, usamos los stats que ya traes del backend
     if (selectedAccount === "all" && !startDate && !endDate) {
       return stats;
     }
 
-    // Si hay filtros, recalculamos sumando lo que quedó en la tabla
+    // Si hay filtros, sumamos de la tabla ya filtrada
     let total_ingresos = 0;
     let total_egresos = 0;
     filteredMovimientos.forEach((mov) => {
@@ -244,18 +244,18 @@ export function TreasuryFlowTab({
       {/* ========================================================= */}
       <div className="flex flex-col gap-4 bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
         <div className="flex flex-wrap items-center gap-3">
-          {/* 1. Búsqueda por Nombre / Concepto */}
+          {/* 1. Búsqueda por Nombre / Concepto / Referencia */}
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
-              placeholder="Buscar concepto, referencia..."
+              placeholder="Buscar concepto o referencia..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 h-10 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-mono text-xs"
             />
           </div>
 
-          {/* 2. COMBOBOX: Cuenta Bancaria (Buscador + Select) */}
+          {/* 2. COMBOBOX: Cuenta Bancaria (Buscador + Select integrado) */}
           <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[220px]">
             <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
             <Popover open={openAccountCombo} onOpenChange={setOpenAccountCombo}>
