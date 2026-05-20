@@ -91,6 +91,7 @@ export function TreasuryFlowTab({
   // =========================================================
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
   const [openAccountCombo, setOpenAccountCombo] = useState(false);
+  const [openConceptCombo, setOpenConceptCombo] = useState(false);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
@@ -109,11 +110,35 @@ export function TreasuryFlowTab({
   }, [movimientos]);
 
   // =========================================================
+  // EXTRACCIÓN DE CONCEPTOS Y REFERENCIAS ÚNICAS PARA EL COMBOBOX
+  // =========================================================
+  const uniqueConceptsAndRefs = useMemo(() => {
+    const map = new Map<string, string>();
+    movimientos.forEach((mov) => {
+      const concept = mov.concepto ? mov.concepto.trim() : "";
+      const ref = mov.referencia_bancaria ? mov.referencia_bancaria.trim() : "";
+
+      if (concept) map.set(concept, concept);
+      if (ref) map.set(ref, ref);
+    });
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+  }, [movimientos]);
+
+  // =========================================================
   // LÓGICA DE FILTRADO LOCAL
   // =========================================================
   const filteredMovimientos = useMemo(() => {
     return movimientos.filter((mov) => {
-      // 1. Filtro por Cuenta Bancaria (Combobox/Select+Search)
+      // 1. Filtro por Concepto / Referencia (Combobox) usando searchTerm
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matchesSearch =
+          (mov.concepto || "").toLowerCase().includes(term) ||
+          (mov.referencia_bancaria || "").toLowerCase().includes(term);
+        if (!matchesSearch) return false;
+      }
+
+      // 2. Filtro por Cuenta Bancaria (Combobox)
       if (selectedAccount !== "all") {
         const bankName = mov.banco
           ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
@@ -121,23 +146,41 @@ export function TreasuryFlowTab({
         if (bankName !== selectedAccount) return false;
       }
 
-      // 2. Filtro por Rango de Fechas
+      // 3. Filtro por Rango de Fechas
       if (startDate || endDate) {
         const movDate = mov.fecha ? mov.fecha.split("T")[0] : "";
         if (startDate && movDate < startDate) return false;
         if (endDate && movDate > endDate) return false;
       }
 
+      // 4. Filtro por Tipo de Movimiento (Abono/Cargo)
+      if (movementFilter !== "all" && mov.tipo !== movementFilter) {
+        return false;
+      }
+
       return true;
     });
-  }, [movimientos, selectedAccount, startDate, endDate]);
+  }, [
+    movimientos,
+    selectedAccount,
+    startDate,
+    endDate,
+    searchTerm,
+    movementFilter,
+  ]);
 
   // =========================================================
   // RECALCULAR KPIs BASADO EN LO FILTRADO
   // =========================================================
   const dynamicStats = useMemo(() => {
     // Si no hay filtros locales, usamos los stats que ya traes del backend
-    if (selectedAccount === "all" && !startDate && !endDate) {
+    if (
+      selectedAccount === "all" &&
+      !startDate &&
+      !endDate &&
+      !searchTerm &&
+      movementFilter === "all"
+    ) {
       return stats;
     }
 
@@ -150,7 +193,15 @@ export function TreasuryFlowTab({
     });
 
     return { total_ingresos, total_egresos };
-  }, [filteredMovimientos, stats, selectedAccount, startDate, endDate]);
+  }, [
+    filteredMovimientos,
+    stats,
+    selectedAccount,
+    startDate,
+    endDate,
+    searchTerm,
+    movementFilter,
+  ]);
 
   const flujoNeto =
     (dynamicStats.total_ingresos || 0) - (dynamicStats.total_egresos || 0);
@@ -244,15 +295,71 @@ export function TreasuryFlowTab({
       {/* ========================================================= */}
       <div className="flex flex-col gap-4 bg-slate-100/50 dark:bg-slate-950/40 p-4 rounded-2xl border border-slate-200/50 dark:border-white/10 shadow-inner">
         <div className="flex flex-wrap items-center gap-3">
-          {/* 1. Búsqueda por Nombre / Concepto / Referencia */}
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
-            <Input
-              placeholder="Buscar concepto o referencia..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 h-10 rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm font-mono text-xs"
-            />
+          {/* 1. COMBOBOX: Concepto / Referencia (Buscador + Select integrado) */}
+          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm flex-1 min-w-[220px]">
+            <Search className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
+            <Popover open={openConceptCombo} onOpenChange={setOpenConceptCombo}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  role="combobox"
+                  aria-expanded={openConceptCombo}
+                  className="w-full justify-between p-0 h-8 font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-transparent"
+                >
+                  <span className="truncate">
+                    {!searchTerm ? "Conceptos y Referencias" : searchTerm}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 rounded-xl shadow-xl border-slate-200 dark:border-slate-800 z-50">
+                <Command>
+                  <CommandInput
+                    placeholder="Buscar concepto o referencia..."
+                    className="h-9 text-xs"
+                  />
+                  <CommandEmpty className="p-4 text-xs text-center text-slate-500">
+                    No se encontró.
+                  </CommandEmpty>
+                  <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                    <CommandItem
+                      onSelect={() => {
+                        setSearchTerm("");
+                        setOpenConceptCombo(false);
+                      }}
+                      className="cursor-pointer font-bold text-xs uppercase tracking-tight"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 text-brand-navy dark:text-white",
+                          !searchTerm ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      Todos
+                    </CommandItem>
+                    {uniqueConceptsAndRefs.map((item, index) => (
+                      <CommandItem
+                        key={index}
+                        value={item}
+                        onSelect={() => {
+                          setSearchTerm(item);
+                          setOpenConceptCombo(false);
+                        }}
+                        className="cursor-pointer text-xs uppercase tracking-tight"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 text-brand-navy dark:text-white",
+                            searchTerm === item ? "opacity-100" : "opacity-0",
+                          )}
+                        />
+                        {item}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* 2. COMBOBOX: Cuenta Bancaria (Buscador + Select integrado) */}
