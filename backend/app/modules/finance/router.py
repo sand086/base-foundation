@@ -470,7 +470,7 @@ def get_receivable_invoices(
 def delete_receivable_invoice(
     invoice_id: int, cascade: bool = False, db: Session = Depends(get_db)
 ):
-    """🚀 FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)"""
+    """ FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)
@@ -947,7 +947,7 @@ def reopen_receivable_invoice(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """🚀 FIX CRÍTICO TESORERÍA: Revertir cobros antes de reabrir factura"""
+    """ FIX CRÍTICO TESORERÍA: Revertir cobros antes de reabrir factura"""
     try:
         invoice = (
             db.query(models.ReceivableInvoice)

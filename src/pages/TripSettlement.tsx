@@ -107,7 +107,7 @@ export default function TripSettlement() {
   const [selectedLegIds, setSelectedLegIds] = useState<string[]>([]);
   const [hiddenHistoryIds, setHiddenHistoryIds] = useState<string[]>([]);
 
-  // 🚀 ESTADOS PARA OPTIMISTIC UI (Actualización instantánea)
+  //  ESTADOS PARA OPTIMISTIC UI (Actualización instantánea)
   const [locallyLiquidatedIds, setLocallyLiquidatedIds] = useState<string[]>(
     [],
   );
@@ -167,7 +167,7 @@ export default function TripSettlement() {
     );
   }, [trips, clients]);
 
-  // 🚀 LÓGICA ACTUALIZADA PARA MOVER A PENDIENTES INSTANTÁNEAMENTE
+  //  LÓGICA ACTUALIZADA PARA MOVER A PENDIENTES INSTANTÁNEAMENTE
   const pendingLegs = useMemo(
     () =>
       allLegs.filter(
@@ -179,7 +179,7 @@ export default function TripSettlement() {
     [allLegs, locallyLiquidatedIds, locallyReopenedIds],
   );
 
-  // 🚀 LÓGICA ACTUALIZADA PARA QUITAR DEL HISTORIAL INSTANTÁNEAMENTE
+  //  LÓGICA ACTUALIZADA PARA QUITAR DEL HISTORIAL INSTANTÁNEAMENTE
   const historyLegs = useMemo(
     () =>
       allLegs.filter(
@@ -817,7 +817,7 @@ export default function TripSettlement() {
 
       setLocallyLiquidatedIds((prev) => [...prev, ...selectedLegIds]);
 
-      // 🚀 NUEVO: Asegurarnos de quitar los IDs si estaban en "Reabiertos"
+      //  NUEVO: Asegurarnos de quitar los IDs si estaban en "Reabiertos"
       setLocallyReopenedIds((prev) =>
         prev.filter((id) => !selectedLegIds.includes(id)),
       );
@@ -929,7 +929,7 @@ export default function TripSettlement() {
           prev.filter((id) => id !== String(actionModal.leg.id)),
         );
 
-        // 🚀 NUEVO: Agregar a la lista de reabiertos para actualizar la UI al instante
+        //  NUEVO: Agregar a la lista de reabiertos para actualizar la UI al instante
         setLocallyReopenedIds((prev) => [...prev, String(actionModal.leg.id)]);
 
         toast.success("Liquidación anulada y reabierta.");

@@ -61,7 +61,7 @@ import {
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
 
-// 🚀 IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
+//  IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
 import {
   EnhancedDataTable,
   ColumnDef,
@@ -262,7 +262,7 @@ export const TripPlanner = () => {
     [trips],
   );
 
-  // 🚀 ACTUALIZADO: Extracción segura de unidades y motogeneradores + campo de búsqueda
+  //  ACTUALIZADO: Extracción segura de unidades y motogeneradores + campo de búsqueda
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
     const items: any[] = [];
@@ -402,7 +402,7 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
-  // 🚀 ACTUALIZADO: Columnas cambiadas a <any> para aceptar campos calculados
+  //  ACTUALIZADO: Columnas cambiadas a <any> para aceptar campos calculados
   const tableColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -456,7 +456,7 @@ export const TripPlanner = () => {
         ),
       },
       {
-        key: "_asignacionSearch", // 🚀 MAGIA: Se usa este campo que tiene todos los ecos integrados para el filtro
+        key: "_asignacionSearch", //  MAGIA: Se usa este campo que tiene todos los ecos integrados para el filtro
         header: "Asignación Física",
         render: (value, row) => (
           <div className="flex flex-col gap-1.5">
@@ -637,7 +637,7 @@ export const TripPlanner = () => {
         </div>
       </div>
 
-      {/* 🚀 AQUI REEMPLAZAMOS LA TABLA MANUAL POR LA ENHANCED DATATABLE */}
+      {/*  AQUI REEMPLAZAMOS LA TABLA MANUAL POR LA ENHANCED DATATABLE */}
       {viewMode === "table" && (
         <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
           <CardContent className="p-0">

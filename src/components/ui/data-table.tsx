@@ -111,7 +111,7 @@ const DataTableCell = React.forwardRef<
     className={cn(
       "px-5 py-4 align-middle transition-all duration-300",
       "text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight",
-      // 🚀 SOLUCIÓN: Eliminado el color forzado en hover que te blanqueaba las letras
+      //  SOLUCIÓN: Eliminado el color forzado en hover que te blanqueaba las letras
       className,
     )}
     {...props}

@@ -85,7 +85,7 @@ export const useBilling = () => {
     }
   };
 
-  // 🚀 CARRIL 1: Motor 1 (Factura Directa con Viaje y Complemento Carta Porte)
+  //  CARRIL 1: Motor 1 (Factura Directa con Viaje y Complemento Carta Porte)
   const generateOneShotInvoice = async (
     payload: any,
     onSuccess?: (data: any) => void,
@@ -112,7 +112,7 @@ export const useBilling = () => {
     }
   };
 
-  // 🚀 CARRIL 2: Motor de Factura Libre (Ingreso puro, Sin Viaje)
+  //  CARRIL 2: Motor de Factura Libre (Ingreso puro, Sin Viaje)
   const generateFreeInvoice = async (
     payload: any,
     onSuccess?: (data: any) => void,
@@ -142,7 +142,7 @@ export const useBilling = () => {
     }
   };
 
-  // 🚀 EXPORTAMOS TODAS LAS FUNCIONES (AQUÍ ESTABA TU ERROR)
+  //  EXPORTAMOS TODAS LAS FUNCIONES (AQUÍ ESTABA TU ERROR)
   return {
     isStamping,
     handleStampNominal,

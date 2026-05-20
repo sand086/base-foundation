@@ -87,7 +87,7 @@ export const useReceivables = () => {
     refreshReceivables: receivablesQuery.refetch,
 
     // ACCIONES
-    // 🚀 Acepta un segundo parámetro { cascade } para la eliminación avanzada
+    //  Acepta un segundo parámetro { cascade } para la eliminación avanzada
     deleteReceivable: async (id: number, options?: { cascade?: boolean }) => {
       try {
         await deleteReceivableMut.mutateAsync({

@@ -12,7 +12,7 @@ export const receivableService = {
     return data as ReceivableInvoice[];
   },
 
-  // 🚀 FIX: Modificado para usar AxiosClient directo y soportar la query string ?cascade=true
+  //  FIX: Modificado para usar AxiosClient directo y soportar la query string ?cascade=true
   deleteInvoice: async (id: number | string, cascade?: boolean) => {
     const { data } = await axiosClient.delete(
       `/api/finance/receivables/${id}`,

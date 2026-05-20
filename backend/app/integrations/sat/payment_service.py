@@ -540,7 +540,7 @@ class PaymentComplementService:
                 )
 
                 if doc_rel:
-                    # A) Registro en CxC (INYECCIÓN DE CAMPOS FALTANTES 🚀)
+                    # A) Registro en CxC (INYECCIÓN DE CAMPOS FALTANTES )
                     nuevo_pago = ReceivableInvoicePayment(
                         invoice_id=factura.id,
                         bank_account_id=int(bank_account_id),
@@ -550,7 +550,7 @@ class PaymentComplementService:
                         referencia=str(referencia) if referencia else "",
                         cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
                         complemento_uuid=str(complemento_uuid),
-                        # 🚀 INYECCIÓN DE LOS DATOS CRÍTICOS AL MODELO
+                        #  INYECCIÓN DE LOS DATOS CRÍTICOS AL MODELO
                         parcialidad=int(doc_rel["parcialidad"]),
                         saldo_anterior=float(doc_rel["saldo_anterior"]),
                         saldo_insoluto=float(doc_rel["saldo_insoluto"]),

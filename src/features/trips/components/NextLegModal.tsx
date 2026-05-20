@@ -213,11 +213,11 @@ export function NextLegModal({
   onSubmit,
   onSuccessRefresh,
 }: NextLegModalProps) {
-  // 🚀 INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
+  //  INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
   const { unidades, updateLoadStatus, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { products: satProducts } = useSatCatalogs();
-  const { handleStampNominal } = useBilling(); // 🚀 INYECTADO PARA EL TIMBRADO AUTOMÁTICO
+  const { handleStampNominal } = useBilling(); //  INYECTADO PARA EL TIMBRADO AUTOMÁTICO
 
   const [loading, setLoading] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
@@ -239,7 +239,7 @@ export function NextLegModal({
     destino_vacio: "",
   });
 
-  // 🚀 EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
+  //  EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
   useEffect(() => {
     if (formData.unit_id) {
       fetchLastOdometer(formData.unit_id).then(setOdoInicial);
@@ -599,7 +599,7 @@ export function NextLegModal({
             `Equipo liberado en ${formData.destino_vacio}. Viaje listo para liquidación.`,
           );
         } else if (formData.leg_type === "ruta_carretera") {
-          // 🚀 MAGIA AQUÍ: TIMBRADO AUTOMÁTICO DE CARTA PORTE $1 AL PASAR A RUTA CARRETERA
+          //  MAGIA AQUÍ: TIMBRADO AUTOMÁTICO DE CARTA PORTE $1 AL PASAR A RUTA CARRETERA
           toast.loading("Actualizando Carta Porte para Ruta Carretera...", {
             id: `cp-${tripPadre.id}`,
           });
@@ -631,7 +631,7 @@ export function NextLegModal({
     tripFiscalData,
     legUiConfig,
     onSuccessRefresh,
-    handleStampNominal, // 🚀 DEPENDENCIA INYECTADA
+    handleStampNominal, //  DEPENDENCIA INYECTADA
   ]);
 
   // Extracción dinámica (prioriza lo que el usuario esté tecleando/seleccionando)

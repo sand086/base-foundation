@@ -232,7 +232,7 @@ def update_invoice(db: Session, invoice_id: int, payload: schemas.PayableInvoice
 
     data = payload.model_dump(exclude_unset=True)
 
-    # 🚀 ==========================================
+    #  ==========================================
     # LÓGICA DE CANCELACIÓN Y REAPERTURA
     # ==========================================
     if "estatus" in data:
@@ -284,7 +284,7 @@ def delete_invoice(db: Session, invoice_id: int):
     if not invoice:
         return False
 
-    # 🚀 BLOQUEO DE AUDITORÍA
+    #  BLOQUEO DE AUDITORÍA
     if invoice.saldo_pendiente < invoice.monto_total:
         raise ValueError(
             "Bloqueo de Auditoría: No se puede eliminar una factura que ya tiene abonos o pagos registrados."
@@ -322,7 +322,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             status_code=404, detail="Factura no encontrada o ya eliminada."
         )
 
-    # 🚀 NUEVO CANDADO: Evitar pagar facturas canceladas
+    #  NUEVO CANDADO: Evitar pagar facturas canceladas
     if invoice.estatus == models.InvoiceStatus.CANCELADO:
         raise ValueError(
             "No puedes registrar pagos a una factura que ha sido Cancelada."

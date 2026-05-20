@@ -174,7 +174,7 @@ export default function Payables() {
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [openSupplierCombo, setOpenSupplierCombo] = useState(false);
 
-  // 🚀 NUEVO: FILTROS DE RANGO DE FECHAS
+  //  NUEVO: FILTROS DE RANGO DE FECHAS
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
@@ -253,7 +253,7 @@ export default function Payables() {
     }));
   }, [normalizedInvoices]);
 
-  // 🚀 SE ACTUALIZÓ PARA INCLUIR EL RANGO DE FECHAS
+  //  SE ACTUALIZÓ PARA INCLUIR EL RANGO DE FECHAS
   const filteredInvoices = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -293,7 +293,7 @@ export default function Payables() {
       const matchesSupplier =
         supplierFilter === "all" || String(inv.supplier_id) === supplierFilter;
 
-      // 🚀 NUEVO: Lógica de Filtro por Rango de Fechas (Basado en Emisión o Vencimiento, según necesites, aquí es por Emisión)
+      //  NUEVO: Lógica de Filtro por Rango de Fechas (Basado en Emisión o Vencimiento, según necesites, aquí es por Emisión)
       let matchesDate = true;
       if (startDate || endDate) {
         if (!inv.fecha_vencimiento) {

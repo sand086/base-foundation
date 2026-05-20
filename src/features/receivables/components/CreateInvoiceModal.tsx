@@ -100,7 +100,7 @@ export function CreateInvoiceModal({
   const { products: satProducts, loading: loadingSatProducts } =
     useSatCatalogs();
 
-  // 🚀 INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
+  //  INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
   const { generateOneShotInvoice, generateFreeInvoice, isStamping } =
     useBilling();
 
@@ -268,7 +268,7 @@ export function CreateInvoiceModal({
     );
   };
 
-  // 🚀 EL RUTEADOR INTELIGENTE
+  //  EL RUTEADOR INTELIGENTE
   const handleSubmit = async () => {
     if (
       !clienteId ||
@@ -327,7 +327,7 @@ export function CreateInvoiceModal({
 
     // Si hubo éxito, cerramos y disparamos el refresh de la tabla
     if (result) {
-      // 🚀 MAGIA: Abrimos el PDF de la factura en una nueva pestaña automáticamente
+      //  MAGIA: Abrimos el PDF de la factura en una nueva pestaña automáticamente
       if (result.data && result.data.uuid) {
         window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
       }
@@ -998,7 +998,7 @@ export function CreateInvoiceModal({
                 !clienteId ||
                 montoTotal <= 0 ||
                 loadingClients ||
-                isStamping || // 🚀 SE BLOQUEA MIENTRAS TIMBRA
+                isStamping || //  SE BLOQUEA MIENTRAS TIMBRA
                 !razonSocialEditable ||
                 !rfcEditable ||
                 !cpEditable ||

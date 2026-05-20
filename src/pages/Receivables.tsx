@@ -53,7 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input"; // 🚀 Importación de Input
+import { Input } from "@/components/ui/input"; //  Importación de Input
 
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
@@ -95,7 +95,7 @@ export default function Receivables() {
 
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
 
-  // 🚀 NUEVOS: Estados para filtros
+  //  NUEVOS: Estados para filtros
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -214,7 +214,7 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
-  // 🚀 LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + RANGO DE FECHAS)
+  //  LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + RANGO DE FECHAS)
   const filteredInvoices = useMemo(() => {
     let filtered = formattedInvoices;
 
@@ -699,7 +699,7 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* 🚀 NUEVO BOTÓN: Cancelar Factura */}
+                {/*  NUEVO BOTÓN: Cancelar Factura */}
                 {!hasPayments && row.estatus !== "cancelado" && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -744,7 +744,7 @@ export default function Receivables() {
       >
         <div className="flex flex-wrap items-center gap-3">
           {/* ======================================= */}
-          {/* 🚀 BARRA DE FILTROS ACTUALIZADA (CLIENTE + RANGO DE FECHAS) */}
+          {/*  BARRA DE FILTROS ACTUALIZADA (CLIENTE + RANGO DE FECHAS) */}
           {/* ======================================= */}
           <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
             {/* Filtro Cliente */}
@@ -774,7 +774,7 @@ export default function Receivables() {
               </Select>
             </div>
 
-            {/* 🚀 Filtro Rango de Fechas */}
+            {/*  Filtro Rango de Fechas */}
             {/*             <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm gap-2">
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
                 De:
@@ -797,7 +797,7 @@ export default function Receivables() {
               />
             </div> */}
 
-            {/* 🚀 Botón Limpiar (Solo aparece si hay algún filtro activo) */}
+            {/*  Botón Limpiar (Solo aparece si hay algún filtro activo) */}
             {(selectedClientId !== "all" || startDate || endDate) && (
               <Button
                 variant="ghost"

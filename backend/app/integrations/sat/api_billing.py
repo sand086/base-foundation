@@ -343,7 +343,7 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     )
     clean_uuid = match.group(0) if match else str(uuid)
 
-    # 🚀 FIX: Usamos el servicio base para que lea la carpeta EXACTA de tu servidor de Producción
+    #  FIX: Usamos el servicio base para que lea la carpeta EXACTA de tu servidor de Producción
     service = CartaPorteService(db)
 
     pdf_path_upper = service.storage_dir / f"{clean_uuid.upper()}.pdf"
@@ -377,7 +377,7 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
     )
     clean_uuid = match.group(0) if match else str(uuid)
 
-    # 🚀 FIX: Usamos el servicio base para encontrar la carpeta
+    #  FIX: Usamos el servicio base para encontrar la carpeta
     service = CartaPorteService(db)
 
     xml_path_upper = service.storage_dir / f"{clean_uuid.upper()}.xml"
@@ -629,7 +629,7 @@ def registrar_pago_multiple(
         return resultado
 
     except Exception as e:
-        # 🚀 TRUCO DE DEBUG: Lanzamos el error directo a la pantalla
+        #  TRUCO DE DEBUG: Lanzamos el error directo a la pantalla
         raise HTTPException(
             status_code=400, detail=f"EL SAT RECHAZÓ EL PAGO. Motivo exacto: {str(e)}"
         )

@@ -368,9 +368,9 @@ const RolesPermissions: React.FC = () => {
         usuarios: "users",
         trackingop: "traffic",
         reportes: "reports",
-        tesoreria: "treasury", // 🚀 FIX: Mapeo de Tesorería
-        proveedores: "suppliers", // 🚀 FIX: Mapeo de Proveedores
-        administracion: "admin", // 🚀 FIX: Mapeo de Admin
+        tesoreria: "treasury", //  FIX: Mapeo de Tesorería
+        proveedores: "suppliers", //  FIX: Mapeo de Proveedores
+        administracion: "admin", //  FIX: Mapeo de Admin
       };
 
       modules.forEach((m) => {

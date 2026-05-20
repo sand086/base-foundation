@@ -960,7 +960,7 @@ class BillingService:
             invoice_data.viaje_id, usar_tramo_final=True
         )
 
-        # 🚀 BLINDAJE: Buscamos la Carta Porte (is_nominal=True) directamente en la BD
+        #  BLINDAJE: Buscamos la Carta Porte (is_nominal=True) directamente en la BD
         # Esto evita que se pierda si el router o Pydantic no lo envían bien.
         carta_porte = (
             self.db.query(ReceivableInvoice)
@@ -1020,7 +1020,7 @@ class BillingService:
                 # Si existe, la reciclamos y le INYECTAMOS TODO
                 factura.uuid = uuid_generado
                 factura.uuid_relacionado = (
-                    uuid_relacionado_real  # 🚀 GUARDAMOS EL UUID REAL
+                    uuid_relacionado_real  #  GUARDAMOS EL UUID REAL
                 )
                 factura.status_sat = "TIMBRADA"
                 factura.concepto = data["descripcion_concepto"]
@@ -1031,7 +1031,7 @@ class BillingService:
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
 
-                # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                #  INYECCIÓN DE LOS CAMPOS FALTANTES
                 factura.sub_client_id = viaje.sub_client_id
                 factura.metodo_pago = data.get("metodo_pago", "PPD")
                 factura.forma_pago = data.get("forma_pago", "99")
@@ -1143,7 +1143,7 @@ class BillingService:
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
 
-                # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                #  INYECCIÓN DE LOS CAMPOS FALTANTES
                 factura.sub_client_id = viaje.sub_client_id
                 factura.metodo_pago = data.get("metodo_pago", "PPD")
                 factura.forma_pago = data.get("forma_pago", "99")
@@ -1156,7 +1156,7 @@ class BillingService:
             else:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+                    sub_client_id=viaje.sub_client_id,  #  INYECTADO
                     folio_interno=data.get("folio_interno"),
                     viaje_id=viaje.id,
                     uuid=uuid_generado,
@@ -1172,8 +1172,8 @@ class BillingService:
                     moneda="MXN",
                     fecha_emision=date.today(),
                     fecha_vencimiento=date.today()
-                    + timedelta(days=dias_credito),  # 🚀 INYECTADO
-                    # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                    + timedelta(days=dias_credito),  #  INYECTADO
+                    #  INYECCIÓN DE LOS CAMPOS FALTANTES
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",

@@ -975,7 +975,7 @@ class CartaPorteService:
 
         nueva_factura = ReceivableInvoice(
             client_id=viaje.client_id,
-            sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+            sub_client_id=viaje.sub_client_id,  #  INYECTADO
             viaje_id=viaje.id,
             folio_interno=data.get("folio_interno"),
             uuid=uuid_generado,
@@ -991,8 +991,8 @@ class CartaPorteService:
             moneda="MXN",
             fecha_emision=date.today(),
             fecha_vencimiento=date.today()
-            + timedelta(days=dias_credito),  # 🚀 INYECTADO
-            # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+            + timedelta(days=dias_credito),  #  INYECTADO
+            #  INYECCIÓN DE LOS CAMPOS FALTANTES
             metodo_pago=data.get("metodo_pago", "PUE"),
             forma_pago=data.get("forma_pago", "99"),
             tipo_comprobante="I",
@@ -1060,7 +1060,7 @@ class CartaPorteService:
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
 
-                # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                #  INYECCIÓN DE LOS CAMPOS FALTANTES
                 factura.sub_client_id = viaje.sub_client_id
                 factura.metodo_pago = data.get("metodo_pago", "PPD")
                 factura.forma_pago = data.get("forma_pago", "99")
@@ -1073,7 +1073,7 @@ class CartaPorteService:
             else:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,  # 🚀 INYECTADO
+                    sub_client_id=viaje.sub_client_id,  #  INYECTADO
                     viaje_id=viaje.id,
                     folio_interno=data.get("folio_interno"),
                     uuid=uuid_generado,
@@ -1089,8 +1089,8 @@ class CartaPorteService:
                     moneda="MXN",
                     fecha_emision=date.today(),
                     fecha_vencimiento=date.today()
-                    + timedelta(days=dias_credito),  # 🚀 INYECTADO
-                    # 🚀 INYECCIÓN DE LOS CAMPOS FALTANTES
+                    + timedelta(days=dias_credito),  #  INYECTADO
+                    #  INYECCIÓN DE LOS CAMPOS FALTANTES
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",

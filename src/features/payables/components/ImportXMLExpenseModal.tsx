@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
 
-//   IMPORTAMOS LA LIBRERÍA LECTORA DE EXCEL
+// IMPORTAMOS LA LIBRERÍA LECTORA DE EXCEL
 import * as XLSX from "xlsx";
 
 interface ImportXMLExpenseModalProps {
@@ -52,7 +52,7 @@ export function ImportXMLExpenseModal({
     setIsUploading(true);
 
     try {
-      //   1. LECTURA NATIVA DE EXCEL (Soporta XLS, XLSX y CSV)
+      // 1. LECTURA NATIVA DE EXCEL (Soporta XLS, XLSX y CSV)
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
       const firstSheetName = workbook.SheetNames[0];
@@ -100,6 +100,49 @@ export function ImportXMLExpenseModal({
               ? String(row[index]).trim()
               : "";
         });
+
+        // --- NUEVA LÓGICA DE FILTRADO (IGNORAR PAGOS Y ASIGNAR NEGATIVOS) ---
+        // 1. Identificamos la columna de 'Tipo' (ej. Tipo de Comprobante, Tipo, etc.)
+        const tipoKey = Object.keys(obj).find((k) =>
+          k.toLowerCase().includes("tipo"),
+        );
+        const tipoComprobante = tipoKey ? obj[tipoKey].toLowerCase() : "";
+
+        // Si es un "Pago", lo ignoramos completamente
+        if (
+          tipoComprobante === "p" ||
+          tipoComprobante === "pago" ||
+          tipoComprobante.includes("pago")
+        ) {
+          continue;
+        }
+
+        // 2. Procesamos Notas de Crédito / Egresos (Debe ser saldo negativo)
+        const isNotaCredito =
+          tipoComprobante === "e" ||
+          tipoComprobante === "egreso" ||
+          tipoComprobante.includes("nota de");
+
+        // Identificamos la columna de 'Total'
+        const totalKey = Object.keys(obj).find(
+          (k) =>
+            k.toLowerCase() === "total" || k.toLowerCase().includes("monto"),
+        );
+
+        if (totalKey && obj[totalKey]) {
+          // Limpiamos formatos de moneda ($1,000.00 -> 1000.00)
+          const numTotal = parseFloat(obj[totalKey].replace(/[^0-9.-]+/g, ""));
+
+          if (!isNaN(numTotal)) {
+            // Si es una Nota de Crédito y el número viene positivo, lo forzamos a negativo
+            if (isNotaCredito && numTotal > 0) {
+              obj[totalKey] = (-numTotal).toString();
+            } else {
+              obj[totalKey] = numTotal.toString();
+            }
+          }
+        }
+        // ---------------------------------------------------------------------
 
         // Solo agregamos la fila si extrajimos exitosamente un UUID
         const rowUUID = obj["UUID"] || obj["uuid"] || obj["Uuid"];

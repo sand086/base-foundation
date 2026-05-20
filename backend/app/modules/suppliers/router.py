@@ -101,7 +101,7 @@ def update_invoice(
             raise HTTPException(status_code=404, detail="Factura no encontrada")
         return invoice
     except ValueError as ve:
-        # 🚀 FIX: Atrapamos el error de validación de auditoría (Ej. Al cancelar con pagos)
+        #  FIX: Atrapamos el error de validación de auditoría (Ej. Al cancelar con pagos)
         raise HTTPException(status_code=400, detail=str(ve))
 
 
@@ -112,7 +112,7 @@ def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail="Factura no encontrada")
         return {"message": "Factura eliminada correctamente (Soft Delete)"}
     except ValueError as ve:
-        # 🚀 FIX: Atrapamos el error de validación de auditoría (Ej. Al eliminar con pagos)
+        #  FIX: Atrapamos el error de validación de auditoría (Ej. Al eliminar con pagos)
         raise HTTPException(status_code=400, detail=str(ve))
 
 

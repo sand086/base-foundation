@@ -194,7 +194,7 @@ export function TripDetailsModal({
 
   const [isStampingFinal, setIsStampingFinal] = useState(false);
 
-  // 🚀 VARIABLES SEPARADAS PARA NO CONFUNDIR EL $1 CON LA FACTURA REAL
+  //  VARIABLES SEPARADAS PARA NO CONFUNDIR EL $1 CON LA FACTURA REAL
   const [uuidCartaPorte, setUuidCartaPorte] = useState<string | null>(null);
   const [uuidFacturaFinal, setUuidFacturaFinal] = useState<string | null>(null);
 
@@ -207,7 +207,7 @@ export function TripDetailsModal({
       minimumFractionDigits: 2,
     }).format(val || 0);
 
-  // 🚀 FIX: Lógica blindada con Memoria de Estado y Caché Seguro V2
+  //  FIX: Lógica blindada con Memoria de Estado y Caché Seguro V2
   const processUuids = (tripData: any) => {
     if (!tripData) return;
     const facturas = tripData.receivable_invoices || tripData.invoices || [];
@@ -366,7 +366,7 @@ export function TripDetailsModal({
     const base = isEditing ? tarifaBase : localTrip?.tarifa_base || 0;
     const casetas = isEditing ? costoCasetas : localTrip?.costo_casetas || 0;
 
-    // 🚀 FIX: El subtotal es solo la base
+    //  FIX: El subtotal es solo la base
     const subtotal = base;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
@@ -772,7 +772,7 @@ export function TripDetailsModal({
                         if (generatedUuid) {
                           setUuidCartaPorte(generatedUuid);
 
-                          // 🚀 NUEVO: Guardar en Caché Seguro V2
+                          //  NUEVO: Guardar en Caché Seguro V2
                           localStorage.setItem(
                             `uuids_v2_${localTrip.id}`,
                             JSON.stringify({
@@ -1390,7 +1390,7 @@ export function TripDetailsModal({
                                               response.data?.data ||
                                               response.data;
 
-                                            // 🚀 FIX: Extraemos correctamente el UUID de la factura que acaba de regresar
+                                            //  FIX: Extraemos correctamente el UUID de la factura que acaba de regresar
                                             const generatedFinalUuid =
                                               tripData.uuid ||
                                               tripData.uuid_fiscal;
@@ -1400,7 +1400,7 @@ export function TripDetailsModal({
                                                 generatedFinalUuid,
                                               );
 
-                                              // 🚀 NUEVO: Guardar en Caché Seguro V2
+                                              //  NUEVO: Guardar en Caché Seguro V2
                                               localStorage.setItem(
                                                 `uuids_v2_${localTrip.id}`,
                                                 JSON.stringify({
@@ -1419,7 +1419,7 @@ export function TripDetailsModal({
                                                 },
                                               );
 
-                                              // 🚀 DESCARGA AUTOMÁTICA DEL PDF/XML CON ESPERA ANTI-BLOQUEO
+                                              //  DESCARGA AUTOMÁTICA DEL PDF/XML CON ESPERA ANTI-BLOQUEO
                                               handleDownloadBothFiles(
                                                 generatedFinalUuid,
                                                 true,
