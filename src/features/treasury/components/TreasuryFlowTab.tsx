@@ -20,12 +20,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import {
   Landmark,
   TrendingUp,
@@ -43,6 +48,8 @@ import {
   Wallet,
   Filter,
   FilterX,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BankMovement } from "../types";
@@ -83,6 +90,7 @@ export function TreasuryFlowTab({
   // ESTADOS LOCALES PARA NUEVOS FILTROS
   // =========================================================
   const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [openAccountCombo, setOpenAccountCombo] = useState(false);
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
@@ -105,7 +113,7 @@ export function TreasuryFlowTab({
   // =========================================================
   const filteredMovimientos = useMemo(() => {
     return movimientos.filter((mov) => {
-      // 1. Filtro por Cuenta Bancaria (Select)
+      // 1. Filtro por Cuenta Bancaria (Select/Search)
       if (selectedAccount !== "all") {
         const bankName = mov.banco
           ? mov.banco.replace(/[\u1000-\uFFFF]/g, "").trim()
@@ -247,28 +255,77 @@ export function TreasuryFlowTab({
             />
           </div>
 
-          {/* 2. Select Option de Cuenta Bancaria */}
-          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[200px]">
-            <Filter className="h-4 w-4 text-slate-400 mr-2" />
-            <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-              <SelectTrigger className="w-full border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
-                <SelectValue placeholder="Todas las cuentas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" className="font-bold text-xs">
-                  Todas las cuentas
-                </SelectItem>
-                {uniqueAccounts.map((acc, index) => (
-                  <SelectItem
-                    key={index}
-                    value={acc}
-                    className="text-xs uppercase"
-                  >
-                    {acc}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* 2. COMBOBOX: Cuenta Bancaria (Buscador + Select) */}
+          <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[220px]">
+            <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
+            <Popover open={openAccountCombo} onOpenChange={setOpenAccountCombo}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  role="combobox"
+                  aria-expanded={openAccountCombo}
+                  className="w-full justify-between p-0 h-8 font-bold text-xs text-slate-700 dark:text-slate-300 hover:bg-transparent"
+                >
+                  <span className="truncate">
+                    {selectedAccount === "all"
+                      ? "Todas las cuentas"
+                      : selectedAccount}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[250px] p-0 rounded-xl shadow-xl border-slate-200 dark:border-slate-800 z-50">
+                <Command>
+                  <CommandInput
+                    placeholder="Buscar cuenta..."
+                    className="h-9 text-xs"
+                  />
+                  <CommandEmpty className="p-4 text-xs text-center text-slate-500">
+                    No se encontró la cuenta.
+                  </CommandEmpty>
+                  <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                    <CommandItem
+                      onSelect={() => {
+                        setSelectedAccount("all");
+                        setOpenAccountCombo(false);
+                      }}
+                      className="cursor-pointer font-bold text-xs uppercase tracking-tight"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 text-brand-navy dark:text-white",
+                          selectedAccount === "all"
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      Todas las cuentas
+                    </CommandItem>
+                    {uniqueAccounts.map((acc, index) => (
+                      <CommandItem
+                        key={index}
+                        value={acc}
+                        onSelect={() => {
+                          setSelectedAccount(acc);
+                          setOpenAccountCombo(false);
+                        }}
+                        className="cursor-pointer text-xs uppercase tracking-tight"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 text-brand-navy dark:text-white",
+                            selectedAccount === acc
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        {acc}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* 3. Rango de Fechas (De - A) */}
