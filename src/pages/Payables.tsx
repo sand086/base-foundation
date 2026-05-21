@@ -518,9 +518,7 @@ export default function Payables() {
         sortable: false,
         render: (_, row) => {
           const isDisabled =
-            row.estatus === "pagado" ||
-            row.estatus === "cancelado" ||
-            row.saldo_pendiente === 0;
+            row.estatus === "pagado" || row.estatus === "cancelado";
           return (
             <div className="flex justify-center items-center h-full">
               <Checkbox
@@ -707,11 +705,11 @@ export default function Payables() {
                     setIsPaymentModalOpen(true);
                   }}
                   disabled={
-                    row.saldo_pendiente === 0 || row.estatus === "cancelado"
+                    row.estatus === "cancelado" || row.estatus === "pagado"
                   }
                   className={cn(
                     "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                    row.saldo_pendiente > 0 && row.estatus !== "cancelado"
+                    row.estatus !== "cancelado" && row.estatus !== "pagado"
                       ? "text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/30"
                       : "opacity-50",
                   )}

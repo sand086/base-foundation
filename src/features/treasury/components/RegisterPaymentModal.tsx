@@ -434,7 +434,10 @@ export function RegisterPaymentModal({
             <Button
               onClick={handleSubmit}
               disabled={
-                isSubmitting || formData.monto <= 0 || !formData.cuenta_retiro
+                isSubmitting ||
+                !formData.cuenta_retiro ||
+                (saldoPendiente > 0 && formData.monto <= 0) ||
+                (saldoPendiente <= 0 && formData.monto < 0) // <--- ¡AQUÍ ESTÁ LA CLAVE!
               }
               className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
             >

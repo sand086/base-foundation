@@ -313,7 +313,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             models.PayableInvoice.id == invoice_id,
             models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
         )
-        .with_for_update(of=models.PayableInvoice)  # <--- AQUI ESTÁ LA SOLUCIÓN
+        .with_for_update(of=models.PayableInvoice)
         .first()
     )
 
@@ -322,17 +322,32 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             status_code=404, detail="Factura no encontrada o ya eliminada."
         )
 
-    #  NUEVO CANDADO: Evitar pagar facturas canceladas
+    # CANDADO: Evitar pagar facturas canceladas
     if invoice.estatus == models.InvoiceStatus.CANCELADO:
         raise ValueError(
             "No puedes registrar pagos a una factura que ha sido Cancelada."
         )
 
     try:
-        # 2. Validación y limpieza de montos (Evitamos el error de muchos decimales en Python)
+        # 2. Validación y limpieza de montos
         monto_pago = round(float(payment_in.get("monto", 0.0)), 2)
-        if monto_pago <= 0:
-            raise ValueError("El monto del pago debe ser mayor a cero.")
+
+        # --- NUEVA LÓGICA DE VALIDACIÓN ---
+        # Si la factura tiene saldo pendiente positivo, exigimos un pago mayor a 0
+        if invoice.saldo_pendiente > 0:
+            if monto_pago <= 0:
+                raise ValueError(
+                    "El monto del pago debe ser mayor a cero para facturas con deuda."
+                )
+            if monto_pago > invoice.saldo_pendiente:
+                raise ValueError(
+                    "El monto del pago no puede superar el saldo pendiente."
+                )
+        else:
+            # Si el saldo es negativo o cero, aceptamos $0, pero bloqueamos números negativos
+            if monto_pago < 0:
+                raise ValueError("El monto del pago no puede ser negativo.")
+        # -----------------------------------
 
         # 3. Guardar el registro del pago en la tabla InvoicePayment
         db_payment = models.InvoicePayment(invoice_id=invoice_id, **payment_in)
@@ -340,6 +355,8 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
 
         # 4. Actualizar el saldo de la factura de forma segura
         nuevo_saldo = round((invoice.saldo_pendiente or 0.0) - monto_pago, 2)
+
+        # MAGIA: Si el saldo era -89.89, max(-89.89, 0.0) forzará la factura a quedar en $0.0
         invoice.saldo_pendiente = max(nuevo_saldo, 0.0)
 
         # Usamos 0.01 de tolerancia por si quedan basuras de centavos por redondeos del SAT
@@ -353,25 +370,19 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
         bank_account_id = payment_in.get("bank_account_id")
 
         if bank_account_id:
-            # Bloqueamos también la cuenta de banco mientras descontamos el dinero
             account = (
                 db.query(models.BankAccount)
                 .filter(models.BankAccount.id == bank_account_id)
-                .with_for_update(
-                    of=models.BankAccount
-                )  # <--- AGREGAR EL PARÁMETRO "of" AQUÍ
+                .with_for_update(of=models.BankAccount)
                 .first()
             )
 
             if not account:
                 raise ValueError("La cuenta bancaria seleccionada no existe.")
 
-            # Descontamos el dinero de la cuenta de banco
+            # Descontamos el dinero de la cuenta de banco (Si el pago es de $0, la cuenta no se afecta)
             account.saldo = round((account.saldo or 0.0) - monto_pago, 2)
 
-            # =========================================================
-            # TEXTO CLARO PARA TESORERÍA: "Para que Gustavo sepa qué se pagó"
-            # =========================================================
             proveedor_nombre = (
                 invoice.supplier.razon_social
                 if invoice.supplier
@@ -385,6 +396,8 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
                 "fecha_pago", payment_in.get("fecha", datetime.now())
             )
 
+            # Generamos el movimiento de $0 para que quede registro de auditoría en Tesorería
+            # de que se "concilió" un saldo negativo en esa cuenta.
             mov = models.BankMovement(
                 bank_account_id=account.id,
                 tipo="egreso",
@@ -392,7 +405,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
                 concepto=concepto_claro,
                 referencia=referencia_clara,
                 origen_modulo="CxP",
-                fecha=fecha_movimiento,  # <--- AQUÍ ESTÁ LA SOLUCIÓN
+                fecha=fecha_movimiento,
             )
             db.add(mov)
 
@@ -435,7 +448,7 @@ def delete_payment(db: Session, payment_id: int, user_id: int):
         invoice = (
             db.query(models.PayableInvoice)
             .filter(models.PayableInvoice.id == payment.invoice_id)
-            .with_for_update(of=models.PayableInvoice)  # <--- MISMA SOLUCIÓN
+            .with_for_update(of=models.PayableInvoice)
             .first()
         )
 
