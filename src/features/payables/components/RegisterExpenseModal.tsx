@@ -304,8 +304,8 @@ export function RegisterExpenseModal({
   const validateForm = (): boolean => {
     const errors: string[] = [];
 
-    if (!formData.monto_total || formData.monto_total <= 0)
-      errors.push("El monto debe ser mayor a 0");
+    if (formData.monto_total === undefined || formData.monto_total === null)
+      errors.push("Debes ingresar un monto");
 
     if (!formData.clasificacion)
       errors.push("La clasificación financiera es obligatoria");
@@ -777,7 +777,10 @@ export function RegisterExpenseModal({
               <Input
                 type="number"
                 placeholder="0.00"
-                value={formData.monto_total || ""}
+                // Fix del Bug de React: Permitir que "0" se muestre
+                value={
+                  formData.monto_total === 0 ? 0 : formData.monto_total || ""
+                }
                 onChange={(e) =>
                   setFormData((p) => ({
                     ...p,

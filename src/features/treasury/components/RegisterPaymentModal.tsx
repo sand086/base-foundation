@@ -107,7 +107,7 @@ export function RegisterPaymentModal({
 
     setFormData({
       fecha_pago: today(),
-      monto: saldoPendiente,
+      monto: saldoPendiente > 0 ? saldoPendiente : 0, // Inyecta 0 si es negativo
       metodo_pago: defaultMethod,
       // SI EXISTE, LA PONEMOS POR DEFECTO, DE LO CONTRARIO SE QUEDA VACÍO
       cuenta_retiro: hasBanamex ? "1" : "",
@@ -123,13 +123,19 @@ export function RegisterPaymentModal({
     const errors: string[] = [];
 
     if (!formData.fecha_pago) errors.push("Selecciona la fecha de pago");
-    if (!formData.monto || formData.monto <= 0)
-      errors.push("El monto debe ser mayor a 0");
-    if (formData.monto > saldoPendiente) {
-      errors.push(
-        `El monto no puede exceder el saldo pendiente ($${saldoPendiente.toLocaleString("es-MX")})`,
-      );
+
+    // Si la factura tiene deuda, debe pagar más de 0. Si tiene a favor (negativo) o es 0, permite 0.
+    if (saldoPendiente > 0) {
+      if (formData.monto <= 0) errors.push("El monto debe ser mayor a 0");
+      if (formData.monto > saldoPendiente) {
+        errors.push(
+          `El monto no puede exceder el saldo pendiente ($${saldoPendiente.toLocaleString("es-MX")})`,
+        );
+      }
+    } else {
+      if (formData.monto < 0) errors.push("El monto no puede ser negativo");
     }
+
     if (!formData.cuenta_retiro)
       errors.push("Debes seleccionar una cuenta de retiro o Caja General");
     if (!formData.metodo_pago)
@@ -169,8 +175,6 @@ export function RegisterPaymentModal({
       onOpenChange(false);
     } catch (e: any) {
       console.error(e);
-      // El Toast ya se debe manejar en la función padre (onSubmit),
-      // pero por si acaso falla la llamada, lo atrapamos.
     } finally {
       setIsSubmitting(false);
     }
@@ -290,7 +294,8 @@ export function RegisterPaymentModal({
             <Input
               type="number"
               placeholder="0.00"
-              value={formData.monto || ""}
+              // Fix del Bug de React: Permitir que "0" se muestre
+              value={formData.monto === 0 ? 0 : formData.monto || ""}
               onChange={(e) => {
                 setFormData((p) => ({ ...p, monto: toNumber(e.target.value) }));
                 setError("");
@@ -302,14 +307,20 @@ export function RegisterPaymentModal({
               <button
                 type="button"
                 onClick={() =>
-                  setFormData((p) => ({ ...p, monto: saldoPendiente }))
+                  setFormData((p) => ({
+                    ...p,
+                    monto: saldoPendiente > 0 ? saldoPendiente : 0,
+                  }))
                 }
                 className="text-primary hover:underline font-bold"
               >
                 Pagar saldo completo
               </button>
               <span className="text-muted-foreground font-mono">
-                Máximo: ${saldoPendiente.toLocaleString("es-MX")}
+                Máximo: $
+                {saldoPendiente > 0
+                  ? saldoPendiente.toLocaleString("es-MX")
+                  : "0.00"}
               </span>
             </div>
           </div>
@@ -436,8 +447,8 @@ export function RegisterPaymentModal({
               disabled={
                 isSubmitting ||
                 !formData.cuenta_retiro ||
-                (saldoPendiente > 0 && formData.monto <= 0) ||
-                (saldoPendiente <= 0 && formData.monto < 0) // <--- ¡AQUÍ ESTÁ LA CLAVE!
+                formData.monto < 0 ||
+                (saldoPendiente > 0 && formData.monto <= 0)
               }
               className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
