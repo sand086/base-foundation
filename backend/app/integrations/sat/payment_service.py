@@ -366,7 +366,8 @@ class PaymentComplementService:
             .strip()
         )
 
-        folio_corto = datetime.now().strftime("%H%M%S")
+        pagos_existentes = self.db.query(ReceivableInvoicePayment).count()
+        folio_corto = str(2560 + pagos_existentes)
 
         datos_pago = {
             "serie": "COM",
@@ -698,7 +699,7 @@ class PaymentComplementService:
         context = {
             **data,
             "uuid": uuid,
-            "folio_interno": f"COM-{data['folio']}",
+            "folio_interno": f"com-{data['folio']}",
             "fecha_emision": data["fecha"],
             "fecha_certificacion": fecha_certificacion,
             "cuenta_beneficiario": cuenta_benef,

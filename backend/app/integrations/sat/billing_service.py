@@ -594,8 +594,10 @@ class BillingService:
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": "CP" if is_nominal else "F",
-            "folio": str(viaje.id),
-            "folio_interno": f"CP-{viaje.id}" if is_nominal else f"F-{viaje.id}",
+            "folio": str(17350 + viaje.id) if is_nominal else str(9750 + viaje.id),
+            "folio_interno": (
+                f"cp-{17350 + viaje.id}" if is_nominal else f"f-{9750 + viaje.id}"
+            ),
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",

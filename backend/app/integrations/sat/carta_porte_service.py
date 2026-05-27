@@ -594,8 +594,10 @@ class CartaPorteService:
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": "CP" if is_nominal else "F",
-            "folio": str(viaje.id),
-            "folio_interno": f"CP-{viaje.id}" if is_nominal else f"F-{viaje.id}",
+            "folio": str(17350 + viaje.id) if is_nominal else str(9750 + viaje.id),
+            "folio_interno": (
+                f"cp-{17350 + viaje.id}" if is_nominal else f"f-{9750 + viaje.id}"
+            ),
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
@@ -990,8 +992,7 @@ class CartaPorteService:
             retenciones=Decimal("0.04"),
             moneda="MXN",
             fecha_emision=date.today(),
-            fecha_vencimiento=date.today()
-            + timedelta(days=dias_credito),  #  INYECTADO
+            fecha_vencimiento=date.today() + timedelta(days=dias_credito),  #  INYECTADO
             #  INYECCIÓN DE LOS CAMPOS FALTANTES
             metodo_pago=data.get("metodo_pago", "PUE"),
             forma_pago=data.get("forma_pago", "99"),
