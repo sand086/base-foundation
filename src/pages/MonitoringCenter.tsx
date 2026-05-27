@@ -60,6 +60,7 @@ import {
   DataTableHead,
   DataTableCell,
 } from "@/components/ui/data-table";
+import { PageHeader } from "@/components/ui/page-header";
 
 import { useTrips } from "@/features/trips/hooks/useTrips";
 import axiosClient from "@/api/axiosClient";
@@ -522,19 +523,11 @@ export default function MonitoringCenter() {
   return (
     <div className="flex flex-col h-[calc(100vh-5rem)] p-4 sm:p-6 md:p-8 space-y-6 bg-white/80 dark:bg-brand-navy/95 backdrop-blur-2xl animate-in fade-in duration-700">
       {/* CAPA 2: HEADER TAHOE */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 shrink-0 pb-2 border-b border-slate-200/50 dark:border-white/10">
-        <div>
-          <h1 className="uppercase text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
-            <div className="p-2 bg-slate-100 dark:bg-white/5 rounded-xl shadow-inner">
-              <Activity className="h-6 w-6 text-brand-navy dark:text-white" />
-            </div>
-            Historial de Operaciones
-          </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mt-2">
-            Torre de control para despachos, rutas y liquidaciones
-          </p>
-        </div>
-
+      <PageHeader
+        title="Historial de Operaciones"
+        description="Torre de control para despachos, rutas y liquidaciones."
+        icon={<Activity className="h-8 w-8 text-brand-navy dark:text-white" />}
+      >
         <div className="flex items-center gap-3">
           <Button
             variant={showFilters ? "secondary" : "outline"}
@@ -553,8 +546,7 @@ export default function MonitoringCenter() {
             <Download className="h-3.5 w-3.5 mr-2" /> Exportar Data
           </Button>
         </div>
-      </div>
-
+      </PageHeader>
       {/* CAPA 3: PANEL DE KPIS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6 shrink-0">
         {[

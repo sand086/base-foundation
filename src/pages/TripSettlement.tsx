@@ -69,7 +69,7 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
-
+import { PageHeader } from "@/components/ui/page-header";
 interface ConceptoExtra {
   id: string;
   descripcion: string;
@@ -946,18 +946,13 @@ export default function TripSettlement() {
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <h1 className="uppercase text-2xl font-black text-brand-navy dark:text-white flex items-center gap-2 uppercase">
-            <FileCheck className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />{" "}
-            Liquidaciones Operativas
-          </h1>
-          <p className="text-muted-foreground mt-1 font-medium">
-            Módulo de Tesorería. Selecciona los movimientos y emite el recibo de
-            pago del operador.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Liquidaciones Operativas"
+        description="Módulo de Tesorería. Selecciona los movimientos y emite el recibo de pago del operador."
+        icon={
+          <FileCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+        }
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         <div
