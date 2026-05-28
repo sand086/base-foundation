@@ -5,10 +5,11 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional
 
+
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, logger
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from cryptography import x509
@@ -260,8 +261,22 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     uuid_relacionado = factura_vieja.uuid if factura_vieja else None
 
+    # 👇 NUEVO: Extractor Inteligente de Folio para Reciclaje
+    folio_a_reciclar = None
+    if factura_vieja and factura_vieja.folio_interno:
+        try:
+            # Convierte "CP-13" a 13 entero
+            folio_a_reciclar = int(factura_vieja.folio_interno.split("-")[1])
+        except Exception as e:
+            logger.warning(
+                f"No se pudo extraer folio numérico de {factura_vieja.folio_interno}: {e}"
+            )
+
     invoice_data = ReceivableInvoiceCreate(
-        viaje_id=trip_id, is_nominal=False, uuid_relacionado=uuid_relacionado
+        viaje_id=trip_id,
+        is_nominal=False,
+        uuid_relacionado=uuid_relacionado,
+        folio_forzado=folio_a_reciclar,  # <-- Inyectamos el folio rescatado
     )
 
     try:

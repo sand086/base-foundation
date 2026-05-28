@@ -461,6 +461,34 @@ class CartaPorteService:
             logger.error(f"Fallo en motor criptográfico blindado: {e}")
             raise HTTPException(status_code=500, detail=f"Error en Sello SAT: {str(e)}")
 
+    def _get_y_avanzar_folio(self, serie: str) -> int:
+        from app.models.models import SystemConfig
+
+        config_key = f"folio_actual_{serie}"
+
+        # 1. Buscamos el contador maestro y lo bloqueamos temporalmente para concurrencia
+        secuencia = (
+            self.db.query(SystemConfig)
+            .filter(SystemConfig.key == config_key)
+            .with_for_update()
+            .first()
+        )
+
+        if not secuencia:
+            # 2. Si no existe, inicializamos el contador
+            nuevo_folio = 1
+            secuencia = SystemConfig(
+                key=config_key, value=str(nuevo_folio), grupo="folios", tipo="integer"
+            )
+            self.db.add(secuencia)
+        else:
+            # 3. Si existe, le sumamos 1 y guardamos el nuevo valor
+            nuevo_folio = int(secuencia.value) + 1
+            secuencia.value = str(nuevo_folio)
+
+        # No hacemos db.commit() aquí para no romper la transacción principal
+        return nuevo_folio
+
     def _obtener_datos_completos(
         self, viaje_id: int, buscar_tramo_carretera: bool = False
     ):
@@ -523,6 +551,8 @@ class CartaPorteService:
         r2,
         is_nominal=False,
         ocultar_montos=False,
+        serie_forzada=None,
+        folio_forzado=None,
     ) -> dict:
         subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
         iva = subtotal * 0.16
@@ -591,13 +621,21 @@ class CartaPorteService:
                 detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC de Persona Física válido (13 caracteres). RFC detectado: '{rfc_op_final}'.",
             )
 
+        # 1. Definir la serie
+        serie_final = serie_forzada or (
+            "CP" if is_nominal else "CP"
+        )  # Todo viaje usa CP
+
+        # 2. Obtener el folio (Reciclado o Avanzando el contador maestro)
+        folio_final = (
+            folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
+        )
+
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
-            "serie": "CP" if is_nominal else "F",
-            "folio": str(17350 + viaje.id) if is_nominal else str(9750 + viaje.id),
-            "folio_interno": (
-                f"cp-{17350 + viaje.id}" if is_nominal else f"f-{9750 + viaje.id}"
-            ),
+            "serie": serie_final,
+            "folio": str(folio_final),
+            "folio_interno": f"{serie_final}-{folio_final}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
@@ -968,6 +1006,7 @@ class CartaPorteService:
             r2,
             is_nominal=True,
             ocultar_montos=False,
+            folio_forzado=getattr(invoice_data, "folio_forzado", None),
         )
         resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
 
@@ -1030,6 +1069,7 @@ class CartaPorteService:
             r2,
             is_nominal=False,
             ocultar_montos=False,
+            folio_forzado=getattr(invoice_data, "folio_forzado", None),
         )
         resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
 

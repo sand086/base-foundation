@@ -1291,12 +1291,16 @@ class BillingService:
         import zeep
         from cryptography import x509
 
-        # 1. Variables básicas
-        folio_int = f"FL-{int(datetime.now().timestamp())}"[-6:]  # Folio Libre temporal
+        # 1. Variables básicas y Secuenciador
+        folio_real = self._get_y_avanzar_folio("F")
+        folio_int = f"F-{folio_real}"
         fecha = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
         # 2. Armar XML limpio (Sin complementos)
-        xml_base = self._armar_xml_ingreso_libre(d, folio_int, fecha)
+        xml_base = self._armar_xml_ingreso_libre(d, str(folio_real), fecha)
+
+        # 👇 NUEVO: Guardamos el folio real en el diccionario para usarlo al guardar en BD
+        d["folio_interno"] = folio_int
 
         # 3. Sellar el XML
         with open(self.path_cer, "rb") as f:
