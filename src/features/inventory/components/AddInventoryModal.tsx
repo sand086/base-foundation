@@ -18,10 +18,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, Check, Loader2, Edit } from "lucide-react";
+import { Package, Check, Loader2, Edit, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { InventoryItem } from "@/features/inventory/types";
 import { cn } from "@/lib/utils";
+
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // Form Components
 import {
@@ -71,6 +85,7 @@ export function AddInventoryModal({
   onSave,
 }: AddInventoryModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openProveedor, setOpenProveedor] = useState(false);
 
   const { suppliers, isLoadingSuppliers } = useSuppliers();
 
@@ -260,32 +275,84 @@ export function AddInventoryModal({
                     control={form.control}
                     name="proveedor_id"
                     render={({ field }) => (
-                      <FormItem className="sm:col-span-2">
+                      <FormItem className="sm:col-span-2 flex flex-col pt-1">
                         <FormLabel variant="brand">
                           Proveedor Habitual
                         </FormLabel>
-                        <Select
-                          onValueChange={(val) => field.onChange(Number(val))}
-                          value={field.value ? String(field.value) : undefined}
-                          disabled={isLoadingSuppliers}
+                        <Popover
+                          open={openProveedor}
+                          onOpenChange={setOpenProveedor}
                         >
-                          <FormControl>
-                            <SelectTrigger className="h-11 font-bold text-xs shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                              <SelectValue placeholder="Seleccione un proveedor (Opcional)" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="max-h-60">
-                            {suppliers.map((sup) => (
-                              <SelectItem
-                                key={sup.id}
-                                value={String(sup.id)}
-                                className="font-bold text-xs uppercase"
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openProveedor}
+                                className={cn(
+                                  "w-full justify-between h-11 shadow-sm bg-card border-slate-200 dark:border-white/10",
+                                  !field.value && "text-muted-foreground",
+                                )}
+                                disabled={isLoadingSuppliers}
                               >
-                                {sup.razon_social}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                <span className="font-bold text-xs uppercase truncate text-slate-800 dark:text-slate-100">
+                                  {field.value
+                                    ? suppliers.find(
+                                        (sup) => sup.id === field.value,
+                                      )?.razon_social
+                                    : "Seleccione un proveedor (Opcional)"}
+                                </span>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-full sm:w-[400px] p-0"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput
+                                placeholder="Buscar proveedor..."
+                                className="uppercase text-xs font-bold"
+                              />
+                              <CommandList className="max-h-60 custom-scrollbar">
+                                <CommandEmpty className="py-6 text-center text-xs font-bold uppercase text-muted-foreground">
+                                  No se encontró ningún proveedor.
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  {suppliers.map((sup) => (
+                                    <CommandItem
+                                      key={sup.id}
+                                      value={sup.razon_social} // IMPORTANTE: Se usa para buscar por el texto
+                                      onSelect={() => {
+                                        // Si hace click en el mismo que ya está seleccionado, lo limpia (permite null)
+                                        form.setValue(
+                                          "proveedor_id",
+                                          sup.id === field.value
+                                            ? null
+                                            : sup.id,
+                                          { shouldValidate: true },
+                                        );
+                                        setOpenProveedor(false); // Cierra el menú al seleccionar
+                                      }}
+                                      className="font-bold text-xs uppercase cursor-pointer"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          sup.id === field.value
+                                            ? "opacity-100 text-brand-green"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                      {sup.razon_social}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
