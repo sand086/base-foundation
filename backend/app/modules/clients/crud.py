@@ -75,6 +75,9 @@ def create_client(db: Session, client: schemas.ClientCreate):
             comprobante_domicilio_url=getattr(
                 client, "comprobante_domicilio_url", None
             ),
+            forma_pago=getattr(client, "forma_pago", "99"),
+            metodo_pago=getattr(client, "metodo_pago", "PPD"),
+            moneda=getattr(client, "moneda", "MXN"),
         )
         db.add(db_client)
         db.flush()  # Para obtener el db_client.id

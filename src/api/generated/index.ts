@@ -111,6 +111,7 @@ export type { RateTemplateCreate } from './models/RateTemplateCreate';
 export type { RateTemplateResponse } from './models/RateTemplateResponse';
 export type { RateTemplateUpdate } from './models/RateTemplateUpdate';
 export type { ReceivableInvoiceCreate } from './models/ReceivableInvoiceCreate';
+export type { ReceivableInvoiceLite } from './models/ReceivableInvoiceLite';
 export type { RecentService } from './models/RecentService';
 export { RecordStatus } from './models/RecordStatus';
 export type { RefreshRequest } from './models/RefreshRequest';

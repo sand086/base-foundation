@@ -19,6 +19,9 @@ export type ClientResponse = {
     estatus?: ClientStatus;
     dias_credito?: (number | null);
     contrato_url?: (string | null);
+    forma_pago?: (string | null);
+    metodo_pago?: (string | null);
+    moneda?: (string | null);
     id: number;
     created_at?: (string | null);
     updated_at?: (string | null);

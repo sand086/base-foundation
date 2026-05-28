@@ -190,6 +190,10 @@ class ClientBase(ORMBase):
     dias_credito: int | None = 0
     contrato_url: Optional[str] = Field(default=None, max_length=500)
 
+    forma_pago: Optional[str] = Field(default="99", max_length=5)
+    metodo_pago: Optional[str] = Field(default="PPD", max_length=5)
+    moneda: Optional[str] = Field(default="MXN", max_length=5)
+
 
 class ClientCreate(ClientBase):
     sub_clients: List[SubClientCreate] = Field(default_factory=list)
@@ -200,23 +204,20 @@ class ClientCreate(ClientBase):
 class ClientUpdate(ORMBase):
     razon_social: Optional[str] = Field(default=None, max_length=200)
     public_id: Optional[str] = Field(default=None, max_length=50)
-
     rfc: Optional[str] = Field(default=None, max_length=13)
-
     regimen_fiscal: Optional[str] = Field(default=None, max_length=10)
     uso_cfdi: Optional[str] = Field(default=None, max_length=10)
-
     contacto_principal: Optional[str] = Field(default=None, max_length=100)
     telefono: Optional[str] = Field(default=None, max_length=20)
     email: Optional[EmailStr] = None
-
     direccion_fiscal: Optional[str] = None
     codigo_postal_fiscal: Optional[str] = Field(default=None, max_length=10)
-
     estatus: Optional[ClientStatus] = None
-
     dias_credito: Optional[int] = None
     contrato_url: Optional[str] = Field(default=None, max_length=500)
+    forma_pago: Optional[str] = Field(default=None, max_length=5)
+    metodo_pago: Optional[str] = Field(default=None, max_length=5)
+    moneda: Optional[str] = Field(default=None, max_length=5)
 
     sub_clients: Optional[List[SubClientUpdate]] = None
 

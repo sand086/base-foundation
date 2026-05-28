@@ -237,18 +237,24 @@ export class FinanceService {
     }
     /**
      * Delete Receivable Invoice
+     * FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)
      * @param invoiceId
+     * @param cascade
      * @returns any Successful Response
      * @throws ApiError
      */
     public static deleteReceivableInvoiceApiFinanceReceivablesInvoiceIdDelete(
         invoiceId: number,
+        cascade: boolean = false,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'DELETE',
             url: '/api/finance/receivables/{invoice_id}',
             path: {
                 'invoice_id': invoiceId,
+            },
+            query: {
+                'cascade': cascade,
             },
             errors: {
                 422: `Validation Error`,
@@ -338,6 +344,7 @@ export class FinanceService {
     }
     /**
      * Reopen Receivable Invoice
+     * FIX CRÍTICO TESORERÍA: Revertir cobros antes de reabrir factura
      * @param invoiceId
      * @returns any Successful Response
      * @throws ApiError

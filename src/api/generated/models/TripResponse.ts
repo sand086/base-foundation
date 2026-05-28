@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { ClientResponse } from './ClientResponse';
+import type { ReceivableInvoiceLite } from './ReceivableInvoiceLite';
 import type { RecordStatus } from './RecordStatus';
 import type { TariffBasicInfo } from './TariffBasicInfo';
 import type { TripLegResponse } from './TripLegResponse';
@@ -67,7 +68,7 @@ export type TripResponse = {
     motogenerator_1_unit?: (UnitResponse | null);
     motogenerator_2_unit?: (UnitResponse | null);
     legs?: Array<TripLegResponse>;
-    receivable_invoices?: Array<any>;
+    receivable_invoices?: Array<ReceivableInvoiceLite>;
     record_status: RecordStatus;
     created_at?: (string | null);
     updated_at?: (string | null);

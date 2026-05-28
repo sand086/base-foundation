@@ -813,8 +813,6 @@ export class DefaultService {
     }
     /**
      * Download Invoice Pdf
-     * Busca el archivo PDF generado en el disco y lo descarga,
-     * soportando prefijos del frontend (ej. CFDI_Final_UUID).
      * @param uuid
      * @returns any Successful Response
      * @throws ApiError
@@ -835,8 +833,6 @@ export class DefaultService {
     }
     /**
      * Download Invoice Xml
-     * Busca el archivo XML timbrado en el disco y lo descarga,
-     * soportando prefijos del frontend.
      * @param uuid
      * @returns any Successful Response
      * @throws ApiError
@@ -947,8 +943,8 @@ export class DefaultService {
     }
     /**
      * Generar Complemento de Pago
-     * Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-     * el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA BLINDADO PARA BANCOS 1 A 1)
+     * Endpoint Fase 3.2: Registra el pago y genera el Complemento (REP).
+     * (Bypass desactivado para ver el error real del SAT)
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
