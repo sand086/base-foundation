@@ -417,6 +417,33 @@ class BillingService:
             logger.error(f"Fallo en motor criptográfico blindado: {e}")
             raise HTTPException(status_code=500, detail=f"Error en Sello SAT: {str(e)}")
 
+    def _get_y_avanzar_folio(self, serie: str) -> int:
+        from app.models.models import SystemConfig
+
+        config_key = f"folio_actual_{serie}"
+
+        # 1. Buscamos el contador maestro y lo bloqueamos temporalmente para concurrencia
+        secuencia = (
+            self.db.query(SystemConfig)
+            .filter(SystemConfig.key == config_key)
+            .with_for_update(of=SystemConfig)  # <--- CON EL FIX APLICADO
+            .first()
+        )
+
+        if not secuencia:
+            # 2. Si no existe, inicializamos el contador
+            nuevo_folio = 1
+            secuencia = SystemConfig(
+                key=config_key, value=str(nuevo_folio), grupo="folios", tipo="integer"
+            )
+            self.db.add(secuencia)
+        else:
+            # 3. Si existe, le sumamos 1 y guardamos el nuevo valor
+            nuevo_folio = int(secuencia.value) + 1
+            secuencia.value = str(nuevo_folio)
+
+        return nuevo_folio
+
     def _obtener_datos_completos(self, viaje_id: int, usar_tramo_final: bool = False):
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
         if not viaje:
@@ -467,6 +494,8 @@ class BillingService:
         r2,
         is_nominal=False,
         ocultar_montos=False,
+        serie_forzada=None,
+        folio_forzado=None,
     ) -> dict:
         tarifa = viaje.tariff
 
@@ -493,6 +522,7 @@ class BillingService:
             else "PUBLICO EN GENERAL"
         )
 
+        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
         cp_cliente_fiscal = (
             str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
         )
@@ -502,6 +532,7 @@ class BillingService:
                 detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal.",
             )
 
+        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
         rfc_cliente = (
             str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
         )
@@ -540,6 +571,7 @@ class BillingService:
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
         tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
 
+        #  VALIDACIÓN CRÍTICA SAT CP195: OPERADOR
         raw_rfc = getattr(operador, "rfc", "")
         rfc_op_final = (
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
@@ -553,7 +585,7 @@ class BillingService:
         ):
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido de 13 caracteres. Detectado: '{rfc_op_final}'.",
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC de Persona Física válido (13 caracteres). Detectado: '{rfc_op_final}'.",
             )
 
         origen_real = (
@@ -591,13 +623,17 @@ class BillingService:
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
+        # 👇 MAGIA DE FOLIOS Y SECUENCIADOR 👇
+        serie_final = serie_forzada or "CP"
+        folio_final = (
+            folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
+        )
+
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
-            "serie": "CP" if is_nominal else "F",
-            "folio": str(17350 + viaje.id) if is_nominal else str(9750 + viaje.id),
-            "folio_interno": (
-                f"cp-{17350 + viaje.id}" if is_nominal else f"f-{9750 + viaje.id}"
-            ),
+            "serie": serie_final,
+            "folio": str(folio_final),
+            "folio_interno": f"{serie_final}-{folio_final}",
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
@@ -991,6 +1027,7 @@ class BillingService:
             r2,
             is_nominal=False,
             ocultar_montos=False,
+            folio_forzado=getattr(invoice_data, "folio_forzado", None),
         )
 
         # Le pasamos el UUID detectado al motor del SAT
