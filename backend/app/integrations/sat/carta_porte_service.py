@@ -176,15 +176,19 @@ def _clean_float(val) -> float:
 
 
 def parse_sat_error(e: Exception) -> str:
-    error_msg = str(e).lower()
-    if (
-        "not found" in error_msg
-        or "no such file" in error_msg
-        or "cer" in error_msg
-        or "key" in error_msg
-    ):
-        return "Fallo el timbrado: Actualiza tus sellos (CSD) en configuración. Al parecer no se encuentran, la contraseña es incorrecta o ya no son vigentes."
-    return str(e)
+    """
+    Atrapa cualquier error relacionado con el timbrado o los sellos
+    y lo devuelve crudo para poder diagnosticar la falla real.
+    """
+    import logging
+
+    logger = logging.getLogger("billing.audit")
+
+    # 1. Registramos el error crudo en la consola del servidor
+    logger.error(f"🚨 [CRÍTICO] ERROR REAL EN SELLOS SAT: {str(e)}")
+
+    # 2. Devolvemos el error real al frontend sin enmascararlo
+    return f"Fallo técnico en sellos SAT: {str(e)}"
 
 
 # =========================================================
@@ -359,6 +363,16 @@ class CartaPorteService:
             else (self.cert_dir / "default.key")
         )
         self.key_password = pass_conf.value if pass_conf else "12345678a"
+        logger.info(f"🔍 [DEBUG SELLOS] Ambiente actual: {self.env}")
+        logger.info(
+            f"🔍 [DEBUG SELLOS] Intentando leer CER en: {self.path_cer} | ¿Existe físicamente?: {self.path_cer.exists()}"
+        )
+        logger.info(
+            f"🔍 [DEBUG SELLOS] Intentando leer KEY en: {self.path_key} | ¿Existe físicamente?: {self.path_key.exists()}"
+        )
+        logger.info(
+            f"🔍 [DEBUG SELLOS] Password recuperado: {'SI (Oculto por seguridad)' if self.key_password else 'NO HAY PASSWORD'}"
+        )
 
         rfc_conf = (
             self.db.query(SystemConfig)
@@ -470,7 +484,7 @@ class CartaPorteService:
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
-            .with_for_update()
+            .with_for_update(of=SystemConfig)
             .first()
         )
 

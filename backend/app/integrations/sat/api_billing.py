@@ -47,15 +47,11 @@ class RegistroPagoPayload(BaseModel):
 
 
 def parse_sat_error(e: Exception) -> str:
-    error_msg = str(e).lower()
-    if (
-        "not found" in error_msg
-        or "no such file" in error_msg
-        or "cer" in error_msg
-        or "key" in error_msg
-    ):
-        return "Fallo el timbrado: Actualiza tus sellos (CSD) en configuración. Al parecer no se encuentran, la contraseña es incorrecta o ya no son vigentes."
-    return str(e)
+    import logging
+
+    logger = logging.getLogger("billing.audit")
+    logger.error(f"🚨 [CRÍTICO] ERROR REAL EN SELLOS SAT: {str(e)}")
+    return f"Fallo técnico en sellos SAT: {str(e)}"
 
 
 @router.post("/stamp/free-invoice", response_model=dict)
