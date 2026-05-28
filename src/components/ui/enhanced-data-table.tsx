@@ -93,7 +93,7 @@ interface ColumnFilters {
   };
 }
 
-// 👇 Función que extrae TODOS los textos y números de un objeto (Deep Search)
+//   Función que extrae TODOS los textos y números de un objeto (Deep Search)
 const extractAllValues = (obj: any): string => {
   if (obj === null || obj === undefined) return "";
   if (
@@ -146,7 +146,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    // 👇 Buscador global inteligente
+    //   Buscador global inteligente
     if (globalSearch) {
       const searchTerms = globalSearch
         .toLowerCase()

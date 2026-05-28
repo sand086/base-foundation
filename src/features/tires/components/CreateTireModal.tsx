@@ -406,7 +406,7 @@ export function CreateTireModal({
                       />
                     )}
 
-                    {/* 👇 CAMBIO PRINCIPAL: Bloqueo y advertencia en Profundidad Original 👇 */}
+                    {/*   CAMBIO PRINCIPAL: Bloqueo y advertencia en Profundidad Original   */}
                     <FormField
                       control={form.control}
                       name="profundidad_original"

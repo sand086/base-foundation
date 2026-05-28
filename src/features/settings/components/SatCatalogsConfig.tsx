@@ -476,7 +476,7 @@ export function SatCatalogsConfig() {
       return;
     }
 
-    // 👇 SOLUCIÓN: Limpieza de datos (Parseo a números si aplica y limpieza de vacíos)
+    //   SOLUCIÓN: Limpieza de datos (Parseo a números si aplica y limpieza de vacíos)
     const payload = { ...formData };
     activeCatalog.fields.forEach((field) => {
       if (field.key === "ejes" || field.key === "llantas") {

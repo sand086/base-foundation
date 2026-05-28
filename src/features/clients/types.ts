@@ -57,6 +57,9 @@ export interface Client {
   constancia_fiscal_url?: string | null;
   acta_constitutiva_url?: string | null;
   comprobante_domicilio_url?: string | null;
+  forma_pago?: string;
+  metodo_pago?: string;
+  moneda?: string;
   sub_clients: any[];
 }
 

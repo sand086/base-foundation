@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import (
     IntegrityError,
-)  # 👇 IMPORTANTE: Agregado para atrapar duplicados
+)  #   IMPORTANTE: Agregado para atrapar duplicados
 from typing import List, Type, Any, Optional
 from pydantic import BaseModel
 
@@ -140,7 +140,7 @@ class SatUnitWeightResponse(SatUnitWeightCreate):
         from_attributes = True
 
 
-# 👇 NUEVOS ESQUEMAS PARA CÓDIGOS POSTALES 👇
+#   NUEVOS ESQUEMAS PARA CÓDIGOS POSTALES
 class SatPostalCodeCreate(BaseModel):
     codigo_postal: str
     estado_clave: str
@@ -215,7 +215,7 @@ def create_crud_endpoints(
         for key, value in payload.model_dump().items():
             setattr(item, key, value)
 
-        # 👇 BLINDAJE CONTRA DUPLICADOS AL EDITAR 👇
+        #   BLINDAJE CONTRA DUPLICADOS AL EDITAR
         try:
             db.commit()
             db.refresh(item)

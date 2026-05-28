@@ -521,7 +521,7 @@ class CartaPorteService:
         # Por defecto tomamos el tramo 0 (patio)
         tramo_seleccionado = viaje.legs[0]
 
-        # 👇 FIX: BUSCADOR INTELIGENTE DEL TRAMO DE CARRETERA 👇
+        #   FIX: BUSCADOR INTELIGENTE DEL TRAMO DE CARRETERA
         if buscar_tramo_carretera and len(viaje.legs) > 1:
             # Buscamos el tramo que sea de ruta/carretera
             tramo_ruta = next(
@@ -568,9 +568,23 @@ class CartaPorteService:
         serie_forzada=None,
         folio_forzado=None,
     ) -> dict:
-        subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
-        iva = subtotal * 0.16
-        retenciones = subtotal * 0.04
+        tarifa = viaje.tariff
+
+        #  FIX: FACTURA SIEMPRE SIN CASETAS. Solo toma la tarifa base pura.
+        if tarifa and not is_nominal:
+            subtotal = float(tarifa.tarifa_base or 0.0)
+            iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
+            ret_pct = float(tarifa.retencion_porcentaje or 4.0) / 100.0
+            dist_km = int(tarifa.distancia_km or 0)
+            distancia_real = str(dist_km) if dist_km > 0 else "1"
+        else:
+            subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
+            iva_pct = 0.16
+            ret_pct = 0.04
+            distancia_real = "100" if is_nominal else "450"
+
+        iva = subtotal * iva_pct
+        retenciones = subtotal * ret_pct
         total = subtotal + iva - retenciones
 
         nombre_cliente = (
@@ -580,13 +594,13 @@ class CartaPorteService:
         )
 
         #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
-        cp_cliente = (
+        cp_cliente_fiscal = (
             str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
         )
-        if not cp_cliente:
+        if not cp_cliente_fiscal:
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal guardado en el catálogo de clientes.",
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal.",
             )
 
         #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
@@ -596,23 +610,33 @@ class CartaPorteService:
         if not rfc_cliente or rfc_cliente == "XAXX010101000":
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido. No se permite RFC genérico en Carta Porte 3.1.",
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido. No se permite RFC genérico.",
             )
 
-        #  VALIDACIÓN CRÍTICA SAT CP147: ESTADO Y MUNICIPIO DEL CLIENTE
+        subcliente = viaje.sub_client
+        cp_destino_fisico = (
+            str(getattr(subcliente, "codigo_postal", "")).strip() if subcliente else ""
+        )
+        if not cp_destino_fisico:
+            cp_destino_fisico = cp_cliente_fiscal
+
         loc_destino = (
             self.db.query(SatLocationCode)
-            .filter(SatLocationCode.codigo_postal == cp_cliente)
+            .filter(SatLocationCode.codigo_postal == cp_destino_fisico)
             .first()
         )
         if loc_destino:
-            #  FIX QUIRÚRGICO: Normalizamos el estado de destino
             estado_dest = normalizar_estado_sat(loc_destino.estado_clave)
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
+            nombre_lugar = (
+                getattr(subcliente, "razon_social", nombre_cliente)
+                if subcliente
+                else nombre_cliente
+            )
             raise HTTPException(
                 status_code=400,
-                detail=f"Error Carta Porte 3.1 (CP147): El código postal '{cp_cliente}' de tu cliente '{nombre_cliente}' NO existe en la base de datos 'sat_location_codes'. Insértalo en tu base de datos para que el sistema pueda encontrar su Estado y Municipio.",
+                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' (perteneciente a {nombre_lugar}) NO existe en la BD.",
             )
 
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
@@ -632,18 +656,54 @@ class CartaPorteService:
         ):
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC de Persona Física válido (13 caracteres). RFC detectado: '{rfc_op_final}'.",
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC de Persona Física válido (13 caracteres). Detectado: '{rfc_op_final}'.",
             )
 
-        # 1. Definir la serie
-        serie_final = serie_forzada or (
-            "CP" if is_nominal else "CP"
-        )  # Todo viaje usa CP
+        origen_real = (
+            str(viaje.origin or "DOMICILIO CONOCIDO").replace("|", "").strip()[:100]
+        )
 
-        # 2. Obtener el folio (Reciclado o Avanzando el contador maestro)
+        raw_destino = (
+            getattr(subcliente, "direccion", viaje.destination)
+            if subcliente
+            else (viaje.destination or "DOMICILIO CONOCIDO")
+        )
+        calle_destino_real = str(raw_destino).replace("|", "").strip()[:100]
+
+        c1 = getattr(viaje, "contenedor_1", "")
+        c2 = getattr(viaje, "contenedor_2", "")
+        cont_str = ""
+        if c1 and c1 not in ["N/A", "S/R"]:
+            cont_str += f" {c1}"
+        if c2 and c2 not in ["N/A", "S/R"]:
+            cont_str += f" / {c2}"
+
+        clave_servicio_flete = "78101802"
+        clave_mercancia = (
+            viaje.sat_clave_producto
+            if viaje and getattr(viaje, "sat_clave_producto", None)
+            else "01010101"
+        )
+        desc_merc = (
+            "FLETE NOMINAL"
+            if is_nominal
+            else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+        )
+        pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
+
+        dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
+        condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
+
+        #   MAGIA DE FOLIOS Y SECUENCIADOR
+        serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
+
+        #   NUEVO: EXTRACCIÓN DE CONFIGURACIÓN DEL CLIENTE
+        c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
+        c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
+        c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
@@ -655,36 +715,33 @@ class CartaPorteService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            "descripcion_concepto": (
-                "FLETE CARGA GENERAL"
-                if is_nominal
-                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
-            ),
+            #   NUEVO: SE INYECTA LA CONFIGURACIÓN DEL CLIENTE AQUÍ
+            "forma_pago": c_forma_pago,
+            "metodo_pago": c_metodo_pago,
+            "moneda": c_moneda,
+            # 👆 FIN DE LO NUEVO 👆
+            "tc": "1",
+            "tipo_comprobante": "I",
+            "condiciones_pago": condiciones_pago,
+            "descripcion_concepto": desc_merc,
+            "pdf_descripcion": pdf_descripcion,
+            "clave_prod_serv": clave_servicio_flete,
             "rfc_cliente": rfc_cliente,
             "nombre_cliente": nombre_cliente,
-            "cp_cliente": cp_cliente,
+            "cp_cliente": cp_cliente_fiscal,
+            "cp_destino": cp_destino_fisico,
             "regimen_cliente": (
                 getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
             ),
             "uso_cfdi": "G03",
-            "total_dist_rec": "100" if is_nominal else "450",
+            "total_dist_rec": distancia_real,
             "peso_bruto": (
                 str(viaje.peso_toneladas * 1000)
                 if viaje and viaje.peso_toneladas
                 else "1000.00"
             ),
-            "bienes_transp": (
-                "01010101"
-                if is_nominal
-                or not viaje
-                or not getattr(viaje, "sat_clave_producto", None)
-                else viaje.sat_clave_producto
-            ),
-            "descripcion_mercancia": (
-                viaje.descripcion_mercancia
-                if viaje and viaje.descripcion_mercancia
-                else "Carga General"
-            ),
+            "bienes_transp": clave_mercancia,
+            "descripcion_mercancia": desc_merc,
             "permiso_sct": (
                 getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
             ),
@@ -722,11 +779,12 @@ class CartaPorteService:
             "licencia": (
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
-            "cp_destino": cp_cliente,
             "estado_destino": estado_dest,
             "municipio_destino": municipio_dest,
+            "domicilio_origen": origen_real,
+            "domicilio_destino": calle_destino_real,
             "leyenda_legal": DEFAULT_LEYENDA,
-            "ocultar_montos": False,
+            "ocultar_montos": ocultar_montos,
             "contenedor_1": getattr(viaje, "contenedor_1", "") or "N/A",
             "contenedor_2": getattr(viaje, "contenedor_2", "") or "N/A",
             "referencia_cliente": getattr(viaje, "referencia", "") or "S/R",

@@ -257,7 +257,7 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     uuid_relacionado = factura_vieja.uuid if factura_vieja else None
 
-    # 👇 NUEVO: Extractor Inteligente de Folio para Reciclaje
+    #   NUEVO: Extractor Inteligente de Folio para Reciclaje
     folio_a_reciclar = None
     if factura_vieja and factura_vieja.folio_interno:
         try:

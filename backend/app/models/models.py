@@ -292,6 +292,10 @@ class Client(AuditMixin, Base):
         pg_enum(ClientStatus, "clientstatus"), default=ClientStatus.PENDIENTE
     )
 
+    forma_pago = Column(String(5), default="99")  # Ej: 01, 03, 99
+    metodo_pago = Column(String(5), default="PPD")  # PUE o PPD
+    moneda = Column(String(5), default="MXN")  # MXN, USD
+
     dias_credito = Column(Integer, default=0)
     contrato_url = Column(String(500))
 

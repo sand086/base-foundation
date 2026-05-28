@@ -143,7 +143,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     value={value}
-    // 👇 LA MAGIA GLOBAL: Si no hay textValue explícito, usa el value para ocultar basura del SVG en el select nativo
+    //   LA MAGIA GLOBAL: Si no hay textValue explícito, usa el value para ocultar basura del SVG en el select nativo
     textValue={textValue || value}
     className={cn(
       "relative flex w-full cursor-pointer select-none items-center rounded-xl py-2.5 pl-8 pr-2 text-sm font-semibold outline-none transition-colors duration-200",

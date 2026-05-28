@@ -133,7 +133,7 @@ header {
   font-weight: 800;
   padding: 5px 8px; /* Espacio interno del título */
 
-  /* 👇 AQUÍ CONTROLAS EL ESPACIO ENTRE LA LÍNEA Y EL CONTENIDO DE LA TARJETA */
+  /*   AQUÍ CONTROLAS EL ESPACIO ENTRE LA LÍNEA Y EL CONTENIDO DE LA TARJETA */
   border-bottom: 1px solid #e2e8f0; /* Esta es la línea separadora */
 
   border-left: 3px solid #be0811; /* La barrita roja lateral */
@@ -141,7 +141,7 @@ header {
 
 /* [6. TEXTOS Y DATOS DENTRO DE LAS TARJETAS (Grid Table)] */
 .grid-table td {
-  /* 👇 AQUÍ CONTROLAS EL ESPACIO INTERNO DE LOS DATOS */
+  /*   AQUÍ CONTROLAS EL ESPACIO INTERNO DE LOS DATOS */
   padding: 5px 8px; /* Primer número: arriba/abajo. Segundo: izq/der */
   font-size: 6.5pt;
   border-bottom: 1px solid #f8fafc; /* Líneas tenues que separan los renglones */

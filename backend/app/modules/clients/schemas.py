@@ -110,6 +110,9 @@ class SubClientBase(ORMBase):
     contacto: Optional[str] = Field(default=None, max_length=100)
     telefono: Optional[str] = Field(default=None, max_length=20)
     horario_recepcion: Optional[str] = Field(default=None, max_length=50)
+    forma_pago: Optional[str] = Field(default="99", max_length=5)
+    metodo_pago: Optional[str] = Field(default="PPD", max_length=5)
+    moneda: Optional[str] = Field(default="MXN", max_length=5)
 
     # en tu modelo: estatus es String default "activo"
     estatus: str = Field(default="activo", max_length=20)

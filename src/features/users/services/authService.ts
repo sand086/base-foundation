@@ -1,7 +1,7 @@
 import axiosClient from "@/api/axiosClient";
 import { LoginRequest, LoginResponse, User } from "@/features/users/types";
 
-// 👇 NUEVO: Extendemos tu interfaz original para decirle a TypeScript que ahora enviamos el token
+//   NUEVO: Extendemos tu interfaz original para decirle a TypeScript que ahora enviamos el token
 export interface LoginWithCaptchaRequest extends LoginRequest {
   recaptcha_token: string;
 }

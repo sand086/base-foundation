@@ -296,7 +296,7 @@ export default function FleetTires() {
           return (
             <div className="w-36 space-y-1.5">
               <div className="flex items-center justify-between">
-                {/* 👇 ESTO ES LO QUE ARREGLA TU DUDA: AHORA MUESTRA ACTUAL / ORIGINAL */}
+                {/*   ESTO ES LO QUE ARREGLA TU DUDA: AHORA MUESTRA ACTUAL / ORIGINAL */}
                 <span
                   className="font-mono font-black text-[10px] text-slate-700 dark:text-slate-300"
                   title={`Actual: ${row.profundidad_actual}mm | Original: ${row.profundidad_original}mm`}

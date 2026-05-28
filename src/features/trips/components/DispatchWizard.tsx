@@ -1382,7 +1382,7 @@ export const DispatchWizard = ({
                       }
                       placeholder="Buscar..."
                     />
-                    {/* 👇 SWITCH Y SELECT MOTOGENERADOR 1 👇 */}
+                    {/*   SWITCH Y SELECT MOTOGENERADOR 1   */}
                     <div className="flex items-center gap-2 pt-2">
                       <Switch
                         checked={data.is_refrigerated_1}
@@ -1462,7 +1462,7 @@ export const DispatchWizard = ({
                           }
                           placeholder="Buscar..."
                         />
-                        {/* 👇 SWITCH Y SELECT MOTOGENERADOR 2 👇 */}
+                        {/*   SWITCH Y SELECT MOTOGENERADOR 2   */}
                         <div className="flex items-center gap-2 pt-2">
                           <Switch
                             checked={data.is_refrigerated_2}

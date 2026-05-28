@@ -315,7 +315,7 @@ const Users = () => {
                     (user as any).twoFactorEnabled ||
                     (user as any).is_2fa_enabled,
 
-                  // 👇 ESTA ES LA LÍNEA QUE TE FALTA AÑADIR 👇
+                  //   ESTA ES LA LÍNEA QUE TE FALTA AÑADIR
                   password: (user as any).password || "",
                 });
                 setIsEditModalOpen(true);

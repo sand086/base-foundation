@@ -623,11 +623,16 @@ class BillingService:
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
-        # 👇 MAGIA DE FOLIOS Y SECUENCIADOR 👇
+        #   MAGIA DE FOLIOS Y SECUENCIADOR  
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
+
+        #   NUEVO: EXTRACCIÓN DE CONFIGURACIÓN DEL CLIENTE  
+        c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
+        c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
+        c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
@@ -639,9 +644,11 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            "forma_pago": "99",
-            "metodo_pago": "PPD",
-            "moneda": "MXN",
+            #   NUEVO: SE INYECTA LA CONFIGURACIÓN DEL CLIENTE AQUÍ  
+            "forma_pago": c_forma_pago,
+            "metodo_pago": c_metodo_pago,
+            "moneda": c_moneda,
+            # 👆 FIN DE LO NUEVO 👆
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": condiciones_pago,
@@ -1336,7 +1343,7 @@ class BillingService:
         # 2. Armar XML limpio (Sin complementos)
         xml_base = self._armar_xml_ingreso_libre(d, str(folio_real), fecha)
 
-        # 👇 NUEVO: Guardamos el folio real en el diccionario para usarlo al guardar en BD
+        #   NUEVO: Guardamos el folio real en el diccionario para usarlo al guardar en BD
         d["folio_interno"] = folio_int
 
         # 3. Sellar el XML

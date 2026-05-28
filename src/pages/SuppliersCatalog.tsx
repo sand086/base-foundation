@@ -12,7 +12,7 @@ import {
 
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
-// 👇 Importamos el componente Badge que nos compartiste
+//   Importamos el componente Badge que nos compartiste
 import { Badge } from "@/components/ui/badge";
 import {
   DataTable,
@@ -54,7 +54,7 @@ import { cn } from "@/lib/utils";
 const safeLower = (v: unknown) =>
   typeof v === "string" ? v.toLowerCase() : "";
 
-// 👇 FUNCIÓN AUXILIAR PARA MAPEAR EL COLOR SEGÚN EL CÓDIGO DEL CECO
+//   FUNCIÓN AUXILIAR PARA MAPEAR EL COLOR SEGÚN EL CÓDIGO DEL CECO
 const getCecoBadgeVariant = (codigo?: string) => {
   if (!codigo) return "neutral";
 
@@ -196,7 +196,7 @@ export default function SuppliersCatalog() {
                           {supplier.rfc}
                         </DataTableCell>
 
-                        {/* 👇 COLUMNA CECO: Implementación del nuevo Badge */}
+                        {/*   COLUMNA CECO: Implementación del nuevo Badge */}
                         <DataTableCell>
                           {supplier.cost_center ? (
                             <Badge
