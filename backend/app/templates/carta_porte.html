@@ -107,6 +107,44 @@
           </tr>
         </table>
       </div>
+
+      {% if subcliente_nombre %}
+      <div class="bento-card" style="margin-top: 10px">
+        <div
+          class="bento-card-header"
+          style="color: #475569; border-left-color: #475569"
+        >
+          Datos del Sub-Cliente (Destino Físico)
+        </div>
+        <table class="grid-table">
+          <tr>
+            <td width="40%">
+              <span class="grid-label">Nombre o Razón Social</span>
+              <span class="bold text-dark" style="font-size: 7.5pt"
+                >{{ subcliente_nombre }}</span
+              >
+            </td>
+            <td width="20%">
+              <span class="grid-label">RFC</span>
+              <span class="bold text-dark">{{ subcliente_rfc }}</span>
+            </td>
+            <td width="40%">
+              <span class="grid-label">Contacto (Teléfono / Correo)</span>
+              <span class="text-dark"
+                >{{ subcliente_telefono }} {% if subcliente_correo %}| {{
+                subcliente_correo }}{% endif %}</span
+              >
+            </td>
+          </tr>
+          <tr>
+            <td colspan="3">
+              <span class="grid-label">Dirección</span>
+              <span class="text-dark">{{ subcliente_direccion }}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+      {% endif %}
     </header>
 
     <footer>
@@ -376,9 +414,7 @@
           <tr>
             <td width="60%">
               <span class="grid-label">Bienes</span>
-              <span class="text-dark"
-                >{{ bienes_transp }} - {{ descripcion_mercancia }}</span
-              >
+              <span class="text-dark">{{ descripcion_mercancia_pdf }}</span>
             </td>
             <td width="40%">
               <span class="grid-label">Peso Bruto Total</span>

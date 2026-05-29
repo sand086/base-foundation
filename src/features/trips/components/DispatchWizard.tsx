@@ -83,6 +83,7 @@ export type WizardData = {
   fecha_programada: Date | undefined;
 
   descripcion_mercancia: string;
+  detalle_mercancia: string;
   peso_toneladas: number;
   es_material_peligroso: boolean;
   clase_imo: string;
@@ -403,6 +404,7 @@ export const DispatchWizard = ({
       ? new Date(initialData.fecha_programada)
       : new Date(),
     descripcion_mercancia: initialData?.descripcion_mercancia || "",
+    detalle_mercancia: "",
     peso_toneladas: initialData?.peso_toneladas || 0,
     es_material_peligroso: initialData?.es_material_peligroso || false,
     clase_imo: initialData?.clase_imo || "",
@@ -684,6 +686,11 @@ export const DispatchWizard = ({
       const finalStatus: TripStatus = status;
 
       const mercancia = data.descripcion_mercancia || "CARGA GENERAL";
+      const mercancia_sat = data.descripcion_mercancia || "CARGA GENERAL";
+      const mercancia_final = data.detalle_mercancia
+        ? `${mercancia_sat} | ${data.detalle_mercancia.trim()}` // <--- USA EL PIPE AQUÍ
+        : mercancia_sat;
+
       const contenedor_default = data.contenedor_1 || null;
 
       const payload: any = {
@@ -696,7 +703,7 @@ export const DispatchWizard = ({
         fecha_programada: data.fecha_programada
           ? data.fecha_programada.toISOString().split("T")[0]
           : null,
-        descripcion_mercancia: mercancia,
+        descripcion_mercancia: mercancia_final,
         peso_toneladas: Number(data.peso_toneladas) || 0,
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
@@ -1228,6 +1235,29 @@ export const DispatchWizard = ({
                       }))
                     }
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 pt-4 pb-2 border-b border-slate-200/50 dark:border-white/10 mb-2">
+                <div className="space-y-1.5">
+                  <Label variant="brand">
+                    DESCRIPCIÓN ESPECÍFICA DE LA CARGA (OPCIONAL)
+                  </Label>
+                  <Input
+                    placeholder="Ej: Cajas de cartón con zapatos, Tarimas de aguacate..."
+                    value={data.detalle_mercancia}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        detalle_mercancia: e.target.value,
+                      }))
+                    }
+                    className="border-slate-200 shadow-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground ml-1">
+                    Esta descripción aparecerá en el PDF de tu Factura y Carta
+                    Porte junto con la clave SAT.
+                  </p>
                 </div>
               </div>
 
@@ -2063,7 +2093,9 @@ export const DispatchWizard = ({
                       Mercancía SAT (Peso: {data.peso_toneladas} Ton):
                     </span>
                     <span className="font-semibold text-foreground/80 text-xs line-clamp-2 leading-tight">
-                      {data.descripcion_mercancia || "N/A"}
+                      {data.detalle_mercancia
+                        ? `${data.descripcion_mercancia} - ${data.detalle_mercancia}`
+                        : data.descripcion_mercancia || "N/A"}
                     </span>
                   </div>
                 </CardContent>

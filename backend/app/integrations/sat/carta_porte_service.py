@@ -620,6 +620,23 @@ class CartaPorteService:
         if not cp_destino_fisico:
             cp_destino_fisico = cp_cliente_fiscal
 
+        # EXTRACCIÓN DE DATOS DEL SUBCLIENTE PARA EL PDF
+        subcliente_nombre = (
+            getattr(subcliente, "razon_social", getattr(subcliente, "nombre", ""))
+            if subcliente
+            else ""
+        )
+        subcliente_rfc = getattr(subcliente, "rfc", "") if subcliente else ""
+        subcliente_direccion = (
+            getattr(subcliente, "direccion", "") if subcliente else ""
+        )
+        subcliente_telefono = getattr(subcliente, "telefono", "") if subcliente else ""
+        subcliente_correo = (
+            getattr(subcliente, "correo", getattr(subcliente, "email", ""))
+            if subcliente
+            else ""
+        )
+
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_destino_fisico)
@@ -684,11 +701,18 @@ class CartaPorteService:
             if viaje and getattr(viaje, "sat_clave_producto", None)
             else "01010101"
         )
-        desc_merc = (
+
+        # PROCESAMIENTO DE DESCRIPCIÓN PARA SEPARAR EL PIPE
+        desc_merc_raw = (
             "FLETE NOMINAL"
             if is_nominal
             else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
         )
+        if "|" in desc_merc_raw:
+            desc_merc_pdf = desc_merc_raw.split("|")[-1].strip()
+        else:
+            desc_merc_pdf = desc_merc_raw
+
         pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
@@ -715,15 +739,14 @@ class CartaPorteService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            #   NUEVO: SE INYECTA LA CONFIGURACIÓN DEL CLIENTE AQUÍ
             "forma_pago": c_forma_pago,
             "metodo_pago": c_metodo_pago,
             "moneda": c_moneda,
-            # 👆 FIN DE LO NUEVO 👆
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": condiciones_pago,
-            "descripcion_concepto": desc_merc,
+            "descripcion_concepto": desc_merc_raw,
+            "descripcion_concepto_pdf": desc_merc_pdf,
             "pdf_descripcion": pdf_descripcion,
             "clave_prod_serv": clave_servicio_flete,
             "rfc_cliente": rfc_cliente,
@@ -741,7 +764,8 @@ class CartaPorteService:
                 else "1000.00"
             ),
             "bienes_transp": clave_mercancia,
-            "descripcion_mercancia": desc_merc,
+            "descripcion_mercancia": desc_merc_raw,
+            "descripcion_mercancia_pdf": desc_merc_pdf,
             "permiso_sct": (
                 getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
             ),
@@ -783,6 +807,12 @@ class CartaPorteService:
             "municipio_destino": municipio_dest,
             "domicilio_origen": origen_real,
             "domicilio_destino": calle_destino_real,
+            # SUBCLIENTE EXTRAS PARA EL PDF
+            "subcliente_nombre": subcliente_nombre,
+            "subcliente_rfc": subcliente_rfc,
+            "subcliente_direccion": subcliente_direccion,
+            "subcliente_telefono": subcliente_telefono,
+            "subcliente_correo": subcliente_correo,
             "leyenda_legal": DEFAULT_LEYENDA,
             "ocultar_montos": ocultar_montos,
             "contenedor_1": getattr(viaje, "contenedor_1", "") or "N/A",
@@ -900,6 +930,19 @@ class CartaPorteService:
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
 
+        # ---> NUEVO: Limpiamos el separador especial para el XML del SAT
+        desc_concepto_xml = (
+            str(d.get("descripcion_concepto", ""))
+            .replace(" | ", " - ")
+            .replace("|", "-")
+        )
+        desc_mercancia_xml = (
+            str(d.get("descripcion_mercancia", ""))
+            .replace(" | ", " - ")
+            .replace("|", "-")
+        )
+        # <--- FIN NUEVO
+
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
             if relacion_uuid
@@ -919,7 +962,7 @@ class CartaPorteService:
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
                 <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
                 <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
@@ -941,7 +984,7 @@ class CartaPorteService:
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
+                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
@@ -1001,7 +1044,10 @@ class CartaPorteService:
                         if "Pago" in d.get("descripcion_concepto", "")
                         else "E48 - SRV"
                     ),
-                    "descripcion": d.get("descripcion_concepto", "PAGO"),
+                    "descripcion": d.get(
+                        "descripcion_concepto_pdf",
+                        d.get("descripcion_concepto", "PAGO"),
+                    ),
                     "detalles_extra": f"Folio: {d['folio']}",
                     "precio": subtotal_str,
                     "importe": subtotal_str,

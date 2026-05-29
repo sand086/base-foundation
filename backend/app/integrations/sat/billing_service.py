@@ -549,6 +549,23 @@ class BillingService:
         if not cp_destino_fisico:
             cp_destino_fisico = cp_cliente_fiscal
 
+        # EXTRACCIÓN DE DATOS DEL SUBCLIENTE PARA EL PDF
+        subcliente_nombre = (
+            getattr(subcliente, "razon_social", getattr(subcliente, "nombre", ""))
+            if subcliente
+            else ""
+        )
+        subcliente_rfc = getattr(subcliente, "rfc", "") if subcliente else ""
+        subcliente_direccion = (
+            getattr(subcliente, "direccion", "") if subcliente else ""
+        )
+        subcliente_telefono = getattr(subcliente, "telefono", "") if subcliente else ""
+        subcliente_correo = (
+            getattr(subcliente, "correo", getattr(subcliente, "email", ""))
+            if subcliente
+            else ""
+        )
+
         loc_destino = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == cp_destino_fisico)
@@ -613,23 +630,30 @@ class BillingService:
             if viaje and getattr(viaje, "sat_clave_producto", None)
             else "01010101"
         )
-        desc_merc = (
+
+        # PROCESAMIENTO DE DESCRIPCIÓN PARA SEPARAR EL PIPE
+        desc_merc_raw = (
             "FLETE NOMINAL"
             if is_nominal
             else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
         )
+        if "|" in desc_merc_raw:
+            desc_merc_pdf = desc_merc_raw.split("|")[-1].strip()
+        else:
+            desc_merc_pdf = desc_merc_raw
+
         pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
-        #   MAGIA DE FOLIOS Y SECUENCIADOR  
+        #   MAGIA DE FOLIOS Y SECUENCIADOR
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
 
-        #   NUEVO: EXTRACCIÓN DE CONFIGURACIÓN DEL CLIENTE  
+        #   NUEVO: EXTRACCIÓN DE CONFIGURACIÓN DEL CLIENTE
         c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
         c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
         c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
@@ -644,7 +668,7 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            #   NUEVO: SE INYECTA LA CONFIGURACIÓN DEL CLIENTE AQUÍ  
+            #   NUEVO: SE INYECTA LA CONFIGURACIÓN DEL CLIENTE AQUÍ
             "forma_pago": c_forma_pago,
             "metodo_pago": c_metodo_pago,
             "moneda": c_moneda,
@@ -652,7 +676,10 @@ class BillingService:
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": condiciones_pago,
-            "descripcion_concepto": desc_merc,
+            "descripcion_concepto": desc_merc_raw,
+            "descripcion_concepto_pdf": desc_merc_pdf,
+            "descripcion_mercancia": desc_merc_raw,
+            "descripcion_mercancia_pdf": desc_merc_pdf,
             "pdf_descripcion": pdf_descripcion,
             "clave_prod_serv": clave_servicio_flete,
             "rfc_cliente": rfc_cliente,
@@ -670,7 +697,6 @@ class BillingService:
                 else "1000.00"
             ),
             "bienes_transp": clave_mercancia,
-            "descripcion_mercancia": desc_merc,
             "permiso_sct": (
                 getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
             ),
@@ -712,6 +738,12 @@ class BillingService:
             "municipio_destino": municipio_dest,
             "domicilio_origen": origen_real,
             "domicilio_destino": calle_destino_real,
+            # SUBCLIENTE EXTRAS PARA EL PDF
+            "subcliente_nombre": subcliente_nombre,
+            "subcliente_rfc": subcliente_rfc,
+            "subcliente_direccion": subcliente_direccion,
+            "subcliente_telefono": subcliente_telefono,
+            "subcliente_correo": subcliente_correo,
             "leyenda_legal": DEFAULT_LEYENDA,
             "ocultar_montos": ocultar_montos,
             "contenedor_1": getattr(viaje, "contenedor_1", "") or "N/A",
@@ -832,6 +864,19 @@ class BillingService:
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
 
+        # ---> NUEVO: Limpiamos el separador especial para el XML del SAT
+        desc_concepto_xml = (
+            str(d.get("descripcion_concepto", ""))
+            .replace(" | ", " - ")
+            .replace("|", "-")
+        )
+        desc_mercancia_xml = (
+            str(d.get("descripcion_mercancia", ""))
+            .replace(" | ", " - ")
+            .replace("|", "-")
+        )
+        # <--- FIN NUEVO
+
         rfc_op_final = str(d.get("rfc_operador", "")).strip()
         nombre_op = str(d.get("nombre_operador", "Desconocido"))
 
@@ -864,7 +909,7 @@ class BillingService:
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{d['descripcion_concepto']}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
                 <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
                 <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
@@ -886,7 +931,7 @@ class BillingService:
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{d['descripcion_mercancia']}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
+                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
@@ -943,7 +988,8 @@ class BillingService:
                         else "E48 - SRV"
                     ),
                     "descripcion": d.get(
-                        "pdf_descripcion", d.get("descripcion_concepto", "PAGO")
+                        "descripcion_concepto_pdf",
+                        d.get("descripcion_concepto", "PAGO"),
                     ),
                     "detalles_extra": f"Folio: {d['folio']}",
                     "precio": subtotal_str,
@@ -1392,7 +1438,7 @@ class BillingService:
             factura = ReceivableInvoice(
                 client_id=d.get("client_id"),
                 viaje_id=None,  # ES FACTURA LIBRE
-                folio_interno=data.get("folio_interno"),
+                folio_interno=d.get("folio_interno"),
                 uuid=uuid_timbrado,
                 is_nominal=False,
                 status_sat="TIMBRADA",
@@ -1440,7 +1486,12 @@ class BillingService:
                 impuestos_xml += f'<cfdi:Retenciones><cfdi:Retencion Base="{c["importe"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{ret_renglon:.2f}" /></cfdi:Retenciones>'
 
             impuestos_xml += "</cfdi:Impuestos>"
-            conceptos_xml += f'<cfdi:Concepto ClaveProdServ="{c["claveProdServ"]}" NoIdentificacion="{c.get("id", "01")}" Cantidad="{c["cantidad"]}" ClaveUnidad="{c["claveUnidad"]}" Unidad="UNIDAD" Descripcion="{c["descripcion"]}" ValorUnitario="{c["precioUnitario"]}" Importe="{c["importe"]}" ObjetoImp="02">{impuestos_xml}</cfdi:Concepto>'
+
+            # ---> NUEVO: Limpiamos la descripción de la factura libre también por si acaso
+            desc_limpia = str(c["descripcion"]).replace(" | ", " - ").replace("|", "-")
+            # <--- FIN NUEVO
+
+            conceptos_xml += f'<cfdi:Concepto ClaveProdServ="{c["claveProdServ"]}" NoIdentificacion="{c.get("id", "01")}" Cantidad="{c["cantidad"]}" ClaveUnidad="{c["claveUnidad"]}" Unidad="UNIDAD" Descripcion="{desc_limpia}" ValorUnitario="{c["precioUnitario"]}" Importe="{c["importe"]}" ObjetoImp="02">{impuestos_xml}</cfdi:Concepto>'
 
         # Bloque de Impuestos Globales
         imp_global = f'<cfdi:Impuestos TotalImpuestosRetenidos="{d.get("retenciones", "0.00")}" TotalImpuestosTrasladados="{d.get("iva", "0.00")}"><cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d.get("retenciones", "0.00")}" /></cfdi:Retenciones><cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados></cfdi:Impuestos>'
