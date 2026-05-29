@@ -243,6 +243,11 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     cuando el viaje inicia su tramo de carretera. Automáticamente
     relaciona y cancela la carta porte nominal previa si existe.
     """
+    # 🟢 1. IMPRIMIR EL INICIO DEL PROCESO
+    print("\n" + "=" * 50)
+    print(f"📥 [STAMP REAL TRIGGER] PROCESANDO VIAJE ID: {trip_id}")
+    print("=" * 50 + "\n")
+
     service = BillingService(db)  # CORRECTO: Servicio Financiero
 
     from app.models.models import ReceivableInvoice
@@ -290,12 +295,19 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
                 uuid_sustituto=factura_final.uuid,
             )
 
+        print("✅ [STAMP REAL TRIGGER] ¡Timbrado Exitoso! UUID:", factura_final.uuid)
         return {
             "status": "success",
             "message": "Factura Real generada exitosamente y previa cancelada.",
             "data": {"factura_id": factura_final.id, "uuid": factura_final.uuid},
         }
     except Exception as e:
+        # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
+        print("\n" + "🚨" * 20)
+        print("💥 [STAMP REAL TRIGGER] ERROR INTERNO DETECTADO:")
+        traceback.print_exc()
+        print("🚨" * 20 + "\n")
+
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
 
@@ -310,6 +322,12 @@ def generar_factura_final(
     2. Aplica la Relación 04 al UUID de la Carta Porte nominal.
     3. Cancela localmente la Carta Porte nominal de $1.
     """
+    # 🟢 1. IMPRIMIR EL REQUEST CRUZO
+    print("\n" + "=" * 50)
+    print("📥 [FACTURA CHIDA - FINAL] NUEVO REQUEST RECIBIDO:")
+    print(invoice_data.dict())
+    print("=" * 50 + "\n")
+
     service = BillingService(db)  # CORRECTO: Servicio Financiero
     try:
         factura_final = service.generar_factura_final_relacionada(invoice_data)
@@ -329,6 +347,7 @@ def generar_factura_final(
                     uuid_sustituto=factura_final.uuid,
                 )
 
+        print("✅ [FACTURA CHIDA - FINAL] ¡Timbrado Exitoso! UUID:", factura_final.uuid)
         return {
             "status": "success",
             "message": "Factura Real generada y Carta Porte previa cancelada",
@@ -339,6 +358,12 @@ def generar_factura_final(
             },
         }
     except Exception as e:
+        # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
+        print("\n" + "🚨" * 20)
+        print("💥 [FACTURA CHIDA - FINAL] ERROR INTERNO DETECTADO:")
+        traceback.print_exc()
+        print("🚨" * 20 + "\n")
+
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
 
@@ -597,7 +622,6 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
     return resultado
 
 
-@router.post("/stamp/payment", summary="Generar Complemento de Pago")
 @router.post("/stamp/payment", summary="Generar Complemento de Pago")
 def registrar_pago_multiple(
     payload: RegistroPagoPayload, db: Session = Depends(get_db)
