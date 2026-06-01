@@ -697,3 +697,24 @@ def registrar_pago_multiple(
         raise HTTPException(
             status_code=400, detail=f"EL SAT RECHAZÓ EL PAGO. Motivo exacto: {str(e)}"
         )
+
+
+@router.post("/rebuild-pdf/{invoice_id}")
+def reconstruir_pdf_factura(invoice_id: int, db: Session = Depends(get_db)):
+    """
+    Lee el XML timbrado del disco y re-crea el PDF de la factura.
+    Ideal para corregir diseños o variables sin afectar el documento fiscal (SAT).
+    """
+    from app.integrations.sat.billing_service import BillingService
+
+    service = BillingService(db)
+
+    try:
+        resultado = service.regenerar_pdf_factura(invoice_id)
+        return resultado
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error al reconstruir PDF: {str(e)}"
+        )
