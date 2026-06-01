@@ -75,7 +75,10 @@
       </div>
 
       <div class="bento-card">
-        <div class="bento-card-header">Datos del Cliente</div>
+        <div class="bento-card-header">
+          Datos del Cliente {% if subcliente_nombre %}y Destino Físico{% endif
+          %}
+        </div>
         <table class="grid-table">
           <tr>
             <td width="40%">
@@ -105,32 +108,34 @@
               <span class="text-dark">{{ cp_cliente }}</span>
             </td>
           </tr>
-        </table>
-      </div>
 
-      {% if subcliente_nombre %}
-      <div class="bento-card" style="margin-top: 10px">
-        <div
-          class="bento-card-header"
-          style="color: #475569; border-left-color: #475569"
-        >
-          Datos del Sub-Cliente (Destino Físico)
-        </div>
-        <table class="grid-table">
+          {% if subcliente_nombre %}
           <tr>
-            <td width="40%">
+            <td colspan="3" style="padding-top: 6px; padding-bottom: 2px">
+              <div
+                style="border-top: 1px dashed #cbd5e1; margin-bottom: 4px"
+              ></div>
+              <span
+                class="grid-label"
+                style="color: #475569; font-weight: bold; font-size: 6pt"
+                >➜ DESTINO FÍSICO (SUB-CLIENTE)</span
+              >
+            </td>
+          </tr>
+          <tr>
+            <td>
               <span class="grid-label">Nombre o Razón Social</span>
               <span class="bold text-dark" style="font-size: 7.5pt"
                 >{{ subcliente_nombre }}</span
               >
             </td>
-            <td width="20%">
+            <td>
               <span class="grid-label">RFC</span>
-              <span class="bold text-dark">{{ subcliente_rfc }}</span>
+              <span class="text-dark">{{ subcliente_rfc }}</span>
             </td>
-            <td width="40%">
+            <td>
               <span class="grid-label">Contacto (Teléfono / Correo)</span>
-              <span class="text-dark"
+              <span class="text-dark" style="font-size: 6.5pt"
                 >{{ subcliente_telefono }} {% if subcliente_correo %}| {{
                 subcliente_correo }}{% endif %}</span
               >
@@ -138,13 +143,15 @@
           </tr>
           <tr>
             <td colspan="3">
-              <span class="grid-label">Dirección</span>
-              <span class="text-dark">{{ subcliente_direccion }}</span>
+              <span class="grid-label">Dirección de Entrega</span>
+              <span class="text-dark" style="font-size: 6.5pt"
+                >{{ subcliente_direccion }}</span
+              >
             </td>
           </tr>
+          {% endif %}
         </table>
       </div>
-      {% endif %}
     </header>
 
     <footer>
