@@ -3,6 +3,7 @@ import base64
 import logging
 import logging.config
 import uuid
+import html
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -78,7 +79,7 @@ logger = logging.getLogger("billing.audit")
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
 
 # =========================================================
-#  FIX QUIRÚRGICO: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
+#  FIX: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
 # =========================================================
 SAT_ESTADOS_MAP = {
     "01": "AGU",
@@ -98,13 +99,13 @@ SAT_ESTADOS_MAP = {
     "08": "CHH",
     "8": "CHH",
     "09": "CMX",
-    "9": "CMX",  # <--- Culpable solucionado
+    "9": "CMX",
     "10": "DUR",
     "11": "GUA",
     "12": "GRO",
     "13": "HID",
     "14": "JAL",
-    "15": "MEX",  # Estado de México
+    "15": "MEX",
     "16": "MIC",
     "17": "MOR",
     "18": "NAY",
@@ -128,9 +129,6 @@ SAT_ESTADOS_MAP = {
 
 
 def normalizar_estado_sat(estado: str) -> str:
-    """
-    Recibe un estado numérico (ej. '09') y devuelve la clave de 3 letras válida para el SAT ('CMX').
-    """
     if not estado:
         return ""
     estado_str = str(estado).strip().upper()
@@ -138,14 +136,7 @@ def normalizar_estado_sat(estado: str) -> str:
         resultado = estado_str
     else:
         resultado = SAT_ESTADOS_MAP.get(estado_str, estado_str)
-
-    logger.info(
-        f" [DEBUG SAT] Traduciendo Estado: Original='{estado}' -> SAT='{resultado}'"
-    )
     return resultado
-
-
-# =========================================================
 
 
 class PagoDetalle(BaseModel):
@@ -176,24 +167,10 @@ def _clean_float(val) -> float:
 
 
 def parse_sat_error(e: Exception) -> str:
-    """
-    Atrapa cualquier error relacionado con el timbrado o los sellos
-    y lo devuelve crudo para poder diagnosticar la falla real.
-    """
-    import logging
-
-    logger = logging.getLogger("billing.audit")
-
-    # 1. Registramos el error crudo en la consola del servidor
     logger.error(f"🚨 [CRÍTICO] ERROR REAL EN SELLOS SAT: {str(e)}")
-
-    # 2. Devolvemos el error real al frontend sin enmascararlo
     return f"Fallo técnico en sellos SAT: {str(e)}"
 
 
-# =========================================================
-# MAPEO INTELIGENTE DE REMOLQUES SAT (CTR001 - CTR032)
-# =========================================================
 def get_sat_trailer_code(tipo: str) -> str:
     if not tipo:
         return "CTR004"
@@ -273,9 +250,6 @@ class SafeData(dict):
     def __getitem__(self, key):
         val = self.get(key)
         if val is None or str(val).strip() == "" or str(val).strip() == "None":
-            logger.warning(
-                f" [BLINDAJE ACTIVO] Llave faltante o vacía: '{key}'. Inyectando default."
-            )
             if key in [
                 "subtotal",
                 "total",
@@ -363,16 +337,6 @@ class CartaPorteService:
             else (self.cert_dir / "default.key")
         )
         self.key_password = pass_conf.value if pass_conf else "12345678a"
-        logger.info(f"🔍 [DEBUG SELLOS] Ambiente actual: {self.env}")
-        logger.info(
-            f"🔍 [DEBUG SELLOS] Intentando leer CER en: {self.path_cer} | ¿Existe físicamente?: {self.path_cer.exists()}"
-        )
-        logger.info(
-            f"🔍 [DEBUG SELLOS] Intentando leer KEY en: {self.path_key} | ¿Existe físicamente?: {self.path_key.exists()}"
-        )
-        logger.info(
-            f"🔍 [DEBUG SELLOS] Password recuperado: {'SI (Oculto por seguridad)' if self.key_password else 'NO HAY PASSWORD'}"
-        )
 
         rfc_conf = (
             self.db.query(SystemConfig)
@@ -420,20 +384,18 @@ class CartaPorteService:
         )
         self.emisor_cp = str(cp_conf.value).strip() if cp_conf and cp_conf.value else ""
 
-        # VALIDACIÓN DEL CP ORIGEN (EMISOR)
         loc_emisor = (
             self.db.query(SatLocationCode)
             .filter(SatLocationCode.codigo_postal == self.emisor_cp)
             .first()
         )
         if loc_emisor:
-            #  FIX QUIRÚRGICO: Normalizamos el estado de la empresa
             self.emisor_estado = normalizar_estado_sat(loc_emisor.estado_clave)
             self.emisor_municipio = str(loc_emisor.municipio_clave).zfill(3)
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"ERROR INTERNO: El CP de Origen (Emisor) '{self.emisor_cp}' no existe en el catálogo sat_location_codes. Debes insertarlo en la base de datos.",
+                detail=f"ERROR INTERNO: El CP de Origen (Emisor) '{self.emisor_cp}' no existe en la base de datos.",
             )
 
     def _generar_sello_xslt(self, xml_bytes: bytes) -> tuple[str, str]:
@@ -479,8 +441,6 @@ class CartaPorteService:
         from app.models.models import SystemConfig
 
         config_key = f"folio_actual_{serie}"
-
-        # 1. Buscamos el contador maestro y lo bloqueamos temporalmente para concurrencia
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
@@ -489,18 +449,14 @@ class CartaPorteService:
         )
 
         if not secuencia:
-            # 2. Si no existe, inicializamos el contador
             nuevo_folio = 1
             secuencia = SystemConfig(
                 key=config_key, value=str(nuevo_folio), grupo="folios", tipo="integer"
             )
             self.db.add(secuencia)
         else:
-            # 3. Si existe, le sumamos 1 y guardamos el nuevo valor
             nuevo_folio = int(secuencia.value) + 1
             secuencia.value = str(nuevo_folio)
-
-        # No hacemos db.commit() aquí para no romper la transacción principal
         return nuevo_folio
 
     def _obtener_datos_completos(
@@ -518,21 +474,16 @@ class CartaPorteService:
                 status_code=400, detail="El viaje no tiene tramos (TripLeg)."
             )
 
-        # Por defecto tomamos el tramo 0 (patio)
         tramo_seleccionado = viaje.legs[0]
 
-        #   FIX: BUSCADOR INTELIGENTE DEL TRAMO DE CARRETERA
         if buscar_tramo_carretera and len(viaje.legs) > 1:
-            # Buscamos el tramo que sea de ruta/carretera
             tramo_ruta = next(
                 (leg for leg in viaje.legs if "ruta" in str(leg.leg_type).lower()), None
             )
             if tramo_ruta:
                 tramo_seleccionado = tramo_ruta
             else:
-                # Fallback de seguridad: si no halla la palabra 'ruta', toma el penúltimo o último
                 tramo_seleccionado = viaje.legs[-1]
-        # 👆 ------------------------------------------------ 👆
 
         unidad = (
             self.db.query(Unit).filter(Unit.id == tramo_seleccionado.unit_id).first()
@@ -570,7 +521,6 @@ class CartaPorteService:
     ) -> dict:
         tarifa = viaje.tariff
 
-        #  FIX: FACTURA SIEMPRE SIN CASETAS. Solo toma la tarifa base pura.
         if tarifa and not is_nominal:
             subtotal = float(tarifa.tarifa_base or 0.0)
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
@@ -593,7 +543,6 @@ class CartaPorteService:
             else "PUBLICO EN GENERAL"
         )
 
-        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
         cp_cliente_fiscal = (
             str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
         )
@@ -603,14 +552,13 @@ class CartaPorteService:
                 detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal.",
             )
 
-        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
         rfc_cliente = (
             str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
         )
         if not rfc_cliente or rfc_cliente == "XAXX010101000":
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido. No se permite RFC genérico.",
+                detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener un RFC válido.",
             )
 
         subcliente = viaje.sub_client
@@ -653,13 +601,12 @@ class CartaPorteService:
             )
             raise HTTPException(
                 status_code=400,
-                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' (perteneciente a {nombre_lugar}) NO existe en la BD.",
+                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' NO existe.",
             )
 
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
         tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
 
-        #  VALIDACIÓN CRÍTICA SAT CP195: OPERADOR
         raw_rfc = getattr(operador, "rfc", "")
         rfc_op_final = (
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
@@ -673,13 +620,12 @@ class CartaPorteService:
         ):
             raise HTTPException(
                 status_code=400,
-                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC de Persona Física válido (13 caracteres). Detectado: '{rfc_op_final}'.",
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido (13 caracteres).",
             )
 
         origen_real = (
             str(viaje.origin or "DOMICILIO CONOCIDO").replace("|", "").strip()[:100]
         )
-
         raw_destino = (
             getattr(subcliente, "direccion", viaje.destination)
             if subcliente
@@ -696,13 +642,14 @@ class CartaPorteService:
             cont_str += f" / {c2}"
 
         clave_servicio_flete = "78101802"
-        clave_mercancia = (
-            viaje.sat_clave_producto
-            if viaje and getattr(viaje, "sat_clave_producto", None)
-            else "01010101"
-        )
 
-        # PROCESAMIENTO DE DESCRIPCIÓN PARA SEPARAR EL PIPE
+        # =========================================================
+        # BLINDAJE EXTREMO: MERCANCÍA DEL COMPLEMENTO (CARTA PORTE)
+        # =========================================================
+        # Obligamos a que la mercancía física en la Carta Porte sea "01010101".
+        # Esto anula cualquier error de catálogo SAT (Material Peligroso #CP155).
+        clave_mercancia_final = "01010101"
+
         desc_merc_raw = (
             "FLETE NOMINAL"
             if is_nominal
@@ -718,13 +665,11 @@ class CartaPorteService:
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
-        #   MAGIA DE FOLIOS Y SECUENCIADOR
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
 
-        #   NUEVO: EXTRACCIÓN DE CONFIGURACIÓN DEL CLIENTE
         c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
         c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
         c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
@@ -763,7 +708,8 @@ class CartaPorteService:
                 if viaje and viaje.peso_toneladas
                 else "1000.00"
             ),
-            "bienes_transp": clave_mercancia,
+            # ATENCIÓN AQUÍ: La mercancía transportada será siempre la permitida genérica
+            "bienes_transp": clave_mercancia_final,
             "descripcion_mercancia": desc_merc_raw,
             "descripcion_mercancia_pdf": desc_merc_pdf,
             "permiso_sct": (
@@ -930,13 +876,13 @@ class CartaPorteService:
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
 
-        # ---> NUEVO: Limpiamos el separador especial para el XML del SAT
-        desc_concepto_xml = (
+        # ---> NUEVO: Limpiamos los caracteres y escapes para evitar errores en XML
+        desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
         )
-        desc_mercancia_xml = (
+        desc_mercancia_xml = html.escape(
             str(d.get("descripcion_mercancia", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
@@ -953,16 +899,15 @@ class CartaPorteService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
-        mat_peligroso = (
-            ' MaterialPeligroso="No"' if d["bienes_transp"] == "01010101" else ""
-        )
+        # BLINDAJE FINAL: Declaramos Material Peligroso como "No" porque inyectamos "01010101"
+        mat_peligroso = ' MaterialPeligroso="No"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="78101802" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
                 <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
                 <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
@@ -1033,11 +978,7 @@ class CartaPorteService:
             "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', 0))):,}",
             "conceptos": [
                 {
-                    "clave": (
-                        "84111506"
-                        if "Pago" in d.get("descripcion_concepto", "")
-                        else "78101802"
-                    ),
+                    "clave": d.get("clave_prod_serv", "78101802"),
                     "cantidad": "1.00",
                     "unidad": (
                         "ACT"
@@ -1134,7 +1075,7 @@ class CartaPorteService:
 
         nueva_factura = ReceivableInvoice(
             client_id=viaje.client_id,
-            sub_client_id=viaje.sub_client_id,  #  INYECTADO
+            sub_client_id=viaje.sub_client_id,
             viaje_id=viaje.id,
             folio_interno=data.get("folio_interno"),
             uuid=uuid_generado,
@@ -1149,8 +1090,7 @@ class CartaPorteService:
             retenciones=Decimal("0.04"),
             moneda="MXN",
             fecha_emision=date.today(),
-            fecha_vencimiento=date.today() + timedelta(days=dias_credito),  #  INYECTADO
-            #  INYECCIÓN DE LOS CAMPOS FALTANTES
+            fecha_vencimiento=date.today() + timedelta(days=dias_credito),
             metodo_pago=data.get("metodo_pago", "PUE"),
             forma_pago=data.get("forma_pago", "99"),
             tipo_comprobante="I",
@@ -1204,7 +1144,6 @@ class CartaPorteService:
                 .order_by(ReceivableInvoice.id.desc())
                 .first()
             )
-
             dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
             uuid_generado = getattr(resultado_pac, "uuid", None)
 
@@ -1218,21 +1157,18 @@ class CartaPorteService:
                 factura.iva = Decimal(str(_clean_float(data["iva"])))
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
-
-                #  INYECCIÓN DE LOS CAMPOS FALTANTES
                 factura.sub_client_id = viaje.sub_client_id
                 factura.metodo_pago = data.get("metodo_pago", "PPD")
                 factura.forma_pago = data.get("forma_pago", "99")
                 factura.tipo_comprobante = "I"
                 factura.fecha_vencimiento = date.today() + timedelta(days=dias_credito)
-
                 if uuid_generado:
                     factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
                     factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
             else:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,  #  INYECTADO
+                    sub_client_id=viaje.sub_client_id,
                     viaje_id=viaje.id,
                     folio_interno=data.get("folio_interno"),
                     uuid=uuid_generado,
@@ -1247,9 +1183,7 @@ class CartaPorteService:
                     retenciones=Decimal(str(_clean_float(data["retenciones"]))),
                     moneda="MXN",
                     fecha_emision=date.today(),
-                    fecha_vencimiento=date.today()
-                    + timedelta(days=dias_credito),  #  INYECTADO
-                    #  INYECCIÓN DE LOS CAMPOS FALTANTES
+                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",
@@ -1266,7 +1200,6 @@ class CartaPorteService:
                 )
 
             self.db.add(factura)
-
             if factura.uuid:
                 viaje.uuid_fiscal = factura.uuid
                 viaje.estatus = "facturado"

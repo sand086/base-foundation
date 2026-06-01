@@ -3,6 +3,7 @@ import base64
 import logging
 import logging.config
 import uuid
+import html
 import re
 from datetime import date, datetime
 from decimal import Decimal
@@ -1474,35 +1475,70 @@ class BillingService:
 
     def _armar_xml_ingreso_libre(self, d: dict, folio: str, fecha: str) -> str:
         conceptos_xml = ""
-        # Iteramos los conceptos que llegaron del Frontend
-        for c in d.get("conceptos", []):
-            # Calcula IVA del renglón (Asumimos 16%)
-            iva_renglon = float(c["importe"]) * 0.16
-            impuestos_xml = f'<cfdi:Impuestos><cfdi:Traslados><cfdi:Traslado Base="{c["importe"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_renglon:.2f}" /></cfdi:Traslados>'
+        total_subtotal = 0.0
+        total_iva = 0.0
+        total_ret = 0.0
 
-            # Si hay retención global, se la aplicamos proporcionalmente al renglón
-            if float(d.get("retenciones", 0)) > 0:
-                ret_renglon = float(c["importe"]) * 0.04
-                impuestos_xml += f'<cfdi:Retenciones><cfdi:Retencion Base="{c["importe"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{ret_renglon:.2f}" /></cfdi:Retenciones>'
+        # Determinamos si lleva retención global (esto te ayuda a aplicarla renglón por renglón)
+        tiene_retencion = float(d.get("retenciones", 0)) > 0
+
+        # Iteramos los conceptos que lleguen del Frontend (los que sean)
+        for c in d.get("conceptos", []):
+            importe_concepto = float(c["importe"])
+            precio_unitario = float(c.get("precioUnitario", c["importe"]))
+            cantidad = float(c.get("cantidad", 1.0))
+
+            # Cálculos exactos al centavo
+            iva_renglon = importe_concepto * 0.16
+            ret_renglon = importe_concepto * 0.04 if tiene_retencion else 0.0
+
+            total_subtotal += importe_concepto
+            total_iva += iva_renglon
+            total_ret += ret_renglon
+
+            # Escape de caracteres especiales XML (Si meten un "&" o "<" no truena)
+            desc_raw = (
+                str(c.get("descripcion", "")).replace(" | ", " - ").replace("|", "-")
+            )
+            desc_limpia = html.escape(desc_raw)
+
+            # Armado de impuestos por concepto (Base EXACTA)
+            impuestos_xml = f'<cfdi:Impuestos><cfdi:Traslados><cfdi:Traslado Base="{importe_concepto:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_renglon:.2f}" /></cfdi:Traslados>'
+
+            if tiene_retencion:
+                impuestos_xml += f'<cfdi:Retenciones><cfdi:Retencion Base="{importe_concepto:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{ret_renglon:.2f}" /></cfdi:Retenciones>'
 
             impuestos_xml += "</cfdi:Impuestos>"
 
-            # ---> NUEVO: Limpiamos la descripción de la factura libre también por si acaso
-            desc_limpia = str(c["descripcion"]).replace(" | ", " - ").replace("|", "-")
-            # <--- FIN NUEVO
+            clave_prod = c.get("claveProdServ", "78101802")
+            clave_uni = c.get("claveUnidad", "E48")
+            no_id = html.escape(str(c.get("id", "01")))
 
-            conceptos_xml += f'<cfdi:Concepto ClaveProdServ="{c["claveProdServ"]}" NoIdentificacion="{c.get("id", "01")}" Cantidad="{c["cantidad"]}" ClaveUnidad="{c["claveUnidad"]}" Unidad="UNIDAD" Descripcion="{desc_limpia}" ValorUnitario="{c["precioUnitario"]}" Importe="{c["importe"]}" ObjetoImp="02">{impuestos_xml}</cfdi:Concepto>'
+            conceptos_xml += f'<cfdi:Concepto ClaveProdServ="{clave_prod}" NoIdentificacion="{no_id}" Cantidad="{cantidad:.6f}" ClaveUnidad="{clave_uni}" Unidad="UNIDAD" Descripcion="{desc_limpia}" ValorUnitario="{precio_unitario:.2f}" Importe="{importe_concepto:.2f}" ObjetoImp="02">{impuestos_xml}</cfdi:Concepto>'
 
-        # Bloque de Impuestos Globales
-        imp_global = f'<cfdi:Impuestos TotalImpuestosRetenidos="{d.get("retenciones", "0.00")}" TotalImpuestosTrasladados="{d.get("iva", "0.00")}"><cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d.get("retenciones", "0.00")}" /></cfdi:Retenciones><cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados></cfdi:Impuestos>'
-        if (
-            float(d.get("retenciones", 0)) == 0
-        ):  # Si no hay retención, el SAT prohíbe poner el nodo
-            imp_global = f'<cfdi:Impuestos TotalImpuestosTrasladados="{d.get("iva", "0.00")}"><cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados></cfdi:Impuestos>'
+        # Matemáticas globales blindadas (CFDI 4.0 exige que todo cuadre perfecto)
+        total_total = total_subtotal + total_iva - total_ret
+
+        # Limpiamos nombres de cliente y emisor por si traen caracteres raros
+        emisor_nombre = html.escape(self.emisor_nombre)
+        cliente_nombre = html.escape(str(d.get("cliente", "")))
+
+        # Bloque de Impuestos Globales agrupado
+        if total_ret > 0:
+            imp_global = f'<cfdi:Impuestos TotalImpuestosRetenidos="{total_ret:.2f}" TotalImpuestosTrasladados="{total_iva:.2f}"><cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{total_ret:.2f}" /></cfdi:Retenciones><cfdi:Traslados><cfdi:Traslado Base="{total_subtotal:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{total_iva:.2f}" /></cfdi:Traslados></cfdi:Impuestos>'
+        else:
+            imp_global = f'<cfdi:Impuestos TotalImpuestosTrasladados="{total_iva:.2f}"><cfdi:Traslados><cfdi:Traslado Base="{total_subtotal:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{total_iva:.2f}" /></cfdi:Traslados></cfdi:Impuestos>'
+
+        # IMPORTANTE: Reemplazamos los valores en `d` para que la Base de Datos guarde EXACTAMENTE
+        # lo mismo que dice el XML (evita descuadres de centavos)
+        d["subtotal"] = f"{total_subtotal:.2f}"
+        d["iva"] = f"{total_iva:.2f}"
+        d["retenciones"] = f"{total_ret:.2f}"
+        d["monto_total"] = f"{total_total:.2f}"
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="F" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="Contado" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['monto_total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['cliente_rfc']}" Nombre="{d['cliente']}" DomicilioFiscalReceptor="{d['cp_receptor']}" RegimenFiscalReceptor="{d['regimen_fiscal_receptor']}" UsoCFDI="{d['uso_cfdi']}" />
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="F" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="Contado" SubTotal="{total_subtotal:.2f}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{total_total:.2f}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">
+    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{d['cliente_rfc']}" Nombre="{cliente_nombre}" DomicilioFiscalReceptor="{d['cp_receptor']}" RegimenFiscalReceptor="{d['regimen_fiscal_receptor']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>{conceptos_xml}</cfdi:Conceptos>{imp_global}
 </cfdi:Comprobante>""".strip()

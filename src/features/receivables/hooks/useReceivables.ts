@@ -4,7 +4,7 @@ import { receivableService } from "@/features/receivables/services/receivableSer
 import { ReceivableInvoice } from "@/features/receivables/types";
 import axiosClient from "@/api/axiosClient";
 
-//   HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee
+// HELPER DE BLINDAJE: Extrae siempre un texto del error para evitar que React crashee
 const getErrorMessage = (error: any, fallback: string) => {
   const detail = error.response?.data?.detail;
   if (Array.isArray(detail)) return detail[0]?.msg || fallback;
@@ -62,7 +62,7 @@ export const useReceivables = () => {
     },
   });
 
-  //  NUEVO 5.1 FIX: Timbrar Factura CXC (Provisional -> Timbrada) apuntando al endpoint de Logística
+  // 5.1 FIX: Timbrar Factura Vinculada a Viaje (Provisional -> Timbrada) apuntando a Logística
   const stampInvoiceMut = useMutation({
     mutationFn: (viajeId: number) =>
       axiosClient.post(`/api/logistics/trips/${viajeId}/stamp-real`),
@@ -71,7 +71,16 @@ export const useReceivables = () => {
     },
   });
 
-  // 6.   MUTACIÓN: Reabrir / Restaurar factura
+  // 5.2 NUEVO: Timbrar Factura Libre (Cuentas por Cobrar sin viaje)
+  const stampFreeInvoiceMut = useMutation({
+    mutationFn: (invoiceId: number) =>
+      receivableService.stampInvoice(invoiceId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+    },
+  });
+
+  // 6. MUTACIÓN: Reabrir / Restaurar factura
   const reopenMut = useMutation({
     mutationFn: (id: number) =>
       axiosClient.post(`/api/finance/receivables/${id}/reopen`),
@@ -87,7 +96,6 @@ export const useReceivables = () => {
     refreshReceivables: receivablesQuery.refetch,
 
     // ACCIONES
-    //  Acepta un segundo parámetro { cascade } para la eliminación avanzada
     deleteReceivable: async (id: number, options?: { cascade?: boolean }) => {
       try {
         await deleteReceivableMut.mutateAsync({
@@ -142,10 +150,9 @@ export const useReceivables = () => {
       }
     },
 
-    //  ACCIÓN REFACTORIZADA: Con estado de carga (toast.loading)
     stampInvoice: async (viajeId: number) => {
       const toastId = toast.loading(
-        "Conectando con el SAT y emidiendo factura definitiva...",
+        "Conectando con el SAT y emitiendo factura definitiva (Viaje)...",
       );
       try {
         await stampInvoiceMut.mutateAsync(viajeId);
@@ -167,7 +174,30 @@ export const useReceivables = () => {
       }
     },
 
-    //   ACCIÓN: Restaurar la factura
+    // NUEVA ACCIÓN AISLADA: Para facturas sin viaje
+    stampFreeInvoice: async (invoiceId: number) => {
+      const toastId = toast.loading(
+        "Timbrando factura independiente en el SAT...",
+      );
+      try {
+        await stampFreeInvoiceMut.mutateAsync(invoiceId);
+        toast.success("FACTURA TIMBRADA", {
+          id: toastId,
+          description: "La factura independiente ha sido certificada.",
+        });
+        return true;
+      } catch (error: any) {
+        toast.error("Error de Timbrado", {
+          id: toastId,
+          description: getErrorMessage(
+            error,
+            "Error al timbrar la factura independiente en el SAT",
+          ),
+        });
+        return false;
+      }
+    },
+
     reopenReceivable: async (id: number) => {
       try {
         await reopenMut.mutateAsync(id);

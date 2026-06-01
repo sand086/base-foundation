@@ -80,6 +80,7 @@ export default function Receivables() {
     registerMultiplePaymentRep,
     reopenReceivable,
     stampInvoice,
+    stampFreeInvoice, // <-- AÑADIDO: Extraemos la nueva mutación
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -640,6 +641,7 @@ export default function Receivables() {
                   </>
                 )}
 
+                {/* AQUI ESTA LA LOGICA BIFURCADA Y SEGURA */}
                 {isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -648,13 +650,27 @@ export default function Receivables() {
                         if (
                           window.confirm("¿Timbrar esta factura ante el SAT?")
                         ) {
+                          // Extraemos el viaje_id (si es que existe)
                           const viajeId =
                             (row as any).viaje_id || (row as any).trip_id;
-                          if (!viajeId)
-                            return toast.error("Error", {
-                              description: "Sin viaje válido",
-                            });
-                          await stampInvoice(Number(viajeId));
+
+                          if (viajeId) {
+                            // ==========================================
+                            // LÓGICA ORIGINAL INTACTA (Facturas con Viaje)
+                            // ==========================================
+                            await stampInvoice(Number(viajeId));
+                          } else {
+                            // ==========================================
+                            // NUEVA LÓGICA (Facturas Cuentas por Cobrar / Libres)
+                            // ==========================================
+                            if (!row.id) {
+                              return toast.error("Error", {
+                                description: "ID de factura no válido",
+                              });
+                            }
+                            // Llamamos a la nueva función que no rompe logística
+                            await stampFreeInvoice(Number(row.id));
+                          }
                         }
                       }}
                       className="gap-2 font-black text-[11px] uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50"
@@ -699,7 +715,7 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/*  NUEVO BOTÓN: Cancelar Factura */}
+                {/* NUEVO BOTÓN: Cancelar Factura */}
                 {!hasPayments && row.estatus !== "cancelado" && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -720,7 +736,7 @@ export default function Receivables() {
         },
       },
     ],
-    [selectedRows.length, reopenReceivable, stampInvoice],
+    [selectedRows.length, reopenReceivable, stampInvoice, stampFreeInvoice],
   );
 
   if (isLoadingReceivables) {
@@ -744,7 +760,7 @@ export default function Receivables() {
       >
         <div className="flex flex-wrap items-center gap-3">
           {/* ======================================= */}
-          {/*  BARRA DE FILTROS ACTUALIZADA (CLIENTE + RANGO DE FECHAS) */}
+          {/* BARRA DE FILTROS ACTUALIZADA (CLIENTE + RANGO DE FECHAS) */}
           {/* ======================================= */}
           <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
             {/* Filtro Cliente */}
@@ -774,30 +790,7 @@ export default function Receivables() {
               </Select>
             </div>
 
-            {/*  Filtro Rango de Fechas */}
-            {/*             <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-3 h-10 shadow-sm gap-2">
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                De:
-              </span>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
-              />
-              <div className="h-4 w-px bg-slate-300 dark:bg-slate-700"></div>
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                A:
-              </span>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="h-7 w-[120px] text-xs border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300"
-              />
-            </div> */}
-
-            {/*  Botón Limpiar (Solo aparece si hay algún filtro activo) */}
+            {/* Botón Limpiar (Solo aparece si hay algún filtro activo) */}
             {(selectedClientId !== "all" || startDate || endDate) && (
               <Button
                 variant="ghost"
