@@ -699,11 +699,11 @@ def registrar_pago_multiple(
         )
 
 
-@router.post("/rebuild-pdf/{invoice_id}")
+@router.get("/rebuild-pdf/{invoice_id}")
 def reconstruir_pdf_factura(invoice_id: int, db: Session = Depends(get_db)):
     """
     Lee el XML timbrado del disco y re-crea el PDF de la factura.
-    Ideal para corregir diseños o variables sin afectar el documento fiscal (SAT).
+    [VERSIÓN GET - PARA PROBAR DESDE EL NAVEGADOR]
     """
     from app.integrations.sat.billing_service import BillingService
 
