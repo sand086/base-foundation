@@ -5,7 +5,6 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import List, Optional
 
-
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
@@ -28,6 +27,7 @@ from app.models import models
 from app.modules.auth.router import get_current_active_user
 from app.core.security import verify_password
 import base64
+import traceback  # Importante para los errores
 
 router = APIRouter()
 
@@ -57,7 +57,7 @@ def parse_sat_error(e: Exception) -> str:
 @router.post("/stamp/free-invoice", response_model=dict)
 def generar_factura_libre(invoice_data: dict, db: Session = Depends(get_db)):
     """
-    Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE).
+    Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE) generadas desde cero.
     Crea un CFDI 4.0 de Ingreso puro usando solo los datos del frontend.
     """
     service = BillingService(db)
@@ -75,6 +75,35 @@ def generar_factura_libre(invoice_data: dict, db: Session = Depends(get_db)):
     except Exception as e:
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
+
+
+# ==============================================================
+# NUEVO: ENDPOINT EXCLUSIVO PARA FACTURAS CXC PROVISIONALES
+# ==============================================================
+@router.post("/stamp/invoice/{invoice_id}", response_model=dict)
+def stamp_existing_free_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint Exclusivo para timbrar Facturas Libres (CxC) que ya existen en la BD como provisionales.
+    No requiere datos del frontend, los lee de la base de datos.
+    """
+    service = BillingService(db)
+    try:
+        factura = service.timbrar_factura_existente(invoice_id)
+        return {
+            "status": "success",
+            "message": "Factura independiente timbrada exitosamente",
+            "data": {
+                "factura_id": factura.id,
+                "uuid": factura.uuid,
+                "xml_url": getattr(factura, "xml_url", None),
+            },
+        }
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
+# ==============================================================
 
 
 @router.get("/test-invoice-pro")

@@ -1374,6 +1374,175 @@ class BillingService:
             "resultados": resultados,
         }
 
+    def timbrar_factura_existente(self, invoice_id: int):
+        from app.models.models import ReceivableInvoice
+        import base64
+        import zeep
+        from cryptography import x509
+        from cryptography.hazmat.backends import default_backend
+
+        # 1. Recuperar la factura PROVISIONAL de la BD
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.id == invoice_id)
+            .first()
+        )
+        if not factura:
+            raise ValueError(
+                f"Factura con ID {invoice_id} no encontrada en la base de datos."
+            )
+
+        if factura.status_sat == "TIMBRADA" and factura.uuid:
+            return factura  # Ya estaba timbrada por error de doble clic
+
+        cliente = factura.client
+        if not cliente:
+            raise ValueError("La factura no tiene un cliente asociado.")
+
+        # 2. Extraer el folio limpio (ej: si es F-123, sacar 123)
+        folio_str = (
+            str(factura.folio_interno).split("-")[-1]
+            if factura.folio_interno and "-" in str(factura.folio_interno)
+            else str(factura.id)
+        )
+
+        # 3. Construir el diccionario para el XML Libre
+        fecha = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        d = {
+            "client_id": cliente.id,
+            "folio_interno": factura.folio_interno,
+            "subtotal": float(factura.subtotal or 0.0),
+            "iva": float(factura.iva or 0.0),
+            "retenciones": float(factura.retenciones or 0.0),
+            "monto_total": float(factura.monto_total or 0.0),
+            "moneda": str(
+                factura.moneda.value
+                if hasattr(factura.moneda, "value")
+                else factura.moneda
+            ),
+            "metodo_pago": factura.metodo_pago or "PPD",
+            "forma_pago": factura.forma_pago or "99",
+            "cliente_rfc": cliente.rfc,
+            "cliente": cliente.razon_social,
+            "cp_receptor": cliente.codigo_postal_fiscal,
+            "regimen_fiscal_receptor": cliente.regimen_fiscal or "601",
+            "uso_cfdi": cliente.uso_cfdi or "G03",
+            "conceptos": [
+                {
+                    "id": "01",
+                    "claveProdServ": "84111506",  # Clave SAT estándar para facturación genérica
+                    "cantidad": "1",
+                    "claveUnidad": "E48",
+                    "descripcion": factura.concepto or "Servicios Administrativos",
+                    "precioUnitario": float(factura.subtotal or 0.0),
+                    "importe": float(factura.subtotal or 0.0),
+                }
+            ],
+        }
+
+        # 4. Armar y sellar el XML
+        xml_base = self._armar_xml_ingreso_libre(d, folio_str, fecha)
+
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
+            cert = x509.load_der_x509_certificate(cer_data, default_backend())
+            cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
+            sn_hex = format(cert.serial_number, "x")
+            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+
+        xml_con_cert = xml_base.replace(
+            "<cfdi:Comprobante",
+            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
+        )
+        sello_b64, cadena_original = self._generar_sello_xslt(
+            xml_con_cert.encode("utf-8")
+        )
+        xml_sellado = xml_con_cert.replace(
+            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
+        )
+
+        # 5. Enviar a Timbrar al PAC
+        try:
+            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            result = client_zeep.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
+            )
+
+            if int(getattr(result, "status", 0)) != 200:
+                raise ValueError(f"Error PAC: {result.mensaje}")
+
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) != 200:
+                raise ValueError(f"Error SAT: {res_sat.mensaje}")
+
+            uuid_timbrado = res_sat.uuid
+            raw_cfdi = res_sat.cfdiTimbrado
+            cfdi_bytes = (
+                raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
+            )
+
+            # Guardar el XML fisicamente en el Servidor
+            self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
+
+            # 6. Generar el PDF y el QR (Para poder descargarlo en el Frontend)
+            try:
+                from io import BytesIO
+
+                root = etree.fromstring(cfdi_bytes)
+                ns = {
+                    "cfdi": "http://www.sat.gob.mx/cfd/4",
+                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+                }
+                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+                s_sat = tfd_node.get("SelloSAT", "0000")
+                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+                s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+                cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+                total_float = _clean_float(d["monto_total"])
+                importe_letra = f"({total_float:,.2f} MXN)"
+
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={d['cliente_rfc']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                buffer = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(
+                    buffer, format="PNG"
+                )
+
+                # Reutilizamos tu plantilla de diseño de factura
+                self._generar_pdf_con_diseno(
+                    d,
+                    uuid_timbrado,
+                    buffer.getvalue(),
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original_tfd,
+                    importe_letra,
+                )
+            except Exception as e:
+                logger.error(
+                    f"El XML se timbró pero falló el diseño del PDF de la factura libre: {e}"
+                )
+
+            # 7. Actualizar la base de datos
+            factura.uuid = uuid_timbrado
+            factura.status_sat = "TIMBRADA"
+            factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
+            factura.xml_url = f"/api/sat/invoice/{uuid_timbrado}/xml"
+            self.db.add(factura)
+            self.db.commit()
+            self.db.refresh(factura)
+
+            return factura
+
+        except Exception as e:
+            logger.error(f"Fallo en factura libre existente: {e}")
+            self.db.rollback()
+            raise ValueError(f"Fallo en timbrado SAT: {str(e)}")
+
     def generar_factura_libre(self, d: dict):
         """Genera y timbra una factura de Ingreso Pura (Sin Carta Porte)"""
         from datetime import date
