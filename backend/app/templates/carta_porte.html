@@ -75,10 +75,7 @@
       </div>
 
       <div class="bento-card">
-        <div class="bento-card-header">
-          Datos del Cliente {% if subcliente_nombre %}y Destino Físico{% endif
-          %}
-        </div>
+        <div class="bento-card-header">Datos del Cliente</div>
         <table class="grid-table">
           <tr>
             <td width="40%">
@@ -108,48 +105,6 @@
               <span class="text-dark">{{ cp_cliente }}</span>
             </td>
           </tr>
-
-          {% if subcliente_nombre %}
-          <tr>
-            <td colspan="3" style="padding-top: 6px; padding-bottom: 2px">
-              <div
-                style="border-top: 1px dashed #cbd5e1; margin-bottom: 4px"
-              ></div>
-              <span
-                class="grid-label"
-                style="color: #475569; font-weight: bold; font-size: 6pt"
-                >➜ DESTINO FÍSICO (SUB-CLIENTE)</span
-              >
-            </td>
-          </tr>
-          <tr>
-            <td>
-              <span class="grid-label">Nombre o Razón Social</span>
-              <span class="bold text-dark" style="font-size: 7.5pt"
-                >{{ subcliente_nombre }}</span
-              >
-            </td>
-            <td>
-              <span class="grid-label">RFC</span>
-              <span class="text-dark">{{ subcliente_rfc }}</span>
-            </td>
-            <td>
-              <span class="grid-label">Contacto (Teléfono / Correo)</span>
-              <span class="text-dark" style="font-size: 6.5pt"
-                >{{ subcliente_telefono }} {% if subcliente_correo %}| {{
-                subcliente_correo }}{% endif %}</span
-              >
-            </td>
-          </tr>
-          <tr>
-            <td colspan="3">
-              <span class="grid-label">Dirección de Entrega</span>
-              <span class="text-dark" style="font-size: 6.5pt"
-                >{{ subcliente_direccion }}</span
-              >
-            </td>
-          </tr>
-          {% endif %}
         </table>
       </div>
     </header>
@@ -379,6 +334,46 @@
           </tr>
         </table>
       </div>
+
+      {% if subcliente_nombre %}
+      <div class="bento-card">
+        <div
+          class="bento-card-header"
+          style="color: #0f172a; border-left-color: #cbd5e1"
+        >
+          Destino Físico (Sub-Cliente)
+        </div>
+        <table class="grid-table">
+          <tr>
+            <td width="40%">
+              <span class="grid-label">Nombre o Razón Social</span>
+              <span class="bold text-dark" style="font-size: 7.5pt"
+                >{{ subcliente_nombre }}</span
+              >
+            </td>
+            <td width="25%">
+              <span class="grid-label">RFC</span>
+              <span class="text-dark">{{ subcliente_rfc }}</span>
+            </td>
+            <td width="35%">
+              <span class="grid-label">Contacto (Teléfono / Correo)</span>
+              <span class="text-dark" style="font-size: 6.5pt"
+                >{{ subcliente_telefono }} {% if subcliente_correo %}| {{
+                subcliente_correo }}{% endif %}</span
+              >
+            </td>
+          </tr>
+          <tr>
+            <td colspan="3">
+              <span class="grid-label">Dirección de Entrega</span>
+              <span class="text-dark" style="font-size: 6.5pt"
+                >{{ subcliente_direccion }}</span
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+      {% endif %}
 
       <div class="bento-card">
         <div class="bento-card-header">Identificación Vehicular y Seguros</div>
