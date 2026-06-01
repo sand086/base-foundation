@@ -415,7 +415,10 @@ export default function Receivables() {
         header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
-          const isProvisional = row.status_sat === "PROVISIONAL";
+          const isProvisional =
+            row.status_sat === "PROVISIONAL" ||
+            row.status_sat === "provisional" ||
+            !row.uuid;
           return (
             <div className="flex flex-col items-start">
               <span
