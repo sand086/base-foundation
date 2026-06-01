@@ -53,7 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input"; //  Importación de Input
+import { Input } from "@/components/ui/input";
 
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
@@ -80,7 +80,7 @@ export default function Receivables() {
     registerMultiplePaymentRep,
     reopenReceivable,
     stampInvoice,
-    stampFreeInvoice, // <-- AÑADIDO: Extraemos la nueva mutación
+    stampFreeInvoice,
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -96,7 +96,7 @@ export default function Receivables() {
 
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
 
-  //  NUEVOS: Estados para filtros
+  // NUEVOS: Estados para filtros
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -215,7 +215,7 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
-  //  LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + RANGO DE FECHAS)
+  // LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + RANGO DE FECHAS)
   const filteredInvoices = useMemo(() => {
     let filtered = formattedInvoices;
 
@@ -415,6 +415,7 @@ export default function Receivables() {
         header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
+          // Corrección aplicada también en el render visual de la celda
           const isProvisional =
             row.status_sat === "PROVISIONAL" ||
             row.status_sat === "provisional" ||
@@ -580,9 +581,15 @@ export default function Receivables() {
           const isSelectionActive = selectedRows.length > 0;
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
-          const isProvisional = row.status_sat === "PROVISIONAL";
 
-          const isStamped = !!row.uuid && row.status_sat === "TIMBRADA";
+          // ✅ LÓGICA CORREGIDA PARA DETECTAR CORRECTAMENTE REGISTROS SIN TIMBRAR
+          const isProvisional =
+            row.status_sat === "PROVISIONAL" ||
+            row.status_sat === "provisional" ||
+            !row.uuid;
+
+          // ✅ LÓGICA CORREGIDA PARA DETECTAR FACTURAS TIMBRADAS CUANDO status_sat NO EXISTE
+          const isStamped = !!row.uuid;
 
           return (
             <DropdownMenu>
