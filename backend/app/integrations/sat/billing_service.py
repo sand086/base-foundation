@@ -1819,168 +1819,169 @@ class BillingService:
     <cfdi:Conceptos>{conceptos_xml}</cfdi:Conceptos>{imp_global}
 </cfdi:Comprobante>""".strip()
 
+    def regenerar_pdf_factura(self, invoice_id: int):
+        from app.models.models import ReceivableInvoice
+        from io import BytesIO
+        import qrcode
+        from lxml import etree
 
-def regenerar_pdf_factura(self, invoice_id: int):
-    from app.models.models import ReceivableInvoice
-    from io import BytesIO
-    import qrcode
-    from lxml import etree
-
-    # 1. Buscar la factura
-    factura = (
-        self.db.query(ReceivableInvoice)
-        .filter(ReceivableInvoice.id == invoice_id)
-        .first()
-    )
-    if not factura or not factura.uuid:
-        raise ValueError("Factura no encontrada o todavía no cuenta con un UUID.")
-
-    uuid_timbrado = factura.uuid
-
-    # 2. Leer el XML sellado directamente del disco
-    xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
-    if not xml_path.exists():
-        raise ValueError(f"No se encontró el archivo XML físico en {xml_path}")
-
-    with open(xml_path, "rb") as f:
-        cfdi_bytes = f.read()
-
-    # 3. Extraer los datos criptográficos y sellos del SAT desde el XML
-    root = etree.fromstring(cfdi_bytes)
-    ns = {
-        "cfdi": "http://www.sat.gob.mx/cfd/4",
-        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
-    }
-
-    tfd_nodes = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
-    if not tfd_nodes:
-        raise ValueError("El XML no cuenta con el nodo TimbreFiscalDigital del SAT.")
-
-    tfd_node = tfd_nodes[0]
-    s_sat = tfd_node.get("SelloSAT", "0000")
-    c_sat = tfd_node.get("NoCertificadoSAT", "0000")
-    s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-    fecha_timbrado = tfd_node.get("FechaTimbrado")
-    cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{fecha_timbrado}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
-
-    total_float = float(factura.monto_total or 0.0)
-
-    # Procesar cantidad con letra
-    if HAS_NUM2WORDS:
-        entero = int(total_float)
-        decimales = int(round((total_float - entero) * 100))
-        texto = num2words(entero, lang="es").upper()
-        if texto == "UNO":
-            texto = "UN"
-        importe_letra = (
-            f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+        # 1. Buscar la factura
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.id == invoice_id)
+            .first()
         )
-    else:
-        importe_letra = f"({total_float:,.2f} MXN)"
+        if not factura or not factura.uuid:
+            raise ValueError("Factura no encontrada o todavía no cuenta con un UUID.")
 
-    # 4. Reconstruir el código QR
-    cliente = factura.client
-    rfc_cliente = cliente.rfc if cliente else "XAXX010101000"
-    qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={rfc_cliente}&tt={total_float:.2f}&fe={s_emi[-8:]}"
-    qr = qrcode.QRCode(version=1, box_size=10, border=2)
-    qr.add_data(qr_string)
-    qr.make(fit=True)
-    buffer = BytesIO()
-    qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+        uuid_timbrado = factura.uuid
 
-    # 5. Armar el diccionario para inyectar en la plantilla PDF
-    if factura.viaje_id:
-        # Reconstruir PDF de Carta Porte / Viaje
-        viaje, cliente_v, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            factura.viaje_id, usar_tramo_final=True
-        )
-        d = self._build_dict_from_models(
-            viaje,
-            cliente_v,
-            unidad,
-            operador,
-            r1,
-            r2,
-            is_nominal=factura.is_nominal,
-            ocultar_montos=False,
-            folio_forzado=(
-                int(str(factura.folio_interno).split("-")[-1])
-                if factura.folio_interno
-                else None
-            ),
-        )
-        # Aseguramos los montos reales
-        d["subtotal"] = f"{float(factura.subtotal or 0.0):.2f}"
-        d["iva"] = f"{float(factura.iva or 0.0):.2f}"
-        d["retenciones"] = f"{float(factura.retenciones or 0.0):.2f}"
-        d["total"] = f"{total_float:.2f}"
-    else:
-        # Reconstruir PDF de Factura Libre
-        folio_str = (
-            str(factura.folio_interno).split("-")[-1]
-            if factura.folio_interno and "-" in str(factura.folio_interno)
-            else str(factura.id)
-        )
-        d = {
-            "folio_interno": factura.folio_interno,
-            "folio": folio_str,
-            "fecha": (
-                factura.fecha_emision.strftime("%Y-%m-%dT%H:%M:%S")
-                if factura.fecha_emision
-                else fecha_timbrado
-            ),
-            "subtotal": float(factura.subtotal or 0.0),
-            "iva": float(factura.iva or 0.0),
-            "retenciones": float(factura.retenciones or 0.0),
-            "total": total_float,
-            "monto_total": total_float,
-            "moneda": (
-                str(
-                    factura.moneda.value
-                    if hasattr(factura.moneda, "value")
-                    else factura.moneda
-                )
-                if factura.moneda
-                else "MXN"
-            ),
-            "metodo_pago": factura.metodo_pago or "PPD",
-            "forma_pago": factura.forma_pago or "99",
-            "condiciones_pago": (
-                f"EN {cliente.dias_credito} DIAS"
-                if cliente and getattr(cliente, "dias_credito", 0) > 0
-                else "CONTADO"
-            ),
-            # Nombres de variables fijos que pide el template PDF
-            "rfc_cliente": rfc_cliente,
-            "nombre_cliente": cliente.razon_social if cliente else "",
-            "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
-            "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
-            "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
-            "conceptos": [
-                {
-                    "claveProdServ": "84111506",
-                    "cantidad": "1",
-                    "claveUnidad": "E48",
-                    "descripcion": factura.concepto or "Servicios Administrativos",
-                    "precioUnitario": float(factura.subtotal or 0.0),
-                    "importe": float(factura.subtotal or 0.0),
-                }
-            ],
+        # 2. Leer el XML sellado directamente del disco
+        xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
+        if not xml_path.exists():
+            raise ValueError(f"No se encontró el archivo XML físico en {xml_path}")
+
+        with open(xml_path, "rb") as f:
+            cfdi_bytes = f.read()
+
+        # 3. Extraer los datos criptográficos y sellos del SAT desde el XML
+        root = etree.fromstring(cfdi_bytes)
+        ns = {
+            "cfdi": "http://www.sat.gob.mx/cfd/4",
+            "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
         }
 
-    # 6. Ejecutar el generador para SOBREESCRIBIR el archivo físico
-    self._generar_pdf_con_diseno(
-        d,
-        uuid_timbrado,
-        buffer.getvalue(),
-        s_sat,
-        s_emi,
-        c_sat,
-        cadena_original_tfd,
-        importe_letra,
-    )
+        tfd_nodes = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
+        if not tfd_nodes:
+            raise ValueError(
+                "El XML no cuenta con el nodo TimbreFiscalDigital del SAT."
+            )
 
-    return {
-        "mensaje": f"PDF regenerado exitosamente para el folio {factura.folio_interno}",
-        "uuid": uuid_timbrado,
-    }
+        tfd_node = tfd_nodes[0]
+        s_sat = tfd_node.get("SelloSAT", "0000")
+        c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+        s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+        fecha_timbrado = tfd_node.get("FechaTimbrado")
+        cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{fecha_timbrado}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+        total_float = float(factura.monto_total or 0.0)
+
+        # Procesar cantidad con letra
+        if HAS_NUM2WORDS:
+            entero = int(total_float)
+            decimales = int(round((total_float - entero) * 100))
+            texto = num2words(entero, lang="es").upper()
+            if texto == "UNO":
+                texto = "UN"
+            importe_letra = (
+                f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+            )
+        else:
+            importe_letra = f"({total_float:,.2f} MXN)"
+
+        # 4. Reconstruir el código QR
+        cliente = factura.client
+        rfc_cliente = cliente.rfc if cliente else "XAXX010101000"
+        qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={rfc_cliente}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(qr_string)
+        qr.make(fit=True)
+        buffer = BytesIO()
+        qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+
+        # 5. Armar el diccionario para inyectar en la plantilla PDF
+        if factura.viaje_id:
+            # Reconstruir PDF de Carta Porte / Viaje
+            viaje, cliente_v, unidad, operador, r1, r2 = self._obtener_datos_completos(
+                factura.viaje_id, usar_tramo_final=True
+            )
+            d = self._build_dict_from_models(
+                viaje,
+                cliente_v,
+                unidad,
+                operador,
+                r1,
+                r2,
+                is_nominal=factura.is_nominal,
+                ocultar_montos=False,
+                folio_forzado=(
+                    int(str(factura.folio_interno).split("-")[-1])
+                    if factura.folio_interno
+                    else None
+                ),
+            )
+            # Aseguramos los montos reales
+            d["subtotal"] = f"{float(factura.subtotal or 0.0):.2f}"
+            d["iva"] = f"{float(factura.iva or 0.0):.2f}"
+            d["retenciones"] = f"{float(factura.retenciones or 0.0):.2f}"
+            d["total"] = f"{total_float:.2f}"
+        else:
+            # Reconstruir PDF de Factura Libre
+            folio_str = (
+                str(factura.folio_interno).split("-")[-1]
+                if factura.folio_interno and "-" in str(factura.folio_interno)
+                else str(factura.id)
+            )
+            d = {
+                "folio_interno": factura.folio_interno,
+                "folio": folio_str,
+                "fecha": (
+                    factura.fecha_emision.strftime("%Y-%m-%dT%H:%M:%S")
+                    if factura.fecha_emision
+                    else fecha_timbrado
+                ),
+                "subtotal": float(factura.subtotal or 0.0),
+                "iva": float(factura.iva or 0.0),
+                "retenciones": float(factura.retenciones or 0.0),
+                "total": total_float,
+                "monto_total": total_float,
+                "moneda": (
+                    str(
+                        factura.moneda.value
+                        if hasattr(factura.moneda, "value")
+                        else factura.moneda
+                    )
+                    if factura.moneda
+                    else "MXN"
+                ),
+                "metodo_pago": factura.metodo_pago or "PPD",
+                "forma_pago": factura.forma_pago or "99",
+                "condiciones_pago": (
+                    f"EN {cliente.dias_credito} DIAS"
+                    if cliente and getattr(cliente, "dias_credito", 0) > 0
+                    else "CONTADO"
+                ),
+                # Nombres de variables fijos que pide el template PDF
+                "rfc_cliente": rfc_cliente,
+                "nombre_cliente": cliente.razon_social if cliente else "",
+                "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
+                "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
+                "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
+                "conceptos": [
+                    {
+                        "claveProdServ": "84111506",
+                        "cantidad": "1",
+                        "claveUnidad": "E48",
+                        "descripcion": factura.concepto or "Servicios Administrativos",
+                        "precioUnitario": float(factura.subtotal or 0.0),
+                        "importe": float(factura.subtotal or 0.0),
+                    }
+                ],
+            }
+
+        # 6. Ejecutar el generador para SOBREESCRIBIR el archivo físico
+        self._generar_pdf_con_diseno(
+            d,
+            uuid_timbrado,
+            buffer.getvalue(),
+            s_sat,
+            s_emi,
+            c_sat,
+            cadena_original_tfd,
+            importe_letra,
+        )
+
+        return {
+            "mensaje": f"PDF regenerado exitosamente para el folio {factura.folio_interno}",
+            "uuid": uuid_timbrado,
+        }
