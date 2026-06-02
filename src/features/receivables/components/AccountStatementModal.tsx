@@ -142,7 +142,6 @@ export function AccountStatementModal({
       htmlElement.classList.remove("dark");
     }
 
-    // FORZAR ANCHO FIJO: Evita que al tener muchos datos se compriman, se coman espacios o saltos de línea
     const element = pdfRef.current;
     const originalWidth = element.style.width;
     const originalMaxWidth = element.style.maxWidth;
@@ -160,7 +159,6 @@ export function AccountStatementModal({
         windowWidth: 900,
       });
 
-      // Restaurar estilos originales inmediatamente
       element.style.width = originalWidth;
       element.style.maxWidth = originalMaxWidth;
 
@@ -174,8 +172,7 @@ export function AccountStatementModal({
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      // CONFIGURACIÓN DE MÁRGENES: Para evitar cortes bruscos
-      const margin = 15; // 15mm de margen en todos los lados
+      const margin = 15;
       const contentWidth = pdfWidth - margin * 2;
       const canvasRatio = canvas.height / canvas.width;
       const imgHeight = contentWidth * canvasRatio;
@@ -185,15 +182,12 @@ export function AccountStatementModal({
       let heightLeft = imgHeight;
       let position = margin;
 
-      // Imprimir la primera página
       pdf.addImage(imgData, "PNG", margin, position, contentWidth, imgHeight);
       heightLeft -= pageHeightContent;
 
-      // Iterar mientras haya contenido restante (se crea página 2, 3, etc.)
       while (heightLeft > 1) {
         position -= pageHeightContent;
         pdf.addPage();
-        // Agregamos margin superior a cada página extra para que respire
         pdf.addImage(
           imgData,
           "PNG",
@@ -297,7 +291,6 @@ export function AccountStatementModal({
             ref={pdfRef}
             className="p-5 border-2 border-dashed border-border rounded-2xl bg-card shadow-sm space-y-6 print:border-none print:shadow-none print:p-0"
           >
-            {/* break-inside-avoid evita cortes indeseados al imprimir nativo */}
             <div className="flex justify-between items-start border-b border-border pb-4 break-inside-avoid">
               <div>
                 <h2 className="text-xl font-bold text-primary flex items-center gap-2">
@@ -355,7 +348,6 @@ export function AccountStatementModal({
                     return (
                       <div
                         key={invoice.id}
-                        /* break-inside-avoid garantiza que una fila NUNCA se corte a la mitad en la impresión */
                         className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-border/50 min-w-[600px] break-inside-avoid ${
                           isOverdue ? "bg-red-50 dark:bg-red-950/20" : ""
                         }`}
@@ -448,35 +440,34 @@ export function AccountStatementModal({
                     key={idx}
                     className="p-4 bg-muted/50 border border-border rounded-lg break-inside-avoid"
                   >
-                    <p className="font-black text-primary mb-2">
+                    <p className="font-black text-primary mb-3">
                       {cuenta.banco || cuenta.bank_name || cuenta.nombre_banco}
                     </p>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">CLABE:</span>
-                        <span className="font-mono font-bold text-foreground">
+                    {/* AQUI SE REMOVIERON LOS TRUNCATES Y SE AGREGÓ WRAPPING SEGURO */}
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between items-start gap-4">
+                        <span className="text-muted-foreground shrink-0">
+                          CLABE:
+                        </span>
+                        <span className="font-mono font-bold text-foreground text-right break-words">
                           {cuenta.clabe}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cuenta:</span>
-                        <span className="font-mono font-bold text-foreground">
+                      <div className="flex justify-between items-start gap-4">
+                        <span className="text-muted-foreground shrink-0">
+                          Cuenta:
+                        </span>
+                        <span className="font-mono font-bold text-foreground text-right break-words">
                           {cuenta.cuenta ||
                             cuenta.account_number ||
                             cuenta.numero_cuenta}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Titular:</span>
-                        <span
-                          className="text-[11px] truncate max-w-[200px] font-bold text-foreground"
-                          title={
-                            cuenta.titular ||
-                            cuenta.account_name ||
-                            cuenta.nombre_titular ||
-                            companyBankData.razonSocial
-                          }
-                        >
+                      <div className="flex justify-between items-start gap-4">
+                        <span className="text-muted-foreground shrink-0">
+                          Titular:
+                        </span>
+                        <span className="text-[11px] font-bold text-foreground text-right break-words">
                           {cuenta.titular ||
                             cuenta.account_name ||
                             cuenta.nombre_titular ||
