@@ -20,10 +20,13 @@ export type TripUpdate = {
     contenedor_2?: (string | null);
     terminal_entrega_vacio?: (string | null);
     peso_toneladas?: (number | null);
-    es_material_peligroso?: (boolean | null);
-    clase_imo?: (string | null);
+    sat_clave_servicio?: (string | null);
     sat_clave_producto?: (string | null);
     sat_clave_unidad?: (string | null);
+    es_material_peligroso?: (boolean | null);
+    cve_material_peligroso?: (string | null);
+    embalaje?: (string | null);
+    clase_imo?: (string | null);
     mercancia_clave_stcc?: (string | null);
     status?: (TripStatus | null);
     uuid_fiscal?: (string | null);

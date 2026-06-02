@@ -24,16 +24,22 @@ export type TripResponse = {
     route_name?: (string | null);
     descripcion_mercancia?: (string | null);
     peso_toneladas?: (number | null);
-    es_material_peligroso?: (boolean | null);
-    clase_imo?: (string | null);
     /**
-     * Clave SAT para Fletes
+     * Clave SAT Servicio de Flete
+     */
+    sat_clave_servicio?: (string | null);
+    /**
+     * Clave SAT de la Mercancía Transportada
      */
     sat_clave_producto?: (string | null);
     /**
      * Clave SAT Unidad de Servicio
      */
     sat_clave_unidad?: (string | null);
+    es_material_peligroso?: (boolean | null);
+    cve_material_peligroso?: (string | null);
+    embalaje?: (string | null);
+    clase_imo?: (string | null);
     mercancia_clave_stcc?: (string | null);
     /**
      * ¿Remolque 1 es refrigerado?

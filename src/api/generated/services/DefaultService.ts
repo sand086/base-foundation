@@ -681,7 +681,7 @@ export class DefaultService {
     }
     /**
      * Generar Factura Libre
-     * Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE).
+     * Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE) generadas desde cero.
      * Crea un CFDI 4.0 de Ingreso puro usando solo los datos del frontend.
      * @param requestBody
      * @returns any Successful Response
@@ -695,6 +695,28 @@ export class DefaultService {
             url: '/api/sat/stamp/free-invoice',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Stamp Existing Free Invoice
+     * Endpoint Exclusivo para timbrar Facturas Libres (CxC) que ya existen en la BD como provisionales.
+     * No requiere datos del frontend, los lee de la base de datos.
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static stampExistingFreeInvoiceApiSatStampInvoiceInvoiceIdPost(
+        invoiceId: number,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/invoice/{invoice_id}',
+            path: {
+                'invoice_id': invoiceId,
+            },
             errors: {
                 422: `Validation Error`,
             },
@@ -957,6 +979,28 @@ export class DefaultService {
             url: '/api/sat/stamp/payment',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Reconstruir Pdf Factura
+     * Lee el XML timbrado del disco y re-crea el PDF de la factura.
+     * [VERSIÓN GET - PARA PROBAR DESDE EL NAVEGADOR]
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static reconstruirPdfFacturaApiSatRebuildPdfInvoiceIdGet(
+        invoiceId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/sat/rebuild-pdf/{invoice_id}',
+            path: {
+                'invoice_id': invoiceId,
+            },
             errors: {
                 422: `Validation Error`,
             },
