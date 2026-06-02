@@ -62,7 +62,7 @@ interface SmartInvoiceConcept {
 interface CreateInvoiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: () => void; // Ya no requiere el payload porque lo gestiona el hook internamente
+  onSubmit: () => void;
   importedServices?: FinalizableService[];
 }
 
@@ -100,12 +100,14 @@ export function CreateInvoiceModal({
   const { products: satProducts, loading: loadingSatProducts } =
     useSatCatalogs();
 
-  //  INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
+  // INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
   const { generateOneShotInvoice, generateFreeInvoice, isStamping } =
     useBilling();
 
   const [clienteId, setClienteId] = useState("");
+  const [subClienteId, setSubClienteId] = useState(""); // <-- Estado para el sub_client seleccionado
   const [openCombobox, setOpenCombobox] = useState(false);
+  const [openSubCombobox, setOpenSubCombobox] = useState(false); // <-- Estado para abrir/cerrar el popover del sub_client
 
   const [openSatPopoverId, setOpenSatPopoverId] = useState<string | null>(null);
   const [openUnidadPopoverId, setOpenUnidadPopoverId] = useState<string | null>(
@@ -142,26 +144,33 @@ export function CreateInvoiceModal({
   // Autofill Inteligente
   useEffect(() => {
     if (selectedClient) {
-      setRazonSocialEditable(selectedClient.razon_social || "");
-      setRfcEditable(selectedClient.rfc || "");
+      // Como el SubCliente es solo una sucursal operativa (sin RFC propio en la BD),
+      // los datos fiscales obligatorios para el CFDI 4.0 SIEMPRE se toman de la Matriz.
+      const fuenteDatosFiscales = selectedClient;
+
+      setRazonSocialEditable(fuenteDatosFiscales.razon_social || "");
+      setRfcEditable(fuenteDatosFiscales.rfc || "");
       setCpEditable(
-        (selectedClient as any).codigo_postal_fiscal ||
-          (selectedClient as any).codigo_postal ||
+        (fuenteDatosFiscales as any).codigo_postal_fiscal ||
+          (fuenteDatosFiscales as any).codigo_postal ||
           "",
       );
-      setRegimenEditable((selectedClient as any).regimen_fiscal || "601");
-      setUsoCfdiEditable((selectedClient as any).uso_cfdi || "G03");
+      setRegimenEditable((fuenteDatosFiscales as any).regimen_fiscal || "601");
+      setUsoCfdiEditable((fuenteDatosFiscales as any).uso_cfdi || "G03");
       setEmailEditable(
-        (selectedClient as any).email || (selectedClient as any).correo || "",
+        (fuenteDatosFiscales as any).email ||
+          (fuenteDatosFiscales as any).correo ||
+          "",
       );
     }
-  }, [selectedClient]);
+  }, [selectedClient, subClienteId]);
 
-  // Inicialización de Conceptos Inteligentes
+  // Inicialización de Conceptos Inteligentes y Reseteos
   useEffect(() => {
     if (open) {
       if (importedServices && importedServices.length > 0) {
         setClienteId(importedServices[0].clienteId.toString());
+        setSubClienteId("");
         setTipoImpuesto("FLETE");
 
         const newConceptos: SmartInvoiceConcept[] = importedServices.map(
@@ -178,6 +187,7 @@ export function CreateInvoiceModal({
         setConceptos(newConceptos);
       } else {
         setClienteId("");
+        setSubClienteId("");
         setRazonSocialEditable("");
         setRfcEditable("");
         setCpEditable("");
@@ -199,7 +209,7 @@ export function CreateInvoiceModal({
         ]);
       }
     }
-  }, [importedServices, open, tipoImpuesto]);
+  }, [importedServices, open]);
 
   const fechaVencimiento = useMemo(() => {
     const date = new Date(fechaEmision);
@@ -268,7 +278,6 @@ export function CreateInvoiceModal({
     );
   };
 
-  //  EL RUTEADOR INTELIGENTE
   const handleSubmit = async () => {
     if (
       !clienteId ||
@@ -290,6 +299,7 @@ export function CreateInvoiceModal({
 
     const payload = {
       client_id: Number(clienteId),
+      sub_client_id: subClienteId ? Number(subClienteId) : null, // <-- Vinculación a nivel de base de datos
       cliente: razonSocialEditable,
       cliente_rfc: rfcEditable,
       cp_receptor: cpEditable,
@@ -311,9 +321,7 @@ export function CreateInvoiceModal({
 
     let result;
 
-    // Detectamos si la factura proviene de un viaje de logística (Carta Porte) o es libre
     if (importedServices && importedServices.length > 0) {
-      // CARRIL 1: Factura One-Shot (Factura + Complemento Carta Porte)
       const dataWithTrip = {
         ...payload,
         viaje_id: importedServices[0].id,
@@ -321,17 +329,13 @@ export function CreateInvoiceModal({
       };
       result = await generateOneShotInvoice(dataWithTrip);
     } else {
-      // CARRIL 2: Factura Libre (Ingreso puro)
       result = await generateFreeInvoice(payload);
     }
 
-    // Si hubo éxito, cerramos y disparamos el refresh de la tabla
     if (result) {
-      //  MAGIA: Abrimos el PDF de la factura en una nueva pestaña automáticamente
       if (result.data && result.data.uuid) {
         window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
       }
-
       onSubmit();
       onOpenChange(false);
     }
@@ -361,14 +365,14 @@ export function CreateInvoiceModal({
 
         <div className="flex-1 overflow-y-auto p-6 bg-muted/50 custom-scrollbar space-y-6">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL COMPLETA (CFDI 4.0) */}
+            {/* SECCIÓN CLIENTE E INFORMACIÓN FISCAL COMPLETA */}
             <div className="p-5 border border-border rounded-2xl bg-card shadow-sm space-y-4">
               <h3 className="text-[10px] font-black text-brand-navy dark:text-white uppercase tracking-widest border-b border-border pb-2">
                 Datos del Receptor (Editables para SAT)
               </h3>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Buscador */}
+                {/* Buscador de Cliente Matriz */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                     Buscar Cliente del Catálogo
@@ -384,7 +388,7 @@ export function CreateInvoiceModal({
                       >
                         <span className="truncate">
                           {clienteId
-                            ? "✓ Cliente Seleccionado"
+                            ? `✓ ${clients.find((c) => c.id.toString() === clienteId)?.razon_social || "Cliente Seleccionado"}`
                             : loadingClients
                               ? "Cargando..."
                               : "Seleccionar cliente..."}
@@ -405,6 +409,7 @@ export function CreateInvoiceModal({
                               value={client.razon_social}
                               onSelect={() => {
                                 setClienteId(client.id.toString());
+                                setSubClienteId(""); // <-- Limpia la sucursal anterior al cambiar de matriz principal
                                 setOpenCombobox(false);
                               }}
                               className="font-bold text-xs uppercase cursor-pointer"
@@ -425,6 +430,87 @@ export function CreateInvoiceModal({
                     </PopoverContent>
                   </Popover>
                 </div>
+
+                {/* Selector Dinámico de Sucursales (sub_clients) */}
+                {selectedClient &&
+                  selectedClient.sub_clients &&
+                  selectedClient.sub_clients.length > 0 && (
+                    <div className="space-y-2 mt-1 transition-all">
+                      <Label className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">
+                        Especificar Sub-Cliente / Sucursal (Opcional)
+                      </Label>
+                      <Popover
+                        open={openSubCombobox}
+                        onOpenChange={setOpenSubCombobox}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={openSubCombobox}
+                            className="w-full h-11 justify-between font-bold shadow-sm bg-slate-50 border-slate-200 dark:bg-slate-900/10 text-slate-700 dark:text-slate-300 uppercase overflow-hidden"
+                          >
+                            <span className="truncate">
+                              {subClienteId
+                                ? `✓ Sucursal: ${selectedClient.sub_clients.find((s: any) => s.id.toString() === subClienteId)?.nombre || "Seleccionado"}`
+                                : "Facturar a la Matriz principal"}
+                            </span>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[400px] p-0 border-slate-200 dark:border-white/10 z-[100]">
+                          <Command>
+                            <CommandInput placeholder="Buscar sucursal..." />
+                            <CommandEmpty>
+                              No se encontraron sucursales registradas.
+                            </CommandEmpty>
+                            <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                              <CommandItem
+                                value="matriz-principal-clear-option"
+                                onSelect={() => {
+                                  setSubClienteId("");
+                                  setOpenSubCombobox(false);
+                                }}
+                                className="font-bold text-xs uppercase text-muted-foreground cursor-pointer"
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    subClienteId === ""
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
+                                [ Sin sucursal ]
+                              </CommandItem>
+
+                              {selectedClient.sub_clients.map((sub: any) => (
+                                <CommandItem
+                                  key={sub.id}
+                                  value={sub.nombre} // <-- Utilizando la propiedad 'nombre'
+                                  onSelect={() => {
+                                    setSubClienteId(sub.id.toString());
+                                    setOpenSubCombobox(false);
+                                  }}
+                                  className="font-bold text-xs uppercase cursor-pointer"
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      subClienteId === sub.id.toString()
+                                        ? "opacity-100"
+                                        : "opacity-0",
+                                    )}
+                                  />
+                                  {sub.nombre}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
 
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
@@ -873,6 +959,7 @@ export function CreateInvoiceModal({
                     </div>
                   </div>
 
+                  {/* Fila 2: Cantidades, Costo e Importe calculado */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                     <div className="space-y-1.5 md:col-span-3">
                       <Label className="text-[9px] font-bold text-muted-foreground uppercase">
@@ -928,6 +1015,7 @@ export function CreateInvoiceModal({
           </div>
         </div>
 
+        {/* FOOTER: CALCULADORA DE IMPUESTOS Y ACCIONES */}
         <div className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0 space-y-4 z-10">
           <div className="flex flex-col sm:flex-row items-center justify-between bg-foreground rounded-2xl p-5 text-background shadow-xl ring-4 ring-background gap-4">
             <div className="flex flex-row sm:flex-col gap-4 sm:gap-1 text-xs opacity-80 font-mono font-medium justify-center w-full sm:w-auto">
@@ -998,7 +1086,7 @@ export function CreateInvoiceModal({
                 !clienteId ||
                 montoTotal <= 0 ||
                 loadingClients ||
-                isStamping || //  SE BLOQUEA MIENTRAS TIMBRA
+                isStamping ||
                 !razonSocialEditable ||
                 !rfcEditable ||
                 !cpEditable ||
