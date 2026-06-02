@@ -969,17 +969,12 @@ class CartaPorteService:
         # LÓGICA DE MATERIAL PELIGROSO (REGLAS SAT CARTA PORTE 3.1)
         # =========================================================
         usuario_marco_peligroso = d.get("es_material_peligroso", False)
-        catalogo_peligroso = d.get("catalogo_peligroso", "0,1")
+        catalogo_peligroso = str(d.get("catalogo_peligroso", "0,1")).strip()
 
-        # Evaluamos qué dice el SAT sobre esta clave de producto específica
-        if catalogo_peligroso == "1":
-            es_peligroso_final = True  # El SAT obliga a que sea peligroso
-        elif catalogo_peligroso == "0":
-            es_peligroso_final = False  # El SAT prohíbe que sea peligroso
-        else:
-            es_peligroso_final = usuario_marco_peligroso  # "0,1" -> Decide el usuario
-
-        if es_peligroso_final:
+        if catalogo_peligroso == "1" or (
+            catalogo_peligroso == "0,1" and usuario_marco_peligroso
+        ):
+            # Es peligroso (Obligado por SAT o indicado por el usuario en "0,1")
             cve_mat = str(d.get("cve_material_peligroso", "")).strip()
             embalaje = str(d.get("embalaje", "")).strip()
 
@@ -990,7 +985,13 @@ class CartaPorteService:
                 )
 
             mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_mat}" Embalaje="{embalaje}"'
+
+        elif catalogo_peligroso == "0":
+            # REGLA CP155: Si el catálogo es "0", el atributo NO DEBE EXISTIR en el XML.
+            mat_peligroso = ""
+
         else:
+            # Caso "0,1" pero el usuario indicó que NO es peligroso. El atributo DEBE SER "No".
             mat_peligroso = ' MaterialPeligroso="No"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
