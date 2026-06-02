@@ -13,13 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   Form,
@@ -29,6 +22,19 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Wrench,
   Plus,
@@ -40,8 +46,8 @@ import {
   Home,
   MapPin,
   Save,
-  Receipt,
   Calculator,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -73,7 +79,6 @@ const workOrderSchema = z
       .string()
       .min(5, "Describe el problema (mínimo 5 caracteres)"),
     parts: z.array(partSchema).default([]),
-    // NUEVOS CAMPOS FINANCIEROS
     costo_mano_obra: z.coerce.number().min(0).default(0),
     porcentaje_iva: z.coerce.number().min(0).max(100).default(16),
   })
@@ -116,6 +121,12 @@ export const WorkOrderModal = ({
   const [addingPart, setAddingPart] = useState(false);
   const [selectedSkuId, setSelectedSkuId] = useState("");
   const [partQuantity, setPartQuantity] = useState(1);
+
+  // Estados para los popovers del buscador
+  const [openUnit, setOpenUnit] = useState(false);
+  const [openMechanic, setOpenMechanic] = useState(false);
+  const [openTrip, setOpenTrip] = useState(false);
+  const [openSku, setOpenSku] = useState(false);
 
   const isEditMode = !!orderToEdit;
 
@@ -163,18 +174,15 @@ export const WorkOrderModal = ({
         ) {
           const preLoadedParts: SelectedPart[] = orderToEdit.parts.map(
             (p: any) => {
-              // Intentamos buscar en el inventario cargado
               let invItem = inventory.find((i) => i.id === p.inventory_item_id);
 
-              // Si la pieza ya no existe en catálogo, reconstruimos la pieza visual
-              // con los datos históricos de la orden para que no se desaparezca
               if (!invItem) {
                 invItem = {
                   id: p.inventory_item_id,
                   sku: p.item_sku || `SKU-${p.inventory_item_id}`,
                   descripcion: p.item_descripcion || "Refacción Guardada",
                   precio_unitario: p.costo_unitario_snapshot || 0,
-                  stock_actual: 9999, // Simulamos para evitar alerta falsa de falta de stock al editar
+                  stock_actual: 9999,
                   stock_minimo: 0,
                   categoria: "general" as any,
                 } as InventoryItem;
@@ -203,11 +211,9 @@ export const WorkOrderModal = ({
       setSelectedSkuId("");
       setPartQuantity(1);
     }
-    // Se quitó 'inventory' de las dependencias para evitar que React borre el form si el inventario carga un milisegundo tarde
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, orderToEdit]);
 
-  // Actualizar el array de Zod cuando cambia el estado visual de las refacciones
   useEffect(() => {
     form.setValue(
       "parts",
@@ -218,14 +224,12 @@ export const WorkOrderModal = ({
     );
   }, [selectedParts, form]);
 
-  // Limpiar el viaje si cambia la unidad
   useEffect(() => {
     if (!isEditMode) {
       form.setValue("trip_id", undefined);
     }
   }, [watchUnitId, isEditMode, form]);
 
-  // Filtros Derivados
   const activeTripsForUnit = useMemo(() => {
     if (!watchUnitId || !trips) return [];
     return trips.filter(
@@ -245,7 +249,6 @@ export const WorkOrderModal = ({
     return selectedParts.reduce((sum, p) => sum + p.cantidad, 0);
   }, [selectedParts]);
 
-  // Motor de cálculo financiero en tiempo real (Con o sin refacciones)
   const resumenFinanciero = useMemo(() => {
     const costoRefacciones = selectedParts.reduce((acc, part) => {
       const precio = part.item.precio_unitario || 0;
@@ -256,14 +259,12 @@ export const WorkOrderModal = ({
     const subtotal = costoRefacciones + manoObra;
     const ivaRate = Number(watchIvaRate) || 0;
 
-    // El IVA solo se calcula sobre la mano de obra, las refacciones ya traen IVA en inventario
     const iva = manoObra * (ivaRate / 100);
     const total = subtotal + iva;
 
     return { costoRefacciones, manoObra, subtotal, iva, total };
   }, [selectedParts, watchManoObra, watchIvaRate]);
 
-  // Manejadores de Refacciones
   const handleAddPart = () => {
     const item = inventory.find((i) => i.id.toString() === selectedSkuId);
     if (item && partQuantity > 0) {
@@ -287,12 +288,9 @@ export const WorkOrderModal = ({
     );
   };
 
-  // Submit General Blindado
   const handleFormSubmit = async (data: WorkOrderFormData) => {
     setIsSubmitting(true);
     try {
-      // Forzamos a mapear las partes seleccionadas directamente desde el estado de React
-      // para evitar que React Hook Form envíe un arreglo vacío por desincronización
       const partesAseguradas = selectedParts.map((p) => ({
         inventory_item_id: p.item.id,
         cantidad: p.cantidad,
@@ -302,7 +300,6 @@ export const WorkOrderModal = ({
         ...data,
         parts: partesAseguradas,
         trip_id: data.tipo_mantenimiento === "ruta" ? data.trip_id : null,
-        // Aseguramos que viajen como números
         costo_mano_obra: Number(data.costo_mano_obra) || 0,
         porcentaje_iva: Number(data.porcentaje_iva) || 0,
       };
@@ -375,73 +372,168 @@ export const WorkOrderModal = ({
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* BUSCADOR DE UNIDAD */}
                   <FormField
                     control={form.control}
                     name="unit_id"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col pt-1">
                         <FormLabel variant="brand" required>
                           Unidad Afectada
                         </FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value ? String(field.value) : undefined}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                              <SelectValue placeholder="Seleccionar unidad..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
-                            {unidades.map((unit) => (
-                              <SelectItem
-                                key={unit.id}
-                                value={String(unit.id)}
-                                className="font-bold text-xs uppercase"
+                        <Popover open={openUnit} onOpenChange={setOpenUnit}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openUnit}
+                                className={cn(
+                                  "w-full justify-between h-11 shadow-sm bg-card border-slate-200 dark:border-white/10",
+                                  !field.value && "text-muted-foreground",
+                                )}
                               >
-                                ECO-{unit.numero_economico}{" "}
-                                <span className="text-slate-400 ml-2 font-medium">
-                                  ({unit.marca})
+                                <span className="font-bold text-xs uppercase truncate text-slate-800 dark:text-slate-100">
+                                  {field.value
+                                    ? `ECO-${unidades.find((u) => u.id === field.value)?.numero_economico} (${unidades.find((u) => u.id === field.value)?.marca})`
+                                    : "Seleccionar unidad..."}
                                 </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-full sm:w-[400px] p-0"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput
+                                placeholder="Buscar por número ECO o marca..."
+                                className="uppercase text-xs font-bold"
+                              />
+                              <CommandList className="max-h-60 custom-scrollbar">
+                                <CommandEmpty className="py-6 text-center text-xs font-bold uppercase text-muted-foreground">
+                                  No se encontró ninguna unidad.
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  {unidades.map((unit) => (
+                                    <CommandItem
+                                      key={unit.id}
+                                      value={`ECO-${unit.numero_economico} ${unit.marca}`}
+                                      onSelect={() => {
+                                        form.setValue("unit_id", unit.id, {
+                                          shouldValidate: true,
+                                        });
+                                        setOpenUnit(false);
+                                      }}
+                                      className="font-bold text-xs uppercase cursor-pointer"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          unit.id === field.value
+                                            ? "opacity-100 text-brand-green"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                      ECO-{unit.numero_economico}
+                                      <span className="text-slate-400 ml-2 font-medium">
+                                        ({unit.marca})
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
+                  {/* BUSCADOR DE MECÁNICO */}
                   <FormField
                     control={form.control}
                     name="mechanic_id"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-col pt-1">
                         <FormLabel variant="brand">Mecánico Asignado</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value ? String(field.value) : undefined}
+                        <Popover
+                          open={openMechanic}
+                          onOpenChange={setOpenMechanic}
                         >
-                          <FormControl>
-                            <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                              <SelectValue placeholder="Seleccionar mecánico..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
-                            {mechanics.map((mech) => (
-                              <SelectItem
-                                key={mech.id}
-                                value={String(mech.id)}
-                                className="font-bold text-xs uppercase"
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openMechanic}
+                                className={cn(
+                                  "w-full justify-between h-11 shadow-sm bg-card border-slate-200 dark:border-white/10",
+                                  !field.value && "text-muted-foreground",
+                                )}
                               >
-                                {mech.nombre}{" "}
-                                <span className="text-slate-400 ml-2 font-medium">
-                                  ({mech.especialidad})
+                                <span className="font-bold text-xs uppercase truncate text-slate-800 dark:text-slate-100">
+                                  {field.value
+                                    ? mechanics.find(
+                                        (m) => m.id === field.value,
+                                      )?.nombre
+                                    : "Seleccionar mecánico..."}
                                 </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-full sm:w-[400px] p-0"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput
+                                placeholder="Buscar mecánico..."
+                                className="uppercase text-xs font-bold"
+                              />
+                              <CommandList className="max-h-60 custom-scrollbar">
+                                <CommandEmpty className="py-6 text-center text-xs font-bold uppercase text-muted-foreground">
+                                  No se encontró mecánico.
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  {mechanics.map((mech) => (
+                                    <CommandItem
+                                      key={mech.id}
+                                      value={mech.nombre}
+                                      onSelect={() => {
+                                        form.setValue(
+                                          "mechanic_id",
+                                          mech.id === field.value
+                                            ? null
+                                            : mech.id,
+                                          { shouldValidate: true },
+                                        );
+                                        setOpenMechanic(false);
+                                      }}
+                                      className="font-bold text-xs uppercase cursor-pointer"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          mech.id === field.value
+                                            ? "opacity-100 text-brand-green"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                      {mech.nombre}
+                                      <span className="text-slate-400 ml-2 font-medium">
+                                        ({mech.especialidad})
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -491,50 +583,80 @@ export const WorkOrderModal = ({
                       control={form.control}
                       name="trip_id"
                       render={({ field }) => (
-                        <FormItem className="mt-4 animate-in fade-in slide-in-from-top-2">
+                        <FormItem className="mt-4 flex flex-col pt-1 animate-in fade-in slide-in-from-top-2">
                           <FormLabel
                             variant="brand"
                             className="text-amber-700 dark:text-amber-500"
                           >
                             Vincular al Viaje *
                           </FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={
-                              field.value ? String(field.value) : undefined
-                            }
-                            disabled={!watchUnitId}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-11 border-amber-200 dark:border-amber-800/50 bg-white dark:bg-slate-900">
-                                <SelectValue
-                                  placeholder={
-                                    watchUnitId
-                                      ? "Selecciona el viaje afectado..."
-                                      : "Primero selecciona la Unidad arriba"
-                                  }
+                          <Popover open={openTrip} onOpenChange={setOpenTrip}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openTrip}
+                                  disabled={!watchUnitId}
+                                  className={cn(
+                                    "w-full justify-between h-11 border-amber-200 dark:border-amber-800/50 bg-white dark:bg-slate-900",
+                                    !field.value && "text-muted-foreground",
+                                  )}
+                                >
+                                  <span className="font-bold text-xs uppercase truncate text-slate-800 dark:text-slate-100">
+                                    {field.value
+                                      ? `VIAJE ${activeTripsForUnit.find((t: any) => t.id === field.value)?.public_id || field.value}`
+                                      : watchUnitId
+                                        ? "Selecciona el viaje afectado..."
+                                        : "Primero selecciona la Unidad arriba"}
+                                  </span>
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-full sm:w-[400px] p-0"
+                              align="start"
+                            >
+                              <Command>
+                                <CommandInput
+                                  placeholder="Buscar viaje..."
+                                  className="uppercase text-xs font-bold"
                                 />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
-                              {activeTripsForUnit.length === 0 ? (
-                                <div className="p-2 text-[10px] text-slate-500 text-center font-bold">
-                                  No hay viajes activos para esta unidad
-                                </div>
-                              ) : (
-                                activeTripsForUnit.map((t: any) => (
-                                  <SelectItem
-                                    key={t.id}
-                                    value={String(t.id)}
-                                    className="font-bold text-xs uppercase"
-                                  >
-                                    VIAJE {t.public_id || t.id} - {t.origin} a{" "}
-                                    {t.destination}
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
+                                <CommandList className="max-h-60 custom-scrollbar">
+                                  <CommandEmpty className="py-6 text-center text-xs font-bold uppercase text-muted-foreground">
+                                    No hay viajes activos para esta unidad.
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    {activeTripsForUnit.map((t: any) => (
+                                      <CommandItem
+                                        key={t.id}
+                                        value={`VIAJE ${t.public_id || t.id} ${t.origin} ${t.destination}`}
+                                        onSelect={() => {
+                                          form.setValue("trip_id", t.id, {
+                                            shouldValidate: true,
+                                          });
+                                          setOpenTrip(false);
+                                        }}
+                                        className="font-bold text-xs uppercase cursor-pointer"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            t.id === field.value
+                                              ? "opacity-100 text-amber-600"
+                                              : "opacity-0",
+                                          )}
+                                        />
+                                        VIAJE {t.public_id || t.id} - {t.origin}{" "}
+                                        a {t.destination}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -587,60 +709,103 @@ export const WorkOrderModal = ({
                 {addingPart && (
                   <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 shadow-inner space-y-4 animate-in fade-in slide-in-from-top-2">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="sm:col-span-2 space-y-2">
+                      {/* BUSCADOR DE REFACCIONES */}
+                      <div className="sm:col-span-2 space-y-2 flex flex-col pt-1">
                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                           SKU / Refacción
                         </Label>
-                        <Select
-                          value={selectedSkuId}
-                          onValueChange={setSelectedSkuId}
-                        >
-                          <SelectTrigger className="h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm text-xs font-bold">
-                            <SelectValue placeholder="Seleccionar del inventario..." />
-                          </SelectTrigger>
-                          <SelectContent className="bg-card/95 backdrop-blur-xl border-border">
-                            {availableParts.length === 0 ? (
-                              <div className="p-2 text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest">
-                                No hay refacciones disponibles
-                              </div>
-                            ) : (
-                              availableParts.map((item) => (
-                                <SelectItem
-                                  key={item.id}
-                                  value={item.id.toString()}
-                                  className="text-xs"
-                                >
-                                  <div className="flex items-center justify-between w-full pr-2 gap-4">
-                                    <div className="flex items-center gap-2 truncate">
-                                      <span className="font-mono font-black uppercase text-brand-navy dark:text-blue-400">
-                                        {item.sku}
-                                      </span>
-                                      <span className="text-slate-600 dark:text-slate-400 font-medium truncate hidden sm:inline-block max-w-[150px]">
-                                        {item.descripcion}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      {item.stock_actual <
-                                        item.stock_minimo && (
-                                        <AlertTriangle className="h-3 w-3 text-rose-500" />
-                                      )}
-                                      <span
-                                        className={cn(
-                                          "text-[10px] font-mono font-bold",
-                                          item.stock_actual === 0
-                                            ? "text-rose-500"
-                                            : "text-slate-500",
-                                        )}
-                                      >
-                                        STOCK: {item.stock_actual}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={openSku} onOpenChange={setOpenSku}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openSku}
+                              className={cn(
+                                "w-full justify-between h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 shadow-sm",
+                                !selectedSkuId && "text-muted-foreground",
+                              )}
+                            >
+                              <span className="font-bold text-xs uppercase truncate text-slate-800 dark:text-slate-100">
+                                {selectedSkuId
+                                  ? (() => {
+                                      const i = inventory.find(
+                                        (inv) =>
+                                          String(inv.id) === selectedSkuId,
+                                      );
+                                      return i
+                                        ? `${i.sku} - ${i.descripcion}`
+                                        : "Seleccionar del inventario...";
+                                    })()
+                                  : "Seleccionar del inventario..."}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-full sm:w-[400px] p-0"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput
+                                placeholder="Buscar por SKU o descripción..."
+                                className="uppercase text-xs font-bold"
+                              />
+                              <CommandList className="max-h-60 custom-scrollbar">
+                                <CommandEmpty className="py-6 text-center text-xs font-bold uppercase text-muted-foreground">
+                                  No hay refacciones disponibles.
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  {availableParts.map((item) => (
+                                    <CommandItem
+                                      key={item.id}
+                                      value={`${item.sku} ${item.descripcion}`}
+                                      onSelect={() => {
+                                        setSelectedSkuId(String(item.id));
+                                        setOpenSku(false);
+                                      }}
+                                      className="text-xs cursor-pointer"
+                                    >
+                                      <div className="flex items-center justify-between w-full pr-2 gap-4">
+                                        <div className="flex items-center gap-2 truncate">
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              String(item.id) === selectedSkuId
+                                                ? "opacity-100 text-brand-green"
+                                                : "opacity-0",
+                                            )}
+                                          />
+                                          <span className="font-mono font-black uppercase text-brand-navy dark:text-blue-400">
+                                            {item.sku}
+                                          </span>
+                                          <span className="text-slate-600 dark:text-slate-400 font-medium truncate hidden sm:inline-block max-w-[150px]">
+                                            {item.descripcion}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          {item.stock_actual <
+                                            item.stock_minimo && (
+                                            <AlertTriangle className="h-3 w-3 text-rose-500" />
+                                          )}
+                                          <span
+                                            className={cn(
+                                              "text-[10px] font-mono font-bold",
+                                              item.stock_actual === 0
+                                                ? "text-rose-500"
+                                                : "text-slate-500",
+                                            )}
+                                          >
+                                            STOCK: {item.stock_actual}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">
