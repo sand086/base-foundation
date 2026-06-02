@@ -334,8 +334,11 @@ class BillingService:
         )
 
         # FIX: Extraer el texto si viene atrapado dentro del atributo 'Comentario' del XML
-        match = re.search(r'Comentario=["\'](.*?)["\']', raw_leyenda, re.DOTALL)
-        self.leyenda_legal_db = match.group(1) if match else raw_leyenda
+        match = re.search(
+            r'Comentario=["\'](.*)["\']\s*(?:>|/>|></)', raw_leyenda, re.DOTALL
+        )
+        self.leyenda_legal_db = match.group(1).strip() if match else raw_leyenda
+
         nombre_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"empresa_nombre{self.suffix}")
