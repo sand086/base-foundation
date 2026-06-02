@@ -49,14 +49,14 @@ interface AccountStatementModalProps {
 }
 
 const companyBankData = {
-  razonSocial: "Transportes Rápidos 3T S.A. de C.V.",
-  rfc: "TR3T850101ABC",
+  razonSocial: "Rápidos 3T S.A. de C.V.",
+  rfc: "RTX110624KP5",
   cuentas: [
     {
       banco: "Banorte",
       clabe: "072180000000000001",
       cuenta: "0000000001",
-      titular: "Transportes Rápidos 3T S.A. de C.V.",
+      titular: "Rápidos 3T S.A. de C.V.",
     },
   ],
 };
