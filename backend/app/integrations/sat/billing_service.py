@@ -56,7 +56,7 @@ logger = logging.getLogger("billing.audit")
 DEFAULT_LEYENDA = "Condiciones de prestación de servicios que ampara la CARTA DE PORTE O COMPROBANTE PARA EL TRANSPORTE DE MERCANCÍAS. PRIMERA.- Para los efectos del presente contrato..."
 
 # =========================================================
-#  FIX: MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
+#  MAPEO INTELIGENTE DE ESTADOS SAT (INEGI -> 3 LETRAS)
 # =========================================================
 SAT_ESTADOS_MAP = {
     "01": "AGU",
@@ -343,7 +343,6 @@ class BillingService:
         else:
             texto = raw_leyenda
 
-        # Limpiamos las colas sucias del XML sin importar si le faltaban comillas
         texto = re.sub(r'["\']?\s*></.*?>(.*)$', "", texto, flags=re.IGNORECASE)
         texto = re.sub(r'["\']?\s*/?>\s*$', "", texto)
 
@@ -452,23 +451,20 @@ class BillingService:
 
         config_key = f"folio_actual_{serie}"
 
-        # 1. Buscamos el contador maestro y lo bloqueamos temporalmente para concurrencia
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
-            .with_for_update(of=SystemConfig)  # <--- CON EL FIX APLICADO
+            .with_for_update(of=SystemConfig)
             .first()
         )
 
         if not secuencia:
-            # 2. Si no existe, inicializamos el contador
             nuevo_folio = 1
             secuencia = SystemConfig(
                 key=config_key, value=str(nuevo_folio), grupo="folios", tipo="integer"
             )
             self.db.add(secuencia)
         else:
-            # 3. Si existe, le sumamos 1 y guardamos el nuevo valor
             nuevo_folio = int(secuencia.value) + 1
             secuencia.value = str(nuevo_folio)
 
@@ -529,7 +525,6 @@ class BillingService:
     ) -> dict:
         tarifa = viaje.tariff
 
-        #  FIX: FACTURA SIEMPRE SIN CASETAS. Solo toma la tarifa base pura.
         if tarifa and not is_nominal:
             subtotal = float(tarifa.tarifa_base or 0.0)
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
@@ -552,7 +547,6 @@ class BillingService:
             else "PUBLICO EN GENERAL"
         )
 
-        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: CÓDIGO POSTAL CLIENTE
         cp_cliente_fiscal = (
             str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
         )
@@ -562,7 +556,6 @@ class BillingService:
                 detail=f"Regla SAT CFDI 4.0: El cliente '{nombre_cliente}' DEBE tener su Código Postal Fiscal.",
             )
 
-        #  VALIDACIÓN CRÍTICA SAT CFDI 4.0: RFC CLIENTE
         rfc_cliente = (
             str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
         )
@@ -579,7 +572,6 @@ class BillingService:
         if not cp_destino_fisico:
             cp_destino_fisico = cp_cliente_fiscal
 
-        # EXTRACCIÓN DE DATOS DEL SUBCLIENTE PARA EL PDF
         subcliente_nombre = (
             getattr(subcliente, "razon_social", getattr(subcliente, "nombre", ""))
             if subcliente
@@ -618,7 +610,6 @@ class BillingService:
         tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
         tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
 
-        #  VALIDACIÓN CRÍTICA SAT CP195: OPERADOR
         raw_rfc = getattr(operador, "rfc", "")
         rfc_op_final = (
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
@@ -661,14 +652,12 @@ class BillingService:
             else "01010101"
         )
 
-        # 1. GENERAMOS LA SERIE Y FOLIO PRIMERO PARA EVALUAR LA REGLA
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        # 2. REGLA DE NEGOCIO: SI ES CP, SE FUERZA "FLETE CARGA GENERAL"
         if serie_final.upper().startswith("CP") or str(
             folio_interno
         ).upper().startswith("CP"):
@@ -676,7 +665,6 @@ class BillingService:
             desc_merc_pdf = "FLETE CARGA GENERAL"
             pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
         else:
-            # Si es Factura Libre u otra serie, respetamos lo que viene de la BD
             desc_merc_raw = (
                 "FLETE CARGA GENERAL"
                 if is_nominal
@@ -692,18 +680,10 @@ class BillingService:
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
-        #   MAGIA DE FOLIOS Y SECUENCIADOR
-        serie_final = serie_forzada or "CP"
-        folio_final = (
-            folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
-        )
-
-        #   NUEVO: EXTRACCIÓN DE CONFIGURACIÓN DEL CLIENTE
         c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
         c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
         c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
 
-        # --- EXTRACCIÓN DE MATERIAL PELIGROSO ---
         es_mat_peligroso = getattr(viaje, "es_material_peligroso", False)
         cve_mat_peligroso = (
             str(getattr(viaje, "cve_material_peligroso", "") or "").strip().upper()
@@ -720,11 +700,9 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            #   NUEVO: SE INYECTA LA CONFIGURACIÓN DEL CLIENTE AQUÍ
             "forma_pago": c_forma_pago,
             "metodo_pago": c_metodo_pago,
             "moneda": c_moneda,
-            # 👆 FIN DE LO NUEVO 👆
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": condiciones_pago,
@@ -793,7 +771,6 @@ class BillingService:
             "municipio_destino": municipio_dest,
             "domicilio_origen": origen_real,
             "domicilio_destino": calle_destino_real,
-            # SUBCLIENTE EXTRAS PARA EL PDF
             "subcliente_nombre": subcliente_nombre,
             "subcliente_rfc": subcliente_rfc,
             "subcliente_direccion": subcliente_direccion,
@@ -919,7 +896,6 @@ class BillingService:
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
 
-        # ---> NUEVO: Limpiamos el separador especial para el XML del SAT
         desc_concepto_xml = (
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
@@ -930,7 +906,6 @@ class BillingService:
             .replace(" | ", " - ")
             .replace("|", "-")
         )
-        # <--- FIN NUEVO
 
         rfc_op_final = str(d.get("rfc_operador", "")).strip()
         nombre_op = str(d.get("nombre_operador", "Desconocido"))
@@ -956,17 +931,27 @@ class BillingService:
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
         # ========================================================
-        # NUEVA LÓGICA DE MATERIAL PELIGROSO
+        # FIX: LÓGICA DE MATERIAL PELIGROSO
+        # (Si es 0, ignorar; si es 1, validar obligatoriamente claves)
         # ========================================================
         is_peligroso = d.get("es_material_peligroso")
 
         # El SAT exige estrictamente "Sí" o "No"
         if is_peligroso in [True, "true", "1", "Sí", "Si"]:
-            cve_onu = d.get("cve_material_peligroso", "")
-            emb = d.get("embalaje", "")
+            cve_onu = str(d.get("cve_material_peligroso", "")).strip()
+            emb = str(d.get("embalaje", "")).strip()
+
+            # Validación OBLIGATORIA si marcaron el viaje con 1
+            if not cve_onu or not emb:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Regla SAT: Marcaste el viaje con Material Peligroso (1), debes especificar la Clave de Material Peligroso (ONU) y el Tipo de Embalaje.",
+                )
+
             # Insertamos los 3 atributos requeridos obligatorios
             mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_onu}" Embalaje="{emb}"'
         else:
+            # Si es falso, 0 o No, simplemente no consideramos las demás claves y forzamos el 'No'
             mat_peligroso = ' MaterialPeligroso="No"'
         # ========================================================
 
@@ -1124,7 +1109,6 @@ class BillingService:
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
-            # FIX INYECTADO: Asegurarnos de que pase la variable limpiada a la plantilla
             "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
         }
 
@@ -1146,8 +1130,6 @@ class BillingService:
             invoice_data.viaje_id, usar_tramo_final=True
         )
 
-        #  BLINDAJE: Buscamos la Carta Porte (is_nominal=True) directamente en la BD
-        # Esto evita que se pierda si el router o Pydantic no lo envían bien.
         carta_porte = (
             self.db.query(ReceivableInvoice)
             .filter(
@@ -1159,7 +1141,6 @@ class BillingService:
             .first()
         )
 
-        # Obtenemos el UUID de la Carta Porte
         uuid_relacionado_real = (
             carta_porte.uuid
             if carta_porte
@@ -1178,7 +1159,6 @@ class BillingService:
             folio_forzado=getattr(invoice_data, "folio_forzado", None),
         )
 
-        # Le pasamos el UUID detectado al motor del SAT
         resultado_pac = self._importar_comprobante_ws(
             data, relacion_uuid=uuid_relacionado_real
         )
@@ -1186,7 +1166,6 @@ class BillingService:
         monto_total = Decimal(str(_clean_float(data["total"])))
 
         try:
-            # FIX ANTI-DUPLICADOS: Buscamos la provisional y la ACTUALIZAMOS
             factura = (
                 self.db.query(ReceivableInvoice)
                 .filter(
@@ -1204,11 +1183,8 @@ class BillingService:
             uuid_generado = getattr(resultado_pac, "uuid", None)
 
             if factura:
-                # Si existe, la reciclamos y le INYECTAMOS TODO
                 factura.uuid = uuid_generado
-                factura.uuid_relacionado = (
-                    uuid_relacionado_real  #  GUARDAMOS EL UUID REAL
-                )
+                factura.uuid_relacionado = uuid_relacionado_real
                 factura.status_sat = "TIMBRADA"
                 factura.concepto = data["descripcion_concepto"]
                 factura.monto_total = monto_total
@@ -1218,7 +1194,6 @@ class BillingService:
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
 
-                #  INYECCIÓN DE LOS CAMPOS FALTANTES
                 factura.sub_client_id = viaje.sub_client_id
                 factura.metodo_pago = data.get("metodo_pago", "PPD")
                 factura.forma_pago = data.get("forma_pago", "99")
@@ -1229,7 +1204,6 @@ class BillingService:
                     factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
                     factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
             else:
-                # Fallback por si algo falló y no existe provisional
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
                     folio_interno=data.get("folio_interno"),
@@ -1330,7 +1304,6 @@ class BillingService:
                 factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
                 factura.fecha_emision = date.today()
 
-                #  INYECCIÓN DE LOS CAMPOS FALTANTES
                 factura.sub_client_id = viaje.sub_client_id
                 factura.metodo_pago = data.get("metodo_pago", "PPD")
                 factura.forma_pago = data.get("forma_pago", "99")
@@ -1343,7 +1316,7 @@ class BillingService:
             else:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,  #  INYECTADO
+                    sub_client_id=viaje.sub_client_id,
                     folio_interno=data.get("folio_interno"),
                     viaje_id=viaje.id,
                     uuid=uuid_generado,
@@ -1358,9 +1331,7 @@ class BillingService:
                     retenciones=Decimal(str(_clean_float(data["retenciones"]))),
                     moneda="MXN",
                     fecha_emision=date.today(),
-                    fecha_vencimiento=date.today()
-                    + timedelta(days=dias_credito),  #  INYECTADO
-                    #  INYECCIÓN DE LOS CAMPOS FALTANTES
+                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",
@@ -1468,9 +1439,6 @@ class BillingService:
             "resultados": resultados,
         }
 
-    # =========================================================
-    # FIX: MÉTODOS DE FACTURA LIBRE CORREGIDOS Y COMPATIBILIZADOS
-    # =========================================================
     def timbrar_factura_existente(self, invoice_id: int):
         from app.models.models import ReceivableInvoice
         import base64
@@ -1478,7 +1446,6 @@ class BillingService:
         from cryptography import x509
         from cryptography.hazmat.backends import default_backend
 
-        # 1. Recuperar la factura PROVISIONAL de la BD
         factura = (
             self.db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.id == invoice_id)
@@ -1490,20 +1457,18 @@ class BillingService:
             )
 
         if factura.status_sat == "TIMBRADA" and factura.uuid:
-            return factura  # Ya estaba timbrada por error de doble clic
+            return factura
 
         cliente = factura.client
         if not cliente:
             raise ValueError("La factura no tiene un cliente asociado.")
 
-        # 2. Extraer el folio limpio (ej: si es F-123, sacar 123)
         folio_str = (
             str(factura.folio_interno).split("-")[-1]
             if factura.folio_interno and "-" in str(factura.folio_interno)
             else str(factura.id)
         )
 
-        # 3. Construir el diccionario HÍBRIDO (Sirve para XML Libre y para Plantilla PDF)
         fecha = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         d = {
             "client_id": cliente.id,
@@ -1522,12 +1487,10 @@ class BillingService:
             ),
             "metodo_pago": factura.metodo_pago or "PPD",
             "forma_pago": factura.forma_pago or "99",
-            # Formatos variables para el armador XML
             "cliente_rfc": cliente.rfc,
             "cliente": cliente.razon_social,
             "cp_receptor": cliente.codigo_postal_fiscal,
             "regimen_fiscal_receptor": cliente.regimen_fiscal or "601",
-            # Formatos variables obligatorios para tu Plantilla PDF existente
             "rfc_cliente": cliente.rfc,
             "nombre_cliente": cliente.razon_social,
             "cp_cliente": cliente.codigo_postal_fiscal,
@@ -1550,7 +1513,6 @@ class BillingService:
             "leyenda_legal": self.leyenda_legal_db,
         }
 
-        # 4. Armar y sellar el XML
         xml_base = self._armar_xml_ingreso_libre(d, folio_str, fecha)
 
         with open(self.path_cer, "rb") as f:
@@ -1571,7 +1533,6 @@ class BillingService:
             "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
         )
 
-        # 5. Enviar a Timbrar al PAC
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
             result = client_zeep.service.timbrar(
@@ -1591,10 +1552,8 @@ class BillingService:
                 raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
             )
 
-            # Guardar el XML fisicamente en el Servidor
             self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
 
-            # 6. Generar el PDF y el QR (Para poder descargarlo en el Frontend)
             try:
                 from io import BytesIO
 
@@ -1630,7 +1589,6 @@ class BillingService:
                     buffer, format="PNG"
                 )
 
-                # Reutilizamos tu plantilla de diseño de factura
                 self._generar_pdf_con_diseno(
                     d,
                     uuid_timbrado,
@@ -1646,7 +1604,6 @@ class BillingService:
                     f"El XML se timbró pero falló el diseño del PDF de la factura libre: {e}"
                 )
 
-            # 7. Actualizar la base de datos
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"
             factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
@@ -1663,23 +1620,19 @@ class BillingService:
             raise ValueError(f"Fallo en timbrado SAT: {str(e)}")
 
     def generar_factura_libre(self, d: dict):
-        """Genera y timbra una factura de Ingreso Pura (Sin Carta Porte) One Shot"""
         from datetime import date
         from decimal import Decimal
         import base64
         import zeep
         from cryptography import x509
 
-        # 1. Variables básicas y Secuenciador
         folio_real = self._get_y_avanzar_folio("F")
         folio_int = f"F-{folio_real}"
         fecha = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # 2. Armar XML limpio (Sin complementos)
         xml_base = self._armar_xml_ingreso_libre(d, str(folio_real), fecha)
         d["folio_interno"] = folio_int
 
-        # 3. Sellar el XML
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data)
@@ -1696,7 +1649,6 @@ class BillingService:
             "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
         )
 
-        # 4. Enviar a Timbrar al PAC
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
             result = client_zeep.service.timbrar(
@@ -1716,12 +1668,8 @@ class BillingService:
                 raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
             )
 
-            # Guardar XML
             self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
 
-            # ---------------------------------------------------------
-            # FIX: GENERACIÓN DE PDF PARA FACTURAS ONE-SHOT
-            # ---------------------------------------------------------
             try:
                 from io import BytesIO
 
@@ -1756,7 +1704,6 @@ class BillingService:
                     buffer, format="PNG"
                 )
 
-                # Inyectamos variables necesarias a d para la plantilla
                 d["folio"] = str(folio_real)
                 d["fecha"] = fecha
                 d["total"] = total_float
@@ -1781,12 +1728,11 @@ class BillingService:
                     f"Fallo el diseño del PDF de la factura libre (one-shot): {e}"
                 )
 
-            # 5. Guardar en Base de Datos como "Factura Libre"
             from app.models.models import ReceivableInvoice
 
             factura = ReceivableInvoice(
                 client_id=d.get("client_id"),
-                viaje_id=None,  # ES FACTURA LIBRE
+                viaje_id=None,
                 folio_interno=d.get("folio_interno"),
                 uuid=uuid_timbrado,
                 is_nominal=False,
@@ -1828,16 +1774,13 @@ class BillingService:
         total_iva = 0.0
         total_ret = 0.0
 
-        # Determinamos si lleva retención global (esto te ayuda a aplicarla renglón por renglón)
         tiene_retencion = float(d.get("retenciones", 0)) > 0
 
-        # Iteramos los conceptos que lleguen del Frontend (los que sean)
         for c in d.get("conceptos", []):
             importe_concepto = float(c["importe"])
             precio_unitario = float(c.get("precioUnitario", c["importe"]))
             cantidad = float(c.get("cantidad", 1.0))
 
-            # Cálculos exactos al centavo
             iva_renglon = importe_concepto * 0.16
             ret_renglon = importe_concepto * 0.04 if tiene_retencion else 0.0
 
@@ -1845,13 +1788,11 @@ class BillingService:
             total_iva += iva_renglon
             total_ret += ret_renglon
 
-            # Escape de caracteres especiales XML (Si meten un "&" o "<" no truena)
             desc_raw = (
                 str(c.get("descripcion", "")).replace(" | ", " - ").replace("|", "-")
             )
             desc_limpia = html.escape(desc_raw)
 
-            # Armado de impuestos por concepto (Base EXACTA)
             impuestos_xml = f'<cfdi:Impuestos><cfdi:Traslados><cfdi:Traslado Base="{importe_concepto:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_renglon:.2f}" /></cfdi:Traslados>'
 
             if tiene_retencion:
@@ -1865,21 +1806,16 @@ class BillingService:
 
             conceptos_xml += f'<cfdi:Concepto ClaveProdServ="{clave_prod}" NoIdentificacion="{no_id}" Cantidad="{cantidad:.6f}" ClaveUnidad="{clave_uni}" Unidad="UNIDAD" Descripcion="{desc_limpia}" ValorUnitario="{precio_unitario:.2f}" Importe="{importe_concepto:.2f}" ObjetoImp="02">{impuestos_xml}</cfdi:Concepto>'
 
-        # Matemáticas globales blindadas (CFDI 4.0 exige que todo cuadre perfecto)
         total_total = total_subtotal + total_iva - total_ret
 
-        # Limpiamos nombres de cliente y emisor por si traen caracteres raros
         emisor_nombre = html.escape(self.emisor_nombre)
         cliente_nombre = html.escape(str(d.get("cliente", "")))
 
-        # Bloque de Impuestos Globales agrupado
         if total_ret > 0:
             imp_global = f'<cfdi:Impuestos TotalImpuestosRetenidos="{total_ret:.2f}" TotalImpuestosTrasladados="{total_iva:.2f}"><cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{total_ret:.2f}" /></cfdi:Retenciones><cfdi:Traslados><cfdi:Traslado Base="{total_subtotal:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{total_iva:.2f}" /></cfdi:Traslados></cfdi:Impuestos>'
         else:
             imp_global = f'<cfdi:Impuestos TotalImpuestosTrasladados="{total_iva:.2f}"><cfdi:Traslados><cfdi:Traslado Base="{total_subtotal:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{total_iva:.2f}" /></cfdi:Traslados></cfdi:Impuestos>'
 
-        # IMPORTANTE: Reemplazamos los valores en `d` para que la Base de Datos guarde EXACTAMENTE
-        # lo mismo que dice el XML (evita descuadres de centavos)
         d["subtotal"] = f"{total_subtotal:.2f}"
         d["iva"] = f"{total_iva:.2f}"
         d["retenciones"] = f"{total_ret:.2f}"
@@ -1898,7 +1834,6 @@ class BillingService:
         import qrcode
         from lxml import etree
 
-        # 1. Buscar la factura
         factura = (
             self.db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.id == invoice_id)
@@ -1909,7 +1844,6 @@ class BillingService:
 
         uuid_timbrado = factura.uuid
 
-        # 2. Leer el XML sellado directamente del disco
         xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
         if not xml_path.exists():
             raise ValueError(f"No se encontró el archivo XML físico en {xml_path}")
@@ -1917,7 +1851,6 @@ class BillingService:
         with open(xml_path, "rb") as f:
             cfdi_bytes = f.read()
 
-        # 3. Extraer los datos criptográficos y sellos del SAT desde el XML
         root = etree.fromstring(cfdi_bytes)
         ns = {
             "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -1939,7 +1872,6 @@ class BillingService:
 
         total_float = float(factura.monto_total or 0.0)
 
-        # Procesar cantidad con letra
         if HAS_NUM2WORDS:
             entero = int(total_float)
             decimales = int(round((total_float - entero) * 100))
@@ -1952,7 +1884,6 @@ class BillingService:
         else:
             importe_letra = f"({total_float:,.2f} MXN)"
 
-        # 4. Reconstruir el código QR
         cliente = factura.client
         rfc_cliente = cliente.rfc if cliente else "XAXX010101000"
         qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={rfc_cliente}&tt={total_float:.2f}&fe={s_emi[-8:]}"
@@ -1962,9 +1893,7 @@ class BillingService:
         buffer = BytesIO()
         qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
 
-        # 5. Armar el diccionario para inyectar en la plantilla PDF
         if factura.viaje_id:
-            # Reconstruir PDF de Carta Porte / Viaje
             viaje, cliente_v, unidad, operador, r1, r2 = self._obtener_datos_completos(
                 factura.viaje_id, usar_tramo_final=True
             )
@@ -1983,13 +1912,11 @@ class BillingService:
                     else None
                 ),
             )
-            # Aseguramos los montos reales
             d["subtotal"] = f"{float(factura.subtotal or 0.0):.2f}"
             d["iva"] = f"{float(factura.iva or 0.0):.2f}"
             d["retenciones"] = f"{float(factura.retenciones or 0.0):.2f}"
             d["total"] = f"{total_float:.2f}"
         else:
-            # Reconstruir PDF de Factura Libre
             folio_str = (
                 str(factura.folio_interno).split("-")[-1]
                 if factura.folio_interno and "-" in str(factura.folio_interno)
@@ -2024,7 +1951,6 @@ class BillingService:
                     if cliente and getattr(cliente, "dias_credito", 0) > 0
                     else "CONTADO"
                 ),
-                # Nombres de variables fijos que pide el template PDF
                 "rfc_cliente": rfc_cliente,
                 "nombre_cliente": cliente.razon_social if cliente else "",
                 "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
@@ -2048,7 +1974,6 @@ class BillingService:
                 ),
             }
 
-        # 6. Ejecutar el generador para SOBREESCRIBIR el archivo físico
         self._generar_pdf_con_diseno(
             d,
             uuid_timbrado,
