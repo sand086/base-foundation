@@ -193,7 +193,7 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "descripcion", label: "Descripción" },
     ],
   },
-  /*   {
+  {
     id: "sat-hazardous-materials",
     endpoint: "sat-hazardous-materials",
     name: "Materiales Peligrosos",
@@ -203,7 +203,7 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "descripcion", label: "Descripción" },
       { key: "clase_div", label: "Clase Div" },
     ],
-  }, */
+  },
   {
     id: "sat-stations",
     endpoint: "sat-stations",
