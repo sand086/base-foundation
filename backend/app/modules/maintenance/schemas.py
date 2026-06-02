@@ -61,7 +61,6 @@ class InventoryItemUpdate(ORMBase):
     descripcion: Optional[str] = Field(default=None, max_length=200)
     categoria: Optional[InventoryCategory] = None
 
-    # --- ESCUDO: Fuerza minúsculas al actualizar ---
     @field_validator("categoria", mode="before")
     @classmethod
     def force_lowercase(cls, value):
@@ -74,6 +73,8 @@ class InventoryItemUpdate(ORMBase):
 
     ubicacion: Optional[str] = Field(default=None, max_length=100)
     precio_unitario: Optional[float] = None
+
+    proveedor_id: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
 
