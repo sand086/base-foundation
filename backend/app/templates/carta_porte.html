@@ -180,20 +180,40 @@
         <table class="grid-table">
           <tr>
             <td width="25%">
-              <span class="grid-label">Uso CFDI</span
-              ><span class="text-dark">{{ uso_cfdi }}</span>
+              <span class="grid-label">Uso CFDI</span>
+              <span class="text-dark">
+                {{ uso_cfdi }} {% if uso_cfdi == 'G01' %}(Adquisición de
+                mercancías) {% elif uso_cfdi == 'G02' %}(Devoluciones,
+                descuentos o bonificaciones) {% elif uso_cfdi == 'G03' %}(Gastos
+                en general) {% elif uso_cfdi == 'I04' %}(Equipo de computo y
+                accesorios) {% elif uso_cfdi == 'I08' %}(Otra maquinaria y
+                equipo) {% elif uso_cfdi == 'P01' %}(Por definir) {% elif
+                uso_cfdi == 'S01' %}(Sin efectos fiscales) {% elif uso_cfdi ==
+                'CP01' %}(Pagos) {% endif %}
+              </span>
             </td>
             <td width="30%">
-              <span class="grid-label">Método de Pago</span
-              ><span class="text-dark">{{ metodo_pago }}</span>
+              <span class="grid-label">Método de Pago</span>
+              <span class="text-dark">
+                {{ metodo_pago }} {% if metodo_pago == 'PUE' %}(Pago en una sola
+                exhibición) {% elif metodo_pago == 'PPD' %}(Pago en
+                parcialidades o diferido) {% endif %}
+              </span>
             </td>
             <td width="20%">
-              <span class="grid-label">Moneda</span
-              ><span class="bold text-dark">{{ moneda }}</span>
+              <span class="grid-label">Moneda</span>
+              <span class="bold text-dark">{{ moneda }}</span>
             </td>
             <td width="25%">
-              <span class="grid-label">Forma de Pago</span
-              ><span class="text-dark">{{ forma_pago }}</span>
+              <span class="grid-label">Forma de Pago</span>
+              <span class="text-dark">
+                {{ forma_pago }} {% if forma_pago == '01' %}(Efectivo) {% elif
+                forma_pago == '02' %}(Cheque nominativo) {% elif forma_pago ==
+                '03' %}(Transferencia electrónica de fondos) {% elif forma_pago
+                == '04' %}(Tarjeta de crédito) {% elif forma_pago == '28'
+                %}(Tarjeta de débito) {% elif forma_pago == '99' %}(Por definir)
+                {% endif %}
+              </span>
             </td>
           </tr>
         </table>
@@ -459,7 +479,7 @@
 
       <div class="addenda-box">
         <span class="bold text-dark">Addenda:</span><br />
-        {{ leyenda_legal }}
+        {{ leyenda_legal | striptags }}
       </div>
     </main>
   </body>

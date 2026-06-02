@@ -343,6 +343,17 @@ class CartaPorteService:
             .filter_by(key=f"empresa_rfc{self.suffix}")
             .first()
         )
+
+        leyenda_conf = (
+            self.db.query(SystemConfig)
+            .filter_by(key=f"sat_leyenda_legal{self.suffix}")
+            .first()
+        )
+        self.leyenda_legal_db = (
+            leyenda_conf.value
+            if leyenda_conf and leyenda_conf.value
+            else DEFAULT_LEYENDA
+        )
         nombre_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"empresa_nombre{self.suffix}")
@@ -759,7 +770,7 @@ class CartaPorteService:
             "subcliente_direccion": subcliente_direccion,
             "subcliente_telefono": subcliente_telefono,
             "subcliente_correo": subcliente_correo,
-            "leyenda_legal": DEFAULT_LEYENDA,
+            "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,
             "contenedor_1": getattr(viaje, "contenedor_1", "") or "N/A",
             "contenedor_2": getattr(viaje, "contenedor_2", "") or "N/A",
