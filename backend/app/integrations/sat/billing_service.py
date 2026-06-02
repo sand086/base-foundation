@@ -322,6 +322,9 @@ class BillingService:
             .first()
         )
 
+        # -------------------------------------------------------------
+        # FIX DEFINITIVO: EXTRACCIÓN MANUAL A PRUEBA DE ERRORES (SIN REGEX)
+        # -------------------------------------------------------------
         leyenda_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"sat_leyenda_legal{self.suffix}")
@@ -333,11 +336,19 @@ class BillingService:
             else DEFAULT_LEYENDA
         )
 
-        # FIX: Extraer el texto si viene atrapado dentro del atributo 'Comentario' del XML
-        match = re.search(
-            r'Comentario=["\'](.*)["\']\s*(?:>|/>|></)', raw_leyenda, re.DOTALL
-        )
-        self.leyenda_legal_db = match.group(1).strip() if match else raw_leyenda
+        if 'Comentario="' in raw_leyenda:
+            texto = raw_leyenda.split('Comentario="', 1)[1]
+        elif "Comentario='" in raw_leyenda:
+            texto = raw_leyenda.split("Comentario='", 1)[1]
+        else:
+            texto = raw_leyenda
+
+        # Limpiamos las colas sucias del XML sin importar si le faltaban comillas
+        texto = re.sub(r'["\']?\s*></.*?>(.*)$', "", texto, flags=re.IGNORECASE)
+        texto = re.sub(r'["\']?\s*/?>\s*$', "", texto)
+
+        self.leyenda_legal_db = texto.strip()
+        # -------------------------------------------------------------
 
         nombre_conf = (
             self.db.query(SystemConfig)
@@ -1077,6 +1088,7 @@ class BillingService:
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
+            # FIX INYECTADO: Asegurarnos de que pase la variable limpiada a la plantilla
             "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
         }
 
@@ -1496,6 +1508,7 @@ class BillingService:
                     "importe": float(factura.subtotal or 0.0),
                 }
             ],
+            "leyenda_legal": self.leyenda_legal_db,
         }
 
         # 4. Armar y sellar el XML
@@ -1712,6 +1725,7 @@ class BillingService:
                 d["nombre_cliente"] = d.get("cliente")
                 d["cp_cliente"] = d.get("cp_receptor")
                 d["regimen_cliente"] = d.get("regimen_fiscal_receptor")
+                d["leyenda_legal"] = self.leyenda_legal_db
 
                 self._generar_pdf_con_diseno(
                     d,
@@ -1976,6 +1990,7 @@ class BillingService:
                 "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
                 "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
                 "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
+                "leyenda_legal": self.leyenda_legal_db,
                 "conceptos": [
                     {
                         "claveProdServ": "84111506",

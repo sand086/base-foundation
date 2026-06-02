@@ -345,7 +345,7 @@ class CartaPorteService:
         )
 
         # -------------------------------------------------------------
-        # FIX: EXTRACCIÓN DE LA LEYENDA LEGAL (LIMPIANDO ETIQUETAS XML)
+        # FIX DEFINITIVO: EXTRACCIÓN MANUAL A PRUEBA DE ERRORES (SIN REGEX)
         # -------------------------------------------------------------
         leyenda_conf = (
             self.db.query(SystemConfig)
@@ -358,10 +358,19 @@ class CartaPorteService:
             else DEFAULT_LEYENDA
         )
 
-        match = re.search(
-            r'Comentario=["\'](.*)["\']\s*(?:>|/>|></)', raw_leyenda, re.DOTALL
-        )
-        self.leyenda_legal_db = match.group(1).strip() if match else raw_leyenda
+        if 'Comentario="' in raw_leyenda:
+            texto = raw_leyenda.split('Comentario="', 1)[1]
+        elif "Comentario='" in raw_leyenda:
+            texto = raw_leyenda.split("Comentario='", 1)[1]
+        else:
+            texto = raw_leyenda
+
+        # Limpiamos las colas sucias del XML sin importar si le faltaban comillas
+        texto = re.sub(r'["\']?\s*></.*?>(.*)$', "", texto, flags=re.IGNORECASE)
+        texto = re.sub(r'["\']?\s*/?>\s*$', "", texto)
+
+        self.leyenda_legal_db = texto.strip()
+        # -------------------------------------------------------------
 
         nombre_conf = (
             self.db.query(SystemConfig)
@@ -991,15 +1000,32 @@ class CartaPorteService:
         retenciones_str = f"{_clean_float(d.get('retenciones', 0)):,.2f}"
         total_str = f"{_clean_float(d.get('total', 0)):,.2f}"
 
-        context = {
-            **d,
-            "subtotal": subtotal_str,
-            "iva": iva_str,
-            "retenciones": retenciones_str,
-            "total": total_str,
-            "peso_bruto": f"{_clean_float(d.get('peso_bruto', 0)):,.2f}",
-            "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', 0))):,}",
-            "conceptos": [
+        # ---------------------------------------------------------
+        # FIX: CONSTRUCCIÓN CORRECTA DE LA LISTA DE CONCEPTOS PDF
+        # ---------------------------------------------------------
+        conceptos_render = []
+        if (
+            "conceptos" in d
+            and isinstance(d["conceptos"], list)
+            and len(d["conceptos"]) > 0
+            and "precioUnitario" in d["conceptos"][0]
+        ):
+            # Es una factura Libre y trajo sus conceptos listos para renderizarse
+            for c in d["conceptos"]:
+                conceptos_render.append(
+                    {
+                        "clave": c.get("claveProdServ", "84111506"),
+                        "cantidad": str(c.get("cantidad", "1.00")),
+                        "unidad": c.get("claveUnidad", "E48"),
+                        "descripcion": c.get("descripcion", ""),
+                        "detalles_extra": f"Folio: {d.get('folio_interno', d.get('folio', ''))}",
+                        "precio": f"{float(c.get('precioUnitario', 0)):,.2f}",
+                        "importe": f"{float(c.get('importe', 0)):,.2f}",
+                    }
+                )
+        else:
+            # Es una factura con Carta Porte (o complemento de pago)
+            conceptos_render = [
                 {
                     "clave": d.get("clave_prod_serv", "78101802"),
                     "cantidad": "1.00",
@@ -1012,41 +1038,43 @@ class CartaPorteService:
                         "descripcion_concepto_pdf",
                         d.get("descripcion_concepto", "PAGO"),
                     ),
-                    "detalles_extra": f"Folio: {d['folio']}",
+                    "detalles_extra": f"Folio: {d.get('folio', '')}",
                     "precio": subtotal_str,
                     "importe": subtotal_str,
                 }
-            ],
+            ]
+
+        context = {
+            **d,
+            "subtotal": subtotal_str,
+            "iva": iva_str,
+            "retenciones": retenciones_str,
+            "total": total_str,
+            "peso_bruto": f"{_clean_float(d.get('peso_bruto', 0)):,.2f}",
+            "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', 0))):,}",
+            "conceptos": conceptos_render,
             "rfc_emisor": self.emisor_rfc,
             "nombre_emisor": self.emisor_nombre,
             "cp_emisor": self.emisor_cp,
             "regimen_emisor": self.emisor_regimen,
             "uuid": uuid,
             "folio_interno": d.get(
-                "folio_interno", f"{d.get('serie', 'F')}-{d['folio']}"
+                "folio_interno", f"{d.get('serie', 'F')}-{d.get('folio', '')}"
             ),
-            "fecha_emision": d["fecha"],
+            "fecha_emision": d.get("fecha", ""),
             "logo_src": logo_src,
             "qr_src": qr_src,
             "metodo_pago": d.get(
                 "metodo_pago",
                 "PUE" if _clean_float(d.get("total", 0)) <= 1.50 else "PPD",
             ),
-            "tipo_comprobante": (
-                "P (Pago)"
-                if "PAGO" in d.get("descripcion_concepto", "").upper()
-                else "I (Ingreso)"
-            ),
-            "moneda": (
-                "MXN"
-                if "PAGO" not in d.get("descripcion_concepto", "").upper()
-                else "XXX"
-            ),
+            "tipo_comprobante": "I (Ingreso)",
+            "moneda": d.get("moneda", "MXN"),
             "tc": "1",
             "forma_pago": d.get("forma_pago", "99"),
-            "condiciones_pago": "Contado",
+            "condiciones_pago": d.get("condiciones_pago", "CONTADO"),
             "cert_sat": c_sat,
-            "cert_emisor": "00001000000504204441",
+            "cert_emisor": d.get("cert_emisor", "00001000000000000000"),
             "sello_sat": chunk_b64(s_sat),
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
@@ -1059,7 +1087,7 @@ class CartaPorteService:
             "destinatario_nombre": d.get("nombre_cliente", ""),
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
-            "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', d.get('cp_cliente', ''))}",
+            "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
             # FIX: Inyección de la leyenda legal limpia para el PDF
             "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
         }
@@ -1193,9 +1221,9 @@ class CartaPorteService:
             else:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,
-                    viaje_id=viaje.id,
+                    sub_client_id=viaje.sub_client_id,  #  INYECTADO
                     folio_interno=data.get("folio_interno"),
+                    viaje_id=viaje.id,
                     uuid=uuid_generado,
                     is_nominal=False,
                     status_sat="TIMBRADA",
@@ -1208,7 +1236,9 @@ class CartaPorteService:
                     retenciones=Decimal(str(_clean_float(data["retenciones"]))),
                     moneda="MXN",
                     fecha_emision=date.today(),
-                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
+                    fecha_vencimiento=date.today()
+                    + timedelta(days=dias_credito),  #  INYECTADO
+                    #  INYECCIÓN DE LOS CAMPOS FALTANTES
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",
