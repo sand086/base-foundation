@@ -670,15 +670,28 @@ class CartaPorteService:
         if c2 and c2 not in ["N/A", "S/R"]:
             cont_str += f" / {c2}"
 
-        clave_servicio_flete = "78101802"
+        # Extraemos la clave dinámica del Viaje
+        clave_servicio_flete = (
+            getattr(viaje, "sat_clave_servicio", "78101802") or "78101802"
+        )
+        clave_mercancia_final = (
+            getattr(viaje, "sat_clave_producto", "01010101") or "01010101"
+        )
 
         # =========================================================
-        # BLINDAJE EXTREMO: MERCANCÍA DEL COMPLEMENTO (CARTA PORTE)
+        # CONSULTA AL CATÁLOGO SAT PARA MATERIAL PELIGROSO
         # =========================================================
-        # Obligamos a que la mercancía física en la Carta Porte sea "01010101".
-        # Esto anula cualquier error de catálogo SAT (Material Peligroso #CP155).
+        from app.models.models import SatProduct
 
-        clave_mercancia_final = "01010101"
+        producto_sat = (
+            self.db.query(SatProduct)
+            .filter(SatProduct.clave == clave_mercancia_final)
+            .first()
+        )
+        # Extraemos el valor oficial del catálogo (0, 1, o "0,1"). Si no existe, por seguridad asumimos "0,1"
+        catalogo_peligroso = (
+            producto_sat.es_material_peligroso if producto_sat else "0,1"
+        )
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
@@ -752,8 +765,14 @@ class CartaPorteService:
                 if viaje and viaje.peso_toneladas
                 else "1000.00"
             ),
-            # ATENCIÓN AQUÍ: La mercancía transportada será siempre la permitida genérica
             "bienes_transp": clave_mercancia_final,
+            # EXTRAEMOS DATOS DE MATERIAL PELIGROSO
+            "es_material_peligroso": getattr(viaje, "es_material_peligroso", False),
+            "catalogo_peligroso": str(
+                catalogo_peligroso
+            ).strip(),  # <--- AÑADIMOS EL DATO DEL SAT
+            "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
+            "embalaje": getattr(viaje, "embalaje", ""),
             "descripcion_mercancia": desc_merc_raw,
             "descripcion_mercancia_pdf": desc_merc_pdf,
             "permiso_sct": (
@@ -946,8 +965,33 @@ class CartaPorteService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
-        # BLINDAJE FINAL: Declaramos Material Peligroso como "No" porque inyectamos "01010101"
-        mat_peligroso = ' MaterialPeligroso="No"'
+        # =========================================================
+        # LÓGICA DE MATERIAL PELIGROSO (REGLAS SAT CARTA PORTE 3.1)
+        # =========================================================
+        usuario_marco_peligroso = d.get("es_material_peligroso", False)
+        catalogo_peligroso = d.get("catalogo_peligroso", "0,1")
+
+        # Evaluamos qué dice el SAT sobre esta clave de producto específica
+        if catalogo_peligroso == "1":
+            es_peligroso_final = True  # El SAT obliga a que sea peligroso
+        elif catalogo_peligroso == "0":
+            es_peligroso_final = False  # El SAT prohíbe que sea peligroso
+        else:
+            es_peligroso_final = usuario_marco_peligroso  # "0,1" -> Decide el usuario
+
+        if es_peligroso_final:
+            cve_mat = str(d.get("cve_material_peligroso", "")).strip()
+            embalaje = str(d.get("embalaje", "")).strip()
+
+            if not cve_mat or not embalaje:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"SAT HTTP 400: La Clave SAT {d['bienes_transp']} indica que es Material Peligroso. Es obligatorio incluir la Clave ONU (Ej: UN1005) y el Embalaje (Ej: 4G).",
+                )
+
+            mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_mat}" Embalaje="{embalaje}"'
+        else:
+            mat_peligroso = ' MaterialPeligroso="No"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}

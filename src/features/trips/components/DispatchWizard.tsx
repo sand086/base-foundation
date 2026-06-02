@@ -85,7 +85,12 @@ export type WizardData = {
   descripcion_mercancia: string;
   detalle_mercancia: string;
   peso_toneladas: number;
+  cantidad: number; // <--- NUEVO
+  sat_clave_producto: string; // <--- NUEVO
+  sat_clave_servicio: string; // <--- NUEVO
   es_material_peligroso: boolean;
+  cve_material_peligroso: string; // <--- NUEVO
+  embalaje: string; // <--- NUEVO
   clase_imo: string;
 
   referencia_cliente: string;
@@ -289,6 +294,11 @@ export const DispatchWizard = ({
           : new Date(),
         descripcion_mercancia: tripFromState.descripcion_mercancia || "",
         peso_toneladas: tripFromState.peso_toneladas || 0,
+        cantidad: tripFromState.cantidad_bultos || tripFromState.cantidad || 1,
+        sat_clave_producto: tripFromState.sat_clave_producto || "01010101",
+        sat_clave_servicio: tripFromState.sat_clave_servicio || "78101802",
+        cve_material_peligroso: tripFromState.cve_material_peligroso || "",
+        embalaje: tripFromState.embalaje || "",
         es_material_peligroso: tripFromState.es_material_peligroso || false,
         clase_imo: tripFromState.clase_imo || "",
         contenedor_1: tripFromState.contenedor_1 || "",
@@ -406,7 +416,12 @@ export const DispatchWizard = ({
     descripcion_mercancia: initialData?.descripcion_mercancia || "",
     detalle_mercancia: "",
     peso_toneladas: initialData?.peso_toneladas || 0,
+    cantidad: initialData?.cantidad || 1,
+    sat_clave_producto: initialData?.sat_clave_producto || "01010101",
+    sat_clave_servicio: initialData?.sat_clave_servicio || "78101802",
     es_material_peligroso: initialData?.es_material_peligroso || false,
+    cve_material_peligroso: initialData?.cve_material_peligroso || "",
+    embalaje: initialData?.embalaje || "",
     clase_imo: initialData?.clase_imo || "",
     contenedor_1: initialData?.contenedor_1 || "",
     contenedor_2: initialData?.contenedor_2 || "",
@@ -705,6 +720,13 @@ export const DispatchWizard = ({
           : null,
         descripcion_mercancia: mercancia_final,
         peso_toneladas: Number(data.peso_toneladas) || 0,
+        cantidad: Number(data.cantidad) || 1,
+        sat_clave_producto: data.sat_clave_producto,
+        sat_clave_servicio: data.sat_clave_servicio,
+        cve_material_peligroso: data.es_material_peligroso
+          ? data.cve_material_peligroso
+          : null,
+        embalaje: data.es_material_peligroso ? data.embalaje : null,
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
         contenedor_1: contenedor_default,
@@ -887,6 +909,11 @@ export const DispatchWizard = ({
         isValid = isValid && Boolean(data.dollyId_2 && data.remolque2Id_2);
       }
     }
+    if (data.es_material_peligroso) {
+      isValid =
+        isValid && Boolean(data.cve_material_peligroso && data.embalaje);
+    }
+
     return isValid;
   }, [isFullTrip, data]);
 
@@ -1192,14 +1219,14 @@ export const DispatchWizard = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-3 pt-2">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-4 pt-2">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label variant="brand" required>
                     MERCANCÍA (CATÁLOGO SAT)
                   </Label>
                   <SearchableSelect
                     items={availableSatProducts}
-                    value={data.descripcion_mercancia.split(" ")[0]}
+                    value={data.sat_clave_producto}
                     placeholder="Buscar producto SAT..."
                     onSelect={(val) => {
                       const prod = availableSatProducts.find(
@@ -1208,6 +1235,7 @@ export const DispatchWizard = ({
                       if (prod)
                         setData((p) => ({
                           ...p,
+                          sat_clave_producto: prod.clave,
                           descripcion_mercancia: prod.label,
                           es_material_peligroso:
                             prod.es_material_peligroso === "1",
@@ -1217,6 +1245,23 @@ export const DispatchWizard = ({
                               : "",
                         }));
                     }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label variant="brand" required>
+                    CANTIDAD
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Ej: 15"
+                    className="h-10"
+                    value={data.cantidad || ""}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        cantidad: parseFloat(e.target.value) || 1,
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1237,6 +1282,44 @@ export const DispatchWizard = ({
                   />
                 </div>
               </div>
+
+              {/* CAMPOS CONDICIONALES DE MATERIAL PELIGROSO */}
+              {data.es_material_peligroso && (
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-1.5 border-l-2 border-brand-red pl-3">
+                    <Label variant="brand" className="text-brand-red" required>
+                      CLAVE ONU (MAT. PELIGROSO)
+                    </Label>
+                    <Input
+                      placeholder="Ej: UN1005"
+                      value={data.cve_material_peligroso}
+                      onChange={(e) =>
+                        setData((p) => ({
+                          ...p,
+                          cve_material_peligroso: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      className="border-red-200 uppercase font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5 border-l-2 border-brand-red pl-3">
+                    <Label variant="brand" className="text-brand-red" required>
+                      EMBALAJE SAT
+                    </Label>
+                    <Input
+                      placeholder="Ej: 4G"
+                      value={data.embalaje}
+                      onChange={(e) =>
+                        setData((p) => ({
+                          ...p,
+                          embalaje: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      className="border-red-200 uppercase font-mono"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-4 pt-4 pb-2 border-b border-slate-200/50 dark:border-white/10 mb-2">
                 <div className="space-y-1.5">
@@ -2090,13 +2173,21 @@ export const DispatchWizard = ({
                   {/* MERCANCÍA */}
                   <div className="pt-3 border-t border-slate-200 dark:border-white/10 space-y-1">
                     <span className="font-bold text-muted-foreground text-xs block">
-                      Mercancía SAT (Peso: {data.peso_toneladas} Ton):
+                      Mercancía SAT (Cant: {data.cantidad} | Peso:{" "}
+                      {data.peso_toneladas} Ton):
                     </span>
                     <span className="font-semibold text-foreground/80 text-xs line-clamp-2 leading-tight">
                       {data.detalle_mercancia
                         ? `${data.descripcion_mercancia} - ${data.detalle_mercancia}`
                         : data.descripcion_mercancia || "N/A"}
                     </span>
+                    {data.es_material_peligroso && (
+                      <span className="font-bold text-brand-red text-[11px] block mt-1.5 bg-red-50 p-1.5 rounded-md">
+                        ⚠️ MAT. PELIGROSO: ONU{" "}
+                        {data.cve_material_peligroso || "S/D"} | EMBALAJE:{" "}
+                        {data.embalaje || "S/D"}
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>

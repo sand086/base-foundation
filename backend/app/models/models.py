@@ -664,6 +664,9 @@ class Trip(AuditMixin, Base):
     descripcion_mercancia = Column(String(255), default="Carga General")
     peso_toneladas = Column(Float, default=0.0)
     es_material_peligroso = Column(Boolean, default=False)
+    cve_material_peligroso = Column(String(10), nullable=True)  # Ej: UN1005
+    embalaje = Column(String(10), nullable=True)  # Ej: 4G
+    sat_clave_servicio = Column(String(20), default="78101802")  # Flete
     referencia = Column(String(100), nullable=True)
     contenedor_1 = Column(String(100), nullable=True)
     contenedor_2 = Column(String(100), nullable=True)

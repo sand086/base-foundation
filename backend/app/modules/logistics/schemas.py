@@ -396,14 +396,23 @@ class TripBase(ORMBase):
         default="Carga General", max_length=255
     )
     peso_toneladas: Optional[float] = Field(default=0.0, ge=0.0)
-    es_material_peligroso: Optional[bool] = False
-    clase_imo: Optional[str] = Field(default=None, max_length=50)
+
+    # --- INICIO NUEVOS CAMPOS MATERIAL PELIGROSO Y CFDI ---
+    sat_clave_servicio: Optional[str] = Field(
+        default="78101802", max_length=20, description="Clave SAT Servicio de Flete"
+    )
     sat_clave_producto: Optional[str] = Field(
-        default="01010101", max_length=20, description="Clave SAT para Fletes"
+        default="01010101",
+        max_length=20,
+        description="Clave SAT de la Mercancía Transportada",
     )
     sat_clave_unidad: Optional[str] = Field(
         default="E48", max_length=10, description="Clave SAT Unidad de Servicio"
     )
+    es_material_peligroso: Optional[bool] = False
+    cve_material_peligroso: Optional[str] = Field(default=None, max_length=10)
+    embalaje: Optional[str] = Field(default=None, max_length=10)
+    clase_imo: Optional[str] = Field(default=None, max_length=50)
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
 
     is_refrigerated_1: Optional[bool] = Field(
@@ -512,10 +521,15 @@ class TripUpdate(ORMBase):
     contenedor_2: Optional[str] = None
     terminal_entrega_vacio: Optional[str] = None
     peso_toneladas: Optional[float] = None
-    es_material_peligroso: Optional[bool] = None
-    clase_imo: Optional[str] = Field(default=None, max_length=50)
+
+    # --- INICIO NUEVOS CAMPOS MATERIAL PELIGROSO Y CFDI ---
+    sat_clave_servicio: Optional[str] = Field(default=None, max_length=20)
     sat_clave_producto: Optional[str] = Field(default=None, max_length=20)
     sat_clave_unidad: Optional[str] = Field(default=None, max_length=10)
+    es_material_peligroso: Optional[bool] = None
+    cve_material_peligroso: Optional[str] = Field(default=None, max_length=10)
+    embalaje: Optional[str] = Field(default=None, max_length=10)
+    clase_imo: Optional[str] = Field(default=None, max_length=50)
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
     status: Optional[TripStatus] = None
     uuid_fiscal: Optional[str] = None
