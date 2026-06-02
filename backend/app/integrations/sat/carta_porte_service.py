@@ -966,33 +966,48 @@ class CartaPorteService:
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
         # =========================================================
-        # LÓGICA DE MATERIAL PELIGROSO (REGLAS SAT CARTA PORTE 3.1)
+        # LÓGICA DE MATERIAL PELIGROSO Y VALIDACIONES AMIGABLES
         # =========================================================
         usuario_marco_peligroso = d.get("es_material_peligroso", False)
         catalogo_peligroso = str(d.get("catalogo_peligroso", "0,1")).strip()
+        clave_prod = str(d.get("bienes_transp", "01010101")).strip()
 
+        # 1. VALIDACIONES PREVENTIVAS PARA EL USUARIO (Evitan el error críptico del SAT)
+        if catalogo_peligroso == "0" and usuario_marco_peligroso:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error de Captura: Marcaste el producto '{clave_prod}' como Peligroso, pero el SAT indica que NUNCA es peligroso. Por favor, desmarca la casilla en el viaje o corrige tu catálogo de productos a 0,1.",
+            )
+
+        if catalogo_peligroso == "1" and not usuario_marco_peligroso:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error de Captura: El producto '{clave_prod}' SIEMPRE es Material Peligroso según el SAT. Debes marcar la casilla e ingresar la Clave ONU y el Embalaje.",
+            )
+
+        # 2. ARMADO DEL XML SEGÚN LA REGLA SAT
         if catalogo_peligroso == "1" or (
             catalogo_peligroso == "0,1" and usuario_marco_peligroso
         ):
-            # Es peligroso (Obligado por SAT o indicado por el usuario en "0,1")
             cve_mat = str(d.get("cve_material_peligroso", "")).strip()
             embalaje = str(d.get("embalaje", "")).strip()
 
             if not cve_mat or not embalaje:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"SAT HTTP 400: La Clave SAT {d['bienes_transp']} indica que es Material Peligroso. Es obligatorio incluir la Clave ONU (Ej: UN1005) y el Embalaje (Ej: 4G).",
+                    detail=f"Faltan Datos: Declaraste la carga como Material Peligroso. Es obligatorio escribir la Clave ONU (Ej: UN1005) y el código de Embalaje (Ej: 4G).",
                 )
 
             mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_mat}" Embalaje="{embalaje}"'
 
         elif catalogo_peligroso == "0":
-            # REGLA CP155: Si el catálogo es "0", el atributo NO DEBE EXISTIR en el XML.
+            # REGLA CP155: Si el catálogo es "0", el atributo NO DEBE EXISTIR.
             mat_peligroso = ""
 
         else:
-            # Caso "0,1" pero el usuario indicó que NO es peligroso. El atributo DEBE SER "No".
+            # Caso "0,1" pero el usuario indicó que NO es peligroso.
             mat_peligroso = ' MaterialPeligroso="No"'
+        # =========================================================
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="99" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="MXN" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="PPD" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
