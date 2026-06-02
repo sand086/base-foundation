@@ -666,24 +666,41 @@ class BillingService:
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        if serie_final.upper().startswith("CP") or str(
-            folio_interno
-        ).upper().startswith("CP"):
-            desc_merc_raw = "FLETE CARGA GENERAL"
-            desc_merc_pdf = "FLETE CARGA GENERAL"
-            pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
+        desc_concepto_xml = "FLETE GENERAL"
+        desc_concepto_pdf = f"FLETE GENERAL {cont_str}".strip()
+
+        desc_mercancia_xml = (
+            "FLETE GENERAL"
+            if is_nominal
+            else (viaje.descripcion_mercancia or "CARGA GENERAL")
+        ).replace("|", "-")
+        desc_mercancia_pdf = desc_mercancia_xml
+
+        pdf_descripcion = f"[{clave_servicio_flete}] {desc_concepto_pdf}"
+
+        # Lógica transparente para inyectar si es peligroso en el PDF
+        es_peligroso_user_bool = es_mat_peligroso in [
+            True,
+            "true",
+            "1",
+            "Sí",
+            "Si",
+            "SI",
+            "si",
+        ]
+        if flag_peligroso_catalogo == "0":
+            is_peligroso_pdf = False
+        elif flag_peligroso_catalogo == "1":
+            is_peligroso_pdf = True
         else:
-            desc_merc_raw = (
-                "FLETE CARGA GENERAL"
-                if is_nominal
-                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+            is_peligroso_pdf = es_peligroso_user_bool
+
+        if is_peligroso_pdf:
+            info_mat = (
+                f"Mat. Peligroso: SÍ (ONU: {cve_mat_peligroso} - Emb: {embalaje_mat})"
             )
-            desc_merc_pdf = (
-                desc_merc_raw.split("|")[-1].strip()
-                if "|" in desc_merc_raw
-                else desc_merc_raw
-            )
-            pdf_descripcion = f"[{clave_servicio_flete}] {desc_merc_pdf} {cont_str}"
+        else:
+            info_mat = "Mat. Peligroso: NO"
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
@@ -714,12 +731,14 @@ class BillingService:
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": condiciones_pago,
-            "descripcion_concepto": desc_merc_raw,
-            "descripcion_concepto_pdf": desc_merc_pdf,
-            "descripcion_mercancia": desc_merc_raw,
-            "descripcion_mercancia_pdf": desc_merc_pdf,
+            "descripcion_concepto": desc_concepto_xml,
+            "descripcion_concepto_pdf": desc_concepto_pdf,
+            "descripcion_mercancia": desc_mercancia_xml,
+            "descripcion_mercancia_pdf": desc_mercancia_pdf,
             "pdf_descripcion": pdf_descripcion,
             "clave_prod_serv": clave_servicio_flete,
+            "cantidad": "1",
+            "info_material_peligroso": info_mat,
             "rfc_cliente": rfc_cliente,
             "nombre_cliente": nombre_cliente,
             "cp_cliente": cp_cliente_fiscal,
