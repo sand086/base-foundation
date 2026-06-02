@@ -945,23 +945,25 @@ class BillingService:
         flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
         is_peligroso_user = d.get("es_material_peligroso")
 
-        # 1. Evaluamos qué dice el SAT vs qué dijo el usuario
-        if flag_cat == "0":
-            es_peligroso_final = False
-        elif flag_cat == "1":
-            es_peligroso_final = True
-        else:  # "0,1" (Opcional, manda el usuario)
-            es_peligroso_final = is_peligroso_user in [
-                True,
-                "true",
-                "1",
-                "Sí",
-                "Si",
-                "SI",
-                "si",
-            ]
+        # Determinamos la elección del usuario
+        es_peligroso_user_bool = is_peligroso_user in [
+            True,
+            "true",
+            "1",
+            "Sí",
+            "Si",
+            "SI",
+            "si",
+        ]
 
-        if es_peligroso_final:
+        if flag_cat == "0":
+            # ESCENARIO 1: El catálogo dice 0 (No peligroso).
+            # SAT PROHÍBE el atributo. Se debe omitir por completo.
+            mat_peligroso = ""
+
+        elif flag_cat == "1" or (flag_cat == "0,1" and es_peligroso_user_bool):
+            # ESCENARIO 2: El catálogo dice 1 (Obligatorio)
+            # O dice "0,1" pero el usuario indicó que SÍ es peligroso.
             cve_onu = str(d.get("cve_material_peligroso", "")).strip()
             emb = str(d.get("embalaje", "")).strip()
 
@@ -972,7 +974,10 @@ class BillingService:
                 )
 
             mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_onu}" Embalaje="{emb}"'
+
         else:
+            # ESCENARIO 3: El catálogo dice "0,1" (Opcional) y el usuario indicó que NO es peligroso.
+            # Aquí el SAT SÍ exige que se declare explícitamente como "No".
             mat_peligroso = ' MaterialPeligroso="No"'
         # ========================================================
 
