@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from io import BytesIO
+import sys
 
 import zeep
 from zeep.plugins import HistoryPlugin
@@ -33,8 +34,14 @@ try:
     from num2words import num2words
 
     HAS_NUM2WORDS = True
-except ImportError:
+    print("✅ [OK] NUM2WORDS ENCONTRADO EN:", sys.executable)
+except ImportError as e:
     HAS_NUM2WORDS = False
+    print("❌ [ERROR CRÍTICO] NO ENCONTRÉ NUM2WORDS.")
+    print("❌ Python ejecutándose en:", sys.executable)
+    print("❌ Buscando librerías en las siguientes rutas:")
+    for path in sys.path:
+        print("   ->", path)
 
 from app.db.database import get_db
 from app.modules.logistics.schemas import ReceivableInvoiceCreate
