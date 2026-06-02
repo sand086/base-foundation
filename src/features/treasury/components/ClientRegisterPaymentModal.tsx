@@ -209,7 +209,7 @@ export function ClientRegisterPaymentModal({
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar pt-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar pt-4">
           <div className="space-y-6">
             {/*   SECCIÓN 1: DATOS GENERALES DEL PAGO */}
             <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
@@ -424,7 +424,7 @@ export function ClientRegisterPaymentModal({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
           <div className="sm:hidden w-full text-center mb-2">
