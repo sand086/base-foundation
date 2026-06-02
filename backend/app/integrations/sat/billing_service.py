@@ -327,12 +327,15 @@ class BillingService:
             .filter_by(key=f"sat_leyenda_legal{self.suffix}")
             .first()
         )
-        self.leyenda_legal_db = (
+        raw_leyenda = (
             leyenda_conf.value
             if leyenda_conf and leyenda_conf.value
             else DEFAULT_LEYENDA
         )
 
+        # FIX: Extraer el texto si viene atrapado dentro del atributo 'Comentario' del XML
+        match = re.search(r'Comentario=["\'](.*?)["\']', raw_leyenda, re.DOTALL)
+        self.leyenda_legal_db = match.group(1) if match else raw_leyenda
         nombre_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"empresa_nombre{self.suffix}")
@@ -1071,6 +1074,7 @@ class BillingService:
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
+            "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))

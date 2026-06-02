@@ -344,16 +344,23 @@ class CartaPorteService:
             .first()
         )
 
+        # -------------------------------------------------------------
+        # FIX: EXTRACCIÓN DE LA LEYENDA LEGAL (LIMPIANDO ETIQUETAS XML)
+        # -------------------------------------------------------------
         leyenda_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"sat_leyenda_legal{self.suffix}")
             .first()
         )
-        self.leyenda_legal_db = (
+        raw_leyenda = (
             leyenda_conf.value
             if leyenda_conf and leyenda_conf.value
             else DEFAULT_LEYENDA
         )
+
+        match = re.search(r'Comentario=["\'](.*?)["\']', raw_leyenda, re.DOTALL)
+        self.leyenda_legal_db = match.group(1) if match else raw_leyenda
+
         nombre_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"empresa_nombre{self.suffix}")
@@ -787,6 +794,7 @@ class CartaPorteService:
             cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
             sn_hex = format(cert.serial_number, "x")
             no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+            data["cert_emisor"] = no_certificado
 
         xml_con_cert = xml_base.replace(
             "<cfdi:Comprobante",
@@ -816,6 +824,8 @@ class CartaPorteService:
                 )
 
             uuid_timbrado = res_sat.uuid
+            logger.info(f"¡FACTURA TIMBRADA! UUID: {uuid_timbrado}")
+
             raw_cfdi = res_sat.cfdiTimbrado
             cfdi_bytes = (
                 raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
@@ -1047,7 +1057,9 @@ class CartaPorteService:
             "destinatario_nombre": d.get("nombre_cliente", ""),
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
-            "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_cliente', '')}",
+            "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', d.get('cp_cliente', ''))}",
+            # FIX: Inyección de la leyenda legal limpia para el PDF
+            "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
