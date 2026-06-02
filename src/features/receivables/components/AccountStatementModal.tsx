@@ -45,7 +45,7 @@ interface AccountStatementModalProps {
   onClose: () => void;
   invoices: ReceivableInvoice[];
   initialClient?: string;
-  bankAccounts?: any[]; // Recibimos los bancos reales desde la vista principal
+  bankAccounts?: any[];
 }
 
 const companyBankData = {
@@ -66,13 +66,12 @@ export function AccountStatementModal({
   onClose,
   invoices,
   initialClient = "all",
-  bankAccounts = [], // Lo inicializamos vacío por seguridad
+  bankAccounts = [],
 }: AccountStatementModalProps) {
   const [selectedClient, setSelectedClient] = useState<string>(initialClient);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
-  // Determinar qué lista de bancos usar y FILTRAR SOLO BANORTE
   const displayBanks = (
     bankAccounts && bankAccounts.length > 0
       ? bankAccounts
@@ -134,7 +133,7 @@ export function AccountStatementModal({
     if (!pdfRef.current) return;
     setIsGeneratingPDF(true);
     toast.info("Generando PDF...", {
-      description: "Por favor espera un momento.",
+      description: "Ajustando el documento para múltiples páginas.",
     });
 
     const htmlElement = document.documentElement;
@@ -143,15 +142,27 @@ export function AccountStatementModal({
       htmlElement.classList.remove("dark");
     }
 
+    // FORZAR ANCHO FIJO: Evita que al tener muchos datos se compriman, se coman espacios o saltos de línea
+    const element = pdfRef.current;
+    const originalWidth = element.style.width;
+    const originalMaxWidth = element.style.maxWidth;
+    element.style.width = "900px";
+    element.style.maxWidth = "900px";
+
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     try {
-      const canvas = await html2canvas(pdfRef.current, {
+      const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
+        windowWidth: 900,
       });
+
+      // Restaurar estilos originales inmediatamente
+      element.style.width = originalWidth;
+      element.style.maxWidth = originalMaxWidth;
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
@@ -162,20 +173,36 @@ export function AccountStatementModal({
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      // CONFIGURACIÓN DE MÁRGENES: Para evitar cortes bruscos
+      const margin = 15; // 15mm de margen en todos los lados
+      const contentWidth = pdfWidth - margin * 2;
       const canvasRatio = canvas.height / canvas.width;
-      const imgHeight = pdfWidth * canvasRatio;
+      const imgHeight = contentWidth * canvasRatio;
+
+      const pageHeightContent = pdfHeight - margin * 2;
 
       let heightLeft = imgHeight;
-      let position = 0;
+      let position = margin;
 
-      pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      // Imprimir la primera página
+      pdf.addImage(imgData, "PNG", margin, position, contentWidth, imgHeight);
+      heightLeft -= pageHeightContent;
 
-      while (heightLeft > 0) {
-        position -= pdfHeight;
+      // Iterar mientras haya contenido restante (se crea página 2, 3, etc.)
+      while (heightLeft > 1) {
+        position -= pageHeightContent;
         pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
+        // Agregamos margin superior a cada página extra para que respire
+        pdf.addImage(
+          imgData,
+          "PNG",
+          margin,
+          position + margin,
+          contentWidth,
+          imgHeight,
+        );
+        heightLeft -= pageHeightContent;
       }
 
       const fileNameClient =
@@ -270,7 +297,8 @@ export function AccountStatementModal({
             ref={pdfRef}
             className="p-5 border-2 border-dashed border-border rounded-2xl bg-card shadow-sm space-y-6 print:border-none print:shadow-none print:p-0"
           >
-            <div className="flex justify-between items-start border-b border-border pb-4">
+            {/* break-inside-avoid evita cortes indeseados al imprimir nativo */}
+            <div className="flex justify-between items-start border-b border-border pb-4 break-inside-avoid">
               <div>
                 <h2 className="text-xl font-bold text-primary flex items-center gap-2">
                   <Building2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
@@ -286,11 +314,10 @@ export function AccountStatementModal({
             </div>
 
             {selectedClient !== "all" && (
-              <div className="p-3 bg-muted/30 rounded-lg">
+              <div className="p-3 bg-muted/30 rounded-lg break-inside-avoid">
                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                   Cliente
                 </p>
-                {/* FIX: Se hizo más pequeña la fuente de text-lg a text-sm, y se agregó break-words para que no se corte */}
                 <p className="font-black text-sm sm:text-base text-foreground break-words leading-tight mt-1">
                   {selectedClient}
                 </p>
@@ -298,18 +325,18 @@ export function AccountStatementModal({
             )}
 
             <div>
-              <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2 text-[10px]">
+              <h3 className="font-black text-sm uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2 text-[10px] break-inside-avoid">
                 <DollarSign className="h-4 w-4" /> Facturas Pendientes
               </h3>
 
               {filteredInvoices.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-8 text-muted-foreground break-inside-avoid">
                   <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-emerald-500" />
                   <p>No hay facturas pendientes de cobro</p>
                 </div>
               ) : (
                 <div className="space-y-2 overflow-x-auto">
-                  <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest py-2 border-b border-border min-w-[600px]">
+                  <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest py-2 border-b border-border min-w-[600px] break-inside-avoid">
                     <div className="col-span-2">Folio</div>
                     <div className="col-span-3">Cliente</div>
                     <div className="col-span-2 text-right">Monto</div>
@@ -328,14 +355,14 @@ export function AccountStatementModal({
                     return (
                       <div
                         key={invoice.id}
-                        className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-border/50 min-w-[600px] ${
+                        /* break-inside-avoid garantiza que una fila NUNCA se corte a la mitad en la impresión */
+                        className={`grid grid-cols-12 gap-2 text-sm py-2 border-b border-border/50 min-w-[600px] break-inside-avoid ${
                           isOverdue ? "bg-red-50 dark:bg-red-950/20" : ""
                         }`}
                       >
                         <div className="col-span-2 font-mono font-bold text-foreground flex items-center">
                           {invoice.folio_interno}
                         </div>
-                        {/* FIX: Se quitó el "truncate" y se redujo un poco el tamaño para nombres muy largos */}
                         <div className="col-span-3 text-[10px] sm:text-[11px] text-foreground font-bold leading-tight flex items-center pr-2 break-words">
                           {invoice.cliente}
                         </div>
@@ -379,7 +406,7 @@ export function AccountStatementModal({
 
             <Separator className="bg-border" />
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 break-inside-avoid">
               <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
                 <div className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400 mb-1 font-black">
                   <CheckCircle2 className="h-4 w-4" />
@@ -409,9 +436,9 @@ export function AccountStatementModal({
               </div>
             </div>
 
-            <Separator className="bg-border" />
+            <Separator className="bg-border break-inside-avoid" />
 
-            <div>
+            <div className="break-inside-avoid">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
                 <CreditCard className="h-4 w-4" /> Datos Bancarios para Depósito
               </h3>
@@ -462,7 +489,7 @@ export function AccountStatementModal({
               </div>
             </div>
 
-            <div className="text-center text-[10px] text-muted-foreground pt-4 border-t border-dashed border-border">
+            <div className="text-center text-[10px] text-muted-foreground pt-4 border-t border-dashed border-border break-inside-avoid">
               <p>Documento generado el {currentDate}</p>
               <p className="mt-1 font-black uppercase tracking-widest">
                 Transportes Rápidos 3T © {new Date().getFullYear()} - Sistema de
