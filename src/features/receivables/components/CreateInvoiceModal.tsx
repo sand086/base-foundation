@@ -141,27 +141,49 @@ export function CreateInvoiceModal({
     [clients, clienteId],
   );
 
-  // Autofill Inteligente
+  // Normalizamos los datos operativos para evitar errores de TypeScript
+  const operationalInfo = useMemo(() => {
+    if (!selectedClient) return null;
+
+    const subClient = selectedClient.sub_clients?.find(
+      (s) => s.id.toString() === subClienteId,
+    );
+
+    if (subClient) {
+      return {
+        type: "Sucursal",
+        contacto: subClient.contacto,
+        telefono: subClient.telefono,
+        direccionCompleta: [
+          subClient.direccion,
+          subClient.ciudad,
+          subClient.estado,
+        ]
+          .filter(Boolean)
+          .join(", "),
+      };
+    }
+
+    return {
+      type: "Matriz",
+      contacto: selectedClient.contacto_principal,
+      telefono: selectedClient.telefono,
+      direccionCompleta: selectedClient.direccion_fiscal,
+    };
+  }, [selectedClient, subClienteId]);
+
+  // Autofill Inteligente Dividido
   useEffect(() => {
     if (selectedClient) {
-      // Como el SubCliente es solo una sucursal operativa (sin RFC propio en la BD),
-      // los datos fiscales obligatorios para el CFDI 4.0 SIEMPRE se toman de la Matriz.
-      const fuenteDatosFiscales = selectedClient;
+      // 1. DATOS FISCALES OBLIGATORIOS (SIEMPRE DE LA MATRIZ)
+      setRazonSocialEditable(selectedClient.razon_social || "");
+      setRfcEditable(selectedClient.rfc || "");
+      setCpEditable(selectedClient.codigo_postal_fiscal || "");
+      setRegimenEditable(selectedClient.regimen_fiscal || "601");
+      setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
 
-      setRazonSocialEditable(fuenteDatosFiscales.razon_social || "");
-      setRfcEditable(fuenteDatosFiscales.rfc || "");
-      setCpEditable(
-        (fuenteDatosFiscales as any).codigo_postal_fiscal ||
-          (fuenteDatosFiscales as any).codigo_postal ||
-          "",
-      );
-      setRegimenEditable((fuenteDatosFiscales as any).regimen_fiscal || "601");
-      setUsoCfdiEditable((fuenteDatosFiscales as any).uso_cfdi || "G03");
-      setEmailEditable(
-        (fuenteDatosFiscales as any).email ||
-          (fuenteDatosFiscales as any).correo ||
-          "",
-      );
+      // 2. CORREO (EL SUB-CLIENTE NO TIENE CORREO EN SU ESQUEMA, SE TOMA DE LA MATRIZ)
+      setEmailEditable(selectedClient.email || "");
     }
   }, [selectedClient, subClienteId]);
 
@@ -299,7 +321,7 @@ export function CreateInvoiceModal({
 
     const payload = {
       client_id: Number(clienteId),
-      sub_client_id: subClienteId ? Number(subClienteId) : null, // <-- Vinculación a nivel de base de datos
+      sub_client_id: subClienteId ? Number(subClienteId) : null,
       cliente: razonSocialEditable,
       cliente_rfc: rfcEditable,
       cp_receptor: cpEditable,
@@ -372,7 +394,7 @@ export function CreateInvoiceModal({
               </h3>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Buscador */}
+                {/* Buscador de Cliente Matriz */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                     Buscar Cliente del Catálogo
@@ -388,7 +410,7 @@ export function CreateInvoiceModal({
                       >
                         <span className="truncate">
                           {clienteId
-                            ? "✓ Cliente Seleccionado"
+                            ? `✓ ${clients.find((c) => c.id.toString() === clienteId)?.razon_social || "Cliente Seleccionado"}`
                             : loadingClients
                               ? "Cargando..."
                               : "Seleccionar cliente..."}
@@ -431,7 +453,7 @@ export function CreateInvoiceModal({
                   </Popover>
                 </div>
 
-                {/* AQUÍ ESTÁ EL SELECTOR VISUAL DE SUCURSALES / SUB-CLIENTES QUE FALTABA */}
+                {/* Selector Dinámico de Sucursales (sub_clients) */}
                 {selectedClient &&
                   selectedClient.sub_clients &&
                   selectedClient.sub_clients.length > 0 && (
@@ -452,7 +474,7 @@ export function CreateInvoiceModal({
                           >
                             <span className="truncate">
                               {subClienteId
-                                ? `✓ Sucursal: ${selectedClient.sub_clients.find((s: any) => s.id.toString() === subClienteId)?.nombre || "Seleccionado"}`
+                                ? `✓ Sucursal: ${selectedClient.sub_clients.find((s) => s.id.toString() === subClienteId)?.nombre || "Seleccionado"}`
                                 : "Facturar a la Matriz principal"}
                             </span>
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -462,7 +484,7 @@ export function CreateInvoiceModal({
                           <Command>
                             <CommandInput placeholder="Buscar sucursal..." />
                             <CommandEmpty>
-                              No se encontraron sucursales.
+                              No se encontraron sucursales registradas.
                             </CommandEmpty>
                             <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
                               <CommandItem
@@ -484,7 +506,7 @@ export function CreateInvoiceModal({
                                 [ Sin sucursal ]
                               </CommandItem>
 
-                              {selectedClient.sub_clients.map((sub: any) => (
+                              {selectedClient.sub_clients.map((sub) => (
                                 <CommandItem
                                   key={sub.id}
                                   value={sub.nombre}
@@ -511,11 +533,60 @@ export function CreateInvoiceModal({
                       </Popover>
                     </div>
                   )}
-                {/* FIN DEL SELECTOR VISUAL DE SUCURSALES */}
 
-                <div className="space-y-2">
+                {/* BLOQUE VISUAL DE DATOS OPERATIVOS / DESTINO */}
+                {operationalInfo && (
+                  <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-white/5 space-y-3">
+                    <h4 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b border-slate-200 dark:border-white/10 pb-2 flex items-center justify-between">
+                      <span>Datos de Destino / Operativos</span>
+                      <span className="text-muted-foreground opacity-60">
+                        ({operationalInfo.type})
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-1">
+                          Contacto
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {operationalInfo.contacto || "No registrado"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-1">
+                          Teléfono
+                        </span>
+                        <span className="font-mono font-bold text-foreground">
+                          {operationalInfo.telefono || "No registrado"}
+                        </span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="block text-[9px] font-bold text-muted-foreground uppercase mb-1">
+                          Dirección de Operación
+                        </span>
+                        <span className="font-medium text-foreground leading-tight block">
+                          {operationalInfo.direccionCompleta || "No registrada"}
+                        </span>
+                      </div>
+                      <div className="col-span-2 pt-2 border-t border-slate-200 dark:border-white/10">
+                        <Label className="text-[9px] font-bold text-muted-foreground uppercase mb-1 block">
+                          Correo de Envío (Editable) *
+                        </Label>
+                        <Input
+                          value={emailEditable}
+                          onChange={(e) => setEmailEditable(e.target.value)}
+                          placeholder="correo@empresa.com"
+                          className="h-9 font-medium shadow-sm bg-white dark:bg-card focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* FIN BLOQUE DATOS OPERATIVOS */}
+
+                <div className="space-y-2 mt-4">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                    Razón Social (SAT sin S.A. de C.V.) *
+                    Razón Social Fiscal (SAT sin S.A. de C.V.) *
                   </Label>
                   <Input
                     value={razonSocialEditable}
@@ -540,7 +611,7 @@ export function CreateInvoiceModal({
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                    C.P. (Domicilio) *
+                    C.P. Fiscal (SAT) *
                   </Label>
                   <Input
                     value={cpEditable}
