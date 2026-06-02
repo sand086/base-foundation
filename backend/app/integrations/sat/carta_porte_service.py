@@ -677,37 +677,52 @@ class CartaPorteService:
         # =========================================================
         # Obligamos a que la mercancía física en la Carta Porte sea "01010101".
         # Esto anula cualquier error de catálogo SAT (Material Peligroso #CP155).
+
         clave_mercancia_final = "01010101"
-
-        desc_merc_raw = (
-            "FLETE NOMINAL"
-            if is_nominal
-            else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
-        )
-        if "|" in desc_merc_raw:
-            desc_merc_pdf = desc_merc_raw.split("|")[-1].strip()
-        else:
-            desc_merc_pdf = desc_merc_raw
-
-        pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
+        # 1. GENERAMOS LA SERIE Y FOLIO PRIMERO PARA EVALUAR LA REGLA
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
+        folio_interno = f"{serie_final}-{folio_final}"
+
+        # 2. REGLA DE NEGOCIO: SI ES CP, SE FUERZA "FLETE CARGA GENERAL"
+        if serie_final.upper().startswith("CP") or folio_interno.upper().startswith(
+            "CP"
+        ):
+            desc_merc_raw = "FLETE CARGA GENERAL"
+            desc_merc_pdf = "FLETE CARGA GENERAL"
+            pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
+        else:
+            # Si es Factura Nominal u otra serie, respetamos lo que viene de la BD
+            desc_merc_raw = (
+                "FLETE NOMINAL"
+                if is_nominal
+                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+            )
+            desc_merc_pdf = (
+                desc_merc_raw.split("|")[-1].strip()
+                if "|" in desc_merc_raw
+                else desc_merc_raw
+            )
+            pdf_descripcion = f"[{clave_servicio_flete}] {desc_merc_pdf} {cont_str}"
 
         c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
         c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
         c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
 
         return {
+            "cantidad": str(
+                getattr(viaje, "cantidad_bultos", getattr(viaje, "cantidad", 1))
+            ),  # <--- EXTRAEMOS CANTIDAD (Protegido por si usas 'cantidad' o 'cantidad_bultos')
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": serie_final,
             "folio": str(folio_final),
-            "folio_interno": f"{serie_final}-{folio_final}",
+            "folio_interno": folio_interno,
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
@@ -1028,7 +1043,7 @@ class CartaPorteService:
             conceptos_render = [
                 {
                     "clave": d.get("clave_prod_serv", "78101802"),
-                    "cantidad": "1.00",
+                    "cantidad": str(d.get("cantidad", "1.00")),
                     "unidad": (
                         "ACT"
                         if "Pago" in d.get("descripcion_concepto", "")

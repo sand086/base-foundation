@@ -260,7 +260,8 @@
         <thead>
           <tr>
             <td width="15%" class="center">CÓDIGO</td>
-            <td width="55%">DESCRIPCIÓN SERVICIO</td>
+            <td width="10%" class="center">CANT.</td>
+            <td width="45%">DESCRIPCIÓN SERVICIO</td>
             <td width="15%" class="right">UNITARIO</td>
             <td width="15%" class="right">IMPORTE</td>
           </tr>
@@ -269,6 +270,7 @@
           {% for c in conceptos %}
           <tr>
             <td class="center text-muted bold">{{ c.clave }}</td>
+            <td class="center text-dark">{{ c.cantidad }}</td>
             <td>
               <span class="bold text-dark">{{ c.descripcion }}</span><br />
               <span style="font-size: 6pt; color: #64748b"

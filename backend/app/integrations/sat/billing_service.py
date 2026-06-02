@@ -661,18 +661,33 @@ class BillingService:
             else "01010101"
         )
 
-        # PROCESAMIENTO DE DESCRIPCIÓN PARA SEPARAR EL PIPE
-        desc_merc_raw = (
-            "FLETE NOMINAL"
-            if is_nominal
-            else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+        # 1. GENERAMOS LA SERIE Y FOLIO PRIMERO PARA EVALUAR LA REGLA
+        serie_final = serie_forzada or "CP"
+        folio_final = (
+            folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
-        if "|" in desc_merc_raw:
-            desc_merc_pdf = desc_merc_raw.split("|")[-1].strip()
-        else:
-            desc_merc_pdf = desc_merc_raw
+        folio_interno = f"{serie_final}-{folio_final}"
 
-        pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
+        # 2. REGLA DE NEGOCIO: SI ES CP, SE FUERZA "FLETE CARGA GENERAL"
+        if serie_final.upper().startswith("CP") or str(
+            folio_interno
+        ).upper().startswith("CP"):
+            desc_merc_raw = "FLETE CARGA GENERAL"
+            desc_merc_pdf = "FLETE CARGA GENERAL"
+            pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
+        else:
+            # Si es Factura Libre u otra serie, respetamos lo que viene de la BD
+            desc_merc_raw = (
+                "FLETE CARGA GENERAL"
+                if is_nominal
+                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+            )
+            desc_merc_pdf = (
+                desc_merc_raw.split("|")[-1].strip()
+                if "|" in desc_merc_raw
+                else desc_merc_raw
+            )
+            pdf_descripcion = f"[{clave_servicio_flete}] {desc_merc_pdf} {cont_str}"
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
@@ -1497,17 +1512,20 @@ class BillingService:
             "cp_cliente": cliente.codigo_postal_fiscal,
             "regimen_cliente": cliente.regimen_fiscal or "601",
             "uso_cfdi": cliente.uso_cfdi or "G03",
-            "conceptos": [
-                {
-                    "id": "01",
-                    "claveProdServ": "84111506",
-                    "cantidad": "1",
-                    "claveUnidad": "E48",
-                    "descripcion": factura.concepto or "Servicios Administrativos",
-                    "precioUnitario": float(factura.subtotal or 0.0),
-                    "importe": float(factura.subtotal or 0.0),
-                }
-            ],
+            "conceptos": (
+                factura.conceptos_detalle
+                if factura.conceptos_detalle and len(factura.conceptos_detalle) > 0
+                else [
+                    {
+                        "claveProdServ": "84111506",
+                        "cantidad": "1",
+                        "claveUnidad": "E48",
+                        "descripcion": factura.concepto or "Servicios Administrativos",
+                        "precioUnitario": float(factura.subtotal or 0.0),
+                        "importe": float(factura.subtotal or 0.0),
+                    }
+                ]
+            ),
             "leyenda_legal": self.leyenda_legal_db,
         }
 
@@ -1758,6 +1776,7 @@ class BillingService:
                     if d.get("conceptos")
                     else "Factura Libre"
                 ),
+                conceptos_detalle=d.get("conceptos", []),
                 monto_total=Decimal(str(d.get("monto_total", 0))),
                 saldo_pendiente=Decimal(str(d.get("monto_total", 0))),
                 subtotal=Decimal(str(d.get("subtotal", 0))),
@@ -1991,16 +2010,21 @@ class BillingService:
                 "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
                 "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
                 "leyenda_legal": self.leyenda_legal_db,
-                "conceptos": [
-                    {
-                        "claveProdServ": "84111506",
-                        "cantidad": "1",
-                        "claveUnidad": "E48",
-                        "descripcion": factura.concepto or "Servicios Administrativos",
-                        "precioUnitario": float(factura.subtotal or 0.0),
-                        "importe": float(factura.subtotal or 0.0),
-                    }
-                ],
+                "conceptos": (
+                    factura.conceptos_detalle
+                    if factura.conceptos_detalle and len(factura.conceptos_detalle) > 0
+                    else [
+                        {
+                            "claveProdServ": "84111506",
+                            "cantidad": "1",
+                            "claveUnidad": "E48",
+                            "descripcion": factura.concepto
+                            or "Servicios Administrativos",
+                            "precioUnitario": float(factura.subtotal or 0.0),
+                            "importe": float(factura.subtotal or 0.0),
+                        }
+                    ]
+                ),
             }
 
         # 6. Ejecutar el generador para SOBREESCRIBIR el archivo físico

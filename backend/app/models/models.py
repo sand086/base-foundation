@@ -1497,6 +1497,7 @@ class ReceivableInvoice(AuditMixin, Base):
     moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
+    conceptos_detalle = Column(JSONB, default=list, server_default="[]")
     concepto = Column(String(255))
 
     estatus = Column(
