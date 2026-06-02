@@ -205,21 +205,18 @@
           class="bento-card-header"
           style="color: #0f172a; border-left-color: #cbd5e1"
         >
-          Destino Físico (Sub-Cliente)
+          Destino Físico
         </div>
         <table class="grid-table">
           <tr>
             <td width="40%">
-              <span class="grid-label">Nombre o Razón Social</span>
+              <span class="grid-label">Nombre</span>
               <span class="bold text-dark" style="font-size: 7.5pt"
                 >{{ subcliente_nombre }}</span
               >
             </td>
-            <td width="25%">
-              <span class="grid-label">RFC</span>
-              <span class="text-dark">{{ subcliente_rfc }}</span>
-            </td>
-            <td width="35%">
+
+            <td width="60%">
               <span class="grid-label">Contacto (Teléfono / Correo)</span>
               <span class="text-dark" style="font-size: 6.5pt"
                 >{{ subcliente_telefono }} {% if subcliente_correo %}| {{
@@ -461,7 +458,7 @@
       </div>
 
       <div class="addenda-box">
-        <span class="bold text-dark">Leyes y Condiciones:</span><br />
+        <span class="bold text-dark">Addenda:</span><br />
         {{ leyenda_legal }}
       </div>
     </main>
