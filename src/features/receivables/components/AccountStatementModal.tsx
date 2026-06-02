@@ -483,8 +483,7 @@ export function AccountStatementModal({
             <div className="text-center text-[10px] text-muted-foreground pt-4 border-t border-dashed border-border break-inside-avoid">
               <p>Documento generado el {currentDate}</p>
               <p className="mt-1 font-black uppercase tracking-widest">
-                Transportes Rápidos 3T © {new Date().getFullYear()} - Sistema de
-                Gestión
+                Rápidos 3T © {new Date().getFullYear()} - Sistema de Gestión
               </p>
             </div>
           </div>
