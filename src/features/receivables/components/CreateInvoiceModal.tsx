@@ -372,7 +372,7 @@ export function CreateInvoiceModal({
               </h3>
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Buscador de Cliente Matriz */}
+                {/* Buscador */}
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
                     Buscar Cliente del Catálogo
@@ -388,7 +388,7 @@ export function CreateInvoiceModal({
                       >
                         <span className="truncate">
                           {clienteId
-                            ? `✓ ${clients.find((c) => c.id.toString() === clienteId)?.razon_social || "Cliente Seleccionado"}`
+                            ? "✓ Cliente Seleccionado"
                             : loadingClients
                               ? "Cargando..."
                               : "Seleccionar cliente..."}
@@ -409,7 +409,7 @@ export function CreateInvoiceModal({
                               value={client.razon_social}
                               onSelect={() => {
                                 setClienteId(client.id.toString());
-                                setSubClienteId(""); // <-- Limpia la sucursal anterior al cambiar de matriz principal
+                                setSubClienteId(""); // Reseteamos la sucursal
                                 setOpenCombobox(false);
                               }}
                               className="font-bold text-xs uppercase cursor-pointer"
@@ -431,7 +431,7 @@ export function CreateInvoiceModal({
                   </Popover>
                 </div>
 
-                {/* Selector Dinámico de Sucursales (sub_clients) */}
+                {/* AQUÍ ESTÁ EL SELECTOR VISUAL DE SUCURSALES / SUB-CLIENTES QUE FALTABA */}
                 {selectedClient &&
                   selectedClient.sub_clients &&
                   selectedClient.sub_clients.length > 0 && (
@@ -462,7 +462,7 @@ export function CreateInvoiceModal({
                           <Command>
                             <CommandInput placeholder="Buscar sucursal..." />
                             <CommandEmpty>
-                              No se encontraron sucursales registradas.
+                              No se encontraron sucursales.
                             </CommandEmpty>
                             <CommandGroup className="max-h-[200px] overflow-y-auto custom-scrollbar">
                               <CommandItem
@@ -487,7 +487,7 @@ export function CreateInvoiceModal({
                               {selectedClient.sub_clients.map((sub: any) => (
                                 <CommandItem
                                   key={sub.id}
-                                  value={sub.nombre} // <-- Utilizando la propiedad 'nombre'
+                                  value={sub.nombre}
                                   onSelect={() => {
                                     setSubClienteId(sub.id.toString());
                                     setOpenSubCombobox(false);
@@ -511,6 +511,7 @@ export function CreateInvoiceModal({
                       </Popover>
                     </div>
                   )}
+                {/* FIN DEL SELECTOR VISUAL DE SUCURSALES */}
 
                 <div className="space-y-2">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
