@@ -703,6 +703,13 @@ class BillingService:
         c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
         c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
 
+        # --- EXTRACCIÓN DE MATERIAL PELIGROSO ---
+        es_mat_peligroso = getattr(viaje, "es_material_peligroso", False)
+        cve_mat_peligroso = (
+            str(getattr(viaje, "cve_material_peligroso", "") or "").strip().upper()
+        )
+        embalaje_mat = str(getattr(viaje, "embalaje", "") or "").strip().upper()
+
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": serie_final,
@@ -736,6 +743,9 @@ class BillingService:
             ),
             "uso_cfdi": "G03",
             "total_dist_rec": distancia_real,
+            "es_material_peligroso": es_mat_peligroso,
+            "cve_material_peligroso": cve_mat_peligroso,
+            "embalaje": embalaje_mat,
             "peso_bruto": (
                 str(viaje.peso_toneladas * 1000)
                 if viaje and viaje.peso_toneladas
@@ -945,9 +955,20 @@ class BillingService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
-        mat_peligroso = (
-            ' MaterialPeligroso="No"' if d["bienes_transp"] == "01010101" else ""
-        )
+        # ========================================================
+        # NUEVA LÓGICA DE MATERIAL PELIGROSO
+        # ========================================================
+        is_peligroso = d.get("es_material_peligroso")
+
+        # El SAT exige estrictamente "Sí" o "No"
+        if is_peligroso in [True, "true", "1", "Sí", "Si"]:
+            cve_onu = d.get("cve_material_peligroso", "")
+            emb = d.get("embalaje", "")
+            # Insertamos los 3 atributos requeridos obligatorios
+            mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_onu}" Embalaje="{emb}"'
+        else:
+            mat_peligroso = ' MaterialPeligroso="No"'
+        # ========================================================
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d['forma_pago']}" CondicionesDePago="{d['condiciones_pago']}" SubTotal="{d['subtotal']}" Moneda="{d['moneda']}" TipoCambio="{d['tc']}" Total="{d['total']}" TipoDeComprobante="{d['tipo_comprobante']}" Exportacion="01" MetodoPago="{d['metodo_pago']}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}

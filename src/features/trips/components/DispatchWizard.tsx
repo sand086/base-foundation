@@ -85,24 +85,22 @@ export type WizardData = {
   descripcion_mercancia: string;
   detalle_mercancia: string;
   peso_toneladas: number;
-  cantidad: number; // <--- NUEVO
-  sat_clave_producto: string; // <--- NUEVO
-  sat_clave_servicio: string; // <--- NUEVO
+  cantidad: number;
+  sat_clave_producto: string;
+  sat_clave_servicio: string;
   es_material_peligroso: boolean;
-  cve_material_peligroso: string; // <--- NUEVO
-  embalaje: string; // <--- NUEVO
+  cve_material_peligroso: string;
+  embalaje: string;
   clase_imo: string;
 
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
 
-  // --- FASE 2: MOTOGENERADORES POR ID ---
   is_refrigerated_1: boolean;
   motogenerator_1_id: string;
   is_refrigerated_2: boolean;
   motogenerator_2_id: string;
-  // --------------------------------------
 
   unitId: string;
   remolque1Id: string;
@@ -112,7 +110,6 @@ export type WizardData = {
 
   leg_type: string;
 
-  //   CAMPOS PARA EL MOTOR DUAL (1 TIMBRE)
   conoceRutaCompleta: boolean;
   unit2Id: string;
   driver2Id: string;
@@ -267,6 +264,129 @@ function SearchableSelect({
   );
 }
 
+function CreatableSearchableSelect({
+  items,
+  value,
+  onSelect,
+  onCreate,
+  placeholder,
+  className,
+}: {
+  items: SearchableItem[];
+  value: string;
+  onSelect: (val: string) => void;
+  onCreate: (val: string) => void;
+  placeholder: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selectedItem = items.find((item) => item.value === value);
+
+  const hasExactMatch = items.some(
+    (i) =>
+      i.value.toLowerCase() === search.toLowerCase() ||
+      i.label.toLowerCase() === search.toLowerCase(),
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-10 w-full justify-between rounded-xl border-border bg-card/90 px-4 font-semibold text-foreground shadow-sm backdrop-blur-xl hover:bg-card",
+            className,
+          )}
+        >
+          {selectedItem ? (
+            <span className="truncate text-left">{selectedItem.label}</span>
+          ) : (
+            <span className="truncate text-left text-slate-400 dark:text-slate-500">
+              {value || placeholder}
+            </span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-[min(380px,calc(100vw-2rem))] p-0"
+        align="start"
+        sideOffset={8}
+      >
+        <Command
+          filter={(val, search) =>
+            val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+          }
+        >
+          <CommandInput
+            placeholder="Buscar o escribir nuevo..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList className="max-h-[280px]">
+            <CommandEmpty>
+              {search.length > 0 ? (
+                <div
+                  className="px-4 py-3 text-sm cursor-pointer hover:bg-accent text-brand-navy font-bold flex items-center gap-2"
+                  onClick={() => {
+                    onCreate(search);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <Box className="h-4 w-4" /> Agregar "{search}" al catálogo
+                </div>
+              ) : (
+                "Escribe para buscar..."
+              )}
+            </CommandEmpty>
+            <CommandGroup>
+              {items.map((item) => (
+                <CommandItem
+                  key={item.value}
+                  value={item.label}
+                  onSelect={() => {
+                    onSelect(item.value);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="rounded-xl"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === item.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {item.label}
+                </CommandItem>
+              ))}
+              {!hasExactMatch && search.length > 0 && (
+                <CommandItem
+                  value={`create-${search}`}
+                  onSelect={() => {
+                    onCreate(search);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="font-bold text-brand-navy border-t mt-1"
+                >
+                  + Agregar nuevo: "{search}"
+                </CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export const DispatchWizard = ({
   initialData: propsInitialData,
   onSuccess,
@@ -363,7 +483,19 @@ export const DispatchWizard = ({
   const { operadores } = useOperators();
   const { createTrip, trips } = useTrips();
   const { clients } = useClients();
-  const { products: satProducts } = useSatCatalogs();
+
+  // === EXTRACCIÓN DINÁMICA DE CATÁLOGOS SAT ===
+  const { products: satProducts, fetchCatalog, saveItem } = useSatCatalogs();
+
+  // Estados locales para los catálogos nuevos
+  const [catMateriales, setCatMateriales] = useState<any[]>([]);
+  const [catEmbalajes, setCatEmbalajes] = useState<any[]>([]);
+
+  // Efecto para cargar los catálogos al montar el componente
+  useEffect(() => {
+    fetchCatalog("sat-hazardous-materials").then(setCatMateriales);
+    fetchCatalog("sat-packaging-types").then(setCatEmbalajes);
+  }, [fetchCatalog]);
 
   const [odoTramo1, setOdoTramo1] = useState(0);
   const [odoTramo2, setOdoTramo2] = useState(0);
@@ -401,6 +533,25 @@ export const DispatchWizard = ({
         ...p,
       })),
     [satProducts],
+  );
+
+  // Mapear la info para los CreatableSelects
+  const availableMateriales = useMemo(
+    () =>
+      catMateriales.map((m) => ({
+        label: `${m.clave} - ${m.descripcion}`,
+        value: m.clave,
+      })),
+    [catMateriales],
+  );
+
+  const availableEmbalajes = useMemo(
+    () =>
+      catEmbalajes.map((e) => ({
+        label: `${e.clave} - ${e.descripcion}`,
+        value: e.clave,
+      })),
+    [catEmbalajes],
   );
 
   const [data, setData] = useState<WizardData>({
@@ -449,6 +600,57 @@ export const DispatchWizard = ({
     anticipo_combustible: initialData?.anticipo_combustible || 0,
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
   });
+
+  // Funciones de creación al vuelo para Material Peligroso y Embalaje
+  const handleCreateMaterial = async (inputValue: string) => {
+    const partes = inputValue.split("-");
+    const clave = partes[0].trim().toUpperCase();
+    const descripcion = partes.slice(1).join("-").trim().toUpperCase() || clave;
+    try {
+      const nuevoItem = await saveItem("sat-hazardous-materials", {
+        clave,
+        descripcion,
+        clase_div: "",
+      });
+      setCatMateriales((prev) => [...prev, nuevoItem]);
+      setData((p) => ({ ...p, cve_material_peligroso: nuevoItem.clave }));
+      toast({
+        title: "Catálogo actualizado",
+        description: `Material ${clave} guardado correctamente.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description:
+          "No se pudo agregar el material. Puede que la clave ya exista.",
+      });
+    }
+  };
+
+  const handleCreateEmbalaje = async (inputValue: string) => {
+    const partes = inputValue.split("-");
+    const clave = partes[0].trim().toUpperCase();
+    const descripcion = partes.slice(1).join("-").trim().toUpperCase() || clave;
+    try {
+      const nuevoItem = await saveItem("sat-packaging-types", {
+        clave,
+        descripcion,
+      });
+      setCatEmbalajes((prev) => [...prev, nuevoItem]);
+      setData((p) => ({ ...p, embalaje: nuevoItem.clave }));
+      toast({
+        title: "Catálogo actualizado",
+        description: `Embalaje ${clave} guardado correctamente.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo agregar el embalaje.",
+      });
+    }
+  };
 
   useEffect(() => {
     if (data.unitId) {
@@ -703,7 +905,7 @@ export const DispatchWizard = ({
       const mercancia = data.descripcion_mercancia || "CARGA GENERAL";
       const mercancia_sat = data.descripcion_mercancia || "CARGA GENERAL";
       const mercancia_final = data.detalle_mercancia
-        ? `${mercancia_sat} | ${data.detalle_mercancia.trim()}` // <--- USA EL PIPE AQUÍ
+        ? `${mercancia_sat} | ${data.detalle_mercancia.trim()}`
         : mercancia_sat;
 
       const contenedor_default = data.contenedor_1 || null;
@@ -1290,33 +1492,35 @@ export const DispatchWizard = ({
                     <Label variant="brand" className="text-brand-red" required>
                       CLAVE ONU (MAT. PELIGROSO)
                     </Label>
-                    <Input
-                      placeholder="Ej: UN1005"
+                    <CreatableSearchableSelect
+                      items={availableMateriales}
                       value={data.cve_material_peligroso}
-                      onChange={(e) =>
-                        setData((p) => ({
-                          ...p,
-                          cve_material_peligroso: e.target.value.toUpperCase(),
-                        }))
+                      onSelect={(v) =>
+                        setData((p) => ({ ...p, cve_material_peligroso: v }))
                       }
-                      className="border-red-200 uppercase font-mono"
+                      onCreate={handleCreateMaterial}
+                      placeholder="Ej: UN1005 - AMONIACO"
+                      className="border-red-200 uppercase"
                     />
+                    <p className="text-[10px] text-muted-foreground ml-1">
+                      Busca o escribe formato: CLAVE - DESCRIPCIÓN
+                    </p>
                   </div>
                   <div className="space-y-1.5 border-l-2 border-brand-red pl-3">
                     <Label variant="brand" className="text-brand-red" required>
                       EMBALAJE SAT
                     </Label>
-                    <Input
-                      placeholder="Ej: 4G"
+                    <CreatableSearchableSelect
+                      items={availableEmbalajes}
                       value={data.embalaje}
-                      onChange={(e) =>
-                        setData((p) => ({
-                          ...p,
-                          embalaje: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      className="border-red-200 uppercase font-mono"
+                      onSelect={(v) => setData((p) => ({ ...p, embalaje: v }))}
+                      onCreate={handleCreateEmbalaje}
+                      placeholder="Ej: 4G - CAJAS DE CARTON"
+                      className="border-red-200 uppercase"
                     />
+                    <p className="text-[10px] text-muted-foreground ml-1">
+                      Busca o escribe formato: CLAVE - DESCRIPCIÓN
+                    </p>
                   </div>
                 </div>
               )}
@@ -1495,7 +1699,7 @@ export const DispatchWizard = ({
                       }
                       placeholder="Buscar..."
                     />
-                    {/*   SWITCH Y SELECT MOTOGENERADOR 1   */}
+                    {/* SWITCH Y SELECT MOTOGENERADOR 1   */}
                     <div className="flex items-center gap-2 pt-2">
                       <Switch
                         checked={data.is_refrigerated_1}
@@ -1575,7 +1779,7 @@ export const DispatchWizard = ({
                           }
                           placeholder="Buscar..."
                         />
-                        {/*   SWITCH Y SELECT MOTOGENERADOR 2   */}
+                        {/* SWITCH Y SELECT MOTOGENERADOR 2   */}
                         <div className="flex items-center gap-2 pt-2">
                           <Switch
                             checked={data.is_refrigerated_2}
