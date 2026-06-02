@@ -72,7 +72,6 @@ export function AccountStatementModal({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
-  // Determinar qué lista de bancos usar
   // Determinar qué lista de bancos usar y FILTRAR SOLO BANORTE
   const displayBanks = (
     bankAccounts && bankAccounts.length > 0
@@ -291,7 +290,8 @@ export function AccountStatementModal({
                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                   Cliente
                 </p>
-                <p className="font-black text-lg text-foreground">
+                {/* FIX: Se hizo más pequeña la fuente de text-lg a text-sm, y se agregó break-words para que no se corte */}
+                <p className="font-black text-sm sm:text-base text-foreground break-words leading-tight mt-1">
                   {selectedClient}
                 </p>
               </div>
@@ -332,17 +332,18 @@ export function AccountStatementModal({
                           isOverdue ? "bg-red-50 dark:bg-red-950/20" : ""
                         }`}
                       >
-                        <div className="col-span-2 font-mono font-bold text-foreground">
+                        <div className="col-span-2 font-mono font-bold text-foreground flex items-center">
                           {invoice.folio_interno}
                         </div>
-                        <div className="col-span-3 truncate text-foreground font-bold">
+                        {/* FIX: Se quitó el "truncate" y se redujo un poco el tamaño para nombres muy largos */}
+                        <div className="col-span-3 text-[10px] sm:text-[11px] text-foreground font-bold leading-tight flex items-center pr-2 break-words">
                           {invoice.cliente}
                         </div>
-                        <div className="col-span-2 text-right font-mono font-bold text-foreground">
+                        <div className="col-span-2 text-right font-mono font-bold text-foreground flex items-center justify-end">
                           {formatCurrency(invoice.monto_total)}
                         </div>
                         <div
-                          className={`col-span-2 text-right font-mono font-black ${
+                          className={`col-span-2 text-right font-mono font-black flex items-center justify-end ${
                             isOverdue
                               ? "text-destructive"
                               : "text-amber-600 dark:text-amber-400"
@@ -350,7 +351,7 @@ export function AccountStatementModal({
                         >
                           {formatCurrency(invoice.saldo_pendiente)}
                         </div>
-                        <div className="col-span-2 flex flex-col text-foreground font-bold">
+                        <div className="col-span-2 flex flex-col justify-center text-foreground font-bold">
                           <span>
                             {new Date(
                               invoice.fecha_vencimiento,
@@ -362,7 +363,7 @@ export function AccountStatementModal({
                             </span>
                           )}
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 flex items-center">
                           {isOverdue ? (
                             <AlertCircle className="h-4 w-4 text-destructive" />
                           ) : (
@@ -441,7 +442,7 @@ export function AccountStatementModal({
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Titular:</span>
                         <span
-                          className="text-xs truncate max-w-[200px] font-bold text-foreground"
+                          className="text-[11px] truncate max-w-[200px] font-bold text-foreground"
                           title={
                             cuenta.titular ||
                             cuenta.account_name ||
