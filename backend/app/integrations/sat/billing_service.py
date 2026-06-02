@@ -678,7 +678,14 @@ class BillingService:
 
         pdf_descripcion = f"[{clave_servicio_flete}] {desc_concepto_pdf}"
 
-        # Lógica transparente para inyectar si es peligroso en el PDF
+        # 1. PRIMERO DECLARAMOS LAS VARIABLES PARA QUE EXISTAN
+        es_mat_peligroso = getattr(viaje, "es_material_peligroso", False)
+        cve_mat_peligroso = (
+            str(getattr(viaje, "cve_material_peligroso", "") or "").strip().upper()
+        )
+        embalaje_mat = str(getattr(viaje, "embalaje", "") or "").strip().upper()
+
+        # 2. AHORA SÍ EVALUAMOS LA LÓGICA DEL PDF
         es_peligroso_user_bool = es_mat_peligroso in [
             True,
             "true",
@@ -708,12 +715,6 @@ class BillingService:
         c_forma_pago = getattr(cliente, "forma_pago", "99") or "99"
         c_metodo_pago = getattr(cliente, "metodo_pago", "PPD") or "PPD"
         c_moneda = getattr(cliente, "moneda", "MXN") or "MXN"
-
-        es_mat_peligroso = getattr(viaje, "es_material_peligroso", False)
-        cve_mat_peligroso = (
-            str(getattr(viaje, "cve_material_peligroso", "") or "").strip().upper()
-        )
-        embalaje_mat = str(getattr(viaje, "embalaje", "") or "").strip().upper()
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
@@ -924,17 +925,17 @@ class BillingService:
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
 
-        desc_concepto_xml = (
+        # ---> NUEVO: Limpiamos el separador especial y escapamos HTML
+        desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
         )
-        desc_mercancia_xml = (
+        desc_mercancia_xml = html.escape(
             str(d.get("descripcion_mercancia", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
         )
-
         rfc_op_final = str(d.get("rfc_operador", "")).strip()
         nombre_op = str(d.get("nombre_operador", "Desconocido"))
 
