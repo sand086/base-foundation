@@ -477,7 +477,7 @@ export function CreateInvoiceModal({
                             <span className="truncate">
                               {subClienteId
                                 ? `✓ Sucursal: ${selectedClient.sub_clients.find((s) => s.id.toString() === subClienteId)?.nombre || "Seleccionado"}`
-                                : "Facturar a la Matriz principal"}
+                                : "Facturar al cliente principal"}
                             </span>
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
