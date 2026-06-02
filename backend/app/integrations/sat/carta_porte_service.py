@@ -54,6 +54,7 @@ from app.models.models import (
     Operator,
     SystemConfig,
     SatLocationCode,
+    SatProduct,
     ReceivableInvoicePayment,
     BankAccount,
 )
@@ -564,6 +565,7 @@ class CartaPorteService:
             dist_km = int(tarifa.distancia_km or 0)
             distancia_real = str(dist_km) if dist_km > 0 else "1"
         else:
+            # 1 Peso si es is_nominal (Carta Porte Pura/Traslado o similar)
             subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
             iva_pct = 0.16
             ret_pct = 0.04
@@ -688,17 +690,30 @@ class CartaPorteService:
         # =========================================================
         # CONSULTA AL CATÁLOGO SAT PARA MATERIAL PELIGROSO
         # =========================================================
-        from app.models.models import SatProduct
-
         producto_sat = (
             self.db.query(SatProduct)
             .filter(SatProduct.clave == clave_mercancia_final)
             .first()
         )
-        # Extraemos el valor oficial del catálogo (0, 1, o "0,1"). Si no existe, por seguridad asumimos "0,1"
+        # Extraemos el valor oficial del catálogo (0, 1, o "0,1")
         catalogo_peligroso = (
-            producto_sat.es_material_peligroso if producto_sat else "0,1"
+            str(producto_sat.es_material_peligroso).strip() if producto_sat else "0,1"
         )
+        usuario_marco_peligroso = getattr(viaje, "es_material_peligroso", False)
+
+        # Determinamos el veredicto final para el XML y para mostrar en el PDF
+        if catalogo_peligroso == "0":
+            es_peligroso_final = "No"
+        elif catalogo_peligroso == "1":
+            es_peligroso_final = "Sí"
+        else:
+            es_peligroso_final = (
+                "Sí"
+                if usuario_marco_peligroso
+                in [True, "true", "1", "Sí", "Si", "SI", "si"]
+                else "No"
+            )
+        # =========================================================
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
@@ -738,7 +753,7 @@ class CartaPorteService:
         return {
             "cantidad": str(
                 getattr(viaje, "cantidad_bultos", getattr(viaje, "cantidad", 1))
-            ),  # <--- EXTRAEMOS CANTIDAD (Protegido por si usas 'cantidad' o 'cantidad_bultos')
+            ),  # <--- EXTRAEMOS CANTIDAD
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": serie_final,
             "folio": str(folio_final),
@@ -774,10 +789,9 @@ class CartaPorteService:
             ),
             "bienes_transp": clave_mercancia_final,
             # EXTRAEMOS DATOS DE MATERIAL PELIGROSO
-            "es_material_peligroso": getattr(viaje, "es_material_peligroso", False),
-            "catalogo_peligroso": str(
-                catalogo_peligroso
-            ).strip(),  # <--- AÑADIMOS EL DATO DEL SAT
+            "es_material_peligroso": usuario_marco_peligroso,
+            "catalogo_peligroso": catalogo_peligroso,
+            "es_peligroso_final": es_peligroso_final,
             "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
             "embalaje": getattr(viaje, "embalaje", ""),
             "descripcion_mercancia": desc_merc_raw,
@@ -823,7 +837,6 @@ class CartaPorteService:
             "municipio_destino": municipio_dest,
             "domicilio_origen": origen_real,
             "domicilio_destino": calle_destino_real,
-            # SUBCLIENTE EXTRAS PARA EL PDF
             "subcliente_nombre": subcliente_nombre,
             "subcliente_rfc": subcliente_rfc,
             "subcliente_direccion": subcliente_direccion,
@@ -977,6 +990,7 @@ class CartaPorteService:
         # =========================================================
         usuario_marco_peligroso = d.get("es_material_peligroso", False)
         catalogo_peligroso = str(d.get("catalogo_peligroso", "0,1")).strip()
+        es_peligroso_final = d.get("es_peligroso_final", "No")
         clave_prod = str(d.get("bienes_transp", "01010101")).strip()
 
         # 1. VALIDACIONES PREVENTIVAS PARA EL USUARIO (Evitan el error críptico del SAT)
@@ -993,9 +1007,7 @@ class CartaPorteService:
             )
 
         # 2. ARMADO DEL XML SEGÚN LA REGLA SAT
-        if catalogo_peligroso == "1" or (
-            catalogo_peligroso == "0,1" and usuario_marco_peligroso
-        ):
+        if es_peligroso_final == "Sí":
             cve_mat = str(d.get("cve_material_peligroso", "")).strip()
             embalaje = str(d.get("embalaje", "")).strip()
 
@@ -1126,6 +1138,17 @@ class CartaPorteService:
                 }
             ]
 
+        # Inyectamos de manera explícita el bloque de texto del material peligroso para el template PDF
+        es_pel_pdf = d.get("es_peligroso_final", "No")
+        cve_onu_pdf = d.get("cve_material_peligroso", "")
+        emb_pdf = d.get("embalaje", "")
+        info_material_peligroso = f"Material Peligroso: {es_pel_pdf}"
+
+        if es_pel_pdf == "Sí":
+            info_material_peligroso += (
+                f" | Clave ONU: {cve_onu_pdf} | Embalaje: {emb_pdf}"
+            )
+
         context = {
             **d,
             "subtotal": subtotal_str,
@@ -1170,8 +1193,8 @@ class CartaPorteService:
             "destinatario_rfc": d.get("rfc_cliente", ""),
             "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
-            # FIX: Inyección de la leyenda legal limpia para el PDF
             "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
+            "info_material_peligroso": info_material_peligroso,  # <--- INYECTADO AL PDF
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))

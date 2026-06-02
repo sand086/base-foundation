@@ -47,6 +47,7 @@ from app.models.models import (
     Operator,
     SystemConfig,
     SatLocationCode,
+    SatProduct,  # <--- AGREGADO EL MODELO DE CATÁLOGO SAT
     ReceivableInvoicePayment,
     BankAccount,
 )
@@ -322,9 +323,6 @@ class BillingService:
             .first()
         )
 
-        # -------------------------------------------------------------
-        # FIX DEFINITIVO: EXTRACCIÓN MANUAL A PRUEBA DE ERRORES (SIN REGEX)
-        # -------------------------------------------------------------
         leyenda_conf = (
             self.db.query(SystemConfig)
             .filter_by(key=f"sat_leyenda_legal{self.suffix}")
@@ -347,7 +345,6 @@ class BillingService:
         texto = re.sub(r'["\']?\s*/?>\s*$', "", texto)
 
         self.leyenda_legal_db = texto.strip()
-        # -------------------------------------------------------------
 
         nombre_conf = (
             self.db.query(SystemConfig)
@@ -652,6 +649,17 @@ class BillingService:
             else "01010101"
         )
 
+        # ---> NUEVO: CRUZAMOS CON EL CATÁLOGO DEL SAT PARA SABER LA VERDAD ABSOLUTA
+        sat_product = (
+            self.db.query(SatProduct)
+            .filter(SatProduct.clave == clave_mercancia)
+            .first()
+        )
+        flag_peligroso_catalogo = (
+            sat_product.es_material_peligroso if sat_product else "0,1"
+        )
+        # <--- FIN DE LA CONSULTA SAT
+
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
@@ -722,6 +730,7 @@ class BillingService:
             "uso_cfdi": "G03",
             "total_dist_rec": distancia_real,
             "es_material_peligroso": es_mat_peligroso,
+            "flag_peligroso_catalogo": flag_peligroso_catalogo,  # <-- INYECTADO A LA DATA
             "cve_material_peligroso": cve_mat_peligroso,
             "embalaje": embalaje_mat,
             "peso_bruto": (
@@ -931,27 +940,39 @@ class BillingService:
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
         # ========================================================
-        # FIX: LÓGICA DE MATERIAL PELIGROSO
-        # (Si es 0, ignorar; si es 1, validar obligatoriamente claves)
+        # NUEVA LÓGICA DE MATERIAL PELIGROSO CRUZADA CON CATÁLOGO SAT
         # ========================================================
-        is_peligroso = d.get("es_material_peligroso")
+        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
+        is_peligroso_user = d.get("es_material_peligroso")
 
-        # El SAT exige estrictamente "Sí" o "No"
-        if is_peligroso in [True, "true", "1", "Sí", "Si"]:
+        # 1. Evaluamos qué dice el SAT vs qué dijo el usuario
+        if flag_cat == "0":
+            es_peligroso_final = False
+        elif flag_cat == "1":
+            es_peligroso_final = True
+        else:  # "0,1" (Opcional, manda el usuario)
+            es_peligroso_final = is_peligroso_user in [
+                True,
+                "true",
+                "1",
+                "Sí",
+                "Si",
+                "SI",
+                "si",
+            ]
+
+        if es_peligroso_final:
             cve_onu = str(d.get("cve_material_peligroso", "")).strip()
             emb = str(d.get("embalaje", "")).strip()
 
-            # Validación OBLIGATORIA si marcaron el viaje con 1
             if not cve_onu or not emb:
                 raise HTTPException(
                     status_code=400,
-                    detail="Regla SAT: Marcaste el viaje con Material Peligroso (1), debes especificar la Clave de Material Peligroso (ONU) y el Tipo de Embalaje.",
+                    detail=f"Regla SAT: La clave de producto/servicio '{d['bienes_transp']}' indica que es un Material Peligroso. Debes especificar la Clave ONU (Ej. UN1005) y el Tipo de Embalaje.",
                 )
 
-            # Insertamos los 3 atributos requeridos obligatorios
             mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_onu}" Embalaje="{emb}"'
         else:
-            # Si es falso, 0 o No, simplemente no consideramos las demás claves y forzamos el 'No'
             mat_peligroso = ' MaterialPeligroso="No"'
         # ========================================================
 
@@ -1021,9 +1042,6 @@ class BillingService:
         retenciones_str = f"{_clean_float(d.get('retenciones', 0)):,.2f}"
         total_str = f"{_clean_float(d.get('total', 0)):,.2f}"
 
-        # ---------------------------------------------------------
-        # FIX: CONSTRUCCIÓN CORRECTA DE LA LISTA DE CONCEPTOS PDF
-        # ---------------------------------------------------------
         conceptos_render = []
         if (
             "conceptos" in d
@@ -1031,7 +1049,6 @@ class BillingService:
             and len(d["conceptos"]) > 0
             and "precioUnitario" in d["conceptos"][0]
         ):
-            # Es una factura Libre y trajo sus conceptos listos para renderizarse
             for c in d["conceptos"]:
                 conceptos_render.append(
                     {
@@ -1045,7 +1062,6 @@ class BillingService:
                     }
                 )
         else:
-            # Es una factura con Carta Porte (o complemento de pago)
             conceptos_render = [
                 {
                     "clave": d.get("clave_prod_serv", "78101802"),
