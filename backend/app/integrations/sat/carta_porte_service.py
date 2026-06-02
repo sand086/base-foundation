@@ -990,7 +990,7 @@ class CartaPorteService:
         # En el XML viaja como carga general (01010101), pero el PDF sí
         # mostrará la información real de Material Peligroso y lo que decida el cliente.
         clave_prod_xml = "01010101"
-        mat_peligroso = ""
+        mat_peligroso = ' MaterialPeligroso="No"'
         # =========================================================
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
