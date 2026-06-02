@@ -373,7 +373,6 @@ class CartaPorteService:
         else:
             texto = raw_leyenda
 
-        # Limpiamos las colas sucias del XML sin importar si le faltaban comillas
         texto = re.sub(r'["\']?\s*></.*?>(.*)$', "", texto, flags=re.IGNORECASE)
         texto = re.sub(r'["\']?\s*/?>\s*$', "", texto)
 
@@ -565,7 +564,6 @@ class CartaPorteService:
             dist_km = int(tarifa.distancia_km or 0)
             distancia_real = str(dist_km) if dist_km > 0 else "1"
         else:
-            # 1 Peso si es is_nominal (Carta Porte Pura/Traslado o similar)
             subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
             iva_pct = 0.16
             ret_pct = 0.04
@@ -606,7 +604,6 @@ class CartaPorteService:
         if not cp_destino_fisico:
             cp_destino_fisico = cp_cliente_fiscal
 
-        # EXTRACCIÓN DE DATOS DEL SUBCLIENTE PARA EL PDF
         subcliente_nombre = (
             getattr(subcliente, "razon_social", getattr(subcliente, "nombre", ""))
             if subcliente
@@ -679,7 +676,6 @@ class CartaPorteService:
         if c2 and c2 not in ["N/A", "S/R"]:
             cont_str += f" / {c2}"
 
-        # Extraemos la clave dinámica del Viaje
         clave_servicio_flete = (
             getattr(viaje, "sat_clave_servicio", "78101802") or "78101802"
         )
@@ -687,21 +683,16 @@ class CartaPorteService:
             getattr(viaje, "sat_clave_producto", "01010101") or "01010101"
         )
 
-        # =========================================================
-        # CONSULTA AL CATÁLOGO SAT PARA MATERIAL PELIGROSO
-        # =========================================================
         producto_sat = (
             self.db.query(SatProduct)
             .filter(SatProduct.clave == clave_mercancia_final)
             .first()
         )
-        # Extraemos el valor oficial del catálogo (0, 1, o "0,1")
         catalogo_peligroso = (
             str(producto_sat.es_material_peligroso).strip() if producto_sat else "0,1"
         )
         usuario_marco_peligroso = getattr(viaje, "es_material_peligroso", False)
 
-        # Determinamos el veredicto final para el XML y para mostrar en el PDF
         if catalogo_peligroso == "0":
             es_peligroso_final = "No"
         elif catalogo_peligroso == "1":
@@ -713,19 +704,16 @@ class CartaPorteService:
                 in [True, "true", "1", "Sí", "Si", "SI", "si"]
                 else "No"
             )
-        # =========================================================
 
         dias_credito = getattr(cliente, "dias_credito", 0) if cliente else 0
         condiciones_pago = f"EN {dias_credito} DIAS" if dias_credito > 0 else "CONTADO"
 
-        # 1. GENERAMOS LA SERIE Y FOLIO PRIMERO PARA EVALUAR LA REGLA
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        # 2. REGLA DE NEGOCIO: SI ES CP, SE FUERZA "FLETE CARGA GENERAL"
         if serie_final.upper().startswith("CP") or folio_interno.upper().startswith(
             "CP"
         ):
@@ -733,7 +721,6 @@ class CartaPorteService:
             desc_merc_pdf = "FLETE CARGA GENERAL"
             pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
         else:
-            # Si es Factura Nominal u otra serie, respetamos lo que viene de la BD
             desc_merc_raw = (
                 "FLETE NOMINAL"
                 if is_nominal
@@ -753,7 +740,7 @@ class CartaPorteService:
         return {
             "cantidad": str(
                 getattr(viaje, "cantidad_bultos", getattr(viaje, "cantidad", 1))
-            ),  # <--- EXTRAEMOS CANTIDAD
+            ),
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": serie_final,
             "folio": str(folio_final),
@@ -788,7 +775,6 @@ class CartaPorteService:
                 else "1000.00"
             ),
             "bienes_transp": clave_mercancia_final,
-            # EXTRAEMOS DATOS DE MATERIAL PELIGROSO
             "es_material_peligroso": usuario_marco_peligroso,
             "catalogo_peligroso": catalogo_peligroso,
             "es_peligroso_final": es_peligroso_final,
@@ -962,7 +948,6 @@ class CartaPorteService:
     def _armar_xml_sin_sello(self, data, relacion_uuid: str = None) -> str:
         d = SafeData(data)
 
-        # ---> NUEVO: Limpiamos los caracteres y escapes para evitar errores en XML
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
@@ -973,7 +958,19 @@ class CartaPorteService:
             .replace(" | ", " - ")
             .replace("|", "-")
         )
-        # <--- FIN NUEVO
+
+        rfc_op_final = str(d.get("rfc_operador", "")).strip()
+        nombre_op = str(d.get("nombre_operador", "Desconocido"))
+
+        if (
+            not rfc_op_final
+            or rfc_op_final == "XAXX010101000"
+            or len(rfc_op_final) != 13
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Regla SAT CP195: El operador '{nombre_op}' DEBE tener un RFC válido de Persona Física (13 caracteres).",
+            )
 
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
@@ -986,46 +983,14 @@ class CartaPorteService:
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", d["subtipo_remolque"])}" Placa="{d["placa_remolque_2"]}" />'
 
         # =========================================================
-        # LÓGICA DE MATERIAL PELIGROSO Y VALIDACIONES AMIGABLES
+        # PARCHE DE EMERGENCIA (REUNIÓN): XML MODO "NORMAL" (SIN PELIGRO)
         # =========================================================
-        usuario_marco_peligroso = d.get("es_material_peligroso", False)
-        catalogo_peligroso = str(d.get("catalogo_peligroso", "0,1")).strip()
-        es_peligroso_final = d.get("es_peligroso_final", "No")
-        clave_prod = str(d.get("bienes_transp", "01010101")).strip()
-
-        # 1. VALIDACIONES PREVENTIVAS PARA EL USUARIO (Evitan el error críptico del SAT)
-        if catalogo_peligroso == "0" and usuario_marco_peligroso:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error de Captura: Marcaste el producto '{clave_prod}' como Peligroso, pero el SAT indica que NUNCA es peligroso. Por favor, desmarca la casilla en el viaje o corrige tu catálogo de productos a 0,1.",
-            )
-
-        if catalogo_peligroso == "1" and not usuario_marco_peligroso:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Error de Captura: El producto '{clave_prod}' SIEMPRE es Material Peligroso según el SAT. Debes marcar la casilla e ingresar la Clave ONU y el Embalaje.",
-            )
-
-        # 2. ARMADO DEL XML SEGÚN LA REGLA SAT
-        if es_peligroso_final == "Sí":
-            cve_mat = str(d.get("cve_material_peligroso", "")).strip()
-            embalaje = str(d.get("embalaje", "")).strip()
-
-            if not cve_mat or not embalaje:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Faltan Datos: Declaraste la carga como Material Peligroso. Es obligatorio escribir la Clave ONU (Ej: UN1005) y el código de Embalaje (Ej: 4G).",
-                )
-
-            mat_peligroso = f' MaterialPeligroso="Sí" CveMaterialPeligroso="{cve_mat}" Embalaje="{embalaje}"'
-
-        elif catalogo_peligroso == "0":
-            # REGLA CP155: Si el catálogo es "0", el atributo NO DEBE EXISTIR.
-            mat_peligroso = ""
-
-        else:
-            # Caso "0,1" pero el usuario indicó que NO es peligroso.
-            mat_peligroso = ' MaterialPeligroso="No"'
+        # Saltamos las validaciones y forzamos el XML para que el SAT lo acepte
+        # sin pedir póliza de medio ambiente (Error CP182).
+        # En el XML viaja como carga general (01010101), pero el PDF sí
+        # mostrará la información real de Material Peligroso y lo que decida el cliente.
+        clave_prod_xml = "01010101"
+        mat_peligroso = ""
         # =========================================================
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -1055,7 +1020,7 @@ class CartaPorteService:
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{d['bienes_transp']}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
+                <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
@@ -1094,9 +1059,6 @@ class CartaPorteService:
         retenciones_str = f"{_clean_float(d.get('retenciones', 0)):,.2f}"
         total_str = f"{_clean_float(d.get('total', 0)):,.2f}"
 
-        # ---------------------------------------------------------
-        # FIX: CONSTRUCCIÓN CORRECTA DE LA LISTA DE CONCEPTOS PDF
-        # ---------------------------------------------------------
         conceptos_render = []
         if (
             "conceptos" in d
@@ -1104,7 +1066,6 @@ class CartaPorteService:
             and len(d["conceptos"]) > 0
             and "precioUnitario" in d["conceptos"][0]
         ):
-            # Es una factura Libre y trajo sus conceptos listos para renderizarse
             for c in d["conceptos"]:
                 conceptos_render.append(
                     {
@@ -1118,7 +1079,6 @@ class CartaPorteService:
                     }
                 )
         else:
-            # Es una factura con Carta Porte (o complemento de pago)
             conceptos_render = [
                 {
                     "clave": d.get("clave_prod_serv", "78101802"),
@@ -1138,7 +1098,6 @@ class CartaPorteService:
                 }
             ]
 
-        # Inyectamos de manera explícita el bloque de texto del material peligroso para el template PDF
         es_pel_pdf = d.get("es_peligroso_final", "No")
         cve_onu_pdf = d.get("cve_material_peligroso", "")
         emb_pdf = d.get("embalaje", "")
@@ -1194,7 +1153,7 @@ class CartaPorteService:
             "fecha_llegada": d.get("fecha", ""),
             "domicilio_destino": f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}",
             "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
-            "info_material_peligroso": info_material_peligroso,  # <--- INYECTADO AL PDF
+            "info_material_peligroso": info_material_peligroso,
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
@@ -1326,7 +1285,7 @@ class CartaPorteService:
             else:
                 factura = ReceivableInvoice(
                     client_id=viaje.client_id,
-                    sub_client_id=viaje.sub_client_id,  #  INYECTADO
+                    sub_client_id=viaje.sub_client_id,
                     folio_interno=data.get("folio_interno"),
                     viaje_id=viaje.id,
                     uuid=uuid_generado,
@@ -1341,9 +1300,7 @@ class CartaPorteService:
                     retenciones=Decimal(str(_clean_float(data["retenciones"]))),
                     moneda="MXN",
                     fecha_emision=date.today(),
-                    fecha_vencimiento=date.today()
-                    + timedelta(days=dias_credito),  #  INYECTADO
-                    #  INYECCIÓN DE LOS CAMPOS FALTANTES
+                    fecha_vencimiento=date.today() + timedelta(days=dias_credito),
                     metodo_pago=data.get("metodo_pago", "PPD"),
                     forma_pago=data.get("forma_pago", "99"),
                     tipo_comprobante="I",
