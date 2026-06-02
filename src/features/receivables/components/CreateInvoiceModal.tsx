@@ -141,7 +141,7 @@ export function CreateInvoiceModal({
     [clients, clienteId],
   );
 
-  // Normalizamos los datos operativos para evitar errores de TypeScript
+  // Normalizamos los datos operativos basados en los modelos de TypeScript
   const operationalInfo = useMemo(() => {
     if (!selectedClient) return null;
 
@@ -149,6 +149,7 @@ export function CreateInvoiceModal({
       (s) => s.id.toString() === subClienteId,
     );
 
+    // Si seleccionó una sucursal, leemos las propiedades de SubClientResponse
     if (subClient) {
       return {
         type: "Sucursal",
@@ -164,6 +165,7 @@ export function CreateInvoiceModal({
       };
     }
 
+    // Si no, leemos las propiedades de ClientResponse (Matriz)
     return {
       type: "Matriz",
       contacto: selectedClient.contacto_principal,
@@ -175,14 +177,14 @@ export function CreateInvoiceModal({
   // Autofill Inteligente Dividido
   useEffect(() => {
     if (selectedClient) {
-      // 1. DATOS FISCALES OBLIGATORIOS (SIEMPRE DE LA MATRIZ)
+      // 1. DATOS FISCALES OBLIGATORIOS (SIEMPRE DE LA MATRIZ - ClientResponse)
       setRazonSocialEditable(selectedClient.razon_social || "");
       setRfcEditable(selectedClient.rfc || "");
       setCpEditable(selectedClient.codigo_postal_fiscal || "");
       setRegimenEditable(selectedClient.regimen_fiscal || "601");
       setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
 
-      // 2. CORREO (EL SUB-CLIENTE NO TIENE CORREO EN SU ESQUEMA, SE TOMA DE LA MATRIZ)
+      // 2. CORREO (EL SUB-CLIENTE NO TIENE CORREO, SE TOMA DE LA MATRIZ O SE PUEDE EDITAR MANUALMENTE)
       setEmailEditable(selectedClient.email || "");
     }
   }, [selectedClient, subClienteId]);
@@ -582,7 +584,6 @@ export function CreateInvoiceModal({
                     </div>
                   </div>
                 )}
-                {/* FIN BLOQUE DATOS OPERATIVOS */}
 
                 <div className="space-y-2 mt-4">
                   <Label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
