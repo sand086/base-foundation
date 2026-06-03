@@ -39,5 +39,10 @@ export type UnitCreate = {
     permiso_sct_url?: (string | null);
     caat_url?: (string | null);
     tarjeta_circulacion_folio?: (string | null);
+    /**
+     * ID del catálogo de aseguradoras (Medio Ambiente)
+     */
+    aseguradora_med_ambiente_id?: (number | null);
+    poliza_med_ambiente?: (string | null);
 };
 

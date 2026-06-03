@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Label genérico
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -33,7 +33,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Unit } from "@/features/units/types";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +45,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { DatePicker } from "@/components/ui/date-picker"; //  Importado para reemplazar input date nativo
+import { DatePicker } from "@/components/ui/date-picker";
+
+// HOOK DEL CATÁLOGO DE ASEGURADORAS
+import { useInsurers } from "@/features/settings/hooks/useInsurers";
 
 // =====================
 // Configuración
@@ -116,12 +118,15 @@ const unidadSchema = z
     permiso_sct_folio: z.string().optional(),
     caat_folio: z.string().optional(),
 
-    // Cambiadas a z.date().optional() para usar con DatePicker
     caat_vence: z.date().optional(),
     seguro_vence: z.date().optional(),
     verificacion_humo_vence: z.date().optional(),
     verificacion_fisico_mecanica_vence: z.date().optional(),
     permiso_sct_vence: z.date().optional(),
+
+    // NUEVOS CAMPOS: SEGURO DE MEDIO AMBIENTE
+    aseguradora_med_ambiente_id: z.number().nullable().optional(),
+    poliza_med_ambiente: z.string().optional(),
 
     status: z.string().default("disponible"),
   })
@@ -250,6 +255,9 @@ export function AddUnidadModal({
 }: AddUnidadModalProps) {
   const { toast } = useToast();
 
+  // Obtenemos el catálogo de aseguradoras
+  const { insurers } = useInsurers();
+
   const [masterPassword, setMasterPassword] = useState("");
   const [showOverride, setShowOverride] = useState(false);
 
@@ -286,6 +294,8 @@ export function AddUnidadModal({
       verificacion_humo_vence: undefined,
       verificacion_fisico_mecanica_vence: undefined,
       permiso_sct_vence: undefined,
+      aseguradora_med_ambiente_id: undefined,
+      poliza_med_ambiente: "",
       status: "disponible",
     },
   });
@@ -338,6 +348,9 @@ export function AddUnidadModal({
           unidadToEdit.verificacion_fisico_mecanica_vence,
         ),
         permiso_sct_vence: parseDateSafe(unidadToEdit.permiso_sct_vence),
+        aseguradora_med_ambiente_id:
+          unidadToEdit.aseguradora_med_ambiente_id || undefined,
+        poliza_med_ambiente: unidadToEdit.poliza_med_ambiente || "",
         status: unidadToEdit.status || "disponible",
       });
       return;
@@ -367,6 +380,8 @@ export function AddUnidadModal({
         verificacion_humo_vence: undefined,
         verificacion_fisico_mecanica_vence: undefined,
         permiso_sct_vence: undefined,
+        aseguradora_med_ambiente_id: undefined,
+        poliza_med_ambiente: "",
         status: "disponible",
       });
       setShowOverride(false);
@@ -449,6 +464,11 @@ export function AddUnidadModal({
       ),
       permiso_sct_vence: formatDateForApi(data.permiso_sct_vence),
       caat_vence: formatDateForApi(data.caat_vence),
+
+      // NUEVOS CAMPOS: SEGURO DE MEDIO AMBIENTE
+      aseguradora_med_ambiente_id: data.aseguradora_med_ambiente_id || null,
+      poliza_med_ambiente: cleanString(data.poliza_med_ambiente),
+
       status: (data.status || "disponible") as any,
       ignore_blocking: ignoreBlocking,
     };
@@ -470,9 +490,9 @@ export function AddUnidadModal({
         if (!isOpen && !isSaving) handleClose();
       }}
     >
-      {/*  CAPA 1: CASCARÓN */}
+      {/* CAPA 1: CASCARÓN */}
       <DialogContent className="w-[95vw] sm:max-w-2xl p-0 flex flex-col max-h-[90vh] bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
-        {/*  CAPA 2: HEADER TAHOE */}
+        {/* CAPA 2: HEADER TAHOE */}
         <DialogHeader className="p-6 bg-card border-b border-border shrink-0 relative z-10">
           <div className="absolute inset-0 bg-gradient-to-br from-black/5 dark:from-white/5 to-transparent pointer-events-none" />
           <div className="relative z-10 flex items-center gap-4 sm:gap-5">
@@ -506,7 +526,7 @@ export function AddUnidadModal({
           </div>
         </DialogHeader>
 
-        {/*  CAPA 3: BODY FORMULARIO */}
+        {/* CAPA 3: BODY FORMULARIO */}
         <Form {...form}>
           <form
             onSubmit={handleSubmit(onSubmit)}
@@ -998,7 +1018,9 @@ export function AddUnidadModal({
                   className="space-y-6 mt-4 animate-in fade-in slide-in-from-bottom-2 duration-500"
                 >
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 rounded-xl flex items-start gap-3 border border-blue-100 dark:border-blue-900/50 shadow-sm">
-                    <Info className="h-5 w-5 mt-0.5 shrink-0" />
+                    <div className="shrink-0 w-8 h-8 flex items-center justify-center bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                      <Info className="h-5 w-5" />
+                    </div>
                     <p className="text-xs font-medium leading-relaxed dark:text-blue-200/80">
                       Aquí se registran folios y fechas de vencimiento
                       operativas. La carga física de archivos PDF se realiza
@@ -1049,7 +1071,69 @@ export function AddUnidadModal({
                       />
                     ))}
 
-                    <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 border border-blue-200 dark:border-blue-900/50 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 shadow-sm">
+                    {/* NUEVO BLOQUE: SEGURO MEDIO AMBIENTE */}
+                    <div className="flex flex-col gap-4 p-5 border border-emerald-200 dark:border-emerald-900/50 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 shadow-sm mt-2">
+                      <div className="flex-1 space-y-3 w-full">
+                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-800 dark:text-emerald-400">
+                          Seguro de Medio Ambiente (Requerido SAT para Mat.
+                          Peligroso)
+                        </Label>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <FormField
+                            control={form.control}
+                            name="aseguradora_med_ambiente_id"
+                            render={({ field }) => (
+                              <FormItem className="flex-[2] space-y-1.5">
+                                <FormControl>
+                                  <Select
+                                    onValueChange={(val) =>
+                                      field.onChange(Number(val))
+                                    }
+                                    value={
+                                      field.value ? field.value.toString() : ""
+                                    }
+                                  >
+                                    <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/50 font-bold uppercase shadow-sm">
+                                      <SelectValue placeholder="Catálogo de Aseguradoras" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {insurers?.map((insurer) => (
+                                        <SelectItem
+                                          key={insurer.id}
+                                          value={insurer.id.toString()}
+                                        >
+                                          {insurer.nombre}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="poliza_med_ambiente"
+                            render={({ field }) => (
+                              <FormItem className="flex-[2] space-y-1.5">
+                                <FormControl>
+                                  <Input
+                                    placeholder="Nº PÓLIZA"
+                                    {...field}
+                                    value={field.value || ""}
+                                    className="h-11 bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/50 font-mono font-bold uppercase shadow-sm"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 border border-blue-200 dark:border-blue-900/50 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 shadow-sm mt-2">
                       <div className="flex-1 space-y-3 w-full">
                         <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-800 dark:text-blue-400">
                           Registro CAAT (Folio y Vigencia)
@@ -1075,7 +1159,7 @@ export function AddUnidadModal({
                             control={form.control}
                             name="caat_vence"
                             render={({ field }) => (
-                              <FormItem className="flex-1 space-y-1.5">
+                              <FormItem className="flex-[2] space-y-1.5">
                                 <FormControl>
                                   <DatePicker
                                     date={field.value}
@@ -1159,7 +1243,7 @@ export function AddUnidadModal({
               </div>
             </Tabs>
 
-            {/*  CAPA 4: FOOTER TAHOE */}
+            {/* CAPA 4: FOOTER TAHOE */}
             <DialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-slate-200 dark:border-white/10 shrink-0">
               <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3 w-full">
                 <Button

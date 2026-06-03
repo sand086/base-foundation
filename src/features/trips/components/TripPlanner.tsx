@@ -214,7 +214,7 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  //   ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
+  //  ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
   const [tableKey, setTableKey] = useState(Date.now());
 
   useEffect(() => {
@@ -342,9 +342,9 @@ export const TripPlanner = () => {
     if (ok) {
       setUpdateModalOpen(false);
       await fetchTrips();
-      setTableKey(Date.now()); //   Destruye y recrea la tabla internamente
+      setTableKey(Date.now()); //  Destruye y recrea la tabla internamente
 
-      //   CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
+      //  CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
 
@@ -431,8 +431,12 @@ export const TripPlanner = () => {
         sortable: true,
         render: (value, row) => (
           <div className="flex flex-col gap-1">
-            <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight ">
+            <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight flex items-center gap-2">
               {row.tripPadre.client?.razon_social || "CLIENTE GENERAL"}
+              {/* NUEVO: INDICADOR VISUAL MATERIAL PELIGROSO */}
+              {row.tripPadre.es_material_peligroso && (
+                <ShieldAlert className="h-3.5 w-3.5 text-amber-500 drop-shadow-sm" />
+              )}
             </span>
             <span className="text-[12px] font-black text-muted-foreground uppercase tracking-widest">
               TRP-{row.tripPadre.public_id || row.tripPadre.id}
@@ -592,7 +596,7 @@ export const TripPlanner = () => {
             onClick={async () => {
               toast.info("Sincronizando datos...");
               await fetchTrips();
-              setTableKey(Date.now()); //   Forzar destrucción y recreación de tabla sin recargar página
+              setTableKey(Date.now()); //  Forzar destrucción y recreación de tabla sin recargar página
             }}
             disabled={loading}
             className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
@@ -637,7 +641,7 @@ export const TripPlanner = () => {
         </div>
       </div>
 
-      {/*  AQUI REEMPLAZAMOS LA TABLA MANUAL POR LA ENHANCED DATATABLE */}
+      {/* AQUI REEMPLAZAMOS LA TABLA MANUAL POR LA ENHANCED DATATABLE */}
       {viewMode === "table" && (
         <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
           <CardContent className="p-0">
@@ -669,8 +673,12 @@ export const TripPlanner = () => {
                         key={v.id}
                         className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-rose-100 dark:border-rose-900/50 text-xs shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px]">
+                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px] flex items-center gap-1.5">
                           {v.client?.razon_social}
+                          {/* INDICADOR MATERIAL PELIGROSO */}
+                          {v.es_material_peligroso && (
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
                         </p>
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
@@ -701,8 +709,12 @@ export const TripPlanner = () => {
                         key={v.id}
                         className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-white/5 text-xs shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px]">
+                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px] flex items-center gap-1.5">
                           {v.client?.razon_social}
+                          {/* INDICADOR MATERIAL PELIGROSO */}
+                          {v.es_material_peligroso && (
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
                         </p>
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
@@ -813,8 +825,12 @@ export const TripPlanner = () => {
                             onClick={() => handleAssignInWizard(v)}
                             className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 p-2 rounded-lg cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:shadow-sm transition-all relative group haptic-press"
                           >
-                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-4">
+                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-4 flex items-center gap-1">
                               {v.client?.razon_social}
+                              {/* INDICADOR MATERIAL PELIGROSO EN CALENDARIO */}
+                              {v.es_material_peligroso && (
+                                <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
+                              )}
                             </div>
                             <div className="text-[10px] text-emerald-600 dark:text-emerald-500/80 truncate font-bold uppercase tracking-tight mt-0.5">
                               {v.route_name || `${v.origin}-${v.destination}`}
@@ -1007,8 +1023,12 @@ export const TripPlanner = () => {
                   className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-slate-900/50 hover:border-emerald-300 dark:hover:border-emerald-500/50 hover:shadow-md transition-all group"
                 >
                   <div className="flex-1 min-w-0 pr-4 mb-4 sm:mb-0">
-                    <p className="font-black text-sm text-brand-navy dark:text-white uppercase truncate">
+                    <p className="font-black text-sm text-brand-navy dark:text-white uppercase truncate flex items-center gap-1.5">
                       {v.client?.razon_social}
+                      {/* INDICADOR MATERIAL PELIGROSO EN CALENDARIO (MODAL) */}
+                      {v.es_material_peligroso && (
+                        <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0" />
+                      )}
                     </p>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest truncate mt-1">
                       {v.route_name || `${v.origin}-${v.destination}`}

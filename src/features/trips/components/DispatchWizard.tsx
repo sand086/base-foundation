@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Award,
   Snowflake,
+  ShieldAlert,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1434,18 +1435,16 @@ export const DispatchWizard = ({
                       const prod = availableSatProducts.find(
                         (p) => p.value === val,
                       );
-                      if (prod)
+                      if (prod) {
+                        const isHazardous = prod.es_material_peligroso === "1";
                         setData((p) => ({
                           ...p,
                           sat_clave_producto: prod.clave,
                           descripcion_mercancia: prod.label,
-                          es_material_peligroso:
-                            prod.es_material_peligroso === "1",
-                          clase_imo:
-                            prod.es_material_peligroso === "1"
-                              ? p.clase_imo
-                              : "",
+                          es_material_peligroso: isHazardous,
+                          clase_imo: isHazardous ? p.clase_imo : "",
                         }));
+                      }
                     }}
                   />
                 </div>
@@ -1483,6 +1482,28 @@ export const DispatchWizard = ({
                     }
                   />
                 </div>
+              </div>
+
+              {/* 🛡️ NUEVO SWITCH MANUAL DE MATERIAL PELIGROSO 🛡️ */}
+              <div className="flex items-center gap-3 mt-4 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200 dark:border-amber-900/50">
+                <Switch
+                  checked={data.es_material_peligroso}
+                  onCheckedChange={(c) =>
+                    setData((p) => ({ ...p, es_material_peligroso: c }))
+                  }
+                />
+                <Label
+                  className="text-[11px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-500 cursor-pointer flex items-center gap-2"
+                  onClick={() =>
+                    setData((p) => ({
+                      ...p,
+                      es_material_peligroso: !p.es_material_peligroso,
+                    }))
+                  }
+                >
+                  <ShieldAlert className="h-4 w-4" /> ¿Esta carga contiene
+                  Materiales Peligrosos (IMO)?
+                </Label>
               </div>
 
               {/* CAMPOS CONDICIONALES DE MATERIAL PELIGROSO */}
