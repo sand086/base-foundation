@@ -240,17 +240,21 @@ async def download_upload(upload_id: int, db: Session = Depends(get_db)):
     "/units/{term}", response_model=schemas.UnitResponse, tags=["Fleet - Units"]
 )
 def read_unit(term: str, db: Session = Depends(get_db)):
+    from urllib.parse import unquote
+
+    term_decoded = unquote(term)
+
+    # 1. SIEMPRE buscar por económico primero (es lo que viaja en la URL)
+    db_unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
+    if db_unit:
+        return db_unit
+
+    # 2. Si no lo encuentra por económico, y resulta que es un número, intentar por ID interno
     if term.isdigit():
         db_unit = crud.get_unit(db, unit_id=int(term))
         if db_unit:
             return db_unit
 
-    from urllib.parse import unquote
-
-    term_decoded = unquote(term)
-    db_unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
-    if db_unit:
-        return db_unit
     raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
 
