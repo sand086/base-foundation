@@ -736,6 +736,26 @@ class CartaPorteService:
                 status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
             )
 
+    def _guardar_xml_disco(self, cfdi_bytes: bytes, uuid_timbrado: str):
+        """
+        Guarda el archivo XML timbrado en el directorio de almacenamiento especificado.
+        """
+        try:
+            # Creamos la ruta completa combinando el directorio y el UUID
+            xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
+
+            # Escribimos los bytes del XML ('wb' es para escritura de bytes)
+            with open(xml_path, "wb") as f:
+                f.write(cfdi_bytes)
+
+            logger.info(f"💾 XML guardado en disco correctamente: {xml_path}")
+        except Exception as e:
+            logger.error(f"❌ Error crítico al guardar el XML en disco: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error interno del servidor al almacenar el archivo XML: {str(e)}",
+            )
+
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))

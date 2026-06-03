@@ -1086,25 +1086,34 @@ export function AddUnidadModal({
                               <FormItem className="flex-[2] space-y-1.5">
                                 <FormControl>
                                   <Select
+                                    // Convierte el valor string del Select a Número para Zod/Form
                                     onValueChange={(val) =>
-                                      field.onChange(Number(val))
+                                      field.onChange(val ? Number(val) : null)
                                     }
+                                    // Evita el string vacío "" para que no se rompa el placeholder
                                     value={
-                                      field.value ? field.value.toString() : ""
+                                      field.value !== null &&
+                                      field.value !== undefined
+                                        ? field.value.toString()
+                                        : undefined
                                     }
                                   >
                                     <SelectTrigger className="h-11 bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800/50 font-bold uppercase shadow-sm">
                                       <SelectValue placeholder="Catálogo de Aseguradoras" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {insurers?.map((insurer) => (
-                                        <SelectItem
-                                          key={insurer.id}
-                                          value={insurer.id.toString()}
-                                        >
-                                          {insurer.nombre}
-                                        </SelectItem>
-                                      ))}
+                                      {/* Validamos que insurers sea un arreglo antes de mapear */}
+                                      {Array.isArray(insurers) &&
+                                        insurers.map((insurer) => (
+                                          <SelectItem
+                                            key={insurer.id}
+                                            value={insurer.id.toString()} // "1"
+                                            className="font-bold text-xs uppercase"
+                                          >
+                                            {insurer.nombre}{" "}
+                                            {/* Mostrará "TEST" */}
+                                          </SelectItem>
+                                        ))}
                                     </SelectContent>
                                   </Select>
                                 </FormControl>
