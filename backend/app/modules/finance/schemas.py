@@ -1,4 +1,12 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+import re
+from pydantic import (
+    BaseModel,
+    EmailStr,
+    Field,
+    ConfigDict,
+    field_validator,
+    ValidationInfo,
+)
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date
 from app.models.models import RecordStatus
@@ -262,3 +270,56 @@ class IndirectCategoryResponse(IndirectCategoryBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# =========================================================
+# FACTURAS LIBRES SAT (BILLING SERVICE)
+# =========================================================
+
+
+class ConceptoLibre(BaseModel):
+    claveProdServ: str = Field(default="84111506")
+    cantidad: float = Field(default=1.0)
+    claveUnidad: str = Field(default="E48")
+    descripcion: str
+    precioUnitario: float
+    importe: float
+    id: Optional[str] = "01"
+
+
+class SatFacturaLibrePayload(BaseModel):
+    """
+    Validador estricto para Facturas de Ingreso (Libres) generadas en Finanzas.
+    """
+
+    cliente_rfc: str
+    cp_receptor: str
+    monto_total: float
+    subtotal: float
+    iva: float
+    retenciones: float
+    conceptos: List[ConceptoLibre]
+
+    model_config = ConfigDict(extra="allow")
+
+    @field_validator("cliente_rfc", mode="before")
+    @classmethod
+    def validate_rfc(cls, v):
+        if not v or str(v).strip() in ["", "None"]:
+            return "XAXX010101000"
+        cleaned = re.sub(r"[^A-Z0-9Ñ]", "", str(v).upper().strip())
+        if len(cleaned) not in [12, 13]:
+            return "XAXX010101000"
+        return cleaned
+
+    @field_validator("cp_receptor", mode="before")
+    @classmethod
+    def validate_cp(cls, v):
+        cp_str = str(v).strip() if v else ""
+        if len(cp_str) == 4 and cp_str.isdigit():
+            return f"0{cp_str}"
+        if len(cp_str) != 5 or not cp_str.isdigit():
+            raise ValueError(
+                f"El Código Postal del cliente debe tener exactamente 5 dígitos. Recibido: '{cp_str}'"
+            )
+        return cp_str

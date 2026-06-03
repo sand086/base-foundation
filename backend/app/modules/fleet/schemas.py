@@ -279,6 +279,12 @@ class UnitBase(ORMBase):
     caat_url: Optional[str] = Field(default=None, max_length=500)
     tarjeta_circulacion_folio: Optional[str] = Field(default=None, max_length=50)
 
+    # NUEVOS CAMPOS: SEGURO DE MEDIO AMBIENTE
+    aseguradora_med_ambiente_id: Optional[int] = Field(
+        default=None, description="ID del catálogo de aseguradoras (Medio Ambiente)"
+    )
+    poliza_med_ambiente: Optional[str] = Field(default=None, max_length=50)
+
 
 class UnitCreate(UnitBase):
     public_id: Optional[str] = Field(default=None, max_length=50)
@@ -325,6 +331,10 @@ class UnitUpdate(ORMBase):
     permiso_sct_url: Optional[str] = Field(default=None, max_length=500)
     caat_url: Optional[str] = Field(default=None, max_length=500)
     tarjeta_circulacion_folio: Optional[str] = Field(default=None, max_length=50)
+
+    # NUEVOS CAMPOS: SEGURO DE MEDIO AMBIENTE
+    aseguradora_med_ambiente_id: Optional[int] = None
+    poliza_med_ambiente: Optional[str] = Field(default=None, max_length=50)
 
     model_config = ConfigDict(extra="ignore")
 

@@ -455,6 +455,15 @@ class Unit(AuditMixin, Base):
     configuracion_ejes = Column(
         pg_enum(UnitAxleConfig, "unitaxleconfig"), nullable=True
     )
+    aseguradora_med_ambiente_id = Column(
+        Integer, ForeignKey("insurers_catalog.id", ondelete="SET NULL"), nullable=True
+    )
+    poliza_med_ambiente = Column(String(50), nullable=True)
+
+    # Relación para poder sacar el nombre fácilmente en Python
+    aseguradora_ambiental = relationship(
+        "InsurerCatalog", foreign_keys=[aseguradora_med_ambiente_id]
+    )
 
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
