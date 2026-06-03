@@ -317,11 +317,17 @@ def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_
 def update_unit_tires(
     unit_term: str, tires: List[schemas.TireCreate], db: Session = Depends(get_db)
 ):
-    unit = (
-        crud.get_unit(db, int(unit_term))
-        if unit_term.isdigit()
-        else crud.get_unit_by_eco(db, unit_term)
-    )
+    unit = None
+    # 1. Intentamos buscar por ID interno si es un dígito
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+
+    # 2. Si falló la búsqueda por ID, buscamos por número económico (Ej: "02")
+    if not unit:
+        from urllib.parse import unquote
+
+        unit = crud.get_unit_by_eco(db, numero_economico=unquote(unit_term))
+
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
@@ -347,11 +353,17 @@ async def upload_unit_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    unit = (
-        crud.get_unit(db, int(unit_term))
-        if unit_term.isdigit()
-        else crud.get_unit_by_eco(db, unit_term)
-    )
+    unit = None
+    # 1. Intentamos buscar por ID interno si es un dígito
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+
+    # 2. Si falló la búsqueda por ID, buscamos por número económico (Ej: "02")
+    if not unit:
+        from urllib.parse import unquote
+
+        unit = crud.get_unit_by_eco(db, numero_economico=unquote(unit_term))
+
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
