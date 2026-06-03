@@ -1671,3 +1671,167 @@ class BillingService:
                 status_code=500,
                 detail=f"Error timbrando factura libre (SAT/PAC): {str(e)}",
             )
+
+    def regenerar_pdf_factura(self, invoice_id: int):
+        from app.models.models import ReceivableInvoice
+        from io import BytesIO
+        import qrcode
+
+        # 1. Buscar la factura en base de datos
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.id == invoice_id)
+            .first()
+        )
+        if not factura:
+            raise ValueError(
+                f"Factura con ID {invoice_id} no encontrada en la base de datos."
+            )
+
+        if not factura.uuid:
+            raise ValueError(
+                "Esta factura no tiene UUID, lo que significa que no ha sido timbrada por el SAT."
+            )
+
+        uuid_timbrado = factura.uuid
+
+        # 2. Localizar el XML físico en el servidor
+        xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
+        if not xml_path.exists():
+            raise ValueError(
+                f"No se encontró el archivo XML original en el servidor: {xml_path}"
+            )
+
+        # 3. Leer el XML para extraer sellos y datos criptográficos
+        with open(xml_path, "rb") as f:
+            cfdi_bytes = f.read()
+
+        try:
+            root = etree.fromstring(cfdi_bytes)
+            ns = {
+                "cfdi": "http://www.sat.gob.mx/cfd/4",
+                "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+            }
+
+            tfd_nodes = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
+            if not tfd_nodes:
+                raise ValueError(
+                    "El XML no contiene el nodo TimbreFiscalDigital necesario para el QR."
+                )
+
+            tfd_node = tfd_nodes[0]
+            s_sat = tfd_node.get("SelloSAT", "0000")
+            c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+            s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+
+            fecha_timbrado = tfd_node.get("FechaTimbrado", "")
+            rfc_prov = tfd_node.get("RfcProvCertif", "")
+            version = tfd_node.get("Version", "1.1")
+            sello_cfd = tfd_node.get("SelloCFD", "")
+
+            cadena_original_tfd = f"||{version}|{uuid_timbrado}|{fecha_timbrado}|{rfc_prov}|{sello_cfd}|{c_sat}||"
+
+            # 4. Formatear Total y Letras
+            total_float = _clean_float(factura.monto_total)
+
+            if HAS_NUM2WORDS:
+                entero = int(total_float)
+                decimales = int(round((total_float - entero) * 100))
+                texto = num2words(entero, lang="es").upper()
+                if texto == "UNO":
+                    texto = "UN"
+                importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+            else:
+                importe_letra = f"({total_float:,.2f} MXN)"
+
+            # 5. Reconstruir QR
+            cliente = factura.client
+            qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={cliente.rfc if cliente else ''}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+            qr = qrcode.QRCode(version=1, box_size=10, border=2)
+            qr.add_data(qr_string)
+            qr.make(fit=True)
+            buffer = BytesIO()
+            qr.make_image(fill_color="black", back_color="white").save(
+                buffer, format="PNG"
+            )
+
+            # 6. Preparar Diccionario de Contexto para el template HTML
+            folio_str = (
+                str(factura.folio_interno).split("-")[-1]
+                if factura.folio_interno and "-" in str(factura.folio_interno)
+                else str(factura.id)
+            )
+
+            d = {
+                "client_id": cliente.id if cliente else None,
+                "folio_interno": factura.folio_interno,
+                "folio": folio_str,
+                "fecha": (
+                    factura.fecha_emision.strftime("%Y-%m-%dT00:00:00")
+                    if factura.fecha_emision
+                    else ""
+                ),
+                "subtotal": float(factura.subtotal or 0.0),
+                "iva": float(factura.iva or 0.0),
+                "retenciones": float(factura.retenciones or 0.0),
+                "total": float(factura.monto_total or 0.0),
+                "monto_total": float(factura.monto_total or 0.0),
+                "moneda": (
+                    str(
+                        factura.moneda.value
+                        if hasattr(factura.moneda, "value")
+                        else factura.moneda
+                    )
+                    if factura.moneda
+                    else "MXN"
+                ),
+                "metodo_pago": factura.metodo_pago or "PPD",
+                "forma_pago": factura.forma_pago or "99",
+                "cliente_rfc": cliente.rfc if cliente else "",
+                "cliente": cliente.razon_social if cliente else "",
+                "cp_receptor": cliente.codigo_postal_fiscal if cliente else "",
+                "regimen_fiscal_receptor": cliente.regimen_fiscal if cliente else "601",
+                "rfc_cliente": cliente.rfc if cliente else "",
+                "nombre_cliente": cliente.razon_social if cliente else "",
+                "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
+                "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
+                "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
+                "conceptos": (
+                    factura.conceptos_detalle
+                    if factura.conceptos_detalle and len(factura.conceptos_detalle) > 0
+                    else [
+                        {
+                            "claveProdServ": "84111506",
+                            "cantidad": 1.0,
+                            "claveUnidad": "E48",
+                            "descripcion": factura.concepto or "Servicios Generales",
+                            "precioUnitario": float(factura.subtotal or 0.0),
+                            "importe": float(factura.subtotal or 0.0),
+                        }
+                    ]
+                ),
+                "leyenda_legal": self.leyenda_legal_db,
+            }
+
+            # 7. Renderizar y Guardar PDF
+            self._generar_pdf_con_diseno(
+                d,
+                uuid_timbrado,
+                buffer.getvalue(),
+                s_sat,
+                s_emi,
+                c_sat,
+                cadena_original_tfd,
+                importe_letra,
+            )
+
+            return {
+                "status": "success",
+                "message": f"PDF regenerado correctamente para la factura {invoice_id} (UUID: {uuid_timbrado})",
+            }
+
+        except Exception as e:
+            logger.error(f"Error regenerando PDF para ID {invoice_id}: {e}")
+            raise ValueError(
+                f"Error extrayendo datos del XML o reconstruyendo el PDF: {str(e)}"
+            )
