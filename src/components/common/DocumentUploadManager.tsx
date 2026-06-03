@@ -228,8 +228,15 @@ export function DocumentUploadManager({
 
   //   Lógica de servicio dinámica para subida
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    // 1. Guardamos la referencia del input y el archivo ANTES de cualquier cosa
+    const inputElement = e.target;
+    const file = inputElement.files?.[0];
+
     if (!file || !activeId) return;
+
+    // 2. ¡EL FIX ESTÁ AQUÍ! Limpiamos el input INMEDIATAMENTE
+    inputElement.value = "";
+
     setIsUploading(true);
 
     try {
@@ -285,7 +292,7 @@ export function DocumentUploadManager({
       toast.error("Error al subir documento");
     } finally {
       setIsUploading(false);
-      e.target.value = "";
+      // ¡AQUÍ YA NO VA e.target.value = "" PORQUE LO HICIMOS ARRIBA!
     }
   };
 
