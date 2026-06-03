@@ -419,7 +419,9 @@ export function AddTicketModal({
     const list = activeTrips.flatMap((t) => {
       const validLegs = (t.legs || []).filter((leg: any) => {
         const legStatus = String(leg.status ?? "").toLowerCase();
-        return ["entregado", "cerrado", "liquidado"].includes(legStatus);
+        return ["en_transito", "entregado", "cerrado", "liquidado"].includes(
+          legStatus,
+        );
       });
 
       const options: { label: string; value: string }[] = [];
