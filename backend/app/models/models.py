@@ -1304,6 +1304,19 @@ class InvoicePayment(AuditMixin, Base):
     complemento_uuid = Column(String(36))
     comprobante_url = Column(String(500), nullable=True)
 
+    # 👇 LOS CAMPOS QUE FALTABAN Y CAUSABAN EL CRASH 👇
+    estatus = Column(String(50), default="ACTIVO", server_default="ACTIVO")
+    motivo_cancelacion = Column(String(5), nullable=True)
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
+
+    document_history = relationship(
+        "PayablePaymentDocumentHistory",
+        back_populates="payment",
+        cascade="all, delete-orphan",
+    )
+    # 👆 -------------------------------------------- 👆
+
     invoice = relationship("PayableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")
 
