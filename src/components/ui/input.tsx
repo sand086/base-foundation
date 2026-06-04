@@ -9,7 +9,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, onChange, preserveCase, ...props }, ref) => {
     // 2. LÓGICA MEJORADA: Identificamos si NO debemos hacer mayúsculas
-    const excludedTypes = ["password", "email", "url", "number"];
+    const excludedTypes = ["password", "email", "url", "number", "file"];
 
     const isExcludedType =
       preserveCase || // Si pasamos preserveCase={true} manualmente

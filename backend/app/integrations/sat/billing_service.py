@@ -610,6 +610,7 @@ class BillingService:
             "folio": str(folio_final),
             "folio_interno": folio_interno,
             "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            # Finanzas
             "subtotal": f"{subtotal:.2f}",
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
@@ -624,12 +625,13 @@ class BillingService:
                 if getattr(cliente, "dias_credito", 0) > 0
                 else "CONTADO"
             ),
+            # Descripciones
             "descripcion_concepto": desc_merc_raw,
             "descripcion_concepto_pdf": desc_merc_pdf,
             "pdf_descripcion": pdf_descripcion,
             "clave_prod_serv": clave_servicio_flete,
-            "cantidad": "1",
             "info_material_peligroso": info_mat,
+            # Cliente y Destino
             "rfc_cliente": rfc_cliente,
             "nombre_cliente": nombre_cliente,
             "cp_cliente": cp_cliente_fiscal,
@@ -638,16 +640,22 @@ class BillingService:
                 getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
             ),
             "uso_cfdi": "G03",
+            # Operación Carta Porte
             "total_dist_rec": distancia_real,
-            "es_material_peligroso": is_peligroso_pdf,
-            "cve_material_peligroso": cve_mat_peligroso,
-            "embalaje": embalaje_mat,
+            "distancia_total": distancia_real,
             "peso_bruto": (
                 str(viaje.peso_toneladas * 1000)
                 if viaje and viaje.peso_toneladas
                 else "1000.00"
             ),
+            # Materiales Peligrosos
             "sat_clave_producto": clave_mercancia,
+            "es_material_peligroso": is_peligroso_pdf,
+            "flag_peligroso_catalogo": flag_peligroso_catalogo,
+            "cve_material_peligroso": cve_mat_peligroso,
+            "embalaje": embalaje_mat,
+            "descripcion_mercancia": desc_merc_raw,
+            # Unidad + Seguros
             "permiso_sct": (
                 getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
             ),
@@ -664,14 +672,14 @@ class BillingService:
                 else "XXXXXX"
             ),
             "anio_modelo": str(getattr(unidad, "year", "2020")) if unidad else "2020",
-            "aseguradora": (
-                getattr(unidad, "aseguradora_resp_civil", "SEGUROS")
-                if unidad
-                else "SEGUROS"
-            ),
-            "poliza": (
-                getattr(unidad, "poliza_resp_civil", "123456") if unidad else "123456"
-            ),
+            # 👇 --- SEGUROS: VALORES POR DEFECTO PARA EVITAR ERRORES O ESPACIOS EN BLANCO --- 👇
+            "aseguradora": getattr(unidad, "aseguradora_resp_civil", "")
+            or "NO REGISTRADA",
+            "poliza": getattr(unidad, "poliza_resp_civil", "") or "S/P",
+            "aseguradora_med_ambiente": getattr(unidad, "aseguradora_med_ambiente", ""),
+            "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
+            # 👆 ----------------------------------------------------------------------------- 👆
+            # Remolques
             "subtipo_remolque": get_sat_trailer_code(tipo_r1_bruto),
             "placa_remolque_1": (
                 getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
@@ -680,17 +688,37 @@ class BillingService:
             "placa_remolque_2": (
                 getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
             ),
+            # Operador
             "rfc_operador": rfc_op_final,
             "nombre_operador": nombre_op,
             "licencia": (
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
+            # Direcciones y Domicilios
             "estado_destino": estado_dest,
             "municipio_destino": municipio_dest,
             "domicilio_origen": origen_real,
             "domicilio_destino": calle_destino_real,
             "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,
+            # 👇 --- CAMPOS EXTRA QUE TU HTML NECESITA PARA IMPRIMIRSE COMPLETO --- 👇
+            "cantidad": "1",
+            "bienes_transp": clave_mercancia,
+            "descripcion_mercancia_pdf": desc_merc_pdf,
+            "contenedor_1": c1,
+            "contenedor_2": c2,
+            "referencia_cliente": getattr(viaje, "referencia", "S/R"),
+            "subcliente_nombre": (
+                getattr(subcliente, "razon_social", nombre_cliente)
+                if subcliente
+                else nombre_cliente
+            ),
+            "subcliente_telefono": getattr(subcliente, "telefono", ""),
+            "subcliente_correo": getattr(
+                subcliente, "correo_electronico", getattr(subcliente, "correo", "")
+            ),
+            "subcliente_direccion": calle_destino_real,
+            # 👆 ------------------------------------------------------------------ 👆
         }
 
     # =========================================================================
@@ -704,7 +732,7 @@ class BillingService:
             .replace("|", "-")
         )
         desc_mercancia_xml = html.escape(
-            str(d.get("descripcion_mercancia", d.get("descripcion_concepto", "")))
+            str(d.get("descripcion_mercancia", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
         )
@@ -719,9 +747,15 @@ class BillingService:
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{d["placa_remolque_2"]}" />'
 
+        # =========================================================
+        # MATERIAL PELIGROSO Y SEGURO AMBIENTAL (REGLA CP182)
+        # =========================================================
         clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
         flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
         mat_peligroso_attr = ""
+
+        # 1. Bandera estricta para saber si al final SÍ fue peligroso
+        es_peligroso_final_xml = False
 
         if flag_cat == "0":
             # El SAT prohíbe enviar el atributo si el catálogo dicta 0
@@ -729,14 +763,27 @@ class BillingService:
         elif flag_cat == "1":
             # El SAT exige "Sí" si el catálogo dicta 1
             mat_peligroso_attr = ' MaterialPeligroso="Sí"'
+            es_peligroso_final_xml = True
             if d.get("cve_material_peligroso"):
                 mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
         else:
             # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
             es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
             mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
-            if es_peligroso_str == "Sí" and d.get("cve_material_peligroso"):
-                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+            if es_peligroso_str == "Sí":
+                es_peligroso_final_xml = True
+                if d.get("cve_material_peligroso"):
+                    mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+
+        # 2. SÓLO agregamos el Seguro Ambiental si la mercancía SÍ fue peligrosa
+        seguro_ambiental_attr = ""
+        if (
+            es_peligroso_final_xml
+            and d.get("aseguradora_med_ambiente")
+            and d.get("poliza_med_ambiente")
+        ):
+            seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
+        # =========================================================
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
@@ -768,7 +815,7 @@ class BillingService:
                 <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}"{seguro_ambiental_attr} />
                     <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>

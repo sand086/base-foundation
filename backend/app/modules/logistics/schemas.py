@@ -722,6 +722,7 @@ class SatCfdiPayload(BaseModel):
     # 4. MATERIALES PELIGROSOS
     sat_clave_producto: str = Field(default="01010101")
     es_material_peligroso: bool = Field(default=False)
+    flag_peligroso_catalogo: Optional[str] = "0,1"
     cve_material_peligroso: Optional[str] = None
     embalaje: Optional[str] = None
     aseguradora_med_ambiente: Optional[str] = None

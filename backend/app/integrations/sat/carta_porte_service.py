@@ -548,9 +548,11 @@ class CartaPorteService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            "forma_pago": getattr(cliente, "forma_pago", "99"),
-            "metodo_pago": getattr(cliente, "metodo_pago", "PPD"),
-            "moneda": getattr(cliente, "moneda", "MXN"),
+            "forma_pago": getattr(cliente, "forma_pago", "99") or "99",
+            "metodo_pago": getattr(cliente, "metodo_pago", "PPD") or "PPD",
+            "moneda": getattr(cliente, "moneda", "MXN") or "MXN",
+            "tc": "1",
+            "tipo_comprobante": "I",
             "condiciones_pago": (
                 f"EN {getattr(cliente, 'dias_credito', 0)} DIAS"
                 if getattr(cliente, "dias_credito", 0) > 0
@@ -562,7 +564,7 @@ class CartaPorteService:
             "clave_prod_serv": getattr(viaje, "sat_clave_servicio", "78101802")
             or "78101802",
             # Cliente y Destino
-            "rfc_cliente": getattr(cliente, "rfc", ""),
+            "rfc_cliente": getattr(cliente, "rfc", "") or "XAXX010101000",
             "nombre_cliente": getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
             "cp_cliente": getattr(cliente, "codigo_postal_fiscal", ""),
             "cp_destino": cp_destino_fisico,
@@ -574,10 +576,11 @@ class CartaPorteService:
             # Materiales Peligrosos
             "sat_clave_producto": clave_mercancia_final,
             "es_material_peligroso": es_peligroso_final,
+            "flag_peligroso_catalogo": catalogo_peligroso,
             "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
             "embalaje": getattr(viaje, "embalaje", ""),
             "descripcion_mercancia": desc_merc_raw,
-            # Unidad + Seguros
+            # Unidad + Seguros (Garantizando que no vayan vacíos en PDF)
             "permiso_sct": getattr(unidad, "permiso_sct_tipo", ""),
             "num_permiso": getattr(unidad, "permiso_sct_folio", ""),
             "config_vehicular": getattr(unidad, "config_vehicular_sat", "T3S2")
@@ -585,9 +588,9 @@ class CartaPorteService:
             "peso_bruto_vehicular": "15000",
             "placas": getattr(unidad, "placas", ""),
             "anio_modelo": str(getattr(unidad, "year", "2020")) if unidad else "2020",
-            "aseguradora": getattr(unidad, "aseguradora_resp_civil", ""),
-            "poliza": getattr(unidad, "poliza_resp_civil", ""),
-            # <-- INYECCIÓN DE SEGURO AMBIENTAL
+            "aseguradora": getattr(unidad, "aseguradora_resp_civil", "")
+            or "NO REGISTRADA",
+            "poliza": getattr(unidad, "poliza_resp_civil", "") or "S/P",
             "aseguradora_med_ambiente": getattr(unidad, "aseguradora_med_ambiente", ""),
             "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
             # Remolques
@@ -618,12 +621,38 @@ class CartaPorteService:
             .strip()[:100],
             "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,
-            "aseguradora_med_ambiente": (
-                unidad.aseguradora_ambiental.nombre
-                if unidad and unidad.aseguradora_ambiental
-                else ""
+            # 👇 --- VARIABLES SEGURAS EXCLUSIVAS PARA IMPRIMIR PDF COMPLETO --- 👇
+            "cantidad": "1",
+            "bienes_transp": clave_mercancia_final,
+            "descripcion_mercancia_pdf": desc_merc_pdf,
+            "contenedor_1": getattr(viaje, "contenedor_1", ""),
+            "contenedor_2": getattr(viaje, "contenedor_2", ""),
+            "referencia_cliente": getattr(viaje, "referencia", "S/R"),
+            "subcliente_nombre": (
+                getattr(
+                    subcliente,
+                    "razon_social",
+                    getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
+                )
+                if subcliente
+                else getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
             ),
-            "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
+            "subcliente_telefono": getattr(subcliente, "telefono", ""),
+            "subcliente_correo": getattr(
+                subcliente, "correo_electronico", getattr(subcliente, "correo", "")
+            ),
+            "subcliente_direccion": str(
+                getattr(
+                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
+                )
+            )
+            .replace("|", "")
+            .strip()[:100],
+            "info_material_peligroso": (
+                f"Mat. Peligroso: SÍ (ONU: {getattr(viaje, 'cve_material_peligroso', '')} - Emb: {getattr(viaje, 'embalaje', '')})"
+                if es_peligroso_final
+                else "Mat. Peligroso: NO"
+            ),
         }
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
@@ -785,21 +814,34 @@ class CartaPorteService:
         flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
         mat_peligroso_attr = ""
 
+        # 1. Bandera estricta para saber si al final SÍ fue peligroso
+        es_peligroso_final_xml = False
+
         if flag_cat == "0":
             # El SAT prohíbe enviar el atributo si el catálogo dicta 0
             mat_peligroso_attr = ""
         elif flag_cat == "1":
             # El SAT exige "Sí" si el catálogo dicta 1
             mat_peligroso_attr = ' MaterialPeligroso="Sí"'
+            es_peligroso_final_xml = True
             if d.get("cve_material_peligroso"):
                 mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
         else:
             # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
             es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
             mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
-            if es_peligroso_str == "Sí" and d.get("cve_material_peligroso"):
-                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
-            # Añadimos el seguro ambiental al string de atributos del nodo Seguros
+            if es_peligroso_str == "Sí":
+                es_peligroso_final_xml = True
+                if d.get("cve_material_peligroso"):
+                    mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+
+        # 2. SÓLO agregamos el Seguro Ambiental si la mercancía SÍ fue peligrosa (Regla CP182)
+        seguro_ambiental_attr = ""
+        if (
+            es_peligroso_final_xml
+            and d.get("aseguradora_med_ambiente")
+            and d.get("poliza_med_ambiente")
+        ):
             seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
         # =========================================================
 
