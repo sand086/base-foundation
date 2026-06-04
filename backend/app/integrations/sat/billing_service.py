@@ -591,7 +591,7 @@ class BillingService:
                 if getattr(cliente, "dias_credito", 0) > 0
                 else "CONTADO"
             ),
-            # Descripciones
+            # Descripciones FACTURA
             "descripcion_concepto": desc_concepto_factura,
             "descripcion_concepto_pdf": desc_concepto_pdf,
             "clave_prod_serv": getattr(viaje, "sat_clave_servicio", "78101802")
@@ -600,14 +600,20 @@ class BillingService:
             "rfc_cliente": getattr(cliente, "rfc", "") or "XAXX010101000",
             "nombre_cliente": getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
             "cp_cliente": getattr(cliente, "codigo_postal_fiscal", ""),
-            "direccion_cliente": direccion_cliente_real,
+            # 👇 DIRECCIÓN FISCAL COMPLETA AÑADIDA 👇
+            "direccion_cliente": str(
+                getattr(cliente, "direccion_fiscal", "DOMICILIO CONOCIDO")
+                or "DOMICILIO CONOCIDO"
+            )
+            .replace("|", "")
+            .strip()[:100],
             "cp_destino": cp_destino_fisico,
             "regimen_cliente": getattr(cliente, "regimen_fiscal", "601"),
             "uso_cfdi": "G03",
             # Operación Carta Porte
             "distancia_total": distancia_real,
             "peso_bruto": getattr(viaje, "peso_toneladas", 0) * 1000,
-            # Materiales Peligrosos y Mercancía Física
+            # Materiales Peligrosos y Mercancía Real
             "sat_clave_producto": clave_mercancia_final,
             "es_material_peligroso": es_peligroso_final,
             "flag_peligroso_catalogo": catalogo_peligroso,
@@ -654,11 +660,17 @@ class BillingService:
             "domicilio_origen": str(viaje.origin or "DOMICILIO CONOCIDO")
             .replace("|", "")
             .strip()[:100],
-            "domicilio_destino": direccion_destino_real,
+            "domicilio_destino": str(
+                getattr(
+                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
+                )
+            )
+            .replace("|", "")
+            .strip()[:100],
             "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,
-            # CAMPOS EXTRA PDF
-            "cantidad": "1",
+            # 👇 CAMPOS PARA QUE EL PDF SALGA PERFECTO 👇
+            "cantidad": "1",  # <-- Para la sección de Mercancías
             "bienes_transp": clave_mercancia_final,
             "descripcion_mercancia_pdf": desc_mercancia_fisica_pdf,
             "contenedor_1": getattr(viaje, "contenedor_1", ""),
@@ -677,12 +689,13 @@ class BillingService:
             "subcliente_correo": getattr(
                 subcliente, "correo_electronico", getattr(subcliente, "correo", "")
             ),
-            "subcliente_direccion": direccion_destino_real,
-            "info_material_peligroso": (
-                f"Mat. Peligroso: SÍ (ONU: {getattr(viaje, 'cve_material_peligroso', '')} - Emb: {getattr(viaje, 'embalaje', '')})"
-                if es_peligroso_final
-                else "Mat. Peligroso: NO"
-            ),
+            "subcliente_direccion": str(
+                getattr(
+                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
+                )
+            )
+            .replace("|", "")
+            .strip()[:100],
         }
 
     # =========================================================================
