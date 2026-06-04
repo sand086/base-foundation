@@ -1007,6 +1007,17 @@ export class DefaultService {
         });
     }
     /**
+     * Rebuild All Pdfs
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static rebuildAllPdfsApiSatRebuildAllPdfsGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/sat/rebuild-all-pdfs',
+        });
+    }
+    /**
      * Root
      * @returns any Successful Response
      * @throws ApiError

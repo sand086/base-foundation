@@ -50,6 +50,7 @@ export type { ConfigBulkUpdate } from './models/ConfigBulkUpdate';
 export { Currency } from './models/Currency';
 export type { DailyRevenue } from './models/DailyRevenue';
 export type { DashboardData } from './models/DashboardData';
+export type { DocumentHistoryResponse } from './models/DocumentHistoryResponse';
 export type { EmailTemplateResponse } from './models/EmailTemplateResponse';
 export type { EmailTemplateUpdate } from './models/EmailTemplateUpdate';
 export type { EmergencyRequest } from './models/EmergencyRequest';

@@ -1531,6 +1531,21 @@ def reopen_trip_leg(db: Session, leg_id: int):
         cxc.record_status = RecordStatus.ELIMINADO
         db.add(cxc)
 
+        # =================================================================
+        # NUEVO: REGISTRO EN BITÁCORA DE AUDITORÍA (ELIMINACIÓN LÓGICA)
+        # =================================================================
+        from app.models.models import AuditLog
+
+        log = AuditLog(
+            user_id=None,  # Ideal si tienes current_user
+            accion=f"CxC {cxc.folio_interno} eliminada lógicamente (Reapertura de liquidación).",
+            tipo_accion="ELIMINACION",
+            modulo="CUENTAS_POR_COBRAR",
+            detalles=f'{{"viaje_id": {trip.id}, "leg_id": {leg_id}}}',
+        )
+        db.add(log)
+        # =================================================================
+
     # 3. REVERSIÓN DE SALDOS DEL TRAMO
     leg.status = (
         models.TripStatus.CERRADO

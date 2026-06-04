@@ -1349,13 +1349,32 @@ class BillingService:
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
             # AQUÍ IRÍA LA LLAMADA AL METODO DE CANCELACIÓN DEL WSDL
-            # Por ahora lo marco como cancelado
+
+            # ==============================================================
+            # NUEVO: REGISTRO DE CANCELACIÓN Y AUDITORÍA
+            # ==============================================================
+            from app.models.models import AuditLog
+            from datetime import datetime
+
             factura.status_sat = "CANCELADO"
+            factura.motivo_cancelacion = motivo
+            factura.fecha_cancelacion = datetime.utcnow()
+
+            log = AuditLog(
+                user_id=None,  # Si pasas el user_id al método, ponlo aquí
+                accion=f"Comprobante {factura.uuid} cancelado ante el SAT",
+                tipo_accion="CANCELACION",
+                modulo="CUENTAS_POR_COBRAR",
+                detalles=f'{{"uuid": "{factura.uuid}", "motivo": "{motivo}", "sustituto": "{uuid_sustituto}"}}',
+            )
+            self.db.add(log)
+            # ==============================================================
+
             self.db.commit()
             logger.info(f"UUID {factura.uuid} cancelado exitosamente en el sistema.")
 
         except Exception as e:
-            logger.error(f"Error al cancelar UUID {factura.uuid}: {e}")
+            # Si falla, se marca como PENDIENTE
             factura.status_sat = "PENDIENTE_CANCELAR_SAT"
             factura.motivo_cancelacion = motivo
             self.db.commit()
@@ -1644,6 +1663,7 @@ class BillingService:
             factura.status_sat = "TIMBRADA"
             factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
             factura.xml_url = f"/api/sat/invoice/{uuid_timbrado}/xml"
+            self._registrar_historial_factura(factura.id, uuid_timbrado)
             self.db.commit()
             self.db.refresh(factura)
             return factura
@@ -1809,6 +1829,7 @@ class BillingService:
             factura.status_sat = "TIMBRADA"
             factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
             factura.xml_url = f"/api/sat/invoice/{uuid_timbrado}/xml"
+            self._registrar_historial_factura(factura.id, uuid_timbrado)
             self.db.commit()
             self.db.refresh(factura)
             return factura
@@ -2070,3 +2091,28 @@ class BillingService:
             "con_error": errores,
             "detalle": resultados,
         }
+
+    def _registrar_historial_factura(self, factura_id: int, uuid: str):
+        """Registra el XML y PDF recién timbrados en el Historial Documental"""
+        from app.models.models import ReceivableInvoiceDocumentHistory
+
+        # Desactivamos comprobantes viejos (en caso de re-timbrado)
+        self.db.query(ReceivableInvoiceDocumentHistory).filter(
+            ReceivableInvoiceDocumentHistory.invoice_id == factura_id
+        ).update({"is_active": False}, synchronize_session=False)
+
+        hist_xml = ReceivableInvoiceDocumentHistory(
+            invoice_id=factura_id,
+            document_type="xml",
+            filename=f"{uuid}.xml",
+            file_url=f"/api/sat/invoice/{uuid}/xml",
+            is_active=True,
+        )
+        hist_pdf = ReceivableInvoiceDocumentHistory(
+            invoice_id=factura_id,
+            document_type="pdf",
+            filename=f"{uuid}.pdf",
+            file_url=f"/api/sat/invoice/{uuid}/pdf",
+            is_active=True,
+        )
+        self.db.add_all([hist_xml, hist_pdf])

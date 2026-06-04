@@ -129,30 +129,26 @@ class PayableInvoiceBase(BaseModel):
     unit_id: Optional[int] = None
     categoria_indirecto_id: Optional[int] = None
     orden_compra_id: Optional[int] = None
-
-    # NUEVO (100% Opcional para no romper)
     cost_center_id: Optional[int] = None
 
     # Identificadores
     uuid: Optional[str] = None
     folio_interno: Optional[str] = None
-    serie: Optional[str] = None  # NUEVO SAT
-    folio: Optional[str] = None  # NUEVO SAT
+    serie: Optional[str] = None
+    folio: Optional[str] = None
 
     # Montos
     subtotal: float = 0.0
-    descuento: Optional[float] = 0.0  # NUEVO SAT
+    descuento: Optional[float] = 0.0
     iva: float = 0.0
     retenciones: float = 0.0
     monto_total: float
     saldo_pendiente: float
-
-    # Granularidad de Impuestos (JSON)
-    desglose_impuestos: Optional[Dict[str, Any]] = Field(default_factory=dict)  # NUEVO
+    desglose_impuestos: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
     # Moneda y Fechas
     moneda: str = "MXN"
-    tipo_cambio: Optional[float] = 1.0  # NUEVO SAT
+    tipo_cambio: Optional[float] = 1.0
     fecha_emision: date
     fecha_vencimiento: date
     concepto: Optional[str] = None
@@ -162,12 +158,34 @@ class PayableInvoiceBase(BaseModel):
     metodo_pago: Optional[str] = None
     forma_pago: Optional[str] = None
     tipo_comprobante: Optional[str] = None
-    uso_cfdi: Optional[str] = None  # NUEVO SAT
-    validacion_efos: Optional[bool] = False  # NUEVO Compliance
+    uso_cfdi: Optional[str] = None
+    validacion_efos: Optional[bool] = False
 
     estatus: str = "pendiente"
     pdf_url: Optional[str] = None
     xml_url: Optional[str] = None
+
+    # NUEVO: CAMPOS DE CANCELACIÓN
+    motivo_cancelacion: Optional[str] = None
+    acuse_cancelacion_url: Optional[str] = None
+    fecha_cancelacion: Optional[datetime] = None
+
+
+# ==========================================
+# DOCUMENT HISTORY SCHEMAS
+# ==========================================
+class DocumentHistoryResponse(BaseModel):
+    id: int
+    document_type: str
+    filename: str
+    file_url: str
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    version: int
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PayableInvoiceCreate(PayableInvoiceBase):
@@ -186,6 +204,7 @@ class PayableInvoiceUpdate(BaseModel):
 
 class PayableInvoiceResponse(PayableInvoiceBase):
     id: int
+    document_history: List[DocumentHistoryResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -198,7 +217,7 @@ class InvoicePaymentBase(BaseModel):
     fecha_pago: date
     monto: float
 
-    # NUEVOS CAMPOS (Complemento de Pago / REP)
+    # (Complemento de Pago / REP)
     parcialidad: Optional[int] = 1
     saldo_anterior: Optional[float] = None
     saldo_insoluto: Optional[float] = None
@@ -209,6 +228,12 @@ class InvoicePaymentBase(BaseModel):
     complemento_uuid: Optional[str] = None
     comprobante_url: Optional[str] = None
 
+    # NUEVO: CAMPOS DE ESTATUS Y CANCELACIÓN
+    estatus: str = "ACTIVO"
+    motivo_cancelacion: Optional[str] = None
+    acuse_cancelacion_url: Optional[str] = None
+    fecha_cancelacion: Optional[datetime] = None
+
 
 class InvoicePaymentCreate(InvoicePaymentBase):
     pass
@@ -216,6 +241,7 @@ class InvoicePaymentCreate(InvoicePaymentBase):
 
 class InvoicePaymentResponse(InvoicePaymentBase):
     id: int
+    document_history: List[DocumentHistoryResponse] = []
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -559,6 +559,30 @@ class PaymentComplementService:
                     )
                     self.db.add(nuevo_pago)
 
+                    self.db.flush()  # <- Necesitamos el flush para obtener el ID de nuevo_pago
+
+                    # ==========================================================
+                    # NUEVO: GUARDAR XML Y PDF EN EL HISTORIAL DOCUMENTAL
+                    # ==========================================================
+                    from app.models.models import ReceivablePaymentDocumentHistory
+
+                    hist_xml = ReceivablePaymentDocumentHistory(
+                        payment_id=nuevo_pago.id,
+                        document_type="xml",
+                        filename=f"{complemento_uuid}.xml",
+                        file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
+                        is_active=True,
+                    )
+                    hist_pdf = ReceivablePaymentDocumentHistory(
+                        payment_id=nuevo_pago.id,
+                        document_type="pdf",
+                        filename=f"{complemento_uuid}.pdf",
+                        file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
+                        is_active=True,
+                    )
+                    self.db.add_all([hist_xml, hist_pdf])
+                    # ==========================================================
+
                     # B) Registro individual en Bancos (Tesorería 1 a 1)
                     mov_schema = finance_schemas.BankMovementCreate(
                         bank_account_id=int(bank_account_id),

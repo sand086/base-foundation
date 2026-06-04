@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { DocumentHistoryResponse } from './DocumentHistoryResponse';
 export type ReceivableInvoiceLite = {
     id: number;
     viaje_id?: (number | null);
@@ -14,5 +15,9 @@ export type ReceivableInvoiceLite = {
     estatus?: (string | null);
     pdf_url?: (string | null);
     xml_url?: (string | null);
+    motivo_cancelacion?: (string | null);
+    acuse_cancelacion_url?: (string | null);
+    fecha_cancelacion?: (string | null);
+    document_history?: Array<DocumentHistoryResponse>;
 };
 

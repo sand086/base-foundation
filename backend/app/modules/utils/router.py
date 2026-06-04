@@ -7,7 +7,18 @@ from typing import Optional
 
 from app.db.database import get_db
 from app.models import models
-from app.models.models import Client, Operator, Unit
+
+from app.models.models import (
+    InvoicePayment,
+    ReceivableInvoicePayment,
+    BankMovement,
+    Trip,
+    PayablePaymentDocumentHistory,
+    ReceivablePaymentDocumentHistory,
+    Client,
+    Operator,
+    Unit,
+)
 
 router = APIRouter(tags=["Utilities"])
 
@@ -21,13 +32,28 @@ ALLOWED_MODELS = {
 }
 
 RECEIPT_MODELS = {
-    "cxp_payment": {"model": models.InvoicePayment, "column": "comprobante_url"},
-    "cxc_payment": {
-        "model": models.ReceivableInvoicePayment,
+    "cxp_payment": {
+        "model": InvoicePayment,
         "column": "comprobante_url",
+        "history_model": PayablePaymentDocumentHistory,
+        "fk_column": "payment_id",
     },
-    "bank_movement": {"model": models.BankMovement, "column": "comprobante_url"},
-    "trip_delivery": {"model": models.Trip, "column": "comprobante_entrega_url"},
+    "cxc_payment": {
+        "model": ReceivableInvoicePayment,
+        "column": "comprobante_url",
+        "history_model": ReceivablePaymentDocumentHistory,
+        "fk_column": "payment_id",
+    },
+    "bank_movement": {
+        "model": BankMovement,
+        "column": "comprobante_url",
+        "history_model": None,
+    },
+    "trip_delivery": {
+        "model": Trip,
+        "column": "comprobante_entrega_url",
+        "history_model": None,
+    },
 }
 
 
@@ -118,8 +144,33 @@ def upload_generic_receipt(
 
     url_publica = f"/static/receipts/{entity_type}/{clean_filename}"
 
-    # Actualizar la BD dinámicamente
+    # Actualizar la BD dinámicamente en el modelo principal
     setattr(record, col_name, url_publica)
+
+    # ==========================================================
+    # NUEVO: REGISTRAR EN EL HISTORIAL DOCUMENTAL SI APLICA
+    # ==========================================================
+    history_model = config.get("history_model")
+    fk_column = config.get("fk_column")
+
+    if history_model and fk_column:
+        # 1. Desactivar versiones anteriores del mismo tipo
+        db.query(history_model).filter(
+            getattr(history_model, fk_column) == entity_id,
+            history_model.document_type == "comprobante",
+        ).update({"is_active": False}, synchronize_session=False)
+
+        # 2. Insertar la nueva versión
+        new_history = history_model(
+            document_type="comprobante",
+            filename=file.filename,
+            file_url=url_publica,
+            version=1,  # Se podría calcular MAX(version)+1, pero con is_active basta por ahora
+            is_active=True,
+            **{fk_column: entity_id},
+        )
+        db.add(new_history)
+
     db.commit()
 
     return {"message": "Archivo subido", "url": url_publica}

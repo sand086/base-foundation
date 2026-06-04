@@ -1171,6 +1171,9 @@ class PayableInvoice(AuditMixin, Base):
     # NUEVO: Clasificadores SAT
     uso_cfdi = Column(String(5), nullable=True)
     validacion_efos = Column(Boolean, default=False, server_default="false")
+    motivo_cancelacion = Column(String(5), nullable=True)  # Ej: "01", "02"
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
 
     estatus = Column(
         pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
@@ -1211,6 +1214,69 @@ class InvoiceDocumentHistory(AuditMixin, Base):
     version = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
     invoice = relationship("PayableInvoice", back_populates="document_history")
+
+
+class ReceivableInvoiceDocumentHistory(AuditMixin, Base):
+    __tablename__ = "receivable_invoice_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(
+        Integer,
+        ForeignKey("receivable_invoices.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_type = Column(String(50), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    invoice = relationship("ReceivableInvoice", back_populates="document_history")
+
+
+class ReceivablePaymentDocumentHistory(AuditMixin, Base):
+    __tablename__ = "receivable_payment_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(
+        Integer,
+        ForeignKey("receivable_invoice_payments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_type = Column(String(50), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    payment = relationship(
+        "ReceivableInvoicePayment", back_populates="document_history"
+    )
+
+
+class PayablePaymentDocumentHistory(AuditMixin, Base):
+    __tablename__ = "payable_payment_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(
+        Integer, ForeignKey("invoice_payments.id", ondelete="CASCADE"), nullable=False
+    )
+    document_type = Column(String(50), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    payment = relationship("InvoicePayment", back_populates="document_history")
 
 
 class InvoicePayment(AuditMixin, Base):
@@ -1536,6 +1602,11 @@ class ReceivableInvoice(AuditMixin, Base):
         cascade="all, delete-orphan",
     )
     client = relationship("Client", back_populates="receivable_invoices")
+    document_history = relationship(
+        "ReceivableInvoiceDocumentHistory",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+    )
 
 
 class ReceivableInvoicePayment(AuditMixin, Base):
@@ -1564,6 +1635,19 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     cuenta_deposito = Column(String(50))
     complemento_uuid = Column(String(36), nullable=True)
     comprobante_url = Column(String(500), nullable=True)
+
+    # NUEVO: CAMPOS DE ESTATUS Y CANCELACIÓN
+    estatus = Column(String(50), default="ACTIVO", server_default="ACTIVO")
+    motivo_cancelacion = Column(String(5), nullable=True)
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
+
+    # NUEVO: Relación de historial documental
+    document_history = relationship(
+        "ReceivablePaymentDocumentHistory",
+        back_populates="payment",
+        cascade="all, delete-orphan",
+    )
 
     invoice = relationship("ReceivableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")

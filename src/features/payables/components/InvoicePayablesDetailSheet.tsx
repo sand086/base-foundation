@@ -17,15 +17,19 @@ import {
 import { Separator } from "@/components/ui/separator";
 import {
   FileText,
+  FileCode2, // <-- NUEVO IMPORT
   Download,
   Calendar,
   DollarSign,
   Building2,
   Receipt,
   CreditCard,
+  AlertTriangle, // <-- NUEVO IMPORT
+  History, // <-- NUEVO IMPORT
   X,
 } from "lucide-react";
 import { useEffect } from "react";
+import { toast } from "sonner"; // <-- NUEVO IMPORT
 
 // FIX: Cambiamos a PayableInvoice (Facturas de Proveedores)
 import type { PayableInvoice } from "@/features/payables/types";
@@ -69,6 +73,16 @@ export function InvoicePayablesDetailSheet({
   const folioInterno = safeStr(inv.folio_interno) || `ID-${id}`;
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
+  // 👇 NUEVA EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
+  const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
+  const isCanceled = estatusStr === "CANCELADO";
+  const docHistory = Array.isArray(inv.document_history)
+    ? inv.document_history
+    : [];
+  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
+  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
+  // 👆 -----------------------------------------------------
+
   // FIX: Ajustamos las propiedades a Proveedor (Supplier) en lugar de Cliente
   const entidadNombre =
     safeStr(inv.supplier?.razon_social) ||
@@ -85,8 +99,6 @@ export function InvoicePayablesDetailSheet({
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
   const moneda = safeStr(inv.moneda) || "MXN";
-  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
-  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
 
   const payments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
@@ -104,12 +116,37 @@ export function InvoicePayablesDetailSheet({
     }
   };
 
+  // 👇 NUEVA FUNCIÓN DE DESCARGA GENÉRICA PARA HISTORIAL
+  const handleDownloadUrl = (url: string, filename: string) => {
+    const toastId = toast.loading(`Descargando ${filename}...`);
+    try {
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+      const fileUrl = url.startsWith("http")
+        ? url
+        : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;
+
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success(`${filename} descargado.`, { id: toastId });
+    } catch {
+      toast.error(`Fallo al descargar ${filename}`, { id: toastId });
+    }
+  };
+  // 👆 -----------------------------------------------------
+
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
       currency: "MXN",
     });
-  const fD = (d: any) => (d ? new Date(d).toLocaleDateString("es-MX") : "—");
+  const fD = (d: any) =>
+    d && d !== "—" ? new Date(d).toLocaleDateString("es-MX") : "—";
 
   const isPaid = saldoPendiente <= 0;
 
@@ -145,6 +182,27 @@ export function InvoicePayablesDetailSheet({
         </SheetHeader>
 
         <div className="space-y-6 py-6 animate-in slide-in-from-right-4 duration-500 overflow-y-auto max-h-[calc(100vh-100px)] custom-scrollbar -mx-4 px-4">
+          {/* 👇 ALERTA DE CANCELACIÓN (NUEVA) */}
+          {isCanceled && (
+            <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">
+                  Factura Cancelada
+                </h4>
+                <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
+                  Este comprobante fue cancelado el{" "}
+                  <strong>{fD(inv.fecha_cancelacion)}</strong>
+                  {inv.motivo_cancelacion
+                    ? ` por el motivo "${inv.motivo_cancelacion}"`
+                    : ""}
+                  .
+                </p>
+              </div>
+            </div>
+          )}
+          {/* 👆 FIN ALERTA */}
+
           {/* IDENTIFICACIÓN */}
           <div className="flex items-start justify-between bg-card p-5 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-brand-navy/50 group-hover:bg-brand-navy transition-colors"></div>
@@ -157,7 +215,7 @@ export function InvoicePayablesDetailSheet({
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {!isPaid && onPayClick && (
+              {!isPaid && !isCanceled && onPayClick && (
                 <Button
                   size="sm"
                   onClick={() => onPayClick(invoice)}
@@ -353,32 +411,82 @@ export function InvoicePayablesDetailSheet({
 
           <Separator className="bg-border/50" />
 
-          {/* ARCHIVOS FACTURA ORIGINAL */}
+          {/* 👇 NUEVO BLOQUE: EXPEDIENTE Y VERSIONES (CON FALLBACK A BOTONES VIEJOS) */}
           <div className="bg-slate-900 dark:bg-slate-950 p-5 rounded-2xl text-white shadow-xl relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all"></div>
+            <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-all pointer-events-none"></div>
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2 relative z-10">
-              <FileText className="h-3.5 w-3.5" /> Factura de Origen
+              <History className="h-3.5 w-3.5" /> Expediente y Versiones de
+              Factura
             </h3>
 
-            <div className="flex gap-3 relative z-10">
-              <Button
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!pdfUrl}
-                onClick={() => pdfUrl && handleDownload(pdfUrl)}
-              >
-                <Download className="h-4 w-4 text-rose-400" /> PDF
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!xmlUrl}
-                onClick={() => xmlUrl && handleDownload(xmlUrl)}
-              >
-                <Download className="h-4 w-4 text-blue-400" /> XML
-              </Button>
-            </div>
+            {docHistory.length > 0 ? (
+              <div className="space-y-3 relative z-10">
+                {docHistory.map((doc: any, index: number) => {
+                  const isPdf = doc.document_type === "pdf";
+                  const isCancel = doc.document_type === "acuse_cancelacion";
+                  return (
+                    <div
+                      key={doc.id || index}
+                      className={`flex items-center justify-between p-3 rounded-xl border ${doc.is_active ? "bg-white/10 border-white/20" : "bg-white/5 border-white/5 opacity-60 grayscale hover:grayscale-0 transition-all"}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`p-2 rounded-lg ${doc.is_active ? (isCancel ? "bg-rose-500/20 text-rose-400" : "bg-blue-500/20 text-blue-400") : "bg-slate-800 text-slate-500"}`}
+                        >
+                          {isPdf || isCancel ? (
+                            <FileText className="w-4 h-4" />
+                          ) : (
+                            <FileCode2 className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-200">
+                            {doc.filename}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider">
+                            Versión {doc.version}{" "}
+                            {doc.is_active ? "(Activa)" : "(Obsoleta)"}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Descargar versión"
+                        className="h-8 w-8 hover:bg-white/20 text-white"
+                        onClick={() =>
+                          handleDownloadUrl(doc.file_url, doc.filename)
+                        }
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              // FALLBACK SI ES UNA FACTURA VIEJA SIN HISTORIAL EN BD
+              <div className="flex gap-3 relative z-10">
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
+                  disabled={!pdfUrl}
+                  onClick={() => pdfUrl && handleDownload(pdfUrl)}
+                >
+                  <Download className="h-4 w-4 text-rose-400" /> PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
+                  disabled={!xmlUrl}
+                  onClick={() => xmlUrl && handleDownload(xmlUrl)}
+                >
+                  <Download className="h-4 w-4 text-blue-400" /> XML
+                </Button>
+              </div>
+            )}
           </div>
+          {/* 👆 FIN NUEVO BLOQUE */}
         </div>
       </SheetContent>
     </Sheet>

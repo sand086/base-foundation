@@ -471,6 +471,23 @@ class TariffBasicInfo(ORMBase):
     tipo_unidad: str
 
 
+# ==========================================
+# DOCUMENT HISTORY SCHEMAS (NUEVO)
+# ==========================================
+class DocumentHistoryResponse(BaseModel):
+    id: int
+    document_type: str
+    filename: str
+    file_url: str
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    version: int
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ReceivableInvoiceLite(ORMBase):
     id: int
     viaje_id: Optional[int] = None
@@ -483,6 +500,14 @@ class ReceivableInvoiceLite(ORMBase):
     estatus: Optional[str] = None
     pdf_url: Optional[str] = None
     xml_url: Optional[str] = None
+
+    # NUEVO: CAMPOS DE CANCELACIÓN
+    motivo_cancelacion: Optional[str] = None
+    acuse_cancelacion_url: Optional[str] = None
+    fecha_cancelacion: Optional[datetime] = None
+
+    # NUEVO: HISTORIAL DE DOCUMENTOS ANIDADO
+    document_history: List[DocumentHistoryResponse] = Field(default_factory=list)
 
 
 class TripResponse(TripBase):
@@ -727,8 +752,6 @@ class SatCfdiPayload(BaseModel):
     embalaje: Optional[str] = None
     aseguradora_med_ambiente: Optional[str] = None
     poliza_med_ambiente: Optional[str] = None
-
-    # 👇 --- NUEVOS CAMPOS AÑADIDOS PARA EL PDF --- 👇
     cantidad: Optional[str] = None
     bienes_transp: Optional[str] = None
     descripcion_mercancia_pdf: Optional[str] = None
@@ -740,7 +763,6 @@ class SatCfdiPayload(BaseModel):
     subcliente_correo: Optional[str] = None
     subcliente_direccion: Optional[str] = None
     info_material_peligroso: Optional[str] = None
-    # 👆 ------------------------------------------ 👆
 
     model_config = ConfigDict(extra="allow")
 
