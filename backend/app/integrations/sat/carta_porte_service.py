@@ -521,20 +521,49 @@ class CartaPorteService:
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        desc_merc_raw = (
+        # =======================================================
+        # SEPARACIÓN DE CONCEPTOS: FACTURA VS CARTA PORTE
+        # =======================================================
+        desc_concepto_factura = (
             "FLETE NOMINAL"
             if is_nominal
             else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
         )
-        desc_merc_pdf = (
-            desc_merc_raw.split("|")[-1].strip()
-            if "|" in desc_merc_raw
-            else desc_merc_raw
+        desc_concepto_pdf = (
+            desc_concepto_factura.split("|")[-1].strip()
+            if "|" in desc_concepto_factura
+            else desc_concepto_factura
+        )
+
+        mercancia_real = viaje.descripcion_mercancia or "CARGA GENERAL"
+        desc_mercancia_fisica_pdf = (
+            mercancia_real.split("|")[-1].strip()
+            if "|" in mercancia_real
+            else mercancia_real
         )
 
         raw_rfc = getattr(operador, "rfc", "")
         rfc_op_final = (
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
+        )
+
+        # Extracción segura de direcciones completas
+        direccion_cliente_real = (
+            str(
+                getattr(cliente, "direccion_fiscal", "DOMICILIO CONOCIDO")
+                or "DOMICILIO CONOCIDO"
+            )
+            .replace("|", "")
+            .strip()[:100]
+        )
+        direccion_destino_real = (
+            str(
+                getattr(
+                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
+                )
+            )
+            .replace("|", "")
+            .strip()[:100]
         )
 
         return {
@@ -559,34 +588,39 @@ class CartaPorteService:
                 else "CONTADO"
             ),
             # Descripciones
-            "descripcion_concepto": desc_merc_raw,
-            "descripcion_concepto_pdf": desc_merc_pdf,
+            "descripcion_concepto": desc_concepto_factura,
+            "descripcion_concepto_pdf": desc_concepto_pdf,
             "clave_prod_serv": getattr(viaje, "sat_clave_servicio", "78101802")
             or "78101802",
             # Cliente y Destino
             "rfc_cliente": getattr(cliente, "rfc", "") or "XAXX010101000",
             "nombre_cliente": getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
             "cp_cliente": getattr(cliente, "codigo_postal_fiscal", ""),
+            "direccion_cliente": direccion_cliente_real,
             "cp_destino": cp_destino_fisico,
             "regimen_cliente": getattr(cliente, "regimen_fiscal", "601"),
             "uso_cfdi": "G03",
             # Operación Carta Porte
             "distancia_total": distancia_real,
             "peso_bruto": getattr(viaje, "peso_toneladas", 0) * 1000,
-            # Materiales Peligrosos
+            # Materiales Peligrosos y Mercancía Física
             "sat_clave_producto": clave_mercancia_final,
             "es_material_peligroso": es_peligroso_final,
             "flag_peligroso_catalogo": catalogo_peligroso,
             "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
             "embalaje": getattr(viaje, "embalaje", ""),
-            "descripcion_mercancia": desc_merc_raw,
-            # Unidad + Seguros (Garantizando que no vayan vacíos en PDF)
-            "permiso_sct": getattr(unidad, "permiso_sct_tipo", ""),
-            "num_permiso": getattr(unidad, "permiso_sct_folio", ""),
+            "descripcion_mercancia": mercancia_real,
+            # Unidad + Seguros
+            "permiso_sct": getattr(unidad, "permiso_sct_tipo", "") or "TPAF01",
+            "num_permiso": getattr(unidad, "permiso_sct_folio", "") or "123456",
             "config_vehicular": getattr(unidad, "config_vehicular_sat", "T3S2")
             or "T3S2",
             "peso_bruto_vehicular": "15000",
-            "placas": getattr(unidad, "placas", ""),
+            "placas": (
+                getattr(unidad, "placas", "XXXXXX").replace("-", "")
+                if unidad
+                else "XXXXXX"
+            ),
             "anio_modelo": str(getattr(unidad, "year", "2020")) if unidad else "2020",
             "aseguradora": getattr(unidad, "aseguradora_resp_civil", "")
             or "NO REGISTRADA",
@@ -595,9 +629,13 @@ class CartaPorteService:
             "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
             # Remolques
             "subtipo_remolque": get_sat_trailer_code(getattr(r1, "tipo", "")),
-            "placa_remolque_1": getattr(r1, "placas", ""),
+            "placa_remolque_1": (
+                getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
+            ),
             "subtipo_remolque_2": get_sat_trailer_code(getattr(r2, "tipo", "")),
-            "placa_remolque_2": getattr(r2, "placas", ""),
+            "placa_remolque_2": (
+                getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
+            ),
             # Operador
             "rfc_operador": rfc_op_final,
             "nombre_operador": (
@@ -612,19 +650,13 @@ class CartaPorteService:
             "domicilio_origen": str(viaje.origin or "DOMICILIO CONOCIDO")
             .replace("|", "")
             .strip()[:100],
-            "domicilio_destino": str(
-                getattr(
-                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
-                )
-            )
-            .replace("|", "")
-            .strip()[:100],
+            "domicilio_destino": direccion_destino_real,
             "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,
-            # 👇 --- VARIABLES SEGURAS EXCLUSIVAS PARA IMPRIMIR PDF COMPLETO --- 👇
+            # CAMPOS EXTRA PDF
             "cantidad": "1",
             "bienes_transp": clave_mercancia_final,
-            "descripcion_mercancia_pdf": desc_merc_pdf,
+            "descripcion_mercancia_pdf": desc_mercancia_fisica_pdf,
             "contenedor_1": getattr(viaje, "contenedor_1", ""),
             "contenedor_2": getattr(viaje, "contenedor_2", ""),
             "referencia_cliente": getattr(viaje, "referencia", "S/R"),
@@ -641,13 +673,7 @@ class CartaPorteService:
             "subcliente_correo": getattr(
                 subcliente, "correo_electronico", getattr(subcliente, "correo", "")
             ),
-            "subcliente_direccion": str(
-                getattr(
-                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
-                )
-            )
-            .replace("|", "")
-            .strip()[:100],
+            "subcliente_direccion": direccion_destino_real,
             "info_material_peligroso": (
                 f"Mat. Peligroso: SÍ (ONU: {getattr(viaje, 'cve_material_peligroso', '')} - Emb: {getattr(viaje, 'embalaje', '')})"
                 if es_peligroso_final

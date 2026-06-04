@@ -728,6 +728,20 @@ class SatCfdiPayload(BaseModel):
     aseguradora_med_ambiente: Optional[str] = None
     poliza_med_ambiente: Optional[str] = None
 
+    # 👇 --- NUEVOS CAMPOS AÑADIDOS PARA EL PDF --- 👇
+    cantidad: Optional[str] = None
+    bienes_transp: Optional[str] = None
+    descripcion_mercancia_pdf: Optional[str] = None
+    contenedor_1: Optional[str] = None
+    contenedor_2: Optional[str] = None
+    referencia_cliente: Optional[str] = None
+    subcliente_nombre: Optional[str] = None
+    subcliente_telefono: Optional[str] = None
+    subcliente_correo: Optional[str] = None
+    subcliente_direccion: Optional[str] = None
+    info_material_peligroso: Optional[str] = None
+    # 👆 ------------------------------------------ 👆
+
     model_config = ConfigDict(extra="allow")
 
     # --- VALIDADORES INDIVIDUALES ---

@@ -462,35 +462,27 @@ class BillingService:
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
             ret_pct = float(tarifa.retencion_porcentaje or 4.0) / 100.0
             dist_km = int(tarifa.distancia_km or 0)
-            distancia_real = str(dist_km) if dist_km > 0 else "1"
+            distancia_real = dist_km
         else:
             subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
             iva_pct = 0.16
             ret_pct = 0.04
-            distancia_real = "100" if is_nominal else "450"
+            distancia_real = 100 if is_nominal else 450
 
         iva = subtotal * iva_pct
         retenciones = subtotal * ret_pct
         total = subtotal + iva - retenciones
 
-        nombre_cliente = (
-            getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
-            if cliente
-            else "PUBLICO EN GENERAL"
-        )
-        cp_cliente_fiscal = (
-            str(getattr(cliente, "codigo_postal_fiscal", "")).strip() if cliente else ""
-        )
-        rfc_cliente = (
-            str(getattr(cliente, "rfc", "")).strip().upper() if cliente else ""
-        )
-
         subcliente = viaje.sub_client
         cp_destino_fisico = (
-            str(getattr(subcliente, "codigo_postal", "")).strip()
-            if subcliente
-            else cp_cliente_fiscal
+            str(getattr(subcliente, "codigo_postal", "")).strip() if subcliente else ""
         )
+        if not cp_destino_fisico:
+            cp_destino_fisico = (
+                str(getattr(cliente, "codigo_postal_fiscal", "")).strip()
+                if cliente
+                else ""
+            )
 
         loc_destino = (
             self.db.query(SatLocationCode)
@@ -501,83 +493,31 @@ class BillingService:
             estado_dest = normalizar_estado_sat(loc_destino.estado_clave)
             municipio_dest = str(loc_destino.municipio_clave).zfill(3)
         else:
-            nombre_lugar = (
-                getattr(subcliente, "razon_social", nombre_cliente)
-                if subcliente
-                else nombre_cliente
-            )
             raise HTTPException(
                 status_code=400,
-                detail=f"Error Carta Porte: El CP de destino '{cp_destino_fisico}' NO existe en la BD.",
+                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' NO existe en los catálogos del SAT.",
             )
 
-        tipo_r1_bruto = getattr(r1, "tipo_1", getattr(r1, "tipo", "")) if r1 else ""
-        tipo_r2_bruto = getattr(r2, "tipo_1", getattr(r2, "tipo", "")) if r2 else ""
-        raw_rfc = getattr(operador, "rfc", "")
-        rfc_op_final = (
-            re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
+        # Lógica de Materiales Peligrosos
+        clave_mercancia_final = (
+            getattr(viaje, "sat_clave_producto", "01010101") or "01010101"
         )
-        nombre_op = getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
-
-        origen_real = (
-            str(viaje.origin or "DOMICILIO CONOCIDO").replace("|", "").strip()[:100]
-        )
-        raw_destino = (
-            getattr(subcliente, "direccion", viaje.destination)
-            if subcliente
-            else (viaje.destination or "DOMICILIO CONOCIDO")
-        )
-        calle_destino_real = str(raw_destino).replace("|", "").strip()[:100]
-
-        c1 = getattr(viaje, "contenedor_1", "")
-        c2 = getattr(viaje, "contenedor_2", "")
-        cont_str = ""
-        if c1 and c1 not in ["N/A", "S/R"]:
-            cont_str += f" {c1}"
-        if c2 and c2 not in ["N/A", "S/R"]:
-            cont_str += f" / {c2}"
-
-        clave_servicio_flete = (
-            getattr(viaje, "sat_clave_servicio", "78101802") or "78101802"
-        )
-        clave_mercancia = getattr(viaje, "sat_clave_producto", "01010101") or "01010101"
-
-        sat_product = (
+        producto_sat = (
             self.db.query(SatProduct)
-            .filter(SatProduct.clave == clave_mercancia)
+            .filter(SatProduct.clave == clave_mercancia_final)
             .first()
         )
-        flag_peligroso_catalogo = (
-            str(sat_product.es_material_peligroso).strip() if sat_product else "0,1"
+        catalogo_peligroso = (
+            str(producto_sat.es_material_peligroso).strip() if producto_sat else "0,1"
         )
 
-        es_mat_peligroso = getattr(viaje, "es_material_peligroso", False)
-        cve_mat_peligroso = (
-            str(getattr(viaje, "cve_material_peligroso", "") or "").strip().upper()
-        )
-        embalaje_mat = str(getattr(viaje, "embalaje", "") or "").strip().upper()
-        es_peligroso_user_bool = es_mat_peligroso in [
-            True,
-            "true",
-            "1",
-            "Sí",
-            "Si",
-            "SI",
-            "si",
-        ]
-
-        if flag_peligroso_catalogo == "0":
-            is_peligroso_pdf = False
-        elif flag_peligroso_catalogo == "1":
-            is_peligroso_pdf = True
+        usuario_marco_peligroso = getattr(viaje, "es_material_peligroso", False)
+        if catalogo_peligroso == "0":
+            es_peligroso_final = False
+        elif catalogo_peligroso == "1":
+            es_peligroso_final = True
         else:
-            is_peligroso_pdf = es_peligroso_user_bool
-
-        info_mat = (
-            f"Mat. Peligroso: SÍ (ONU: {cve_mat_peligroso} - Emb: {embalaje_mat})"
-            if is_peligroso_pdf
-            else "Mat. Peligroso: NO"
-        )
+            es_peligroso_final = usuario_marco_peligroso
 
         serie_final = serie_forzada or "CP"
         folio_final = (
@@ -585,24 +525,50 @@ class BillingService:
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        if serie_final.upper().startswith("CP") or folio_interno.upper().startswith(
-            "CP"
-        ):
-            desc_merc_raw = "FLETE CARGA GENERAL"
-            desc_merc_pdf = "FLETE CARGA GENERAL"
-            pdf_descripcion = f"[{clave_servicio_flete}] Flete carga general {cont_str}"
-        else:
-            desc_merc_raw = (
-                "FLETE NOMINAL"
-                if is_nominal
-                else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+        # =======================================================
+        # SEPARACIÓN DE CONCEPTOS: FACTURA VS CARTA PORTE
+        # =======================================================
+        desc_concepto_factura = (
+            "FLETE NOMINAL"
+            if is_nominal
+            else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+        )
+        desc_concepto_pdf = (
+            desc_concepto_factura.split("|")[-1].strip()
+            if "|" in desc_concepto_factura
+            else desc_concepto_factura
+        )
+
+        mercancia_real = viaje.descripcion_mercancia or "CARGA GENERAL"
+        desc_mercancia_fisica_pdf = (
+            mercancia_real.split("|")[-1].strip()
+            if "|" in mercancia_real
+            else mercancia_real
+        )
+
+        raw_rfc = getattr(operador, "rfc", "")
+        rfc_op_final = (
+            re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
+        )
+
+        # Extracción segura de direcciones completas
+        direccion_cliente_real = (
+            str(
+                getattr(cliente, "direccion_fiscal", "DOMICILIO CONOCIDO")
+                or "DOMICILIO CONOCIDO"
             )
-            desc_merc_pdf = (
-                desc_merc_raw.split("|")[-1].strip()
-                if "|" in desc_merc_raw
-                else desc_merc_raw
+            .replace("|", "")
+            .strip()[:100]
+        )
+        direccion_destino_real = (
+            str(
+                getattr(
+                    subcliente, "direccion", viaje.destination or "DOMICILIO CONOCIDO"
+                )
             )
-            pdf_descripcion = f"[{clave_servicio_flete}] {desc_merc_pdf} {cont_str}"
+            .replace("|", "")
+            .strip()[:100]
+        )
 
         return {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
@@ -626,45 +592,33 @@ class BillingService:
                 else "CONTADO"
             ),
             # Descripciones
-            "descripcion_concepto": desc_merc_raw,
-            "descripcion_concepto_pdf": desc_merc_pdf,
-            "pdf_descripcion": pdf_descripcion,
-            "clave_prod_serv": clave_servicio_flete,
-            "info_material_peligroso": info_mat,
+            "descripcion_concepto": desc_concepto_factura,
+            "descripcion_concepto_pdf": desc_concepto_pdf,
+            "clave_prod_serv": getattr(viaje, "sat_clave_servicio", "78101802")
+            or "78101802",
             # Cliente y Destino
-            "rfc_cliente": rfc_cliente,
-            "nombre_cliente": nombre_cliente,
-            "cp_cliente": cp_cliente_fiscal,
+            "rfc_cliente": getattr(cliente, "rfc", "") or "XAXX010101000",
+            "nombre_cliente": getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
+            "cp_cliente": getattr(cliente, "codigo_postal_fiscal", ""),
+            "direccion_cliente": direccion_cliente_real,
             "cp_destino": cp_destino_fisico,
-            "regimen_cliente": (
-                getattr(cliente, "regimen_fiscal", "601") if cliente else "601"
-            ),
+            "regimen_cliente": getattr(cliente, "regimen_fiscal", "601"),
             "uso_cfdi": "G03",
             # Operación Carta Porte
-            "total_dist_rec": distancia_real,
             "distancia_total": distancia_real,
-            "peso_bruto": (
-                str(viaje.peso_toneladas * 1000)
-                if viaje and viaje.peso_toneladas
-                else "1000.00"
-            ),
-            # Materiales Peligrosos
-            "sat_clave_producto": clave_mercancia,
-            "es_material_peligroso": is_peligroso_pdf,
-            "flag_peligroso_catalogo": flag_peligroso_catalogo,
-            "cve_material_peligroso": cve_mat_peligroso,
-            "embalaje": embalaje_mat,
-            "descripcion_mercancia": desc_merc_raw,
+            "peso_bruto": getattr(viaje, "peso_toneladas", 0) * 1000,
+            # Materiales Peligrosos y Mercancía Física
+            "sat_clave_producto": clave_mercancia_final,
+            "es_material_peligroso": es_peligroso_final,
+            "flag_peligroso_catalogo": catalogo_peligroso,
+            "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
+            "embalaje": getattr(viaje, "embalaje", ""),
+            "descripcion_mercancia": mercancia_real,
             # Unidad + Seguros
-            "permiso_sct": (
-                getattr(unidad, "permiso_sct_tipo", "TPAF01") if unidad else "TPAF01"
-            ),
-            "num_permiso": (
-                getattr(unidad, "permiso_sct_folio", "123456") if unidad else "123456"
-            ),
-            "config_vehicular": (
-                getattr(unidad, "config_vehicular_sat", "T3S2") if unidad else "T3S2"
-            ),
+            "permiso_sct": getattr(unidad, "permiso_sct_tipo", "") or "TPAF01",
+            "num_permiso": getattr(unidad, "permiso_sct_folio", "") or "123456",
+            "config_vehicular": getattr(unidad, "config_vehicular_sat", "T3S2")
+            or "T3S2",
             "peso_bruto_vehicular": "15000",
             "placas": (
                 getattr(unidad, "placas", "XXXXXX").replace("-", "")
@@ -672,53 +626,63 @@ class BillingService:
                 else "XXXXXX"
             ),
             "anio_modelo": str(getattr(unidad, "year", "2020")) if unidad else "2020",
-            # 👇 --- SEGUROS: VALORES POR DEFECTO PARA EVITAR ERRORES O ESPACIOS EN BLANCO --- 👇
             "aseguradora": getattr(unidad, "aseguradora_resp_civil", "")
             or "NO REGISTRADA",
             "poliza": getattr(unidad, "poliza_resp_civil", "") or "S/P",
             "aseguradora_med_ambiente": getattr(unidad, "aseguradora_med_ambiente", ""),
             "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
-            # 👆 ----------------------------------------------------------------------------- 👆
             # Remolques
-            "subtipo_remolque": get_sat_trailer_code(tipo_r1_bruto),
+            "subtipo_remolque": get_sat_trailer_code(getattr(r1, "tipo", "")),
             "placa_remolque_1": (
                 getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
             ),
-            "subtipo_remolque_2": get_sat_trailer_code(tipo_r2_bruto),
+            "subtipo_remolque_2": get_sat_trailer_code(getattr(r2, "tipo", "")),
             "placa_remolque_2": (
                 getattr(r2, "placas", "1XXXX99").replace("-", "") if r2 else "1XXXX99"
             ),
             # Operador
             "rfc_operador": rfc_op_final,
-            "nombre_operador": nombre_op,
+            "nombre_operador": (
+                getattr(operador, "name", "OPERADOR") if operador else "OPERADOR"
+            ),
             "licencia": (
                 getattr(operador, "license_number", "LIC123") if operador else "LIC123"
             ),
             # Direcciones y Domicilios
             "estado_destino": estado_dest,
             "municipio_destino": municipio_dest,
-            "domicilio_origen": origen_real,
-            "domicilio_destino": calle_destino_real,
+            "domicilio_origen": str(viaje.origin or "DOMICILIO CONOCIDO")
+            .replace("|", "")
+            .strip()[:100],
+            "domicilio_destino": direccion_destino_real,
             "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,
-            # 👇 --- CAMPOS EXTRA QUE TU HTML NECESITA PARA IMPRIMIRSE COMPLETO --- 👇
+            # CAMPOS EXTRA PDF
             "cantidad": "1",
-            "bienes_transp": clave_mercancia,
-            "descripcion_mercancia_pdf": desc_merc_pdf,
-            "contenedor_1": c1,
-            "contenedor_2": c2,
+            "bienes_transp": clave_mercancia_final,
+            "descripcion_mercancia_pdf": desc_mercancia_fisica_pdf,
+            "contenedor_1": getattr(viaje, "contenedor_1", ""),
+            "contenedor_2": getattr(viaje, "contenedor_2", ""),
             "referencia_cliente": getattr(viaje, "referencia", "S/R"),
             "subcliente_nombre": (
-                getattr(subcliente, "razon_social", nombre_cliente)
+                getattr(
+                    subcliente,
+                    "razon_social",
+                    getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
+                )
                 if subcliente
-                else nombre_cliente
+                else getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
             ),
             "subcliente_telefono": getattr(subcliente, "telefono", ""),
             "subcliente_correo": getattr(
                 subcliente, "correo_electronico", getattr(subcliente, "correo", "")
             ),
-            "subcliente_direccion": calle_destino_real,
-            # 👆 ------------------------------------------------------------------ 👆
+            "subcliente_direccion": direccion_destino_real,
+            "info_material_peligroso": (
+                f"Mat. Peligroso: SÍ (ONU: {getattr(viaje, 'cve_material_peligroso', '')} - Emb: {getattr(viaje, 'embalaje', '')})"
+                if es_peligroso_final
+                else "Mat. Peligroso: NO"
+            ),
         }
 
     # =========================================================================
@@ -1609,6 +1573,66 @@ class BillingService:
                 uuid_timbrado,
             )
 
+            # =========================================================
+            # --- INICIO NUEVO CÓDIGO: GENERACIÓN DE PDF FACTURA F ---
+            # =========================================================
+            try:
+                raw_cfdi = res_sat.cfdiTimbrado
+                cfdi_bytes = (
+                    raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
+                )
+                root = etree.fromstring(cfdi_bytes)
+                ns = {
+                    "cfdi": "http://www.sat.gob.mx/cfd/4",
+                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+                }
+
+                # Extraer datos del timbre
+                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+                s_sat = tfd_node.get("SelloSAT", "0000")
+                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+                s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+                cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+                # Calcular importe en letras
+                total_float = _clean_float(d.get("monto_total", 0))
+                if HAS_NUM2WORDS:
+                    entero = int(total_float)
+                    decimales = int(round((total_float - entero) * 100))
+                    texto = num2words(entero, lang="es").upper()
+                    if texto == "UNO":
+                        texto = "UN"
+                    importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+                else:
+                    importe_letra = f"({total_float:,.2f} MXN)"
+
+                # Generar código QR
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={d.get('cliente_rfc', '')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                buffer = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(
+                    buffer, format="PNG"
+                )
+
+                # Mandar a imprimir el PDF
+                self._generar_pdf_con_diseno(
+                    d,
+                    uuid_timbrado,
+                    buffer.getvalue(),
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original_tfd,
+                    importe_letra,
+                )
+            except Exception as pdf_error:
+                logger.error(f"Error generando PDF para factura libre: {pdf_error}")
+            # =========================================================
+            # --- FIN NUEVO CÓDIGO ---
+            # =========================================================
+
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"
             factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
@@ -1713,6 +1737,66 @@ class BillingService:
                 ),
                 uuid_timbrado,
             )
+
+            # =========================================================
+            # --- INICIO NUEVO CÓDIGO: GENERACIÓN DE PDF FACTURA F ---
+            # =========================================================
+            try:
+                raw_cfdi = res_sat.cfdiTimbrado
+                cfdi_bytes = (
+                    raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
+                )
+                root = etree.fromstring(cfdi_bytes)
+                ns = {
+                    "cfdi": "http://www.sat.gob.mx/cfd/4",
+                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+                }
+
+                # Extraer datos del timbre
+                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+                s_sat = tfd_node.get("SelloSAT", "0000")
+                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+                s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+                cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+                # Calcular importe en letras
+                total_float = _clean_float(d.get("monto_total", 0))
+                if HAS_NUM2WORDS:
+                    entero = int(total_float)
+                    decimales = int(round((total_float - entero) * 100))
+                    texto = num2words(entero, lang="es").upper()
+                    if texto == "UNO":
+                        texto = "UN"
+                    importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+                else:
+                    importe_letra = f"({total_float:,.2f} MXN)"
+
+                # Generar código QR
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={d.get('cliente_rfc', '')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                buffer = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(
+                    buffer, format="PNG"
+                )
+
+                # Mandar a imprimir el PDF
+                self._generar_pdf_con_diseno(
+                    d,
+                    uuid_timbrado,
+                    buffer.getvalue(),
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original_tfd,
+                    importe_letra,
+                )
+            except Exception as pdf_error:
+                logger.error(f"Error generando PDF para factura libre: {pdf_error}")
+            # =========================================================
+            # --- FIN NUEVO CÓDIGO ---
+            # =========================================================
 
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"

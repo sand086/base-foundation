@@ -400,6 +400,7 @@ def generar_factura_final(
 @router.get("/invoice/{uuid}/pdf", response_class=FileResponse)
 def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     import re
+    from app.models import models
 
     # Limpiamos el UUID
     match = re.search(
@@ -408,7 +409,7 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     )
     clean_uuid = match.group(0) if match else str(uuid)
 
-    #  FIX: Usamos el servicio base para que lea la carpeta EXACTA de tu servidor de Producción
+    # FIX: Usamos el servicio base para que lea la carpeta EXACTA de tu servidor de Producción
     service = CartaPorteService(db)
 
     pdf_path_upper = service.storage_dir / f"{clean_uuid.upper()}.pdf"
@@ -424,9 +425,30 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
             detail=f"Error 404: El PDF no se encuentra físicamente en la ruta {service.storage_dir}",
         )
 
+    # =========================================================
+    # NUEVA LÓGICA: CONSTRUIR EL NOMBRE DEL ARCHIVO DE DESCARGA
+    # =========================================================
+    factura = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.uuid == clean_uuid)
+        .first()
+    )
+
+    if factura:
+        # folio_interno ya trae "CP-15", "F-22", "COM-1", etc.
+        folio = factura.folio_interno or "SINFOLIO"
+        rfc = factura.client.rfc if factura.client else "XAXX010101000"
+
+        # Formato: CP-15_XAXX010101000_UUID.pdf
+        nombre_descarga = f"{folio}_{rfc}_{clean_uuid.upper()}.pdf"
+    else:
+        # Fallback por si la factura no está en la base de datos por alguna razón
+        nombre_descarga = f"CFDI_{clean_uuid.upper()}.pdf"
+    # =========================================================
+
     return FileResponse(
         path=str(pdf_path),
-        filename=f"CFDI_{clean_uuid.upper()}.pdf",
+        filename=nombre_descarga,  # <--- Se asigna el nuevo nombre aquí
         media_type="application/pdf",
         content_disposition_type="attachment",
     )
@@ -435,6 +457,7 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
 @router.get("/invoice/{uuid}/xml", response_class=FileResponse)
 def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
     import re
+    from app.models import models
 
     match = re.search(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
@@ -442,7 +465,7 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
     )
     clean_uuid = match.group(0) if match else str(uuid)
 
-    #  FIX: Usamos el servicio base para encontrar la carpeta
+    # FIX: Usamos el servicio base para encontrar la carpeta
     service = CartaPorteService(db)
 
     xml_path_upper = service.storage_dir / f"{clean_uuid.upper()}.xml"
@@ -458,9 +481,30 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
             detail=f"Error 404: El XML no se encuentra físicamente en la ruta {service.storage_dir}",
         )
 
+    # =========================================================
+    # NUEVA LÓGICA: CONSTRUIR EL NOMBRE DEL ARCHIVO DE DESCARGA
+    # =========================================================
+    factura = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.uuid == clean_uuid)
+        .first()
+    )
+
+    if factura:
+        # folio_interno ya trae "CP-15", "F-22", "COM-1", etc.
+        folio = factura.folio_interno or "SINFOLIO"
+        rfc = factura.client.rfc if factura.client else "XAXX010101000"
+
+        # Formato: CP-15_XAXX010101000_UUID.xml
+        nombre_descarga = f"{folio}_{rfc}_{clean_uuid.upper()}.xml"
+    else:
+        # Fallback por si no existe
+        nombre_descarga = f"CFDI_{clean_uuid.upper()}.xml"
+    # =========================================================
+
     return FileResponse(
         path=str(xml_path),
-        filename=f"CFDI_{clean_uuid.upper()}.xml",
+        filename=nombre_descarga,  # <--- Se asigna el nuevo nombre aquí
         media_type="application/xml",
         content_disposition_type="attachment",
     )

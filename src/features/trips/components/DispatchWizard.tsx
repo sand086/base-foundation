@@ -959,7 +959,6 @@ export const DispatchWizard = ({
         dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
       };
-
       if (finalStatus !== "creado") {
         payload.initial_leg = {
           unit_id: cleanId(data.unitId) || null,
