@@ -679,7 +679,7 @@ class BillingService:
             "subcliente_nombre": (
                 getattr(
                     subcliente,
-                    "razon_social",
+                    "nombre",
                     getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
                 )
                 if subcliente
@@ -1058,7 +1058,7 @@ class BillingService:
 
         try:
             validador = SatCfdiPayload(**raw_data)
-            data = validador.model_dump()
+            data = {**raw_data, **validador.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1138,7 +1138,7 @@ class BillingService:
 
         try:
             validador = SatCfdiPayload(**raw_data)
-            data = validador.model_dump()
+            data = {**raw_data, **validador.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1254,7 +1254,7 @@ class BillingService:
 
         try:
             validador = SatCfdiPayload(**raw_data)
-            data = validador.model_dump()
+            data = {**raw_data, **validador.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1912,62 +1912,104 @@ class BillingService:
             )
 
             # 6. Preparar Diccionario de Contexto para el template HTML
-            folio_str = (
-                str(factura.folio_interno).split("-")[-1]
-                if factura.folio_interno and "-" in str(factura.folio_interno)
-                else str(factura.id)
-            )
+            if factura.viaje_id:
+                # ¡MAGIA AQUÍ! Reconstruimos la data completa de la Carta Porte
+                viaje, cliente_obj, unidad, operador, r1, r2 = (
+                    self._obtener_datos_completos(
+                        factura.viaje_id, usar_tramo_final=not factura.is_nominal
+                    )
+                )
+                d = self._build_dict_from_models(
+                    viaje,
+                    cliente_obj,
+                    unidad,
+                    operador,
+                    r1,
+                    r2,
+                    is_nominal=factura.is_nominal,
+                )
 
-            d = {
-                "client_id": cliente.id if cliente else None,
-                "folio_interno": factura.folio_interno,
-                "folio": folio_str,
-                "fecha": (
+                # Sobrescribimos con los valores exactos financieros de la factura
+                d["folio_interno"] = factura.folio_interno
+                if factura.folio_interno and "-" in str(factura.folio_interno):
+                    d["serie"], d["folio"] = str(factura.folio_interno).split("-", 1)
+                else:
+                    d["folio"] = str(factura.id)
+
+                d["fecha"] = (
                     factura.fecha_emision.strftime("%Y-%m-%dT00:00:00")
                     if factura.fecha_emision
-                    else ""
-                ),
-                "subtotal": float(factura.subtotal or 0.0),
-                "iva": float(factura.iva or 0.0),
-                "retenciones": float(factura.retenciones or 0.0),
-                "total": float(factura.monto_total or 0.0),
-                "monto_total": float(factura.monto_total or 0.0),
-                "moneda": (
-                    str(
-                        factura.moneda.value
-                        if hasattr(factura.moneda, "value")
-                        else factura.moneda
-                    )
-                    if factura.moneda
-                    else "MXN"
-                ),
-                "metodo_pago": factura.metodo_pago or "PPD",
-                "forma_pago": factura.forma_pago or "99",
-                "cliente_rfc": cliente.rfc if cliente else "",
-                "cliente": cliente.razon_social if cliente else "",
-                "cp_receptor": cliente.codigo_postal_fiscal if cliente else "",
-                "regimen_fiscal_receptor": cliente.regimen_fiscal if cliente else "601",
-                "rfc_cliente": cliente.rfc if cliente else "",
-                "nombre_cliente": cliente.razon_social if cliente else "",
-                "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
-                "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
-                "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
-                "conceptos": (
-                    factura.conceptos_detalle
-                    if factura.conceptos_detalle and len(factura.conceptos_detalle) > 0
-                    else [
-                        {
-                            "claveProdServ": "84111506",
-                            "cantidad": 1.0,
-                            "claveUnidad": "E48",
-                            "descripcion": factura.concepto or "Servicios Generales",
-                            "precioUnitario": float(factura.subtotal or 0.0),
-                            "importe": float(factura.subtotal or 0.0),
-                        }
-                    ]
-                ),
-                "leyenda_legal": self.leyenda_legal_db,
-            }
+                    else d["fecha"]
+                )
+                d["subtotal"] = f"{_clean_float(factura.subtotal):.2f}"
+                d["iva"] = f"{_clean_float(factura.iva):.2f}"
+                d["retenciones"] = f"{_clean_float(factura.retenciones):.2f}"
+                d["total"] = f"{_clean_float(factura.monto_total):.2f}"
+
+                if factura.conceptos_detalle:
+                    d["conceptos"] = factura.conceptos_detalle
+            else:
+                # Factura Libre sin Carta Porte (Código original de fallback)
+                folio_str = (
+                    str(factura.folio_interno).split("-")[-1]
+                    if factura.folio_interno and "-" in str(factura.folio_interno)
+                    else str(factura.id)
+                )
+
+                d = {
+                    "client_id": cliente.id if cliente else None,
+                    "folio_interno": factura.folio_interno,
+                    "folio": folio_str,
+                    "fecha": (
+                        factura.fecha_emision.strftime("%Y-%m-%dT00:00:00")
+                        if factura.fecha_emision
+                        else ""
+                    ),
+                    "subtotal": float(factura.subtotal or 0.0),
+                    "iva": float(factura.iva or 0.0),
+                    "retenciones": float(factura.retenciones or 0.0),
+                    "total": float(factura.monto_total or 0.0),
+                    "monto_total": float(factura.monto_total or 0.0),
+                    "moneda": (
+                        str(
+                            factura.moneda.value
+                            if hasattr(factura.moneda, "value")
+                            else factura.moneda
+                        )
+                        if factura.moneda
+                        else "MXN"
+                    ),
+                    "metodo_pago": factura.metodo_pago or "PPD",
+                    "forma_pago": factura.forma_pago or "99",
+                    "cliente_rfc": cliente.rfc if cliente else "",
+                    "cliente": cliente.razon_social if cliente else "",
+                    "cp_receptor": cliente.codigo_postal_fiscal if cliente else "",
+                    "regimen_fiscal_receptor": (
+                        cliente.regimen_fiscal if cliente else "601"
+                    ),
+                    "rfc_cliente": cliente.rfc if cliente else "",
+                    "nombre_cliente": cliente.razon_social if cliente else "",
+                    "cp_cliente": cliente.codigo_postal_fiscal if cliente else "",
+                    "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
+                    "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
+                    "conceptos": (
+                        factura.conceptos_detalle
+                        if factura.conceptos_detalle
+                        and len(factura.conceptos_detalle) > 0
+                        else [
+                            {
+                                "claveProdServ": "84111506",
+                                "cantidad": 1.0,
+                                "claveUnidad": "E48",
+                                "descripcion": factura.concepto
+                                or "Servicios Generales",
+                                "precioUnitario": float(factura.subtotal or 0.0),
+                                "importe": float(factura.subtotal or 0.0),
+                            }
+                        ]
+                    ),
+                    "leyenda_legal": self.leyenda_legal_db,
+                }
 
             # 7. Renderizar y Guardar PDF
             self._generar_pdf_con_diseno(

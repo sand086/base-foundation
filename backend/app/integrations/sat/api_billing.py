@@ -762,3 +762,13 @@ def reconstruir_pdf_factura(invoice_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=500, detail=f"Error al reconstruir PDF: {str(e)}"
         )
+
+
+@router.get("/rebuild-all-pdfs")
+def rebuild_all_pdfs(db: Session = Depends(get_db)):
+    try:
+        service = BillingService(db)
+        resultado = service.regenerar_todos_los_pdfs()
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
