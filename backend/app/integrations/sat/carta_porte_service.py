@@ -525,15 +525,9 @@ class CartaPorteService:
         # SEPARACIÓN DE CONCEPTOS: FACTURA VS CARTA PORTE
         # =======================================================
         desc_concepto_factura = (
-            "FLETE NOMINAL"
-            if is_nominal
-            else (viaje.descripcion_mercancia or "FLETE CARGA GENERAL")
+            "FLETE NOMINAL" if is_nominal else "FLETE DE CARGA GENERAL"
         )
-        desc_concepto_pdf = (
-            desc_concepto_factura.split("|")[-1].strip()
-            if "|" in desc_concepto_factura
-            else desc_concepto_factura
-        )
+        desc_concepto_pdf = desc_concepto_factura
 
         mercancia_real = viaje.descripcion_mercancia or "CARGA GENERAL"
         desc_mercancia_fisica_pdf = (
