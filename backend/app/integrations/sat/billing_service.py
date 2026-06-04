@@ -2033,3 +2033,46 @@ class BillingService:
             raise ValueError(
                 f"Error extrayendo datos del XML o reconstruyendo el PDF: {str(e)}"
             )
+
+    def regenerar_todos_los_pdfs(self):
+        from app.models.models import ReceivableInvoice
+
+        # Buscamos todas las facturas Activas que ya tengan un UUID (ya timbradas)
+        facturas = (
+            self.db.query(ReceivableInvoice)
+            .filter(
+                ReceivableInvoice.record_status == "A",
+                ReceivableInvoice.uuid.isnot(None),
+            )
+            .all()
+        )
+
+        resultados = []
+        procesadas = 0
+        errores = 0
+
+        for factura in facturas:
+            try:
+                # Reutilizamos tu función de regenerar para cada una
+                self.regenerar_pdf_factura(factura.id)
+                resultados.append(
+                    {"id": factura.id, "uuid": factura.uuid, "status": "OK"}
+                )
+                procesadas += 1
+            except Exception as e:
+                resultados.append(
+                    {
+                        "id": factura.id,
+                        "uuid": factura.uuid,
+                        "status": f"ERROR: {str(e)}",
+                    }
+                )
+                errores += 1
+
+        return {
+            "mensaje": "Proceso de regeneración masiva completado",
+            "total_encontradas": len(facturas),
+            "exitosas": procesadas,
+            "con_error": errores,
+            "detalle": resultados,
+        }
