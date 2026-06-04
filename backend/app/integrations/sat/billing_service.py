@@ -461,7 +461,7 @@ class BillingService:
             subtotal = float(tarifa.tarifa_base or 0.0)
             iva_pct = float(tarifa.iva_porcentaje or 16.0) / 100.0
             ret_pct = float(tarifa.retencion_porcentaje or 4.0) / 100.0
-            dist_km = int(tarifa.distancia_km or 0)
+            dist_km = int(tarifa.distancia_km or 100)
             distancia_real = dist_km
         else:
             subtotal = 1.00 if is_nominal else float(viaje.tarifa_base or 0.0)
