@@ -782,13 +782,23 @@ class CartaPorteService:
         # MATERIAL PELIGROSO Y SEGURO AMBIENTAL
         # =========================================================
         clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
+        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
+        mat_peligroso_attr = ""
 
-        es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
-        mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
-
-        seguro_ambiental_attr = ""
-        if d.get("es_material_peligroso"):
-            mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+        if flag_cat == "0":
+            # El SAT prohíbe enviar el atributo si el catálogo dicta 0
+            mat_peligroso_attr = ""
+        elif flag_cat == "1":
+            # El SAT exige "Sí" si el catálogo dicta 1
+            mat_peligroso_attr = ' MaterialPeligroso="Sí"'
+            if d.get("cve_material_peligroso"):
+                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+        else:
+            # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
+            es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
+            mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
+            if es_peligroso_str == "Sí" and d.get("cve_material_peligroso"):
+                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
             # Añadimos el seguro ambiental al string de atributos del nodo Seguros
             seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
         # =========================================================

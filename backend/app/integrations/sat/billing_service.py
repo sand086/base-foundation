@@ -720,11 +720,23 @@ class BillingService:
             remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{d["placa_remolque_2"]}" />'
 
         clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
-        es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
-        mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
+        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
+        mat_peligroso_attr = ""
 
-        if d.get("es_material_peligroso"):
-            mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+        if flag_cat == "0":
+            # El SAT prohíbe enviar el atributo si el catálogo dicta 0
+            mat_peligroso_attr = ""
+        elif flag_cat == "1":
+            # El SAT exige "Sí" si el catálogo dicta 1
+            mat_peligroso_attr = ' MaterialPeligroso="Sí"'
+            if d.get("cve_material_peligroso"):
+                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+        else:
+            # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
+            es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
+            mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
+            if es_peligroso_str == "Sí" and d.get("cve_material_peligroso"):
+                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}

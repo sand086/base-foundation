@@ -271,6 +271,7 @@ export function AddUnidadModal({
   //  REACT HOOK FORM
   const form = useForm<UnidadFormData>({
     resolver: zodResolver(unidadSchema),
+    shouldFocusError: false,
     defaultValues: {
       categoriaFisica: "TRACTOCAMION",
       numero_economico: "",
@@ -314,79 +315,81 @@ export function AddUnidadModal({
   // Load edit data
   // =====================
   useEffect(() => {
-    if (open && unidadToEdit) {
-      const categoriaFisica = normalizeCategoriaFisica(unidadToEdit.tipo_1);
-      const autoLayout = getAutoLayoutByCategoria(categoriaFisica);
-
+    // SÓLO interactuamos con el formulario cuando el modal se va a ABRIR
+    if (open) {
       setShowOverride(false);
       setMasterPassword("");
 
-      reset({
-        categoriaFisica,
-        numero_economico: unidadToEdit.numero_economico || "",
-        placas: unidadToEdit.placas || "",
-        vin: unidadToEdit.vin || "",
-        marca: unidadToEdit.marca || "",
-        modelo: unidadToEdit.modelo || "",
-        year: unidadToEdit.year?.toString() || currentYear.toString(),
-        tipo: autoLayout,
-        tipo_1: categoriaFisica,
-        numero_serie_motor: unidadToEdit.numero_serie_motor || "",
-        marca_motor: unidadToEdit.marca_motor || "",
-        capacidad_carga: unidadToEdit.capacidad_carga?.toString() || "",
-        tipo_carga: unidadToEdit.tipo_carga || "General",
-        tarjeta_circulacion_url: unidadToEdit.tarjeta_circulacion_url || "",
-        tarjeta_circulacion_folio: unidadToEdit.tarjeta_circulacion_folio || "",
-        permiso_sct_folio: unidadToEdit.permiso_sct_folio || "",
-        caat_folio: unidadToEdit.caat_folio || "",
-        caat_vence: parseDateSafe(unidadToEdit.caat_vence),
-        seguro_vence: parseDateSafe(unidadToEdit.seguro_vence),
-        verificacion_humo_vence: parseDateSafe(
-          unidadToEdit.verificacion_humo_vence,
-        ),
-        verificacion_fisico_mecanica_vence: parseDateSafe(
-          unidadToEdit.verificacion_fisico_mecanica_vence,
-        ),
-        permiso_sct_vence: parseDateSafe(unidadToEdit.permiso_sct_vence),
-        aseguradora_med_ambiente_id:
-          unidadToEdit.aseguradora_med_ambiente_id || undefined,
-        poliza_med_ambiente: unidadToEdit.poliza_med_ambiente || "",
-        status: unidadToEdit.status || "disponible",
-      });
-      return;
-    }
+      if (unidadToEdit) {
+        // MODO EDICIÓN
+        const categoriaFisica = normalizeCategoriaFisica(unidadToEdit.tipo_1);
+        const autoLayout = getAutoLayoutByCategoria(categoriaFisica);
 
-    if (!open) {
-      reset({
-        categoriaFisica: "TRACTOCAMION",
-        numero_economico: "",
-        placas: "",
-        vin: "",
-        marca: "",
-        modelo: "",
-        year: currentYear.toString(),
-        tipo: "T3",
-        tipo_1: "TRACTOCAMION",
-        numero_serie_motor: "",
-        marca_motor: "",
-        capacidad_carga: "",
-        tipo_carga: "General",
-        tarjeta_circulacion_url: "",
-        tarjeta_circulacion_folio: "",
-        permiso_sct_folio: "",
-        caat_folio: "",
-        caat_vence: undefined,
-        seguro_vence: undefined,
-        verificacion_humo_vence: undefined,
-        verificacion_fisico_mecanica_vence: undefined,
-        permiso_sct_vence: undefined,
-        aseguradora_med_ambiente_id: undefined,
-        poliza_med_ambiente: "",
-        status: "disponible",
-      });
-      setShowOverride(false);
-      setMasterPassword("");
+        reset({
+          categoriaFisica,
+          numero_economico: unidadToEdit.numero_economico || "",
+          placas: unidadToEdit.placas || "",
+          vin: unidadToEdit.vin || "",
+          marca: unidadToEdit.marca || "",
+          modelo: unidadToEdit.modelo || "",
+          year: unidadToEdit.year?.toString() || currentYear.toString(),
+          tipo: autoLayout,
+          tipo_1: categoriaFisica,
+          numero_serie_motor: unidadToEdit.numero_serie_motor || "",
+          marca_motor: unidadToEdit.marca_motor || "",
+          capacidad_carga: unidadToEdit.capacidad_carga?.toString() || "",
+          tipo_carga: unidadToEdit.tipo_carga || "General",
+          tarjeta_circulacion_url: unidadToEdit.tarjeta_circulacion_url || "",
+          tarjeta_circulacion_folio:
+            unidadToEdit.tarjeta_circulacion_folio || "",
+          permiso_sct_folio: unidadToEdit.permiso_sct_folio || "",
+          caat_folio: unidadToEdit.caat_folio || "",
+          caat_vence: parseDateSafe(unidadToEdit.caat_vence),
+          seguro_vence: parseDateSafe(unidadToEdit.seguro_vence),
+          verificacion_humo_vence: parseDateSafe(
+            unidadToEdit.verificacion_humo_vence,
+          ),
+          verificacion_fisico_mecanica_vence: parseDateSafe(
+            unidadToEdit.verificacion_fisico_mecanica_vence,
+          ),
+          permiso_sct_vence: parseDateSafe(unidadToEdit.permiso_sct_vence),
+          aseguradora_med_ambiente_id:
+            unidadToEdit.aseguradora_med_ambiente_id || undefined,
+          poliza_med_ambiente: unidadToEdit.poliza_med_ambiente || "",
+          status: unidadToEdit.status || "disponible",
+        });
+      } else {
+        // MODO CREACIÓN (Campos vacíos listos para un nuevo registro)
+        reset({
+          categoriaFisica: "TRACTOCAMION",
+          numero_economico: "",
+          placas: "",
+          vin: "",
+          marca: "",
+          modelo: "",
+          year: currentYear.toString(),
+          tipo: "T3",
+          tipo_1: "TRACTOCAMION",
+          numero_serie_motor: "",
+          marca_motor: "",
+          capacidad_carga: "",
+          tipo_carga: "General",
+          tarjeta_circulacion_url: "",
+          tarjeta_circulacion_folio: "",
+          permiso_sct_folio: "",
+          caat_folio: "",
+          caat_vence: undefined,
+          seguro_vence: undefined,
+          verificacion_humo_vence: undefined,
+          verificacion_fisico_mecanica_vence: undefined,
+          permiso_sct_vence: undefined,
+          aseguradora_med_ambiente_id: undefined,
+          poliza_med_ambiente: "",
+          status: "disponible",
+        });
+      }
     }
+    // ¡NOTA: Aquí ya NO existe el bloque 'if (!open)'!
   }, [unidadToEdit, open, reset, currentYear]);
 
   // Sincronizar tipo y tipo_1 cuando cambia categoriaFisica
@@ -478,9 +481,9 @@ export function AddUnidadModal({
 
   const handleClose = () => {
     onOpenChange(false);
-    form.reset();
-    setShowOverride(false);
-    setMasterPassword("");
+    // ❌ ELIMINADO: form.reset(); -> Esto causaba el crash (DOMException)
+    // ❌ ELIMINADO: setShowOverride(false);
+    // ❌ ELIMINADO: setMasterPassword("");
   };
 
   return (
