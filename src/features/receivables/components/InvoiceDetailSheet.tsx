@@ -35,9 +35,9 @@ import {
   Tag,
   Link as LinkIcon,
   MapPin,
-  AlertTriangle, // <-- NUEVO IMPORT
-  History, // <-- NUEVO IMPORT
-  Download, // <-- NUEVO IMPORT
+  AlertTriangle,
+  History,
+  Download,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -83,7 +83,7 @@ export function InvoiceDetailSheet({
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  // 👇 NUEVA EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
+  // 👇 EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
   const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
   const docHistory = Array.isArray(inv.document_history)
@@ -91,6 +91,31 @@ export function InvoiceDetailSheet({
     : [];
   const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
   const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
+
+  // AGRUPACIÓN DEL HISTORIAL POR VERSIÓN PARA LA TABLA
+  const groupedHistory = Object.values(
+    docHistory.reduce((acc: any, doc: any) => {
+      const v = doc.version || 1;
+      if (!acc[v]) {
+        acc[v] = {
+          version: v,
+          created_at: doc.created_at,
+          is_active: doc.is_active,
+          pdf: null,
+          xml: null,
+          acuse: null,
+          filename: doc.filename
+            ? doc.filename.replace(/\.(xml|pdf)$/i, "")
+            : displayFolio,
+        };
+      }
+      if (doc.document_type === "pdf") acc[v].pdf = doc;
+      if (doc.document_type === "xml") acc[v].xml = doc;
+      if (doc.document_type === "acuse_cancelacion") acc[v].acuse = doc;
+
+      return acc;
+    }, {}),
+  ).sort((a: any, b: any) => b.version - a.version); // Orden descendente
   // 👆 -----------------------------------------------------
 
   const entidadNombre =
@@ -156,7 +181,6 @@ export function InvoiceDetailSheet({
     }
   };
 
-  // 👇 NUEVA FUNCIÓN DE DESCARGA GENÉRICA PARA HISTORIAL
   const handleDownloadUrl = (url: string, filename: string) => {
     const toastId = toast.loading(`Descargando ${filename}...`);
     try {
@@ -178,7 +202,6 @@ export function InvoiceDetailSheet({
       toast.error(`Fallo al descargar ${filename}`, { id: toastId });
     }
   };
-  // 👆 -----------------------------------------------------
 
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
@@ -193,6 +216,18 @@ export function InvoiceDetailSheet({
           year: "numeric",
         })
       : "—";
+
+  // FORMATEADOR DE FECHA Y HORA PARA LA TABLA
+  const fDT = (d: any) => {
+    if (!d || d === "—") return "—";
+    return new Date(d).toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   const isPaid = saldoPendiente <= 0;
 
@@ -232,7 +267,7 @@ export function InvoiceDetailSheet({
 
         {/* ================= CONTENEDOR SCROLL ================= */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          {/* 👇 ALERTA DE CANCELACIÓN (NUEVA) */}
+          {/* 👇 ALERTA DE CANCELACIÓN */}
           {isCanceled && (
             <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
@@ -242,7 +277,7 @@ export function InvoiceDetailSheet({
                 </h4>
                 <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
                   Este comprobante fue cancelado el{" "}
-                  <strong>{fD(inv.fecha_cancelacion)}</strong>
+                  <strong>{fDT(inv.fecha_cancelacion)}</strong>
                   {inv.motivo_cancelacion
                     ? ` por el motivo "${inv.motivo_cancelacion}"`
                     : ""}
@@ -251,7 +286,6 @@ export function InvoiceDetailSheet({
               </div>
             </div>
           )}
-          {/* 👆 FIN ALERTA */}
 
           {/* IDENTIFICACIÓN */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group gap-4">
@@ -538,7 +572,7 @@ export function InvoiceDetailSheet({
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* ================= HISTORIAL DE COBROS (REP) ================= */}
+          {/* HISTORIAL DE COBROS (REP) */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
@@ -644,7 +678,7 @@ export function InvoiceDetailSheet({
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* 👇 NUEVO BLOQUE: EXPEDIENTE Y VERSIONES (CON FALLBACK A BOTONES VIEJOS) */}
+          {/* 👇 TABLA DE EXPEDIENTE Y VERSIONES */}
           <div className="bg-slate-900 dark:bg-slate-950 p-5 rounded-2xl text-white shadow-xl relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-all pointer-events-none"></div>
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2 relative z-10">
@@ -652,50 +686,98 @@ export function InvoiceDetailSheet({
               Factura
             </h3>
 
-            {docHistory.length > 0 ? (
-              <div className="space-y-3 relative z-10">
-                {docHistory.map((doc: any, index: number) => {
-                  const isPdf = doc.document_type === "pdf";
-                  const isCancel = doc.document_type === "acuse_cancelacion";
-                  return (
-                    <div
-                      key={doc.id || index}
-                      className={`flex items-center justify-between p-3 rounded-xl border ${doc.is_active ? "bg-white/10 border-white/20" : "bg-white/5 border-white/5 opacity-60 grayscale hover:grayscale-0 transition-all"}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`p-2 rounded-lg ${doc.is_active ? (isCancel ? "bg-rose-500/20 text-rose-400" : "bg-blue-500/20 text-blue-400") : "bg-slate-800 text-slate-500"}`}
-                        >
-                          {isPdf || isCancel ? (
-                            <FileText className="w-4 h-4" />
-                          ) : (
-                            <FileCode2 className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-slate-200">
-                            {doc.filename}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider">
-                            Versión {doc.version}{" "}
-                            {doc.is_active ? "(Activa)" : "(Obsoleta)"}
-                          </span>
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Descargar versión"
-                        className="h-8 w-8 hover:bg-white/20 text-white"
-                        onClick={() =>
-                          handleDownloadUrl(doc.file_url, doc.filename)
-                        }
+            {groupedHistory.length > 0 ? (
+              <div className="border border-white/10 rounded-xl overflow-hidden bg-white/5 relative z-10">
+                <DataTable>
+                  <DataTableHeader>
+                    <DataTableRow className="bg-white/5 border-b-white/10 hover:bg-transparent">
+                      <DataTableHead className="text-[10px] font-black text-slate-400 uppercase tracking-widest py-3 h-auto">
+                        Documento
+                      </DataTableHead>
+                      <DataTableHead className="text-[10px] font-black text-slate-400 uppercase tracking-widest py-3 h-auto">
+                        Fecha / Hora
+                      </DataTableHead>
+                      <DataTableHead className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-3 h-auto">
+                        Descargas
+                      </DataTableHead>
+                    </DataTableRow>
+                  </DataTableHeader>
+                  <DataTableBody>
+                    {groupedHistory.map((group: any) => (
+                      <DataTableRow
+                        key={`v-${group.version}`}
+                        className={`border-b-white/5 transition-colors ${group.is_active ? "hover:bg-white/10" : "opacity-60 grayscale hover:grayscale-0"}`}
                       >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  );
-                })}
+                        <DataTableCell className="py-2.5">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-200">
+                              {group.filename}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider mt-0.5">
+                              Versión {group.version}{" "}
+                              {group.is_active ? "(Activa)" : "(Obsoleta)"}
+                            </span>
+                          </div>
+                        </DataTableCell>
+                        <DataTableCell className="text-[11px] font-medium text-slate-300 py-2.5">
+                          {fDT(group.created_at)}
+                        </DataTableCell>
+                        <DataTableCell className="text-center py-2.5">
+                          <div className="flex justify-center items-center gap-1">
+                            {group.pdf && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar PDF"
+                                className="h-7 w-7 rounded text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.pdf.file_url,
+                                    group.pdf.filename,
+                                  )
+                                }
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {group.xml && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar XML"
+                                className="h-7 w-7 rounded text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.xml.file_url,
+                                    group.xml.filename,
+                                  )
+                                }
+                              >
+                                <FileCode2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {group.acuse && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar Acuse de Cancelación"
+                                className="h-7 w-7 rounded text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.acuse.file_url,
+                                    group.acuse.filename,
+                                  )
+                                }
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </DataTableCell>
+                      </DataTableRow>
+                    ))}
+                  </DataTableBody>
+                </DataTable>
               </div>
             ) : (
               // FALLBACK SI ES UNA FACTURA VIEJA SIN HISTORIAL EN BD
@@ -719,7 +801,7 @@ export function InvoiceDetailSheet({
               </div>
             )}
           </div>
-          {/* 👆 FIN NUEVO BLOQUE */}
+          {/* 👆 FIN TABLA */}
         </div>
       </SheetContent>
     </Sheet>
