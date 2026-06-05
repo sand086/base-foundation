@@ -1,5 +1,3 @@
-// src/features/treasury/Treasury.tsx
-
 import { useState, useMemo, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +9,7 @@ import {
   AlertTriangle,
   Plus,
   Coins,
+  Loader2,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -27,7 +26,7 @@ import { toast } from "sonner";
 
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
-//  IMPORTAMOS LOS TIPOS Y SERVICIOS DE OPENAPI
+// IMPORTAMOS LOS TIPOS Y SERVICIOS DE OPENAPI
 import { FinanceService } from "@/api/generated/services/FinanceService";
 import type { BankMovementResponse } from "@/api/generated/models/BankMovementResponse";
 import type { BankAccountResponse } from "@/api/generated/models/BankAccountResponse";
@@ -60,6 +59,9 @@ export default function Treasury() {
   const [isMovementsLoading, setIsMovementsLoading] = useState(true);
   const [showBalances, setShowBalances] = useState(true);
 
+  // NUEVO ESTADO PARA PREVENIR EL CIERRE DEL MODAL MIENTRAS CARGA EL SAT
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [movementFilter, setMovementFilter] = useState<
     "all" | "egreso" | "ingreso"
@@ -81,7 +83,7 @@ export default function Treasury() {
   const [isAccountDetailOpen, setIsAccountDetailOpen] = useState(false);
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false);
 
-  //  FETCH DE MOVIMIENTOS CON OPENAPI
+  // FETCH DE MOVIMIENTOS CON OPENAPI
   const fetchMovements = async () => {
     setIsMovementsLoading(true);
     try {
@@ -310,7 +312,6 @@ export default function Treasury() {
         open={isDeleteAccountOpen}
         onOpenChange={setIsDeleteAccountOpen}
       >
-        {/* ... Resto del Modal de Delete Account (no cambió) ... */}
         <AlertDialogContent className="w-[95vw] sm:max-w-lg p-0 flex flex-col bg-card/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl overflow-hidden">
           <AlertDialogHeader className="p-6 sm:p-8 bg-card border-b border-border shrink-0">
             <div className="flex items-center gap-4">
@@ -353,6 +354,7 @@ export default function Treasury() {
       <AlertDialog
         open={isDeleteMovementOpen}
         onOpenChange={(open) => {
+          if (isDeleting) return; // Protege contra cierre accidental mientras procesa el SAT
           setIsDeleteMovementOpen(open);
           if (!open) {
             setDeleteStep(1);
@@ -415,17 +417,23 @@ export default function Treasury() {
             </AlertDialogDescription>
           </div>
           <AlertDialogFooter className="p-6 sm:p-8 bg-muted/50 border-t border-border shrink-0">
-            <AlertDialogCancel className="rounded-xl font-bold h-11 px-6">
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="rounded-xl font-bold h-11 px-6"
+            >
               Cancelar
             </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
+            <Button
+              disabled={isDeleting}
+              onClick={async (e) => {
+                e.preventDefault(); // MAGIA: Evita que el modal se cierre cortando la petición
+
                 if (movementToDelete?.conciliado && deleteStep === 1) {
                   setDeleteStep(2);
                   return;
                 }
 
-                // 1. Mostrar toast de carga (el SAT demora 2-3 segundos)
+                setIsDeleting(true);
                 const toastId = toast.loading(
                   "Revirtiendo saldo y cancelando REP en el SAT...",
                 );
@@ -437,39 +445,50 @@ export default function Treasury() {
                   );
 
                   // Actualizar UI
-                  setMovimientos(
-                    movimientos.filter((m) => m.id !== movementToDelete?.id),
+                  setMovimientos((prev) =>
+                    prev.filter((m) => m.id !== movementToDelete?.id),
                   );
                   refreshAccounts();
 
-                  // 2. Éxito
+                  // Éxito
                   toast.success(
                     "Saldo devuelto a la cuenta y REP cancelado correctamente.",
                     { id: toastId },
                   );
+
+                  // Cerramos manualmente el modal tras el éxito
+                  setIsDeleteMovementOpen(false);
+                  setMovementToDelete(null);
+                  setDeleteStep(1);
                 } catch (error: any) {
-                  // 3. Manejo de error (por si el SAT rechaza la cancelación)
+                  // Manejo de error
                   const detail =
                     error.response?.data?.detail ||
                     "Error al procesar la cancelación en el SAT";
                   toast.error(detail, { id: toastId });
+                  setIsDeleteMovementOpen(false); // Cerramos para liberar la interfaz
                 } finally {
-                  setIsDeleteMovementOpen(false);
-                  setMovementToDelete(null);
-                  setDeleteStep(1);
+                  setIsDeleting(false);
                 }
               }}
               className={cn(
-                "rounded-xl font-bold h-11 px-6 text-white shadow-lg",
+                "rounded-xl font-bold h-11 px-6 text-white shadow-lg flex items-center justify-center transition-colors",
                 deleteStep === 2
                   ? "bg-rose-600 hover:bg-rose-700"
                   : "bg-amber-600 hover:bg-amber-700",
               )}
             >
-              {movementToDelete?.conciliado && deleteStep === 1
-                ? "Eliminar movimiento y cancelar en SAT"
-                : "Borrar y Cancelar en SAT"}
-            </AlertDialogAction>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Procesando...
+                </>
+              ) : movementToDelete?.conciliado && deleteStep === 1 ? (
+                "Asumir responsabilidad"
+              ) : (
+                "Borrar y Cancelar en SAT"
+              )}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
