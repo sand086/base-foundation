@@ -596,20 +596,33 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
     tags=["Fleet - Tires"],
 )
 def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
-    # 1. Checamos si la llanta existe y está Activa
+    # 1. Validación normal si la llanta existe y está activa
     if crud.get_tire_by_code(db, tire.codigo_interno):
         raise HTTPException(
             status_code=400, detail="El código de llanta ya existe y está activo."
         )
 
-    # 2. Protegemos contra llantas 'Eliminadas' que aún viven en BD
+    # 2. Bloque ultra seguro para atrapar duplicados ocultos y forzarlos a la pantalla
     try:
         return crud.create_tire(db, tire)
-    except IntegrityError:
+    except Exception as e:
         db.rollback()
+        error_str = str(e).lower()
+
+        # Si la base de datos se queja de un duplicado (UniqueViolation / IntegrityError)
+        if (
+            "unique" in error_str
+            or "duplicate" in error_str
+            or "integrity" in error_str
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Error: Este código interno ya fue registrado anteriormente (quizás se eliminó). Intenta con otro código.",
+            )
+
+        # Si es cualquier otro error, lo mandamos a pantalla también para que sepas qué es
         raise HTTPException(
-            status_code=400,
-            detail="Error: Este código interno ya fue registrado anteriormente (quizás se eliminó). Intenta con otro código.",
+            status_code=400, detail=f"Fallo al guardar la llanta en BD: {str(e)}"
         )
 
 

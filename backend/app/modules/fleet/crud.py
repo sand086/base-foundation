@@ -178,10 +178,29 @@ def get_tire_by_code(db: Session, codigo: str):
 
 
 def create_tire(db: Session, tire_in: schemas.TireCreate):
-    # 1. Extraemos todo dinámicamente para que no se pierda el 'estado_fisico'
-    tire_data = tire_in.model_dump(exclude_unset=True)
+    from app.models.models import RecordStatus
 
-    # 2. Asignamos los defaults iniciales
+    # 1. TRUCO MAESTRO: Si la llanta ya existe pero está ELIMINADA (E), le cambiamos
+    # el código internamente para "liberarlo" y que la base de datos nos deje usarlo.
+    old_deleted_tire = (
+        db.query(models.Tire)
+        .filter(
+            models.Tire.codigo_interno == tire_in.codigo_interno,
+            models.Tire.record_status == RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if old_deleted_tire:
+        # Le ponemos "_DEL_id" al código viejo (Ej: 3T10012469_DEL_15)
+        old_deleted_tire.codigo_interno = (
+            f"{old_deleted_tire.codigo_interno}_DEL_{old_deleted_tire.id}"
+        )
+        db.add(old_deleted_tire)
+        db.flush()  # Sincronizamos rápido con la BD para que libere el código original
+
+    # 2. Ahora sí, creamos la NUEVA llanta con el código libre
+    tire_data = tire_in.model_dump(exclude_unset=True)
     tire_data["costo_acumulado"] = tire_data.get("precio_compra", 0.0)
     tire_data["km_recorridos"] = 0.0
     tire_data["unit_id"] = None
@@ -189,9 +208,9 @@ def create_tire(db: Session, tire_in: schemas.TireCreate):
 
     db_tire = models.Tire(**tire_data)
     db.add(db_tire)
-    db.flush()  # Para obtener el id generado
+    db.flush()  # Obtenemos el ID generado
 
-    # 3. Historial (Quitamos 'fecha=datetime.utcnow()' para que Postgres ponga la suya sin dar Error 500)
+    # 3. Guardamos el historial (Sin forzar fecha para evitar errores de zona horaria)
     history = models.TireHistory(
         tire_id=db_tire.id,
         tipo=TireEventType.COMPRA,
