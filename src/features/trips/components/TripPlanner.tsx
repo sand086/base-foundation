@@ -61,7 +61,7 @@ import {
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
 
-//  IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
+// IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
 import {
   EnhancedDataTable,
   ColumnDef,
@@ -214,7 +214,7 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  //  ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
+  // ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
   const [tableKey, setTableKey] = useState(Date.now());
 
   useEffect(() => {
@@ -262,7 +262,7 @@ export const TripPlanner = () => {
     [trips],
   );
 
-  //  ACTUALIZADO: Extracción segura de unidades y motogeneradores + campo de búsqueda
+  // ACTUALIZADO: Extracción segura de unidades y motogeneradores + campo de búsqueda
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
     const items: any[] = [];
@@ -342,9 +342,9 @@ export const TripPlanner = () => {
     if (ok) {
       setUpdateModalOpen(false);
       await fetchTrips();
-      setTableKey(Date.now()); //  Destruye y recrea la tabla internamente
+      setTableKey(Date.now()); // Destruye y recrea la tabla internamente
 
-      //  CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
+      // CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
 
@@ -402,7 +402,7 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
-  //  ACTUALIZADO: Columnas cambiadas a <any> para aceptar campos calculados
+  // ACTUALIZADO: Columnas cambiadas a <any> para aceptar campos calculados
   const tableColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -460,7 +460,7 @@ export const TripPlanner = () => {
         ),
       },
       {
-        key: "_asignacionSearch", //  MAGIA: Se usa este campo que tiene todos los ecos integrados para el filtro
+        key: "_asignacionSearch", // MAGIA: Se usa este campo que tiene todos los ecos integrados para el filtro
         header: "Asignación Física",
         render: (value, row) => (
           <div className="flex flex-col gap-1.5">
@@ -596,7 +596,7 @@ export const TripPlanner = () => {
             onClick={async () => {
               toast.info("Sincronizando datos...");
               await fetchTrips();
-              setTableKey(Date.now()); //  Forzar destrucción y recreación de tabla sin recargar página
+              setTableKey(Date.now()); // Forzar destrucción y recreación de tabla sin recargar página
             }}
             disabled={loading}
             className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
@@ -683,13 +683,29 @@ export const TripPlanner = () => {
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
-                        <Button
-                          size="sm"
-                          className="w-full h-8 mt-3 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-md shadow-rose-500/20 haptic-press"
-                          onClick={() => handleAssignInWizard(v)}
-                        >
-                          Asignar Rápido
-                        </Button>
+                        <div className="flex items-center gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            className="flex-1 h-8 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-md shadow-rose-500/20 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssignInWizard(v);
+                            }}
+                          >
+                            Asignar Rápido
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 shrink-0 text-rose-500 border-rose-200 hover:bg-rose-100 hover:text-rose-700 dark:border-rose-900/50 dark:hover:bg-rose-900/50 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTripToDelete(v);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
@@ -719,14 +735,30 @@ export const TripPlanner = () => {
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full h-8 mt-3 text-[10px] font-black uppercase tracking-widest border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 haptic-press"
-                          onClick={() => handleAssignInWizard(v)}
-                        >
-                          Despachar Viaje
-                        </Button>
+                        <div className="flex items-center gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssignInWizard(v);
+                            }}
+                          >
+                            Despachar Viaje
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 shrink-0 text-rose-500 border-rose-200 hover:bg-rose-100 hover:text-rose-700 dark:border-white/10 dark:hover:bg-rose-900/30 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTripToDelete(v);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
@@ -1034,16 +1066,31 @@ export const TripPlanner = () => {
                       {v.route_name || `${v.origin}-${v.destination}`}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border-none haptic-press"
-                    onClick={() => {
-                      setSelectedDayTrips(null);
-                      handleAssignInWizard(v);
-                    }}
-                  >
-                    Despachar Rápido
-                  </Button>
+                  <div className="flex items-center gap-2 w-full sm:w-auto mt-4 sm:mt-0">
+                    <Button
+                      size="sm"
+                      className="flex-1 sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border-none haptic-press"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDayTrips(null);
+                        handleAssignInWizard(v);
+                      }}
+                    >
+                      Despachar Rápido
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-10 w-10 shrink-0 text-rose-500 border-rose-200 hover:bg-rose-100 hover:text-rose-700 dark:border-white/10 dark:hover:bg-rose-900/30 rounded-xl haptic-press"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDayTrips(null);
+                        setTripToDelete(v);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
