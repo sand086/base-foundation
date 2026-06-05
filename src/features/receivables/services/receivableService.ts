@@ -3,7 +3,7 @@ import { ReceivableInvoice } from "@/features/receivables/types";
 import axiosClient from "@/api/axiosClient";
 
 export const receivableService = {
-  getInvoices: async (skip = 0, limit = 100) => {
+  getInvoices: async (skip = 0, limit = 5000) => {
     const data =
       await FinanceService.getReceivableInvoicesApiFinanceReceivablesGet(
         skip,
