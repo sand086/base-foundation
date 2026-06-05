@@ -91,7 +91,12 @@ def get_bank_movements(db: Session):
         return (
             db.query(models.BankMovement)
             .options(joinedload(models.BankMovement.bank_account))
-            .filter(models.BankMovement.record_status != RecordStatus.ELIMINADO)
+            .filter(
+                models.BankMovement.record_status != RecordStatus.ELIMINADO,
+                ~models.BankMovement.concepto.ilike(
+                    "%Reverso de Cobro Anulado%"
+                ),  # <-- NUEVO FILTRO AQUÍ
+            )
             .order_by(models.BankMovement.fecha.desc())
             .all()
         )
