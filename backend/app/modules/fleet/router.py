@@ -597,28 +597,49 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
 )
 def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
     try:
-        # 1. Validación normal si la llanta existe y está activa
-        if crud.get_tire_by_code(db, tire.codigo_interno):
-            raise HTTPException(
-                status_code=400,
-                detail="El código de llanta ya existe y está activo actualmente.",
-            )
+        # 1. Buscamos la llanta directamente en la BD, ignorando cualquier filtro
+        llanta_existente = (
+            db.query(models.Tire)
+            .filter(models.Tire.codigo_interno == tire.codigo_interno)
+            .first()
+        )
 
-        # 2. Retornamos el resultado del crud si todo va bien
+        if llanta_existente:
+            # 2. Forzamos la lectura del estatus a TEXTO PURO (evita el choque Enum vs String)
+            estatus_db = str(
+                getattr(
+                    llanta_existente.record_status,
+                    "value",
+                    llanta_existente.record_status,
+                )
+            ).upper()
+
+            if estatus_db == "E":
+                # ¡EL TRUCO DEFINITIVO! Renombramos la llanta muerta para liberar tu código
+                llanta_existente.codigo_interno = (
+                    f"{llanta_existente.codigo_interno}_DEL_{llanta_existente.id}"
+                )
+                db.add(llanta_existente)
+                db.flush()  # Ejecutamos el cambio de nombre en la BD al instante
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El código de llanta ya existe y está ACTIVO actualmente.",
+                )
+
+        # 3. Mandamos a crear tu nueva llanta, ya con el camino despejado
         return crud.create_tire(db, tire)
 
     except HTTPException:
-        # Si fue nuestra validación manual, la dejamos pasar a la pantalla
+        # Dejamos pasar la alerta roja a la pantalla
         raise
-    except IntegrityError as e:
-        # Si choca en BD por duplicidad a nivel tabla
+    except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=400,
-            detail="Error: Este código interno ya fue registrado anteriormente y no se pudo liberar. Intenta con otro código.",
+            detail="Error de Integridad: Este código interno sigue chocando en la base de datos.",
         )
     except Exception as e:
-        # Protegemos contra cualquier otro error (como tipos de dato inválidos)
         db.rollback()
         raise HTTPException(
             status_code=400, detail=f"Fallo interno al guardar la llanta: {str(e)}"
