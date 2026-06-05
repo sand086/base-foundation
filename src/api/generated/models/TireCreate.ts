@@ -12,14 +12,14 @@ export type TireCreate = {
     dot?: (string | null);
     unit_id?: (number | null);
     posicion?: (string | null);
-    estado?: TireStatus;
-    estado_fisico?: TireCondition;
-    profundidad_actual?: number;
-    profundidad_original?: number;
-    km_recorridos?: number;
+    estado?: (TireStatus | null);
+    estado_fisico?: (TireCondition | null);
+    profundidad_actual?: (number | null);
+    profundidad_original?: (number | null);
+    km_recorridos?: (number | null);
     fecha_compra?: (string | null);
-    precio_compra?: number;
-    costo_acumulado?: number;
+    precio_compra?: (number | null);
+    costo_acumulado?: (number | null);
     proveedor?: (string | null);
 };
 

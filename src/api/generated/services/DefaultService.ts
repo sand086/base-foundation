@@ -657,7 +657,7 @@ export class DefaultService {
         });
     }
     /**
-     * Get Unit Last Odometer
+     * Get Unit Last Odometer Endpoint
      * Devuelve el último odómetro registrado para una unidad específica.
      * Busca primero en la liquidación del último viaje (TripLeg) y
      * luego en el último vale de combustible (FuelLog).
@@ -665,7 +665,7 @@ export class DefaultService {
      * @returns any Successful Response
      * @throws ApiError
      */
-    public static getUnitLastOdometerApiFleetUnitsUnitIdLastOdometerGet(
+    public static getUnitLastOdometerEndpointApiFleetUnitsUnitIdLastOdometerGet(
         unitId: number,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
