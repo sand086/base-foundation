@@ -379,8 +379,11 @@ export default function Treasury() {
             <AlertDialogDescription className="text-slate-600 text-sm leading-relaxed">
               {movementToDelete?.conciliado && deleteStep === 1 ? (
                 <div className="p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg text-amber-800">
-                  Este movimiento ya fue conciliado. ¿Estás absolutamente
-                  seguro?
+                  Este movimiento ya fue conciliado y timbrado. ¿Estás seguro?
+                  Se intentará cancelar el REP en el SAT, lo cual puede ser
+                  rechazado por el SAT dependiendo de su antigüedad y tipo. En
+                  caso de rechazo, el movimiento no se eliminará y se te
+                  notificará para tomar acciones adicionales.
                 </div>
               ) : deleteStep === 2 ? (
                 <div className="p-4 bg-rose-50 border-l-4 border-rose-500 rounded-r-lg text-rose-800 font-bold">
@@ -421,18 +424,35 @@ export default function Treasury() {
                   setDeleteStep(2);
                   return;
                 }
+
+                // 1. Mostrar toast de carga (el SAT demora 2-3 segundos)
+                const toastId = toast.loading(
+                  "Revirtiendo saldo y cancelando REP en el SAT...",
+                );
+
                 try {
-                  //  LLAMADA SEGURA AL BACKEND AUTOGENERADO
+                  // LLAMADA AL BACKEND
                   await FinanceService.deleteBankMovementApiFinanceMovementsMovementIdDelete(
                     movementToDelete!.id,
                   );
+
+                  // Actualizar UI
                   setMovimientos(
                     movimientos.filter((m) => m.id !== movementToDelete?.id),
                   );
                   refreshAccounts();
-                  toast.success("Movimiento eliminado y saldo restaurado.");
-                } catch (error) {
-                  toast.error("Error al eliminar el movimiento");
+
+                  // 2. Éxito
+                  toast.success(
+                    "Saldo devuelto a la cuenta y REP cancelado correctamente.",
+                    { id: toastId },
+                  );
+                } catch (error: any) {
+                  // 3. Manejo de error (por si el SAT rechaza la cancelación)
+                  const detail =
+                    error.response?.data?.detail ||
+                    "Error al procesar la cancelación en el SAT";
+                  toast.error(detail, { id: toastId });
                 } finally {
                   setIsDeleteMovementOpen(false);
                   setMovementToDelete(null);
@@ -447,8 +467,8 @@ export default function Treasury() {
               )}
             >
               {movementToDelete?.conciliado && deleteStep === 1
-                ? "Asumir responsabilidad"
-                : "Borrar definitivamente"}
+                ? "Eliminar movimiento y cancelar en SAT"
+                : "Borrar y Cancelar en SAT"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

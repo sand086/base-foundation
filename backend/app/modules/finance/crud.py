@@ -1100,7 +1100,7 @@ def delete_bank_movement(db: Session, movement_id: int):
             elif movement.tipo == "egreso":
                 account.saldo += movement.monto
 
-        # 1. ROLLBACK CxC
+        # 1. ROLLBACK CxC Y CANCELACIÓN SAT
         if movement.origen_modulo == "CxC":
             pago_cxc = (
                 db.query(models.ReceivableInvoicePayment)
@@ -1108,24 +1108,51 @@ def delete_bank_movement(db: Session, movement_id: int):
                     models.ReceivableInvoicePayment.monto == movement.monto,
                     models.ReceivableInvoicePayment.cuenta_deposito
                     == str(movement.bank_account_id),
+                    models.ReceivableInvoicePayment.estatus != "CANCELADO",
                 )
                 .order_by(models.ReceivableInvoicePayment.id.desc())
                 .first()
             )
+
             if pago_cxc:
+                # ====== NUEVO: CANCELAR EN EL SAT EL REP ======
+                if pago_cxc.complemento_uuid and len(pago_cxc.complemento_uuid) >= 36:
+                    from app.integrations.sat.payment_service import (
+                        PaymentComplementService,
+                    )
+
+                    try:
+                        sat_payment_service = PaymentComplementService(db)
+                        # Mandar a cancelar el UUID del pago en el SAT con clave "02" (Comprobante emitido con errores sin relación)
+                        sat_payment_service.cancelar_pago_sat(pago_cxc.id, motivo="02")
+                    except Exception as e:
+                        # Si el SAT falla, detenemos todo para que no se descuadre el banco
+                        raise ValueError(
+                            f"El SAT rechazó la cancelación del REP: {str(e)}"
+                        )
+
+                # ====== DEVOLVER SALDO A LA FACTURA ======
                 invoice = (
                     db.query(models.ReceivableInvoice)
                     .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
-                    .with_for_update(of=models.ReceivableInvoice)  #  FIX: ATOMICIDAD
+                    .with_for_update(of=models.ReceivableInvoice)
                     .first()
                 )
+
                 if invoice:
                     invoice.saldo_pendiente += pago_cxc.monto
                     if invoice.saldo_pendiente >= invoice.monto_total:
                         invoice.estatus = models.InvoiceStatus.PENDIENTE
                     else:
                         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
-                db.delete(pago_cxc)
+
+                # ====== SOFT DELETE DEL PAGO ======
+                # FIX CRÍTICO: No usamos db.delete(pago_cxc) para no perder la historia del UUID cancelado
+                from datetime import datetime
+
+                pago_cxc.estatus = "CANCELADO"
+                pago_cxc.motivo_cancelacion = "02"
+                pago_cxc.fecha_cancelacion = datetime.now()
 
         # 2. ROLLBACK CxP
         elif movement.origen_modulo == "CxP":
