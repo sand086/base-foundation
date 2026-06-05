@@ -178,35 +178,27 @@ def get_tire_by_code(db: Session, codigo: str):
 
 
 def create_tire(db: Session, tire_in: schemas.TireCreate):
-    db_tire = models.Tire(
-        codigo_interno=tire_in.codigo_interno,
-        marca=tire_in.marca,
-        modelo=tire_in.modelo,
-        medida=tire_in.medida,
-        dot=tire_in.dot,
-        profundidad_original=tire_in.profundidad_original,
-        profundidad_actual=tire_in.profundidad_actual,
-        fecha_compra=tire_in.fecha_compra,
-        precio_compra=tire_in.precio_compra,
-        costo_acumulado=tire_in.precio_compra,
-        proveedor=tire_in.proveedor,
-        estado=tire_in.estado,  # Enum TireStatus en tu modelo
-        km_recorridos=0,
-        unit_id=None,
-        posicion=None,
-        # record_status default A por AuditMixin
-    )
-    db.add(db_tire)
-    db.flush()  # para obtener id
+    # 1. Extraemos todo dinámicamente para que no se pierda el 'estado_fisico'
+    tire_data = tire_in.model_dump(exclude_unset=True)
 
+    # 2. Asignamos los defaults iniciales
+    tire_data["costo_acumulado"] = tire_data.get("precio_compra", 0.0)
+    tire_data["km_recorridos"] = 0.0
+    tire_data["unit_id"] = None
+    tire_data["posicion"] = None
+
+    db_tire = models.Tire(**tire_data)
+    db.add(db_tire)
+    db.flush()  # Para obtener el id generado
+
+    # 3. Historial (Quitamos 'fecha=datetime.utcnow()' para que Postgres ponga la suya sin dar Error 500)
     history = models.TireHistory(
         tire_id=db_tire.id,
-        fecha=datetime.utcnow(),
-        tipo=TireEventType.COMPRA,  #   enum (no string)
-        descripcion=f"Alta inicial - Compra a {tire_in.proveedor}",
-        costo=tire_in.precio_compra,
+        tipo=TireEventType.COMPRA,
+        descripcion=f"Alta inicial - Compra a {tire_data.get('proveedor', 'Proveedor no especificado')}",
+        costo=tire_data.get("precio_compra", 0.0),
         responsable="Admin",
-        km=0,
+        km=0.0,
     )
     db.add(history)
 

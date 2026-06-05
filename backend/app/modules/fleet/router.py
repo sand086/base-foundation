@@ -596,9 +596,21 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
     tags=["Fleet - Tires"],
 )
 def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
+    # 1. Checamos si la llanta existe y está Activa
     if crud.get_tire_by_code(db, tire.codigo_interno):
-        raise HTTPException(status_code=400, detail="El código de llanta ya existe")
-    return crud.create_tire(db, tire)
+        raise HTTPException(
+            status_code=400, detail="El código de llanta ya existe y está activo."
+        )
+
+    # 2. Protegemos contra llantas 'Eliminadas' que aún viven en BD
+    try:
+        return crud.create_tire(db, tire)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Error: Este código interno ya fue registrado anteriormente (quizás se eliminó). Intenta con otro código.",
+        )
 
 
 @router.post("/tires/{tire_id}/assign", tags=["Fleet - Tires"])
