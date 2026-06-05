@@ -29,12 +29,12 @@ from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
 from app.modules.logistics.crud import get_last_unit_odometer
 
-#  importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
+# importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud
 
 logger = logging.getLogger(__name__)
 
-#  ÚNICA INSTANCIA DEL ROUTER
+# ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter()
 
 UPLOAD_DIR = "app/uploads/bulk_unidades"
@@ -428,7 +428,7 @@ def update_unit_load_status(
 # ENDPOINT PARA PERSISTENCIA DE ODÓMETRO (ESCALERITA)
 # =====================================================================
 @router.get("/units/{unit_id}/last-odometer")
-def get_unit_last_odometer(unit_id: int, db: Session = Depends(get_db)):
+def get_unit_last_odometer_endpoint(unit_id: int, db: Session = Depends(get_db)):
     """
     Devuelve el último odómetro registrado para una unidad específica.
     Busca primero en la liquidación del último viaje (TripLeg) y
@@ -596,33 +596,32 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
     tags=["Fleet - Tires"],
 )
 def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
-    # 1. Validación normal si la llanta existe y está activa
-    if crud.get_tire_by_code(db, tire.codigo_interno):
-        raise HTTPException(
-            status_code=400, detail="El código de llanta ya existe y está activo."
-        )
-
-    # 2. Bloque ultra seguro para atrapar duplicados ocultos y forzarlos a la pantalla
     try:
-        return crud.create_tire(db, tire)
-    except Exception as e:
-        db.rollback()
-        error_str = str(e).lower()
-
-        # Si la base de datos se queja de un duplicado (UniqueViolation / IntegrityError)
-        if (
-            "unique" in error_str
-            or "duplicate" in error_str
-            or "integrity" in error_str
-        ):
+        # 1. Validación normal si la llanta existe y está activa
+        if crud.get_tire_by_code(db, tire.codigo_interno):
             raise HTTPException(
                 status_code=400,
-                detail="Error: Este código interno ya fue registrado anteriormente (quizás se eliminó). Intenta con otro código.",
+                detail="El código de llanta ya existe y está activo actualmente.",
             )
 
-        # Si es cualquier otro error, lo mandamos a pantalla también para que sepas qué es
+        # 2. Retornamos el resultado del crud si todo va bien
+        return crud.create_tire(db, tire)
+
+    except HTTPException:
+        # Si fue nuestra validación manual, la dejamos pasar a la pantalla
+        raise
+    except IntegrityError as e:
+        # Si choca en BD por duplicidad a nivel tabla
+        db.rollback()
         raise HTTPException(
-            status_code=400, detail=f"Fallo al guardar la llanta en BD: {str(e)}"
+            status_code=400,
+            detail="Error: Este código interno ya fue registrado anteriormente y no se pudo liberar. Intenta con otro código.",
+        )
+    except Exception as e:
+        # Protegemos contra cualquier otro error (como tipos de dato inválidos)
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail=f"Fallo interno al guardar la llanta: {str(e)}"
         )
 
 
