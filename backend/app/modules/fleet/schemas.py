@@ -134,14 +134,14 @@ class MaintenanceTirePayload(BaseModel):
 
 
 class TireHistoryBase(ORMBase):
-    fecha: datetime
+    fecha: Optional[datetime] = None
     tipo: TireEventType
     descripcion: Optional[str] = Field(default=None, max_length=255)
     unit_id: Optional[int] = None
     unidad_economico: Optional[str] = Field(default=None, max_length=50)
     posicion: Optional[int] = None
-    km: float = 0.0
-    costo: float = 0.0
+    km: Optional[float] = 0.0
+    costo: Optional[float] = 0.0
     responsable: Optional[str] = Field(default=None, max_length=100)
 
 
@@ -187,14 +187,14 @@ class TireBase(ORMBase):
     dot: Optional[str] = Field(default=None, max_length=10)
     unit_id: Optional[int] = None
     posicion: Optional[int] = None
-    estado: TireStatus = TireStatus.NUEVO
-    estado_fisico: TireCondition = TireCondition.BUENA
-    profundidad_actual: float = 0.0
-    profundidad_original: float = 0.0
-    km_recorridos: float = 0.0
+    estado: Optional[TireStatus] = TireStatus.NUEVO
+    estado_fisico: Optional[TireCondition] = TireCondition.BUENA
+    profundidad_actual: Optional[float] = 0.0
+    profundidad_original: Optional[float] = 0.0
+    km_recorridos: Optional[float] = 0.0
     fecha_compra: Optional[date] = None
-    precio_compra: float = 0.0
-    costo_acumulado: float = 0.0
+    precio_compra: Optional[float] = 0.0
+    costo_acumulado: Optional[float] = 0.0
     proveedor: Optional[str] = Field(default=None, max_length=100)
 
 
@@ -231,6 +231,10 @@ class TireResponse(TireBase):
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+
+    unidad_actual_economico: Optional[str] = None
+    unidad_actual_id: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

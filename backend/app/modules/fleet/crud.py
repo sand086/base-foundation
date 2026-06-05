@@ -112,7 +112,10 @@ def _enrich_tire_data(tire: models.Tire):
         tire.unidad_actual_id = None
 
     if tire.history:
-        tire.history.sort(key=lambda x: x.fecha, reverse=True)
+        # Blindaje: Si un historial viejo no tiene fecha, lo mandamos al fondo en lugar de lanzar Error 500
+        tire.history.sort(
+            key=lambda x: x.fecha.timestamp() if x.fecha else 0, reverse=True
+        )
 
 
 def _visible_tire_query(db: Session):
