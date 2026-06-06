@@ -93,15 +93,16 @@ def get_bank_movements(db: Session):
             .options(joinedload(models.BankMovement.bank_account))
             .filter(
                 models.BankMovement.record_status != RecordStatus.ELIMINADO,
-                ~models.BankMovement.concepto.ilike(
-                    "%Reverso de Cobro Anulado%"
-                ),  # <-- NUEVO FILTRO AQUÍ
+                models.BankMovement.monto > 0,  # <--- MAGIA: OCULTA TODOS LOS DE $0.00
+                ~models.BankMovement.concepto.ilike("%Reverso de Cobro Anulado%"),
             )
             .order_by(models.BankMovement.fecha.desc())
             .all()
         )
     except Exception as e:
-        print(f"Error en get_bank_movements: {e}")
+        print(
+            f"Error en get_bank_movements: {e} el problema es de que si vopy atener movimientos con mononto en 0 po lo de cuentas por pagar "
+        )
         raise e
 
 
