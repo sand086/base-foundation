@@ -1427,7 +1427,6 @@ def get_cfdi_vault_records(
     MAX_RECORDS = 2000
 
     # 🚀 MAGIA DINÁMICA: Buscar la columna de relación (sustitución) en ReceivableInvoice
-    # Esto nos permite saber si la Carta Porte ya fue reemplazada por otra factura.
     relation_col = None
     for col_name in [
         "uuid_relacionado",
@@ -1494,7 +1493,6 @@ def get_cfdi_vault_records(
                 ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
                 models.ReceivableInvoice.folio_interno == None,
             ),
-            # 🟢 REGLA DEL USUARIO: CP- debe tener viaje activo. F- puede no tenerlo.
             or_(
                 and_(
                     models.ReceivableInvoice.folio_interno.ilike("CP-%"),
@@ -1535,7 +1533,6 @@ def get_cfdi_vault_records(
             )
             es_un_peso = r.monto_total and r.monto_total <= 2.0
 
-            # 🟢 DETECCIÓN DE SUSTITUCIÓN (Para Cartas Porte / 1 peso)
             if (
                 "CANCELAD" in status_fiscal
                 or "CANCELAD" in val_estatus
@@ -1545,15 +1542,17 @@ def get_cfdi_vault_records(
                 status_fiscal = "CANCELADO"
             elif es_carta_porte or es_un_peso:
                 uuid_upper = str(r.uuid).strip().upper() if r.uuid else ""
-                # MÁGIA: Si ya la sustituyeron, la marcamos CANCELADA.
                 if (uuid_upper and uuid_upper in uuids_sustituidos) or (
                     r.viaje_id and r.viaje_id in viajes_facturados_set
                 ):
                     status_fiscal = "CANCELADO"
                 else:
-                    # Si tiene "A", sigue viva y activa
                     if rec_status == "A" or rec_status == RecordStatus.ACTIVO:
                         status_fiscal = "TIMBRADA" if r.uuid else "PROVISIONAL"
+
+            # 🟢 FIX: Ocultar las Provisionales
+            if status_fiscal == "PROVISIONAL":
+                continue
 
             records.append(
                 {
@@ -1593,7 +1592,6 @@ def get_cfdi_vault_records(
                 models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
                 models.PayableInvoice.uuid != None,
             ),
-            # 🟢 REGLA: CxP no está obligada a tener viaje, así que si viaje_id == None se permite
             or_(
                 models.PayableInvoice.viaje_id == None,
                 models.Trip.record_status != RecordStatus.ELIMINADO,
@@ -1625,6 +1623,10 @@ def get_cfdi_vault_records(
                 or rec_status == "E"
             ):
                 status_fiscal = "CANCELADO"
+
+            # Las de CxP por lo general ya están timbradas o canceladas, pero lo validamos por si acaso
+            if status_fiscal == "PROVISIONAL":
+                continue
 
             records.append(
                 {
@@ -1673,8 +1675,6 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.tipo_comprobante.in_(["P", "p"]),
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
             ),
-            # 🟢 REGLA DEL USUARIO: Los complementos de pago DEBEN tener un viaje
-            # activo y que no esté eliminado
             models.ReceivableInvoice.viaje_id.isnot(None),
             models.Trip.record_status != RecordStatus.ELIMINADO,
         )
@@ -1707,6 +1707,10 @@ def get_cfdi_vault_records(
                 or rec_status == "E"
             ):
                 status_fiscal = "CANCELADO"
+
+            # 🟢 FIX: Ocultar los Complementos Provisionales
+            if status_fiscal == "PROVISIONAL":
+                continue
 
             records.append(
                 {
@@ -1745,8 +1749,6 @@ def get_cfdi_vault_records(
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
         )
 
-        # 🟢 REGLA: Recibos de pago asociados a un viaje eliminado NO se muestran.
-        # Si la factura es Libre (F-) y no tiene viaje, se permite.
         query_pagos = query_pagos.filter(
             or_(
                 and_(
@@ -1781,6 +1783,10 @@ def get_cfdi_vault_records(
                 status_fiscal = "TIMBRADO"
             else:
                 status_fiscal = "RECIBO INTERNO"
+
+            # No hay "PROVISIONAL" aquí porque son recibos internos o ya timbrados
+            if status_fiscal == "PROVISIONAL":
+                continue
 
             folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
             comp_uuid = getattr(r, "complemento_uuid", None)
