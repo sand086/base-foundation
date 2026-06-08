@@ -1422,10 +1422,9 @@ def get_cfdi_vault_records(
     end_date: Optional[date] = None,
 ):
     records = []
-    # 🟢 FIX CRÍTICO: Aumentamos el límite a 5000. Dado que tu frontend (React)
-    # usa un buscador local, necesitamos mandarle todo el historial de pagos
-    # para que pueda encontrar recibos antiguos como el COM-2562.
-    MAX_RECORDS = 5000
+    # 🟢 FIX: 1500 es el punto de equilibrio perfecto.
+    # Evita el Error 500 por saturación, pero permite buscar historial viejo como el COM-2562.
+    MAX_RECORDS = 1500
 
     # ==========================================
     # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
@@ -1438,28 +1437,29 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
+            # Si tiene UUID, lo mostramos aunque esté eliminado lógicamente ("E")
             or_(
                 models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
-                models.ReceivableInvoice.uuid.isnot(None),
+                models.ReceivableInvoice.uuid != None,
             ),
             or_(
                 and_(
                     models.ReceivableInvoice.status_sat != "ERROR",
                     models.ReceivableInvoice.status_sat != "ERROR_SAT",
                 ),
-                models.ReceivableInvoice.status_sat.is_(None),
+                models.ReceivableInvoice.status_sat == None,
             ),
+            # Sintaxis universal para omitir tipo Pago "P"
             or_(
-                models.ReceivableInvoice.tipo_comprobante != "P",
-                ~models.ReceivableInvoice.tipo_comprobante.ilike("P"),
-                models.ReceivableInvoice.tipo_comprobante.is_(None),
+                models.ReceivableInvoice.tipo_comprobante.notin_(["P", "p"]),
+                models.ReceivableInvoice.tipo_comprobante == None,
             ),
             or_(
                 ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
-                models.ReceivableInvoice.folio_interno.is_(None),
+                models.ReceivableInvoice.folio_interno == None,
             ),
             or_(
-                models.ReceivableInvoice.viaje_id.is_(None),
+                models.ReceivableInvoice.viaje_id == None,
                 models.Trip.record_status != RecordStatus.ELIMINADO,
             ),
         )
@@ -1476,16 +1476,18 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados:
-            status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+            status_fiscal = (r.status_sat or "PROVISIONAL").upper()
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+            rec_status = getattr(r, "record_status", None)
 
-            # 🟢 FIX: Si fue Cancelada, Eliminada o SUSTITUIDA, forzamos la vista a CANCELADO en rojo
+            # 🟢 FIX: Detecta Canceladas, Sustituidas o con Estatus "E" de eliminado y las pinta Rojo
             if (
                 "CANCELAD" in status_fiscal
                 or "CANCELAD" in val_estatus
                 or "SUSTITUID" in status_fiscal
                 or "SUSTITUID" in val_estatus
-                or r.record_status == RecordStatus.ELIMINADO
+                or rec_status == RecordStatus.ELIMINADO
+                or rec_status == "E"
             ):
                 status_fiscal = "CANCELADO"
 
@@ -1524,10 +1526,10 @@ def get_cfdi_vault_records(
         query = query.filter(
             or_(
                 models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
-                models.PayableInvoice.uuid.isnot(None),
+                models.PayableInvoice.uuid != None,
             ),
             or_(
-                models.PayableInvoice.viaje_id.is_(None),
+                models.PayableInvoice.viaje_id == None,
                 models.Trip.record_status != RecordStatus.ELIMINADO,
             ),
         )
@@ -1581,21 +1583,19 @@ def get_cfdi_vault_records(
         query_cfdi = query_cfdi.filter(
             or_(
                 models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
-                models.ReceivableInvoice.uuid.isnot(None),
+                models.ReceivableInvoice.uuid != None,
             ),
             or_(
-                and_(
-                    models.ReceivableInvoice.status_sat != "ERROR",
-                    models.ReceivableInvoice.status_sat != "ERROR_SAT",
-                ),
-                models.ReceivableInvoice.status_sat.is_(None),
+                models.ReceivableInvoice.status_sat != "ERROR",
+                models.ReceivableInvoice.status_sat == None,
             ),
+            # Aseguramos que atrape los "P"
             or_(
-                models.ReceivableInvoice.tipo_comprobante.ilike("P"),
+                models.ReceivableInvoice.tipo_comprobante.in_(["P", "p"]),
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
             ),
             or_(
-                models.ReceivableInvoice.viaje_id.is_(None),
+                models.ReceivableInvoice.viaje_id == None,
                 models.Trip.record_status != RecordStatus.ELIMINADO,
             ),
         )
@@ -1612,16 +1612,18 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados_cfdi:
-            status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+            status_fiscal = (r.status_sat or "PROVISIONAL").upper()
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+            rec_status = getattr(r, "record_status", None)
 
-            # 🟢 FIX: Atrapamos sustituciones y eliminaciones lógicas
+            # 🟢 FIX: Manejo de cancelados, sustituidos y eliminados
             if (
                 "CANCELAD" in status_fiscal
                 or "CANCELAD" in val_estatus
                 or "SUSTITUID" in status_fiscal
                 or "SUSTITUID" in val_estatus
-                or r.record_status == RecordStatus.ELIMINADO
+                or rec_status == RecordStatus.ELIMINADO
+                or rec_status == "E"
             ):
                 status_fiscal = "CANCELADO"
 
@@ -1669,9 +1671,10 @@ def get_cfdi_vault_records(
 
         for r in resultados_pagos:
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
-            is_deleted = getattr(r, "record_status", None) == RecordStatus.ELIMINADO
+            rec_status = getattr(r, "record_status", None)
+            is_deleted = rec_status == RecordStatus.ELIMINADO or rec_status == "E"
 
-            # 🟢 FIX: Manejo de sustitución / eliminación en complementos
+            # 🟢 FIX: Atrapamos eliminados y sustituidos aquí también
             if "CANCELAD" in val_estatus or "SUSTITUID" in val_estatus or is_deleted:
                 status_fiscal = "CANCELADO"
             elif getattr(r, "complemento_uuid", None):
