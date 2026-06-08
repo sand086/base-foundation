@@ -1272,15 +1272,34 @@ def export_aging_report(
     1. Consolidado por Cliente/Proveedor
     2. Detalle de Facturas
     """
+    # Importamos and_ y or_ localmente para la lógica de folios (F y CP)
+    from sqlalchemy import and_, or_
+
     try:
         today = date.today()
 
-        # 1. Armar la consulta base (Solo deuda real > 0 y no cancelada)
+        # 1. Armar la consulta base (Solo deuda real > 0)
         if module_type == "cxc":
             query = db.query(models.ReceivableInvoice).filter(
                 models.ReceivableInvoice.saldo_pendiente > 0,
-                models.ReceivableInvoice.status_sat != "CANCELADO",
                 models.ReceivableInvoice.record_status == "A",
+                # FILTRO 1: Ignorar Canceladas y las que marcaron ERROR en el SAT
+                models.ReceivableInvoice.status_sat.notin_(["CANCELADO", "ERROR"]),
+                # FILTRO 2: No nominales (excluye las que se timbran por 1 peso)
+                models.ReceivableInvoice.is_nominal == False,
+                # FILTRO 3: Lógica de negocio para Folios F y CP
+                or_(
+                    # Si es libre y empieza con F, es válida
+                    models.ReceivableInvoice.folio_interno.ilike("F%"),
+                    # Si es Carta Porte (empieza con CP), OBLIGATORIAMENTE debe estar atada a un viaje
+                    and_(
+                        models.ReceivableInvoice.folio_interno.ilike("CP%"),
+                        models.ReceivableInvoice.viaje_id.isnot(None),
+                    ),
+                    # (Fallback de seguridad): Facturas provisionales sin folio asignado aún
+                    models.ReceivableInvoice.folio_interno.is_(None),
+                    models.ReceivableInvoice.folio_interno == "",
+                ),
             )
             if start_date:
                 query = query.filter(
@@ -1292,8 +1311,9 @@ def export_aging_report(
         elif module_type == "cxp":
             query = db.query(models.PayableInvoice).filter(
                 models.PayableInvoice.saldo_pendiente > 0,
-                models.PayableInvoice.estatus != "cancelado",
                 models.PayableInvoice.record_status == "A",
+                # Filtro equivalente en Cuentas por Pagar (CXP)
+                models.PayableInvoice.estatus.notin_(["cancelado", "error"]),
             )
             if start_date:
                 query = query.filter(models.PayableInvoice.fecha_emision >= start_date)
@@ -1456,6 +1476,8 @@ def export_aging_report(
 
     except Exception as e:
         db.rollback()
+        import traceback
+
         error_details = traceback.format_exc()
         print(
             "\n"
