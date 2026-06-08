@@ -1272,7 +1272,6 @@ def export_aging_report(
     1. Consolidado por Cliente/Proveedor
     2. Detalle de Facturas
     """
-    # Importamos and_ y or_ localmente para la lógica de folios (F y CP)
     from sqlalchemy import and_, or_
 
     try:
@@ -1283,20 +1282,15 @@ def export_aging_report(
             query = db.query(models.ReceivableInvoice).filter(
                 models.ReceivableInvoice.saldo_pendiente > 0,
                 models.ReceivableInvoice.record_status == "A",
-                # FILTRO 1: Ignorar Canceladas y las que marcaron ERROR en el SAT
+                # En CXC, status_sat es un String, aquí sí podemos filtrar "ERROR"
                 models.ReceivableInvoice.status_sat.notin_(["CANCELADO", "ERROR"]),
-                # FILTRO 2: No nominales (excluye las que se timbran por 1 peso)
                 models.ReceivableInvoice.is_nominal == False,
-                # FILTRO 3: Lógica de negocio para Folios F y CP
                 or_(
-                    # Si es libre y empieza con F, es válida
                     models.ReceivableInvoice.folio_interno.ilike("F%"),
-                    # Si es Carta Porte (empieza con CP), OBLIGATORIAMENTE debe estar atada a un viaje
                     and_(
                         models.ReceivableInvoice.folio_interno.ilike("CP%"),
                         models.ReceivableInvoice.viaje_id.isnot(None),
                     ),
-                    # (Fallback de seguridad): Facturas provisionales sin folio asignado aún
                     models.ReceivableInvoice.folio_interno.is_(None),
                     models.ReceivableInvoice.folio_interno == "",
                 ),
@@ -1312,8 +1306,8 @@ def export_aging_report(
             query = db.query(models.PayableInvoice).filter(
                 models.PayableInvoice.saldo_pendiente > 0,
                 models.PayableInvoice.record_status == "A",
-                # Filtro equivalente en Cuentas por Pagar (CXP)
-                models.PayableInvoice.estatus.notin_(["cancelado", "error"]),
+                # CORRECCIÓN AQUÍ: CXP usa un Enum estricto que no contiene "error"
+                models.PayableInvoice.estatus != "cancelado",
             )
             if start_date:
                 query = query.filter(models.PayableInvoice.fecha_emision >= start_date)
@@ -1343,11 +1337,13 @@ def export_aging_report(
                     else getattr(inv, "supplier_razon_social", "Proveedor Desconocido")
                 )
                 estatus_str = getattr(inv, "estatus", "pendiente")
+                # Si estatus_str es un objeto de tipo Enum, sacamos su valor
+                if hasattr(estatus_str, "value"):
+                    estatus_str = estatus_str.value
 
             days_late = 0
             if inv.fecha_vencimiento:
                 if isinstance(inv.fecha_vencimiento, str):
-                    # Manejo defensivo en caso de que fecha_vencimiento sea string
                     try:
                         v_date = datetime.strptime(
                             inv.fecha_vencimiento[:10], "%Y-%m-%d"
@@ -1361,7 +1357,6 @@ def export_aging_report(
             monto_total = float(inv.monto_total or 0.0)
             saldo_pendiente = float(inv.saldo_pendiente or 0.0)
 
-            # Formateo defensivo de fechas
             fecha_emi_str = ""
             if inv.fecha_emision:
                 fecha_emi_str = (
