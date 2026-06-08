@@ -1411,7 +1411,7 @@ from sqlalchemy import or_, and_, desc
 from typing import Optional
 from datetime import date
 from app.models import models
-from app.models.models import AuditLog, User
+from app.models.models import AuditLog, User, RecordStatus
 from sqlalchemy.orm import Session
 
 
@@ -1422,6 +1422,10 @@ def get_cfdi_vault_records(
     end_date: Optional[date] = None,
 ):
     records = []
+    # 🟢 FIX CRÍTICO: Aumentamos el límite a 5000. Dado que tu frontend (React)
+    # usa un buscador local, necesitamos mandarle todo el historial de pagos
+    # para que pueda encontrar recibos antiguos como el COM-2562.
+    MAX_RECORDS = 5000
 
     # ==========================================
     # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
@@ -1434,8 +1438,10 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
-            models.ReceivableInvoice.record_status
-            != RecordStatus.ELIMINADO,  # <-- BLINDAJE 1
+            or_(
+                models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                models.ReceivableInvoice.uuid.isnot(None),
+            ),
             or_(
                 and_(
                     models.ReceivableInvoice.status_sat != "ERROR",
@@ -1465,12 +1471,24 @@ def get_cfdi_vault_records(
 
         resultados = (
             query.order_by(desc(models.ReceivableInvoice.fecha_emision))
-            .limit(500)
+            .limit(MAX_RECORDS)
             .all()
         )
 
         for r in resultados:
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+            val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+
+            # 🟢 FIX: Si fue Cancelada, Eliminada o SUSTITUIDA, forzamos la vista a CANCELADO en rojo
+            if (
+                "CANCELAD" in status_fiscal
+                or "CANCELAD" in val_estatus
+                or "SUSTITUID" in status_fiscal
+                or "SUSTITUID" in val_estatus
+                or r.record_status == RecordStatus.ELIMINADO
+            ):
+                status_fiscal = "CANCELADO"
+
             records.append(
                 {
                     "id": r.id,
@@ -1485,9 +1503,7 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
-                    "versiones_archivos": getattr(
-                        r, "document_history", []
-                    ),  # <-- BLINDAJE 2
+                    "versiones_archivos": getattr(r, "document_history", []),
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
                 }
@@ -1506,8 +1522,10 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
-            models.PayableInvoice.record_status
-            != RecordStatus.ELIMINADO,  # <-- BLINDAJE 1
+            or_(
+                models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                models.PayableInvoice.uuid.isnot(None),
+            ),
             or_(
                 models.PayableInvoice.viaje_id.is_(None),
                 models.Trip.record_status != RecordStatus.ELIMINADO,
@@ -1520,7 +1538,9 @@ def get_cfdi_vault_records(
             )
 
         resultados = (
-            query.order_by(desc(models.PayableInvoice.fecha_emision)).limit(500).all()
+            query.order_by(desc(models.PayableInvoice.fecha_emision))
+            .limit(MAX_RECORDS)
+            .all()
         )
 
         for r in resultados:
@@ -1559,9 +1579,15 @@ def get_cfdi_vault_records(
         )
 
         query_cfdi = query_cfdi.filter(
-            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
             or_(
-                models.ReceivableInvoice.status_sat != "ERROR",
+                models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                models.ReceivableInvoice.uuid.isnot(None),
+            ),
+            or_(
+                and_(
+                    models.ReceivableInvoice.status_sat != "ERROR",
+                    models.ReceivableInvoice.status_sat != "ERROR_SAT",
+                ),
                 models.ReceivableInvoice.status_sat.is_(None),
             ),
             or_(
@@ -1581,14 +1607,22 @@ def get_cfdi_vault_records(
 
         resultados_cfdi = (
             query_cfdi.order_by(desc(models.ReceivableInvoice.fecha_emision))
-            .limit(250)
+            .limit(MAX_RECORDS)
             .all()
         )
 
         for r in resultados_cfdi:
-            # 🟢 FIX: Normalizar "CANCELADA" a "CANCELADO" para que el frontend lo pinte rojo
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
-            if "CANCELAD" in status_fiscal:
+            val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+
+            # 🟢 FIX: Atrapamos sustituciones y eliminaciones lógicas
+            if (
+                "CANCELAD" in status_fiscal
+                or "CANCELAD" in val_estatus
+                or "SUSTITUID" in status_fiscal
+                or "SUSTITUID" in val_estatus
+                or r.record_status == RecordStatus.ELIMINADO
+            ):
                 status_fiscal = "CANCELADO"
 
             records.append(
@@ -1622,9 +1656,6 @@ def get_cfdi_vault_records(
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
         )
 
-        # 🚨 FIX CRÍTICO: Eliminamos el filtro `estatus != 'CANCELADO'` que ocultaba tu historial
-        # Ahora permitimos que la BD traiga los cancelados a la Bóveda Digital.
-
         if start_date and end_date:
             query_pagos = query_pagos.filter(
                 models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
@@ -1632,15 +1663,16 @@ def get_cfdi_vault_records(
 
         resultados_pagos = (
             query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
-            .limit(250)
+            .limit(MAX_RECORDS)
             .all()
         )
 
         for r in resultados_pagos:
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+            is_deleted = getattr(r, "record_status", None) == RecordStatus.ELIMINADO
 
-            # 🟢 FIX: Respetar fielmente si el recibo está cancelado
-            if "CANCELAD" in val_estatus:
+            # 🟢 FIX: Manejo de sustitución / eliminación en complementos
+            if "CANCELAD" in val_estatus or "SUSTITUID" in val_estatus or is_deleted:
                 status_fiscal = "CANCELADO"
             elif getattr(r, "complemento_uuid", None):
                 status_fiscal = "TIMBRADO"
