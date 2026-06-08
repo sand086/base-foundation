@@ -2095,6 +2095,17 @@ class BillingService:
     def _registrar_historial_factura(self, factura_id: int, uuid: str):
         """Registra el XML y PDF recién timbrados en el Historial Documental"""
         from app.models.models import ReceivableInvoiceDocumentHistory
+        from sqlalchemy import func
+
+        # Buscar la versión actual máxima
+        max_version = (
+            self.db.query(func.max(ReceivableInvoiceDocumentHistory.version))
+            .filter(ReceivableInvoiceDocumentHistory.invoice_id == factura_id)
+            .scalar()
+            or 0
+        )
+
+        nueva_version = max_version + 1
 
         # Desactivamos comprobantes viejos (en caso de re-timbrado)
         self.db.query(ReceivableInvoiceDocumentHistory).filter(
@@ -2106,6 +2117,7 @@ class BillingService:
             document_type="xml",
             filename=f"{uuid}.xml",
             file_url=f"/api/sat/invoice/{uuid}/xml",
+            version=nueva_version,
             is_active=True,
         )
         hist_pdf = ReceivableInvoiceDocumentHistory(
@@ -2113,6 +2125,7 @@ class BillingService:
             document_type="pdf",
             filename=f"{uuid}.pdf",
             file_url=f"/api/sat/invoice/{uuid}/pdf",
+            version=nueva_version,
             is_active=True,
         )
         self.db.add_all([hist_xml, hist_pdf])

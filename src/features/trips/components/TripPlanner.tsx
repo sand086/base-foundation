@@ -857,17 +857,34 @@ export const TripPlanner = () => {
                             onClick={() => handleAssignInWizard(v)}
                             className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 p-2 rounded-lg cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:shadow-sm transition-all relative group haptic-press"
                           >
-                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-4 flex items-center gap-1">
+                            {/* Aumentamos el padding right (pr-14) para que el texto no se superponga con los botones */}
+                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-14 flex items-center gap-1">
                               {v.client?.razon_social}
                               {/* INDICADOR MATERIAL PELIGROSO EN CALENDARIO */}
                               {v.es_material_peligroso && (
                                 <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
                               )}
                             </div>
-                            <div className="text-[10px] text-emerald-600 dark:text-emerald-500/80 truncate font-bold uppercase tracking-tight mt-0.5">
+                            <div className="text-[10px] text-emerald-600 dark:text-emerald-500/80 truncate font-bold uppercase tracking-tight mt-0.5 pr-14">
                               {v.route_name || `${v.origin}-${v.destination}`}
                             </div>
-                            <PlayCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-sm" />
+
+                            {/* Contenedor de acciones al hacer Hover */}
+                            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-rose-500 hover:text-rose-700 hover:bg-rose-200 dark:hover:bg-rose-900/80 rounded-md"
+                                title="Eliminar viaje"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTripToDelete(v);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <PlayCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 drop-shadow-sm" />
+                            </div>
                           </div>
                         ))}
 

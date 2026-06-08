@@ -442,48 +442,47 @@ export function InvoicePayablesDetailSheet({
 
           <Separator className="bg-border/50" />
 
-          {/* TABLA DE EXPEDIENTE Y VERSIONES */}
-          <div className="bg-slate-900 dark:bg-slate-950 p-5 rounded-2xl text-white shadow-xl relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 w-32 h-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-all pointer-events-none"></div>
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2 relative z-10">
-              <History className="h-3.5 w-3.5" /> Expediente y Versiones de
-              Factura
+          {/* TABLA DE EXPEDIENTE Y VERSIONES (CORREGIDA PARA QUE SIEMPRE SEA TABLA) */}
+          <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
+              <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
+              Versiones de Factura
             </h3>
 
-            {groupedHistory.length > 0 ? (
-              <div className="border border-white/10 rounded-xl overflow-hidden bg-white/5 relative z-10">
-                <DataTable>
-                  <DataTableHeader>
-                    <DataTableRow className="bg-white/5 border-b-white/10 hover:bg-transparent">
-                      <DataTableHead className="text-[10px] font-black text-slate-400 uppercase tracking-widest py-3 h-auto">
-                        Documento
-                      </DataTableHead>
-                      <DataTableHead className="text-[10px] font-black text-slate-400 uppercase tracking-widest py-3 h-auto">
-                        Fecha / Hora
-                      </DataTableHead>
-                      <DataTableHead className="text-center text-[10px] font-black text-slate-400 uppercase tracking-widest py-3 h-auto">
-                        Descargas
-                      </DataTableHead>
-                    </DataTableRow>
-                  </DataTableHeader>
-                  <DataTableBody>
-                    {groupedHistory.map((group: any) => (
+            <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
+              <DataTable>
+                <DataTableHeader>
+                  <DataTableRow className="bg-slate-100/50 dark:bg-slate-800/50 border-b-slate-200 dark:border-b-border/50 hover:bg-transparent">
+                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Documento
+                    </DataTableHead>
+                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Fecha / Hora
+                    </DataTableHead>
+                    <DataTableHead className="text-center text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Descargas
+                    </DataTableHead>
+                  </DataTableRow>
+                </DataTableHeader>
+                <DataTableBody>
+                  {groupedHistory.length > 0 ? (
+                    groupedHistory.map((group: any) => (
                       <DataTableRow
                         key={`v-${group.version}`}
-                        className={`border-b-white/5 transition-colors ${group.is_active ? "hover:bg-white/10" : "opacity-60 grayscale hover:grayscale-0"}`}
+                        className={`border-b-slate-100 dark:border-b-border/50 transition-colors ${group.is_active ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "opacity-60 grayscale hover:grayscale-0"}`}
                       >
                         <DataTableCell className="py-2.5">
                           <div className="flex flex-col">
-                            <span className="text-xs font-bold text-slate-200">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                               {group.filename}
                             </span>
-                            <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider mt-0.5">
+                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
                               Versión {group.version}{" "}
                               {group.is_active ? "(Activa)" : "(Obsoleta)"}
                             </span>
                           </div>
                         </DataTableCell>
-                        <DataTableCell className="text-[11px] font-medium text-slate-300 py-2.5">
+                        <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
                           {fDT(group.created_at)}
                         </DataTableCell>
                         <DataTableCell className="text-center py-2.5">
@@ -493,7 +492,7 @@ export function InvoicePayablesDetailSheet({
                                 variant="ghost"
                                 size="icon"
                                 title="Descargar PDF"
-                                className="h-7 w-7 rounded text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                                className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
                                 onClick={() =>
                                   handleDownloadUrl(
                                     group.pdf.file_url,
@@ -509,7 +508,7 @@ export function InvoicePayablesDetailSheet({
                                 variant="ghost"
                                 size="icon"
                                 title="Descargar XML"
-                                className="h-7 w-7 rounded text-blue-400 hover:bg-blue-500/20 hover:text-blue-300"
+                                className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
                                 onClick={() =>
                                   handleDownloadUrl(
                                     group.xml.file_url,
@@ -525,7 +524,7 @@ export function InvoicePayablesDetailSheet({
                                 variant="ghost"
                                 size="icon"
                                 title="Descargar Acuse de Cancelación"
-                                className="h-7 w-7 rounded text-amber-400 hover:bg-amber-500/20 hover:text-amber-300"
+                                className="h-7 w-7 rounded text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/50"
                                 onClick={() =>
                                   handleDownloadUrl(
                                     group.acuse.file_url,
@@ -539,31 +538,63 @@ export function InvoicePayablesDetailSheet({
                           </div>
                         </DataTableCell>
                       </DataTableRow>
-                    ))}
-                  </DataTableBody>
-                </DataTable>
-              </div>
-            ) : (
-              // FALLBACK SI ES UNA FACTURA VIEJA SIN HISTORIAL EN BD
-              <div className="flex gap-3 relative z-10">
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                  disabled={!pdfUrl}
-                  onClick={() => pdfUrl && handleDownload(pdfUrl)}
-                >
-                  <Download className="h-4 w-4 text-rose-400" /> PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                  disabled={!xmlUrl}
-                  onClick={() => xmlUrl && handleDownload(xmlUrl)}
-                >
-                  <Download className="h-4 w-4 text-blue-400" /> XML
-                </Button>
-              </div>
-            )}
+                    ))
+                  ) : pdfUrl || xmlUrl ? (
+                    // 👈 FALLBACK INTEGRADO DENTRO DE LA TABLA
+                    <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <DataTableCell className="py-2.5">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {folioInterno || "Factura"}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
+                            Versión Única (Activa)
+                          </span>
+                        </div>
+                      </DataTableCell>
+                      <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
+                        {fDT(inv.fecha_emision) || "—"}
+                      </DataTableCell>
+                      <DataTableCell className="text-center py-2.5">
+                        <div className="flex justify-center items-center gap-1">
+                          {pdfUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Descargar PDF"
+                              className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                              onClick={() => handleDownload(pdfUrl)}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {xmlUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Descargar XML"
+                              className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
+                              onClick={() => handleDownload(xmlUrl)}
+                            >
+                              <FileCode2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </DataTableCell>
+                    </DataTableRow>
+                  ) : (
+                    <DataTableRow>
+                      <DataTableCell
+                        colSpan={3}
+                        className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs font-medium"
+                      >
+                        No hay documentos ni versiones registradas.
+                      </DataTableCell>
+                    </DataTableRow>
+                  )}
+                </DataTableBody>
+              </DataTable>
+            </div>
           </div>
         </div>
       </SheetContent>
