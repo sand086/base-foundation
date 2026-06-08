@@ -36,23 +36,10 @@ export function AgingExportModal({
     try {
       let url = `/api/finance/export/aging?module_type=${type}`;
 
-      // Transformar el formato YYYY-MM a fechas completas para que la API no falle
-      let finalStartDate = startDate;
-      let finalEndDate = endDate;
-
-      if (startDate && startDate.length === 7) {
-        // Primer día del mes seleccionado
-        finalStartDate = `${startDate}-01`;
-      }
-      if (endDate && endDate.length === 7) {
-        // Último día del mes seleccionado
-        const [year, month] = endDate.split("-");
-        const lastDay = new Date(Number(year), Number(month), 0).getDate();
-        finalEndDate = `${endDate}-${lastDay}`;
-      }
-
-      if (finalStartDate) url += `&start_date=${finalStartDate}`;
-      if (finalEndDate) url += `&end_date=${finalEndDate}`;
+      // Al usar type="date", los valores ya vienen en formato YYYY-MM-DD
+      // listos para enviarse al backend sin transformaciones extra.
+      if (startDate) url += `&start_date=${startDate}`;
+      if (endDate) url += `&end_date=${endDate}`;
 
       const response = await axiosClient.get(url, { responseType: "blob" });
 
@@ -113,7 +100,7 @@ export function AgingExportModal({
 
         <div className="grid gap-6 py-4 bg-muted/30 p-5 rounded-xl border border-border/50 my-2">
           <p className="text-xs font-bold text-slate-500 text-center -mt-2">
-            Filtrar por Mes de Emisión (Opcional)
+            Filtrar por Rango de Fechas (Opcional)
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -121,7 +108,7 @@ export function AgingExportModal({
                 <CalendarDays className="h-3 w-3" /> Desde
               </Label>
               <Input
-                type="month"
+                type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 className="bg-background text-xs font-mono"
@@ -132,7 +119,7 @@ export function AgingExportModal({
                 <CalendarDays className="h-3 w-3" /> Hasta
               </Label>
               <Input
-                type="month"
+                type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="bg-background text-xs font-mono"
