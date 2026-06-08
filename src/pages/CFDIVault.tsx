@@ -314,6 +314,10 @@ export default function CFDIVault() {
         if (s === "PROVISIONAL")
           badgeClass =
             "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300";
+        // 👇 ESTA ES LA LÍNEA NUEVA 👇
+        if (s === "RECIBO INTERNO")
+          badgeClass =
+            "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
 
         return (
           <Badge variant="outline" className={badgeClass}>
