@@ -1420,7 +1420,7 @@ def get_cfdi_vault_records(
     tipo_documento: str,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-):
+) -> List[dict]:
     records = []
 
     # 1. FACTURAS DE CLIENTES
@@ -1533,8 +1533,7 @@ def get_cfdi_vault_records(
 
     # 3. COMPLEMENTOS DE PAGO CLIENTES (REP)
     elif tipo_documento == "PAGO_CLIENTE":
-
-        # A) CFDI Puros (Tipo P)
+        # Parte A: Extraemos los Complementos de Pago CFDI
         query_cfdi = (
             db.query(models.ReceivableInvoice)
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
@@ -1549,6 +1548,7 @@ def get_cfdi_vault_records(
             or_(
                 models.ReceivableInvoice.tipo_comprobante == "P",
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
+                models.ReceivableInvoice.metodo_pago == "PPD",
             ),
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
@@ -1561,19 +1561,29 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.fecha_emision.between(start_date, end_date)
             )
 
-        for r in (
+        resultados_cfdi = (
             query_cfdi.order_by(desc(models.ReceivableInvoice.fecha_emision))
             .limit(300)
             .all()
-        ):
+        )
+
+        for r in resultados_cfdi:
+            status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+
+            folio_final = r.folio_interno
+            if r.tipo_comprobante == "P" and not (
+                r.folio_interno or ""
+            ).upper().startswith("COM"):
+                folio_final = f"COM-{r.id} ({r.folio_interno})"
+
             records.append(
                 {
                     "id": f"cfdi-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": r.folio_interno,
+                    "folio": folio_final,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
-                    "estatus": r.status_sat.upper() if r.status_sat else "PROVISIONAL",
+                    "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
                     ),
@@ -1585,7 +1595,7 @@ def get_cfdi_vault_records(
                 }
             )
 
-        # B) Recibos de Tesorería vinculados a la factura
+        # Parte B: Recibos Internos de Tesorería (¡Se corrigió la duplicación aquí!)
         query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .join(
@@ -1601,11 +1611,13 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
             )
 
-        for r in (
+        resultados_pagos = (
             query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
             .limit(300)
             .all()
-        ):
+        )
+
+        for r in resultados_pagos:
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
 
             if val_estatus == "CANCELADO":
@@ -1613,9 +1625,8 @@ def get_cfdi_vault_records(
             elif r.complemento_uuid:
                 status_fiscal = "TIMBRADO"
             else:
-                status_fiscal = "RECIBO INTERNO"  # 🟢 Aquí sabemos que es PUE o un abono no timbrado
+                status_fiscal = "RECIBO INTERNO"
 
-            # 🟢 MAGIA: Inyectamos el Folio de la Factura Padre en el string del buscador
             folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
 
             if r.complemento_uuid:
