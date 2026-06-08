@@ -1420,10 +1420,19 @@ def get_cfdi_vault_records(
     tipo_documento: str,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-) -> List[dict]:
+):
+    """
+    Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
+    - Evita el bug de nulos que ocultaba registros nuevos.
+    - Convierte IDs a str para cumplir con el esquema unificado.
+    - Enlaza facturas padre a recibos de tesorería para búsquedas cruzadas (ej: CP-17383).
+    - Muestra estatus 'RECIBO INTERNO' para cobros de facturas PUE sin timbrado.
+    """
     records = []
 
-    # 1. FACTURAS DE CLIENTES
+    # ==========================================
+    # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
+    # ==========================================
     if tipo_documento == "FACTURA_CLIENTE":
         query = (
             db.query(models.ReceivableInvoice)
@@ -1463,13 +1472,19 @@ def get_cfdi_vault_records(
 
         for r in resultados:
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+            fecha_dt = (
+                datetime.combine(r.fecha_emision, datetime.min.time())
+                if r.fecha_emision
+                else None
+            )
+
             records.append(
                 {
-                    "id": r.id,
+                    "id": str(r.id),
                     "tipo_documento": "FACTURA_CLIENTE",
                     "folio": r.folio_interno,
                     "uuid": r.uuid,
-                    "fecha_emision": r.fecha_emision,
+                    "fecha_emision": fecha_dt,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
@@ -1479,10 +1494,13 @@ def get_cfdi_vault_records(
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "viaje_id": r.viaje_id,
                     "pdf_url": r.pdf_url,
+                    "versiones_archivos": [],
                 }
             )
 
-    # 2. FACTURAS DE PROVEEDORES
+    # ==========================================
+    # 2. FACTURAS DE PROVEEDORES (Gastos CxP)
+    # ==========================================
     elif tipo_documento == "FACTURA_PROVEEDOR":
         query = (
             db.query(models.PayableInvoice)
@@ -1511,14 +1529,19 @@ def get_cfdi_vault_records(
         for r in resultados:
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
             status_fiscal = "CANCELADO" if val_estatus == "CANCELADO" else "TIMBRADO"
+            fecha_dt = (
+                datetime.combine(r.fecha_emision, datetime.min.time())
+                if r.fecha_emision
+                else None
+            )
 
             records.append(
                 {
-                    "id": r.id,
+                    "id": str(r.id),
                     "tipo_documento": "FACTURA_PROVEEDOR",
                     "folio": r.folio or r.folio_interno,
                     "uuid": r.uuid,
-                    "fecha_emision": r.fecha_emision,
+                    "fecha_emision": fecha_dt,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.supplier.razon_social if r.supplier else "Desconocido"
@@ -1528,12 +1551,15 @@ def get_cfdi_vault_records(
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "viaje_id": r.viaje_id,
                     "pdf_url": r.pdf_url,
+                    "versiones_archivos": [],
                 }
             )
 
-    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP)
+    # ==========================================
+    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP / COM)
+    # ==========================================
     elif tipo_documento == "PAGO_CLIENTE":
-        # Parte A: Extraemos los Complementos de Pago CFDI
+        # SUB-PARTE A: Complementos Creados Oficiales (Tipo P)
         query_cfdi = (
             db.query(models.ReceivableInvoice)
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
@@ -1548,7 +1574,6 @@ def get_cfdi_vault_records(
             or_(
                 models.ReceivableInvoice.tipo_comprobante == "P",
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
-                models.ReceivableInvoice.metodo_pago == "PPD",
             ),
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
@@ -1569,20 +1594,19 @@ def get_cfdi_vault_records(
 
         for r in resultados_cfdi:
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
-
-            folio_final = r.folio_interno
-            if r.tipo_comprobante == "P" and not (
-                r.folio_interno or ""
-            ).upper().startswith("COM"):
-                folio_final = f"COM-{r.id} ({r.folio_interno})"
+            fecha_dt = (
+                datetime.combine(r.fecha_emision, datetime.min.time())
+                if r.fecha_emision
+                else None
+            )
 
             records.append(
                 {
                     "id": f"cfdi-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": folio_final,
+                    "folio": r.folio_interno,
                     "uuid": r.uuid,
-                    "fecha_emision": r.fecha_emision,
+                    "fecha_emision": fecha_dt,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
@@ -1592,10 +1616,11 @@ def get_cfdi_vault_records(
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "viaje_id": r.viaje_id,
                     "pdf_url": r.pdf_url,
+                    "versiones_archivos": [],
                 }
             )
 
-        # Parte B: Recibos Internos de Tesorería (¡Se corrigió la duplicación aquí!)
+        # SUB-PARTE B: Recibos Internos de Tesorería vinculados (Soporta búsquedas por Factura Padre)
         query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .join(
@@ -1613,7 +1638,7 @@ def get_cfdi_vault_records(
 
         resultados_pagos = (
             query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
-            .limit(300)
+            .limit(200)
             .all()
         )
 
@@ -1627,6 +1652,7 @@ def get_cfdi_vault_records(
             else:
                 status_fiscal = "RECIBO INTERNO"
 
+            # 🟢 AMARRE INTELIGENTE: Ponemos el Folio de la Factura Padre para que React lo encuentre al buscar
             folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
 
             if r.complemento_uuid:
@@ -1639,13 +1665,19 @@ def get_cfdi_vault_records(
                     f"{r.referencia or f'Recibo-{r.id}'} (Fra: {folio_padre})"
                 )
 
+            fecha_dt = (
+                datetime.combine(r.fecha_pago, datetime.min.time())
+                if r.fecha_pago
+                else None
+            )
+
             records.append(
                 {
                     "id": f"rec-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
                     "folio": folio_mostrar,
                     "uuid": r.complemento_uuid,
-                    "fecha_emision": r.fecha_pago,
+                    "fecha_emision": fecha_dt,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.invoice.client.razon_social
@@ -1657,6 +1689,7 @@ def get_cfdi_vault_records(
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
                     "pdf_url": r.comprobante_url,
+                    "versiones_archivos": [],
                 }
             )
 
