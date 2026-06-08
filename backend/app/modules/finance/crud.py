@@ -1405,8 +1405,7 @@ def delete_indirect_category(db: Session, cat_id: int, user_id: int = None):
 
 
 # =====================================================================
-
-# BÓVEDA DIGITAL / HISTORIAL CFDI (NUEVO)
+# BÓVEDA DIGITAL / HISTORIAL CFDI (ACTUALIZADO)
 # =====================================================================
 from sqlalchemy import or_, and_, desc
 from app.models.models import (
@@ -1419,9 +1418,6 @@ from app.models.models import (
 )
 
 
-from sqlalchemy import desc
-
-
 def get_cfdi_vault_records(
     db: Session,
     tipo_documento: str,
@@ -1430,18 +1426,34 @@ def get_cfdi_vault_records(
 ):
     """
     Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
+    Filtra viajes eliminados y separa correctamente las facturas de los complementos "COM".
     """
     records = []
 
+    # ==========================================
     # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
+    # ==========================================
     if tipo_documento == "FACTURA_CLIENTE":
-        query = db.query(models.ReceivableInvoice).join(
-            models.Client, models.ReceivableInvoice.client_id == models.Client.id
+        query = (
+            db.query(models.ReceivableInvoice)
+            .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
+            .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
         )
 
-        # 🟢 CORRECCIÓN: Filtramos SOLO por status_sat (que es texto libre)
-        # Ya no tocamos "estatus" para evitar el error del Enum en Postgres
-        query = query.filter(models.ReceivableInvoice.status_sat != "ERROR")
+        query = query.filter(
+            models.ReceivableInvoice.status_sat != "ERROR",
+            # Excluimos los Complementos de Pago (COM) para mandarlos a su propia pestaña
+            or_(
+                models.ReceivableInvoice.tipo_comprobante != "P",
+                models.ReceivableInvoice.tipo_comprobante.is_(None),
+            ),
+            ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
+            # 🟢 REGLA: Que el viaje no esté eliminado (O que sea una factura sin viaje)
+            or_(
+                models.ReceivableInvoice.viaje_id.is_(None),
+                models.Trip.record_status != "E",
+            ),
+        )
 
         if start_date and end_date:
             query = query.filter(
@@ -1475,10 +1487,24 @@ def get_cfdi_vault_records(
                 }
             )
 
+    # ==========================================
     # 2. FACTURAS DE PROVEEDORES (CxP)
+    # ==========================================
     elif tipo_documento == "FACTURA_PROVEEDOR":
-        query = db.query(models.PayableInvoice).join(
-            models.Supplier, models.PayableInvoice.supplier_id == models.Supplier.id
+        query = (
+            db.query(models.PayableInvoice)
+            .join(
+                models.Supplier, models.PayableInvoice.supplier_id == models.Supplier.id
+            )
+            .outerjoin(models.Trip, models.PayableInvoice.viaje_id == models.Trip.id)
+        )
+
+        query = query.filter(
+            # 🟢 REGLA: Que el viaje no esté eliminado (O que no aplique a viaje)
+            or_(
+                models.PayableInvoice.viaje_id.is_(None),
+                models.Trip.record_status != "E",
+            )
         )
 
         if start_date and end_date:
@@ -1511,9 +1537,65 @@ def get_cfdi_vault_records(
                 }
             )
 
+    # ==========================================
     # 3. COMPLEMENTOS DE PAGO CLIENTES (REP)
+    # ==========================================
     elif tipo_documento == "PAGO_CLIENTE":
-        query = (
+        # PARTE A: Complementos CFDI Reales (Los "COM")
+        query_cfdi = (
+            db.query(models.ReceivableInvoice)
+            .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
+            .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
+        )
+
+        query_cfdi = query_cfdi.filter(
+            models.ReceivableInvoice.status_sat != "ERROR",
+            # Filtramos para que solo traiga los que son Pagos/Complementos
+            or_(
+                models.ReceivableInvoice.tipo_comprobante == "P",
+                models.ReceivableInvoice.folio_interno.ilike("COM%"),
+            ),
+            # 🟢 REGLA: Que el viaje no esté eliminado
+            or_(
+                models.ReceivableInvoice.viaje_id.is_(None),
+                models.Trip.record_status != "E",
+            ),
+        )
+
+        if start_date and end_date:
+            query_cfdi = query_cfdi.filter(
+                models.ReceivableInvoice.fecha_emision.between(start_date, end_date)
+            )
+
+        resultados_cfdi = (
+            query_cfdi.order_by(desc(models.ReceivableInvoice.fecha_emision))
+            .limit(300)
+            .all()
+        )
+
+        for r in resultados_cfdi:
+            records.append(
+                {
+                    "id": f"cfdi-{r.id}",  # Prefix para evitar colisiones de ID con los recibos
+                    "tipo_documento": "PAGO_CLIENTE",
+                    "folio": r.folio_interno,
+                    "uuid": r.uuid,
+                    "fecha_emision": r.fecha_emision,
+                    "estatus": r.estatus,
+                    "cliente_proveedor_nombre": (
+                        r.client.razon_social if r.client else "Desconocido"
+                    ),
+                    "monto_total": r.monto_total,
+                    "fecha_cancelacion": r.fecha_cancelacion,
+                    "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": r.document_history,
+                    "viaje_id": r.viaje_id,
+                    "pdf_url": r.pdf_url,
+                }
+            )
+
+        # PARTE B: Recibos Internos de Tesorería (ReceivableInvoicePayment)
+        query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .join(
                 models.ReceivableInvoice,
@@ -1527,22 +1609,22 @@ def get_cfdi_vault_records(
         )
 
         if start_date and end_date:
-            query = query.filter(
+            query_pagos = query_pagos.filter(
                 models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
             )
 
-        resultados = (
-            query.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
-            .limit(500)
+        resultados_pagos = (
+            query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
+            .limit(200)
             .all()
         )
 
-        for r in resultados:
+        for r in resultados_pagos:
             records.append(
                 {
-                    "id": r.id,
+                    "id": f"rec-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": r.referencia or f"Pago-{r.id}",
+                    "folio": r.referencia or f"Recibo-{r.id}",
                     "uuid": r.complemento_uuid,
                     "fecha_emision": r.fecha_pago,
                     "estatus": r.estatus,
@@ -1564,12 +1646,8 @@ def get_cfdi_vault_records(
 
 
 def get_cfdi_timeline(db: Session, tipo_documento: str, document_id: int):
-    """
-    Obtiene la línea de tiempo de auditoría para un documento específico.
-    """
+    # (El código del timeline se queda igual, no hay necesidad de alterarlo)
     timeline = []
-
-    # 1. Definir qué módulo buscar en el AuditLog según el tipo
     modulo_map = {
         "FACTURA_CLIENTE": "receivable_invoices",
         "FACTURA_PROVEEDOR": "payable_invoices",
@@ -1577,15 +1655,12 @@ def get_cfdi_timeline(db: Session, tipo_documento: str, document_id: int):
     }
     modulo_target = modulo_map.get(tipo_documento, "")
 
-    # 2. Buscar en la tabla de auditoría global
     audit_logs = (
         db.query(AuditLog)
         .join(User, AuditLog.user_id == User.id, isouter=True)
         .filter(
             AuditLog.modulo == modulo_target,
-            AuditLog.detalles.ilike(
-                f"%id': {document_id}%"
-            ),  # Busca el ID dentro del JSON de detalles
+            AuditLog.detalles.ilike(f"%id': {document_id}%"),
         )
         .order_by(AuditLog.created_at.desc())
         .all()
