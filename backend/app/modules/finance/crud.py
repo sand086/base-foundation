@@ -1405,17 +1405,14 @@ def delete_indirect_category(db: Session, cat_id: int, user_id: int = None):
 
 
 # =====================================================================
-# BÓVEDA DIGITAL / HISTORIAL CFDI (ACTUALIZADO)
+# BÓVEDA DIGITAL / HISTORIAL CFDI (CON FACTURAS PADRE EN PAGOS)
 # =====================================================================
 from sqlalchemy import or_, and_, desc
-from app.models.models import (
-    AuditLog,
-    User,
-    ReceivableInvoiceDocumentHistory,
-    InvoiceDocumentHistory,
-    ReceivablePaymentDocumentHistory,
-    PayablePaymentDocumentHistory,
-)
+from typing import Optional
+from datetime import date
+from app.models import models
+from app.models.models import AuditLog, User
+from sqlalchemy.orm import Session
 
 
 def get_cfdi_vault_records(
@@ -1424,15 +1421,9 @@ def get_cfdi_vault_records(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ):
-    """
-    Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
-    Ahora refleja el ESTATUS FISCAL (Timbrado/Cancelado) y extrae correctamente los folios COM.
-    """
     records = []
 
-    # ==========================================
-    # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
-    # ==========================================
+    # 1. FACTURAS DE CLIENTES
     if tipo_documento == "FACTURA_CLIENTE":
         query = (
             db.query(models.ReceivableInvoice)
@@ -1441,13 +1432,18 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
-            models.ReceivableInvoice.status_sat != "ERROR",
-            # Excluimos los Complementos de Pago (COM)
+            or_(
+                models.ReceivableInvoice.status_sat != "ERROR",
+                models.ReceivableInvoice.status_sat.is_(None),
+            ),
             or_(
                 models.ReceivableInvoice.tipo_comprobante != "P",
                 models.ReceivableInvoice.tipo_comprobante.is_(None),
             ),
-            ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
+            or_(
+                ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
+                models.ReceivableInvoice.folio_interno.is_(None),
+            ),
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
                 models.Trip.record_status != "E",
@@ -1466,9 +1462,7 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados:
-            # 🟢 MAGIA: Usamos el status_sat (Fiscal) en lugar de la cobranza
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
-
             records.append(
                 {
                     "id": r.id,
@@ -1476,22 +1470,19 @@ def get_cfdi_vault_records(
                     "folio": r.folio_interno,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
-                    "estatus": status_fiscal,  # <-- AQUÍ SE MANDA TIMBRADO/CANCELADO
+                    "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
                     ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
-                    "versiones_archivos": r.document_history,
                     "viaje_id": r.viaje_id,
                     "pdf_url": r.pdf_url,
                 }
             )
 
-    # ==========================================
-    # 2. FACTURAS DE PROVEEDORES (CxP)
-    # ==========================================
+    # 2. FACTURAS DE PROVEEDORES
     elif tipo_documento == "FACTURA_PROVEEDOR":
         query = (
             db.query(models.PayableInvoice)
@@ -1518,7 +1509,6 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados:
-            # Los proveedores siempre nos dan facturas timbradas, a menos que nos la cancelen
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
             status_fiscal = "CANCELADO" if val_estatus == "CANCELADO" else "TIMBRADO"
 
@@ -1536,17 +1526,15 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
-                    "versiones_archivos": r.document_history,
                     "viaje_id": r.viaje_id,
                     "pdf_url": r.pdf_url,
                 }
             )
 
-    # ==========================================
-    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP / COM)
-    # ==========================================
+    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP)
     elif tipo_documento == "PAGO_CLIENTE":
-        # Parte A: Extraemos los Complementos de Pago oficiales (Folios COM)
+
+        # A) CFDI Puros (Tipo P)
         query_cfdi = (
             db.query(models.ReceivableInvoice)
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
@@ -1554,7 +1542,10 @@ def get_cfdi_vault_records(
         )
 
         query_cfdi = query_cfdi.filter(
-            models.ReceivableInvoice.status_sat != "ERROR",
+            or_(
+                models.ReceivableInvoice.status_sat != "ERROR",
+                models.ReceivableInvoice.status_sat.is_(None),
+            ),
             or_(
                 models.ReceivableInvoice.tipo_comprobante == "P",
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
@@ -1570,36 +1561,31 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.fecha_emision.between(start_date, end_date)
             )
 
-        resultados_cfdi = (
+        for r in (
             query_cfdi.order_by(desc(models.ReceivableInvoice.fecha_emision))
             .limit(300)
             .all()
-        )
-
-        for r in resultados_cfdi:
-            status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
-
+        ):
             records.append(
                 {
                     "id": f"cfdi-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": r.folio_interno,  # 🟢 AQUÍ ESTÁ EL FOLIO COM
+                    "folio": r.folio_interno,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
-                    "estatus": status_fiscal,
+                    "estatus": r.status_sat.upper() if r.status_sat else "PROVISIONAL",
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
                     ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
-                    "versiones_archivos": r.document_history,
                     "viaje_id": r.viaje_id,
                     "pdf_url": r.pdf_url,
                 }
             )
 
-        # Parte B: Recibos Internos de Tesorería
+        # B) Recibos de Tesorería vinculados a la factura
         query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .join(
@@ -1615,28 +1601,38 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
             )
 
-        resultados_pagos = (
+        for r in (
             query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
-            .limit(200)
+            .limit(300)
             .all()
-        )
-
-        for r in resultados_pagos:
+        ):
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
 
-            # Determinamos el estatus fiscal de un recibo de pago
             if val_estatus == "CANCELADO":
                 status_fiscal = "CANCELADO"
             elif r.complemento_uuid:
                 status_fiscal = "TIMBRADO"
             else:
-                status_fiscal = "PROVISIONAL"
+                status_fiscal = "RECIBO INTERNO"  # 🟢 Aquí sabemos que es PUE o un abono no timbrado
+
+            # 🟢 MAGIA: Inyectamos el Folio de la Factura Padre en el string del buscador
+            folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
+
+            if r.complemento_uuid:
+                if r.referencia and "COM" in r.referencia.upper():
+                    folio_mostrar = f"{r.referencia} (Fra: {folio_padre})"
+                else:
+                    folio_mostrar = f"COM-{r.id} (Fra: {folio_padre})"
+            else:
+                folio_mostrar = (
+                    f"{r.referencia or f'Recibo-{r.id}'} (Fra: {folio_padre})"
+                )
 
             records.append(
                 {
                     "id": f"rec-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": r.referencia or f"Recibo-{r.id}",
+                    "folio": folio_mostrar,
                     "uuid": r.complemento_uuid,
                     "fecha_emision": r.fecha_pago,
                     "estatus": status_fiscal,
@@ -1648,7 +1644,6 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
-                    "versiones_archivos": r.document_history,
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
                     "pdf_url": r.comprobante_url,
                 }
