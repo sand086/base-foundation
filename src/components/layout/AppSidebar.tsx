@@ -138,6 +138,12 @@ const menuItems: MenuItem[] = [
     moduleCode: "receivables",
   },
   {
+    title: "Historico CFDI",
+    icon: FileCheck,
+    path: "/history-cfdi",
+    moduleCode: "cfdi",
+  },
+  {
     title: "Tesorería",
     icon: Landmark,
     path: "/treasury",

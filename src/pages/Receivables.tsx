@@ -17,6 +17,7 @@ import {
   FileText,
   AlertTriangle,
   FilterX,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvo
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { ClientRegisterPaymentModal } from "@/features/treasury/components/ClientRegisterPaymentModal";
 import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
+import { AgingExportModal } from "@/components/common/AgingExportModal";
 
 import {
   ReceivableInvoice,
@@ -95,6 +97,7 @@ export default function Receivables() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
+  const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
 
   // NUEVOS: Estados para filtros
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
@@ -829,6 +832,15 @@ export default function Receivables() {
             Estado de Cuenta
           </Button>
 
+          <Button
+            onClick={() => setIsAgingModalOpen(true)}
+            variant="outline"
+            className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-bold transition-all shadow-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Exportar Antigüedad
+          </Button>
+
           <ActionButton
             size="md"
             className="bg-brand-navy hover:bg-brand-navy/90"
@@ -1094,6 +1106,12 @@ export default function Receivables() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AgingExportModal
+        open={isAgingModalOpen}
+        onOpenChange={setIsAgingModalOpen}
+        type="cxc"
+      />
     </div>
   );
 }

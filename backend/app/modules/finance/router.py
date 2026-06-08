@@ -4,8 +4,10 @@ import shutil
 import json
 import traceback
 from datetime import datetime, timedelta, date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from io import BytesIO
 
+import pandas as pd
 from pydantic import BaseModel
 from fastapi import (
     APIRouter,
@@ -16,7 +18,9 @@ from fastapi import (
     Body,
     status,
     Form,
+    Query,
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from lxml import etree
 
@@ -1170,6 +1174,293 @@ def delete_indirect_category(
             "\n"
             + "=" * 50
             + "\n💥 ERROR CRÍTICO EN delete_indirect_category 💥\n"
+            + error_details
+            + "\n"
+            + "=" * 50
+            + "\n"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
+        )
+
+
+# =====================================================================
+# BÓVEDA DIGITAL (HISTORIAL CFDI)
+# =====================================================================
+
+
+@router.get("/cfdi-vault", response_model=schemas.CFDIHistoryResponse)
+def get_cfdi_vault(
+    tipo_documento: str,
+    start_date: date = None,
+    end_date: date = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Obtiene los registros de la bóveda (Facturas, Complementos, etc)
+    tipo_documento: 'FACTURA_CLIENTE', 'FACTURA_PROVEEDOR', 'PAGO_CLIENTE'
+    """
+    try:
+        records = crud.get_cfdi_vault_records(db, tipo_documento, start_date, end_date)
+        return {"data": records, "total_records": len(records)}
+    except Exception as e:
+        db.rollback()
+        error_details = traceback.format_exc()
+        print(
+            "\n"
+            + "=" * 50
+            + "\n💥 ERROR CRÍTICO EN get_cfdi_vault 💥\n"
+            + error_details
+            + "\n"
+            + "=" * 50
+            + "\n"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
+        )
+
+
+@router.get(
+    "/cfdi-vault/{tipo_documento}/{document_id}/timeline",
+    response_model=List[schemas.CFDIActivityTimeline],
+)
+def get_cfdi_document_timeline(
+    tipo_documento: str,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Obtiene la línea de tiempo de auditoría (quién canceló, quién emitió) de un CFDI específico.
+    """
+    try:
+        timeline = crud.get_cfdi_timeline(db, tipo_documento, document_id)
+        return timeline
+    except Exception as e:
+        db.rollback()
+        error_details = traceback.format_exc()
+        print(
+            "\n"
+            + "=" * 50
+            + "\n💥 ERROR CRÍTICO EN get_cfdi_document_timeline 💥\n"
+            + error_details
+            + "\n"
+            + "=" * 50
+            + "\n"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
+        )
+
+
+# =====================================================================
+# REPORTES Y ESTADOS DE CUENTA (ANTIGÜEDAD DE SALDOS)
+# =====================================================================
+
+
+@router.get("/export/aging")
+def export_aging_report(
+    module_type: str = Query(..., description="cxc o cxp"),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Exporta un reporte de Antigüedad de Saldos en Excel con 2 pestañas:
+    1. Consolidado por Cliente/Proveedor
+    2. Detalle de Facturas
+    """
+    try:
+        today = date.today()
+
+        # 1. Armar la consulta base (Solo deuda real > 0 y no cancelada)
+        if module_type == "cxc":
+            query = db.query(models.ReceivableInvoice).filter(
+                models.ReceivableInvoice.saldo_pendiente > 0,
+                models.ReceivableInvoice.status_sat != "CANCELADO",
+                models.ReceivableInvoice.record_status == "A",
+            )
+            if start_date:
+                query = query.filter(
+                    models.ReceivableInvoice.fecha_emision >= start_date
+                )
+            if end_date:
+                query = query.filter(models.ReceivableInvoice.fecha_emision <= end_date)
+
+        elif module_type == "cxp":
+            query = db.query(models.PayableInvoice).filter(
+                models.PayableInvoice.saldo_pendiente > 0,
+                models.PayableInvoice.estatus != "cancelado",
+                models.PayableInvoice.record_status == "A",
+            )
+            if start_date:
+                query = query.filter(models.PayableInvoice.fecha_emision >= start_date)
+            if end_date:
+                query = query.filter(models.PayableInvoice.fecha_emision <= end_date)
+        else:
+            raise HTTPException(
+                status_code=400, detail="Tipo de módulo inválido. Usa 'cxc' o 'cxp'"
+            )
+
+        invoices = query.all()
+
+        details_data = []
+        summary_data = {}
+
+        # 2. Procesar datos y calcular rangos de antigüedad
+        for inv in invoices:
+            if module_type == "cxc":
+                entidad_nombre = (
+                    inv.client.razon_social if inv.client else "Cliente Desconocido"
+                )
+                estatus_str = inv.status_sat
+            else:
+                entidad_nombre = (
+                    inv.supplier.razon_social
+                    if inv.supplier
+                    else getattr(inv, "supplier_razon_social", "Proveedor Desconocido")
+                )
+                estatus_str = getattr(inv, "estatus", "pendiente")
+
+            days_late = 0
+            if inv.fecha_vencimiento:
+                if isinstance(inv.fecha_vencimiento, str):
+                    # Manejo defensivo en caso de que fecha_vencimiento sea string
+                    try:
+                        v_date = datetime.strptime(
+                            inv.fecha_vencimiento[:10], "%Y-%m-%d"
+                        ).date()
+                        days_late = (today - v_date).days
+                    except:
+                        days_late = 0
+                else:
+                    days_late = (today - inv.fecha_vencimiento).days
+
+            monto_total = float(inv.monto_total or 0.0)
+            saldo_pendiente = float(inv.saldo_pendiente or 0.0)
+
+            # Formateo defensivo de fechas
+            fecha_emi_str = ""
+            if inv.fecha_emision:
+                fecha_emi_str = (
+                    inv.fecha_emision
+                    if isinstance(inv.fecha_emision, str)
+                    else inv.fecha_emision.strftime("%Y-%m-%d")
+                )
+
+            fecha_ven_str = ""
+            if inv.fecha_vencimiento:
+                fecha_ven_str = (
+                    inv.fecha_vencimiento
+                    if isinstance(inv.fecha_vencimiento, str)
+                    else inv.fecha_vencimiento.strftime("%Y-%m-%d")
+                )
+
+            # Guardar para la Pestaña 2 (Detalle Completo)
+            details_data.append(
+                {
+                    "Folio": getattr(inv, "folio_interno", "")
+                    or getattr(inv, "uuid", "")
+                    or str(inv.id),
+                    "Entidad": entidad_nombre,
+                    "Concepto": inv.concepto or "S/D",
+                    "Fecha Emisión": fecha_emi_str,
+                    "Fecha Vencimiento": fecha_ven_str,
+                    "Estatus": estatus_str,
+                    "Monto Original (MXN)": monto_total,
+                    "Saldo Pendiente (MXN)": saldo_pendiente,
+                    "Días de Atraso": days_late if days_late > 0 else 0,
+                }
+            )
+
+            # Acumular para la Pestaña 1 (Tabla Consolidada)
+            if entidad_nombre not in summary_data:
+                summary_data[entidad_nombre] = {
+                    "Entidad": entidad_nombre,
+                    "Deuda Total": 0.0,
+                    "Al Corriente": 0.0,
+                    "1 a 30 días": 0.0,
+                    "31 a 60 días": 0.0,
+                    "61 a 90 días": 0.0,
+                    "Más de 90 días": 0.0,
+                }
+
+            summary_data[entidad_nombre]["Deuda Total"] += saldo_pendiente
+
+            if days_late <= 0:
+                summary_data[entidad_nombre]["Al Corriente"] += saldo_pendiente
+            elif 1 <= days_late <= 30:
+                summary_data[entidad_nombre]["1 a 30 días"] += saldo_pendiente
+            elif 31 <= days_late <= 60:
+                summary_data[entidad_nombre]["31 a 60 días"] += saldo_pendiente
+            elif 61 <= days_late <= 90:
+                summary_data[entidad_nombre]["61 a 90 días"] += saldo_pendiente
+            else:
+                summary_data[entidad_nombre]["Más de 90 días"] += saldo_pendiente
+
+        # 3. Construir los DataFrames y formatear el Excel
+        df_summary = pd.DataFrame(list(summary_data.values()))
+        df_details = pd.DataFrame(details_data)
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            if not df_summary.empty:
+                df_summary.to_excel(
+                    writer, sheet_name="Consolidado por Entidad", index=False
+                )
+            else:
+                pd.DataFrame([{"Mensaje": "No hay deuda en este periodo"}]).to_excel(
+                    writer, sheet_name="Consolidado por Entidad", index=False
+                )
+
+            if not df_details.empty:
+                df_details.to_excel(
+                    writer, sheet_name="Detalle de Facturas", index=False
+                )
+            else:
+                pd.DataFrame([{"Mensaje": "No hay deuda en este periodo"}]).to_excel(
+                    writer, sheet_name="Detalle de Facturas", index=False
+                )
+
+            # Ajuste automático del ancho de las columnas
+            for sheet_name in writer.sheets:
+                worksheet = writer.sheets[sheet_name]
+                for column_cells in worksheet.columns:
+                    max_length = 0
+                    column = column_cells[0].column_letter
+                    for cell in column_cells:
+                        try:
+                            if len(str(cell.value)) > max_length:
+                                max_length = len(str(cell.value))
+                        except:
+                            pass
+                    adjusted_width = max_length + 2
+                    worksheet.column_dimensions[column].width = adjusted_width
+
+        output.seek(0)
+
+        # 4. Enviar el archivo
+        filename = f"Antiguedad_Saldos_{module_type.upper()}_{today}.xlsx"
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
+
+        return StreamingResponse(
+            output,
+            headers=headers,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    except Exception as e:
+        db.rollback()
+        error_details = traceback.format_exc()
+        print(
+            "\n"
+            + "=" * 50
+            + "\n💥 ERROR CRÍTICO EN export_aging_report 💥\n"
             + error_details
             + "\n"
             + "=" * 50

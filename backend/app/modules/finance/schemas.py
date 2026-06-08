@@ -349,3 +349,49 @@ class SatFacturaLibrePayload(BaseModel):
                 f"El Código Postal del cliente debe tener exactamente 5 dígitos. Recibido: '{cp_str}'"
             )
         return cp_str
+
+
+# ==========================================
+# CFDI HISTORY SCHEMAS (BÓVEDA DIGITAL)
+# ==========================================
+
+
+class CFDIActivityTimeline(BaseModel):
+    """Esquema para la línea de tiempo de auditoría de un documento"""
+
+    fecha: datetime
+    accion: str
+    tipo_accion: str  # Ej: "CREACION", "TIMBRADO", "CANCELACION", "NUEVA_VERSION"
+    usuario: str
+    detalles: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CFDIHistoryRecord(BaseModel):
+    """Esquema unificado para la tabla principal del Historial CFDI"""
+
+    id: int
+    tipo_documento: str  # "FACTURAS_CLIENTES", "COMPLEMENTOS_PAGO", "CARTAS_PORTE", "FACTURAS_PROVEEDORES"
+    folio: Optional[str] = None
+    uuid: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    estatus: str
+    cliente_proveedor_nombre: str
+    monto_total: Optional[float] = None
+    creado_por_nombre: Optional[str] = None
+    modificado_por_nombre: Optional[str] = None
+    fecha_cancelacion: Optional[datetime] = None
+    motivo_cancelacion: Optional[str] = None
+
+    # Lista anidada de versiones de archivos (PDF/XML) y línea de tiempo
+    versiones_archivos: List[DocumentHistoryResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CFDIHistoryResponse(BaseModel):
+    """Esquema de respuesta paginada o en lista para la Bóveda"""
+
+    data: List[CFDIHistoryRecord]
+    total_records: int

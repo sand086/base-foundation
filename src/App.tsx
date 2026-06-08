@@ -45,6 +45,7 @@ import TwoFactorAuth from "./pages/TwoFactorAuth";
 import TrafficControl from "./pages/TrafficControl";
 import Verify2FA from "@/features/users/components/Verify2FA";
 import SuppliersCatalog from "./pages/SuppliersCatalog";
+import CFDIVault from "./pages/CFDIVault";
 
 // Wizard de Despacho
 import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
@@ -182,6 +183,7 @@ const App = () => (
                       element={<ProtectedRoute requiredModule="treasury" />}
                     >
                       <Route path="treasury" element={<Treasury />} />
+                      <Route path="history-cfdi" element={<CFDIVault />} />
                       <Route
                         path="finance-dashboard"
                         element={<FinanceDashboard />}

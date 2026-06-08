@@ -25,6 +25,7 @@ import {
   CheckSquare,
   Ban,
   RefreshCcw,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
@@ -94,6 +95,7 @@ import { InvoicePayablesDetailSheet } from "@/features/payables/components/Invoi
 import { PayableInvoice } from "@/features/payables/types";
 
 import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
+import { AgingExportModal } from "@/components/common/AgingExportModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -143,6 +145,7 @@ export default function Payables() {
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
+  const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
 
   // ESTADOS PARA CANCELAR Y REABRIR
   const [isCancelInvoiceOpen, setIsCancelInvoiceOpen] = useState(false);
@@ -866,6 +869,15 @@ export default function Payables() {
           >
             <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer Reporte
             SAT
+          </Button>
+
+          <Button
+            onClick={() => setIsAgingModalOpen(true)}
+            variant="outline"
+            className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-bold transition-all shadow-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Exportar Antigüedad
           </Button>
 
           <ActionButton
@@ -1622,6 +1634,12 @@ export default function Payables() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AgingExportModal
+        open={isAgingModalOpen}
+        onOpenChange={setIsAgingModalOpen}
+        type="cxp"
+      />
     </div>
   );
 }

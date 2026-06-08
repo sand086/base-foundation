@@ -1210,6 +1210,7 @@ class InvoiceDocumentHistory(AuditMixin, Base):
     id = Column(Integer, primary_key=True)
     invoice_id = Column(Integer, ForeignKey("payable_invoices.id", ondelete="CASCADE"))
     document_type = Column(String(20))
+    filename = Column(String(255), nullable=False, server_default="documento.pdf")
     file_url = Column(String(500))
     version = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)

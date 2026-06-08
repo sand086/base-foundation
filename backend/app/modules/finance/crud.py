@@ -1402,3 +1402,191 @@ def delete_indirect_category(db: Session, cat_id: int, user_id: int = None):
     db.add(db_cat)
     db.commit()
     return True
+
+
+# =====================================================================
+
+# BÓVEDA DIGITAL / HISTORIAL CFDI (NUEVO)
+# =====================================================================
+from sqlalchemy import or_, and_, desc
+from app.models.models import (
+    AuditLog,
+    User,
+    ReceivableInvoiceDocumentHistory,
+    InvoiceDocumentHistory,
+    ReceivablePaymentDocumentHistory,
+    PayablePaymentDocumentHistory,
+)
+
+
+def get_cfdi_vault_records(
+    db: Session,
+    tipo_documento: str,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+):
+    """
+    Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
+    tipo_documento puede ser: 'FACTURA_CLIENTE', 'FACTURA_PROVEEDOR', 'PAGO_CLIENTE', 'PAGO_PROVEEDOR'
+    """
+    records = []
+
+    # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
+    if tipo_documento == "FACTURA_CLIENTE":
+        query = db.query(models.ReceivableInvoice).join(
+            models.Client, models.ReceivableInvoice.client_id == models.Client.id
+        )
+        if start_date and end_date:
+            query = query.filter(
+                models.ReceivableInvoice.fecha_emision.between(start_date, end_date)
+            )
+
+        resultados = (
+            query.order_by(desc(models.ReceivableInvoice.fecha_emision))
+            .limit(100)
+            .all()
+        )
+
+        for r in resultados:
+            records.append(
+                {
+                    "id": r.id,
+                    "tipo_documento": "FACTURA_CLIENTE",
+                    "folio": r.folio_interno,
+                    "uuid": r.uuid,
+                    "fecha_emision": r.fecha_emision,
+                    "estatus": r.estatus,
+                    "cliente_proveedor_nombre": (
+                        r.client.razon_social if r.client else "Desconocido"
+                    ),
+                    "monto_total": r.monto_total,
+                    "fecha_cancelacion": r.fecha_cancelacion,
+                    "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": r.document_history,
+                }
+            )
+
+    # 2. FACTURAS DE PROVEEDORES (CxP)
+    elif tipo_documento == "FACTURA_PROVEEDOR":
+        query = db.query(models.PayableInvoice).join(
+            models.Supplier, models.PayableInvoice.supplier_id == models.Supplier.id
+        )
+        if start_date and end_date:
+            query = query.filter(
+                models.PayableInvoice.fecha_emision.between(start_date, end_date)
+            )
+
+        resultados = (
+            query.order_by(desc(models.PayableInvoice.fecha_emision)).limit(100).all()
+        )
+
+        for r in resultados:
+            records.append(
+                {
+                    "id": r.id,
+                    "tipo_documento": "FACTURA_PROVEEDOR",
+                    "folio": r.folio or r.folio_interno,
+                    "uuid": r.uuid,
+                    "fecha_emision": r.fecha_emision,
+                    "estatus": r.estatus,
+                    "cliente_proveedor_nombre": (
+                        r.supplier.razon_social if r.supplier else "Desconocido"
+                    ),
+                    "monto_total": r.monto_total,
+                    "fecha_cancelacion": r.fecha_cancelacion,
+                    "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": r.document_history,
+                }
+            )
+
+    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP)
+    elif tipo_documento == "PAGO_CLIENTE":
+        query = (
+            db.query(models.ReceivableInvoicePayment)
+            .join(
+                models.ReceivableInvoice,
+                models.ReceivableInvoicePayment.invoice_id
+                == models.ReceivableInvoice.id,
+            )
+            .join(
+                models.Client,
+                models.ReceivableInvoice.client_id == models.Client.id,
+            )
+        )
+        if start_date and end_date:
+            query = query.filter(
+                models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
+            )
+
+        resultados = (
+            query.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
+            .limit(100)
+            .all()
+        )
+
+        for r in resultados:
+            records.append(
+                {
+                    "id": r.id,
+                    "tipo_documento": "PAGO_CLIENTE",
+                    "folio": r.referencia or f"Pago-{r.id}",
+                    "uuid": r.complemento_uuid,
+                    "fecha_emision": r.fecha_pago,
+                    "estatus": r.estatus,
+                    "cliente_proveedor_nombre": (
+                        r.invoice.client.razon_social
+                        if r.invoice and r.invoice.client
+                        else "Desconocido"
+                    ),
+                    "monto_total": r.monto,
+                    "fecha_cancelacion": r.fecha_cancelacion,
+                    "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": r.document_history,
+                }
+            )
+
+    return records
+
+
+def get_cfdi_timeline(db: Session, tipo_documento: str, document_id: int):
+    """
+    Obtiene la línea de tiempo de auditoría para un documento específico.
+    """
+    timeline = []
+
+    # 1. Definir qué módulo buscar en el AuditLog según el tipo
+    modulo_map = {
+        "FACTURA_CLIENTE": "receivable_invoices",
+        "FACTURA_PROVEEDOR": "payable_invoices",
+        "PAGO_CLIENTE": "receivable_invoice_payments",
+    }
+    modulo_target = modulo_map.get(tipo_documento, "")
+
+    # 2. Buscar en la tabla de auditoría global
+    audit_logs = (
+        db.query(AuditLog)
+        .join(User, AuditLog.user_id == User.id, isouter=True)
+        .filter(
+            AuditLog.modulo == modulo_target,
+            AuditLog.detalles.ilike(
+                f"%id': {document_id}%"
+            ),  # Busca el ID dentro del JSON de detalles
+        )
+        .order_by(AuditLog.created_at.desc())
+        .all()
+    )
+
+    for log in audit_logs:
+        timeline.append(
+            {
+                "fecha": log.created_at,
+                "accion": log.accion,
+                "tipo_accion": log.tipo_accion,
+                "usuario": (
+                    f"{log.user.nombre} {log.user.apellido}" if log.user else "Sistema"
+                ),
+                "detalles": log.detalles,
+            }
+        )
+
+    return timeline
