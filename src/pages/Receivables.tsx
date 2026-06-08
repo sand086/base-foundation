@@ -838,7 +838,7 @@ export default function Receivables() {
             className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-bold transition-all shadow-sm"
           >
             <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Exportar Antigüedad
+            Exportar consolidado
           </Button>
 
           <ActionButton

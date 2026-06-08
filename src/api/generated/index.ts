@@ -38,6 +38,9 @@ export type { Body_upload_units_bulk_api_fleet_units_bulk_upload_post } from './
 export type { Body_upload_user_avatar_api_auth__user_id__avatar_post } from './models/Body_upload_user_avatar_api_auth__user_id__avatar_post';
 export type { BrandCreate } from './models/BrandCreate';
 export type { BrandResponse } from './models/BrandResponse';
+export type { CFDIActivityTimeline } from './models/CFDIActivityTimeline';
+export type { CFDIHistoryRecord } from './models/CFDIHistoryRecord';
+export type { CFDIHistoryResponse } from './models/CFDIHistoryResponse';
 export type { ClientCreate } from './models/ClientCreate';
 export type { ClientLite } from './models/ClientLite';
 export type { ClientResponse } from './models/ClientResponse';

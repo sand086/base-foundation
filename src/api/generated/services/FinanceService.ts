@@ -10,6 +10,8 @@ import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
+import type { CFDIActivityTimeline } from '../models/CFDIActivityTimeline';
+import type { CFDIHistoryResponse } from '../models/CFDIHistoryResponse';
 import type { IndirectCategoryCreate } from '../models/IndirectCategoryCreate';
 import type { IndirectCategoryResponse } from '../models/IndirectCategoryResponse';
 import type { IndirectCategoryUpdate } from '../models/IndirectCategoryUpdate';
@@ -450,6 +452,87 @@ export class FinanceService {
             url: '/api/finance/indirect-categories/{cat_id}',
             path: {
                 'cat_id': catId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Cfdi Vault
+     * Obtiene los registros de la bóveda (Facturas, Complementos, etc)
+     * tipo_documento: 'FACTURA_CLIENTE', 'FACTURA_PROVEEDOR', 'PAGO_CLIENTE'
+     * @param tipoDocumento
+     * @param startDate
+     * @param endDate
+     * @returns CFDIHistoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static getCfdiVaultApiFinanceCfdiVaultGet(
+        tipoDocumento: string,
+        startDate?: string,
+        endDate?: string,
+    ): CancelablePromise<CFDIHistoryResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/cfdi-vault',
+            query: {
+                'tipo_documento': tipoDocumento,
+                'start_date': startDate,
+                'end_date': endDate,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Cfdi Document Timeline
+     * Obtiene la línea de tiempo de auditoría (quién canceló, quién emitió) de un CFDI específico.
+     * @param tipoDocumento
+     * @param documentId
+     * @returns CFDIActivityTimeline Successful Response
+     * @throws ApiError
+     */
+    public static getCfdiDocumentTimelineApiFinanceCfdiVaultTipoDocumentoDocumentIdTimelineGet(
+        tipoDocumento: string,
+        documentId: number,
+    ): CancelablePromise<Array<CFDIActivityTimeline>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/cfdi-vault/{tipo_documento}/{document_id}/timeline',
+            path: {
+                'tipo_documento': tipoDocumento,
+                'document_id': documentId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Aging Report
+     * Exporta un reporte de Antigüedad de Saldos en Excel con 2 pestañas:
+     * 1. Consolidado por Cliente/Proveedor
+     * 2. Detalle de Facturas
+     * @param moduleType cxc o cxp
+     * @param startDate
+     * @param endDate
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportAgingReportApiFinanceExportAgingGet(
+        moduleType: string,
+        startDate?: (string | null),
+        endDate?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/export/aging',
+            query: {
+                'module_type': moduleType,
+                'start_date': startDate,
+                'end_date': endDate,
             },
             errors: {
                 422: `Validation Error`,

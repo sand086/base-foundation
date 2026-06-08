@@ -86,9 +86,7 @@ export function AgingExportModal({
   };
 
   const title =
-    type === "cxc"
-      ? "Antigüedad de Saldos (CxC)"
-      : "Antigüedad de Saldos (CxP)";
+    type === "cxc" ? "Saldos totales (CxC)" : "Saldos totales (CxP)";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
