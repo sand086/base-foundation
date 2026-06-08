@@ -1426,7 +1426,7 @@ def get_cfdi_vault_records(
 ):
     """
     Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
-    Filtra viajes eliminados y separa correctamente las facturas de los complementos "COM".
+    Ahora refleja el ESTATUS FISCAL (Timbrado/Cancelado) y extrae correctamente los folios COM.
     """
     records = []
 
@@ -1442,13 +1442,12 @@ def get_cfdi_vault_records(
 
         query = query.filter(
             models.ReceivableInvoice.status_sat != "ERROR",
-            # Excluimos los Complementos de Pago (COM) para mandarlos a su propia pestaña
+            # Excluimos los Complementos de Pago (COM)
             or_(
                 models.ReceivableInvoice.tipo_comprobante != "P",
                 models.ReceivableInvoice.tipo_comprobante.is_(None),
             ),
             ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
-            # 🟢 REGLA: Que el viaje no esté eliminado (O que sea una factura sin viaje)
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
                 models.Trip.record_status != "E",
@@ -1467,6 +1466,9 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados:
+            # 🟢 MAGIA: Usamos el status_sat (Fiscal) en lugar de la cobranza
+            status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+
             records.append(
                 {
                     "id": r.id,
@@ -1474,7 +1476,7 @@ def get_cfdi_vault_records(
                     "folio": r.folio_interno,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
-                    "estatus": r.estatus,
+                    "estatus": status_fiscal,  # <-- AQUÍ SE MANDA TIMBRADO/CANCELADO
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
                     ),
@@ -1500,7 +1502,6 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
-            # 🟢 REGLA: Que el viaje no esté eliminado (O que no aplique a viaje)
             or_(
                 models.PayableInvoice.viaje_id.is_(None),
                 models.Trip.record_status != "E",
@@ -1517,6 +1518,10 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados:
+            # Los proveedores siempre nos dan facturas timbradas, a menos que nos la cancelen
+            val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+            status_fiscal = "CANCELADO" if val_estatus == "CANCELADO" else "TIMBRADO"
+
             records.append(
                 {
                     "id": r.id,
@@ -1524,7 +1529,7 @@ def get_cfdi_vault_records(
                     "folio": r.folio or r.folio_interno,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
-                    "estatus": r.estatus,
+                    "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.supplier.razon_social if r.supplier else "Desconocido"
                     ),
@@ -1538,10 +1543,10 @@ def get_cfdi_vault_records(
             )
 
     # ==========================================
-    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP)
+    # 3. COMPLEMENTOS DE PAGO CLIENTES (REP / COM)
     # ==========================================
     elif tipo_documento == "PAGO_CLIENTE":
-        # PARTE A: Complementos CFDI Reales (Los "COM")
+        # Parte A: Extraemos los Complementos de Pago oficiales (Folios COM)
         query_cfdi = (
             db.query(models.ReceivableInvoice)
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
@@ -1550,12 +1555,10 @@ def get_cfdi_vault_records(
 
         query_cfdi = query_cfdi.filter(
             models.ReceivableInvoice.status_sat != "ERROR",
-            # Filtramos para que solo traiga los que son Pagos/Complementos
             or_(
                 models.ReceivableInvoice.tipo_comprobante == "P",
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
             ),
-            # 🟢 REGLA: Que el viaje no esté eliminado
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
                 models.Trip.record_status != "E",
@@ -1574,14 +1577,16 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados_cfdi:
+            status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+
             records.append(
                 {
-                    "id": f"cfdi-{r.id}",  # Prefix para evitar colisiones de ID con los recibos
+                    "id": f"cfdi-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": r.folio_interno,
+                    "folio": r.folio_interno,  # 🟢 AQUÍ ESTÁ EL FOLIO COM
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
-                    "estatus": r.estatus,
+                    "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
                     ),
@@ -1594,7 +1599,7 @@ def get_cfdi_vault_records(
                 }
             )
 
-        # PARTE B: Recibos Internos de Tesorería (ReceivableInvoicePayment)
+        # Parte B: Recibos Internos de Tesorería
         query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .join(
@@ -1602,10 +1607,7 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoicePayment.invoice_id
                 == models.ReceivableInvoice.id,
             )
-            .join(
-                models.Client,
-                models.ReceivableInvoice.client_id == models.Client.id,
-            )
+            .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
         )
 
         if start_date and end_date:
@@ -1620,6 +1622,16 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados_pagos:
+            val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
+
+            # Determinamos el estatus fiscal de un recibo de pago
+            if val_estatus == "CANCELADO":
+                status_fiscal = "CANCELADO"
+            elif r.complemento_uuid:
+                status_fiscal = "TIMBRADO"
+            else:
+                status_fiscal = "PROVISIONAL"
+
             records.append(
                 {
                     "id": f"rec-{r.id}",
@@ -1627,7 +1639,7 @@ def get_cfdi_vault_records(
                     "folio": r.referencia or f"Recibo-{r.id}",
                     "uuid": r.complemento_uuid,
                     "fecha_emision": r.fecha_pago,
-                    "estatus": r.estatus,
+                    "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.invoice.client.razon_social
                         if r.invoice and r.invoice.client

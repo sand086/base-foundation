@@ -300,11 +300,27 @@ export default function CFDIVault() {
     {
       key: "estatus",
       header: "Estatus",
-      render: (val) => (
-        <Badge variant={val === "CANCELADO" ? "destructive" : "default"}>
-          {val}
-        </Badge>
-      ),
+      render: (val) => {
+        const s = (val || "").toUpperCase();
+
+        // Asignamos colores semánticos basados en el SAT
+        let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
+        if (s === "TIMBRADO")
+          badgeClass =
+            "bg-green-100 text-green-800 hover:bg-green-200 border-green-300";
+        if (s === "CANCELADO")
+          badgeClass =
+            "bg-red-100 text-red-800 hover:bg-red-200 border-red-300";
+        if (s === "PROVISIONAL")
+          badgeClass =
+            "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300";
+
+        return (
+          <Badge variant="outline" className={badgeClass}>
+            {s}
+          </Badge>
+        );
+      },
     },
     {
       key: "pdf_url",
