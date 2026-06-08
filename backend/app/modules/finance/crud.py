@@ -1559,16 +1559,13 @@ def get_cfdi_vault_records(
         )
 
         query_cfdi = query_cfdi.filter(
-            models.ReceivableInvoice.record_status
-            != RecordStatus.ELIMINADO,  # <-- BLINDAJE 1
+            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
             or_(
                 models.ReceivableInvoice.status_sat != "ERROR",
                 models.ReceivableInvoice.status_sat.is_(None),
             ),
             or_(
-                models.ReceivableInvoice.tipo_comprobante.ilike(
-                    "P"
-                ),  # <-- BLINDAJE 3 (Flexible a BD)
+                models.ReceivableInvoice.tipo_comprobante.ilike("P"),
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
             ),
             or_(
@@ -1589,7 +1586,11 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados_cfdi:
+            # 🟢 FIX: Normalizar "CANCELADA" a "CANCELADO" para que el frontend lo pinte rojo
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
+            if "CANCELAD" in status_fiscal:
+                status_fiscal = "CANCELADO"
+
             records.append(
                 {
                     "id": f"cfdi-{r.id}",
@@ -1621,10 +1622,8 @@ def get_cfdi_vault_records(
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
         )
 
-        # Filtramos explícitamente los que NO están cancelados para evitar errores visuales
-        query_pagos = query_pagos.filter(
-            models.ReceivableInvoicePayment.estatus != "CANCELADO"
-        )
+        # 🚨 FIX CRÍTICO: Eliminamos el filtro `estatus != 'CANCELADO'` que ocultaba tu historial
+        # Ahora permitimos que la BD traiga los cancelados a la Bóveda Digital.
 
         if start_date and end_date:
             query_pagos = query_pagos.filter(
@@ -1640,7 +1639,8 @@ def get_cfdi_vault_records(
         for r in resultados_pagos:
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
 
-            if val_estatus == "CANCELADO":
+            # 🟢 FIX: Respetar fielmente si el recibo está cancelado
+            if "CANCELAD" in val_estatus:
                 status_fiscal = "CANCELADO"
             elif getattr(r, "complemento_uuid", None):
                 status_fiscal = "TIMBRADO"
@@ -1676,12 +1676,10 @@ def get_cfdi_vault_records(
                     "monto_total": getattr(r, "monto", 0),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
-                    "versiones_archivos": getattr(
-                        r, "document_history", []
-                    ),  # <-- BLINDAJE 2: Evita el Crash 500
+                    "versiones_archivos": getattr(r, "document_history", []),
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
                     "pdf_url": getattr(r, "comprobante_url", None)
-                    or getattr(r, "pdf_url", None),  # <-- BLINDAJE
+                    or getattr(r, "pdf_url", None),
                 }
             )
 
