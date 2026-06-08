@@ -1419,6 +1419,9 @@ from app.models.models import (
 )
 
 
+from sqlalchemy import desc
+
+
 def get_cfdi_vault_records(
     db: Session,
     tipo_documento: str,
@@ -1427,7 +1430,6 @@ def get_cfdi_vault_records(
 ):
     """
     Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
-    tipo_documento puede ser: 'FACTURA_CLIENTE', 'FACTURA_PROVEEDOR', 'PAGO_CLIENTE', 'PAGO_PROVEEDOR'
     """
     records = []
 
@@ -1437,11 +1439,9 @@ def get_cfdi_vault_records(
             models.Client, models.ReceivableInvoice.client_id == models.Client.id
         )
 
-        # 🟢 EXCLUIMOS errores del SAT, pero dejamos pasar las CANCELADAS
-        query = query.filter(
-            models.ReceivableInvoice.status_sat != "ERROR",
-            models.ReceivableInvoice.estatus != "error_sat",
-        )
+        # 🟢 CORRECCIÓN: Filtramos SOLO por status_sat (que es texto libre)
+        # Ya no tocamos "estatus" para evitar el error del Enum en Postgres
+        query = query.filter(models.ReceivableInvoice.status_sat != "ERROR")
 
         if start_date and end_date:
             query = query.filter(
@@ -1470,8 +1470,8 @@ def get_cfdi_vault_records(
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "versiones_archivos": r.document_history,
-                    "viaje_id": r.viaje_id,  # ✅ AGREGADO: ID del Viaje
-                    "pdf_url": r.pdf_url,  # ✅ AGREGADO: URL del PDF
+                    "viaje_id": r.viaje_id,
+                    "pdf_url": r.pdf_url,
                 }
             )
 
@@ -1480,9 +1480,6 @@ def get_cfdi_vault_records(
         query = db.query(models.PayableInvoice).join(
             models.Supplier, models.PayableInvoice.supplier_id == models.Supplier.id
         )
-
-        # 🟢 EXCLUIMOS errores (por si acaso también en proveedores)
-        query = query.filter(models.PayableInvoice.estatus != "error_sat")
 
         if start_date and end_date:
             query = query.filter(
@@ -1509,8 +1506,8 @@ def get_cfdi_vault_records(
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "versiones_archivos": r.document_history,
-                    "viaje_id": r.viaje_id,  # ✅ AGREGADO: ID del Viaje
-                    "pdf_url": r.pdf_url,  # ✅ AGREGADO: URL del PDF
+                    "viaje_id": r.viaje_id,
+                    "pdf_url": r.pdf_url,
                 }
             )
 
@@ -1528,9 +1525,6 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.client_id == models.Client.id,
             )
         )
-
-        # 🟢 EXCLUIMOS errores de timbrado en pagos
-        query = query.filter(models.ReceivableInvoicePayment.estatus != "error_sat")
 
         if start_date and end_date:
             query = query.filter(
@@ -1561,10 +1555,8 @@ def get_cfdi_vault_records(
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
                     "versiones_archivos": r.document_history,
-                    "viaje_id": (
-                        r.invoice.viaje_id if r.invoice else None
-                    ),  # ✅ AGREGADO: Viaje de la factura padre
-                    "pdf_url": r.comprobante_url,  # ✅ AGREGADO: URL del PDF del complemento
+                    "viaje_id": r.invoice.viaje_id if r.invoice else None,
+                    "pdf_url": r.comprobante_url,
                 }
             )
 
