@@ -1421,13 +1421,6 @@ def get_cfdi_vault_records(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ):
-    """
-    Obtiene los registros de CFDI estandarizados para la Bóveda Digital.
-    - Evita el bug de nulos que ocultaba registros nuevos.
-    - Convierte IDs a str para cumplir con el esquema unificado.
-    - Enlaza facturas padre a recibos de tesorería para búsquedas cruzadas (ej: CP-17383).
-    - Muestra estatus 'RECIBO INTERNO' para cobros de facturas PUE sin timbrado.
-    """
     records = []
 
     # ==========================================
@@ -1441,12 +1434,18 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
+            models.ReceivableInvoice.record_status
+            != RecordStatus.ELIMINADO,  # <-- BLINDAJE 1
             or_(
-                models.ReceivableInvoice.status_sat != "ERROR",
+                and_(
+                    models.ReceivableInvoice.status_sat != "ERROR",
+                    models.ReceivableInvoice.status_sat != "ERROR_SAT",
+                ),
                 models.ReceivableInvoice.status_sat.is_(None),
             ),
             or_(
                 models.ReceivableInvoice.tipo_comprobante != "P",
+                ~models.ReceivableInvoice.tipo_comprobante.ilike("P"),
                 models.ReceivableInvoice.tipo_comprobante.is_(None),
             ),
             or_(
@@ -1455,7 +1454,7 @@ def get_cfdi_vault_records(
             ),
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
-                models.Trip.record_status != "E",
+                models.Trip.record_status != RecordStatus.ELIMINADO,
             ),
         )
 
@@ -1472,19 +1471,13 @@ def get_cfdi_vault_records(
 
         for r in resultados:
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
-            fecha_dt = (
-                datetime.combine(r.fecha_emision, datetime.min.time())
-                if r.fecha_emision
-                else None
-            )
-
             records.append(
                 {
-                    "id": str(r.id),
+                    "id": r.id,
                     "tipo_documento": "FACTURA_CLIENTE",
                     "folio": r.folio_interno,
                     "uuid": r.uuid,
-                    "fecha_emision": fecha_dt,
+                    "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
@@ -1492,9 +1485,11 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": getattr(
+                        r, "document_history", []
+                    ),  # <-- BLINDAJE 2
                     "viaje_id": r.viaje_id,
-                    "pdf_url": r.pdf_url,
-                    "versiones_archivos": [],
+                    "pdf_url": getattr(r, "pdf_url", None),
                 }
             )
 
@@ -1511,10 +1506,12 @@ def get_cfdi_vault_records(
         )
 
         query = query.filter(
+            models.PayableInvoice.record_status
+            != RecordStatus.ELIMINADO,  # <-- BLINDAJE 1
             or_(
                 models.PayableInvoice.viaje_id.is_(None),
-                models.Trip.record_status != "E",
-            )
+                models.Trip.record_status != RecordStatus.ELIMINADO,
+            ),
         )
 
         if start_date and end_date:
@@ -1529,19 +1526,14 @@ def get_cfdi_vault_records(
         for r in resultados:
             val_estatus = getattr(r.estatus, "value", str(r.estatus)).upper()
             status_fiscal = "CANCELADO" if val_estatus == "CANCELADO" else "TIMBRADO"
-            fecha_dt = (
-                datetime.combine(r.fecha_emision, datetime.min.time())
-                if r.fecha_emision
-                else None
-            )
 
             records.append(
                 {
-                    "id": str(r.id),
+                    "id": r.id,
                     "tipo_documento": "FACTURA_PROVEEDOR",
                     "folio": r.folio or r.folio_interno,
                     "uuid": r.uuid,
-                    "fecha_emision": fecha_dt,
+                    "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.supplier.razon_social if r.supplier else "Desconocido"
@@ -1549,9 +1541,9 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": getattr(r, "document_history", []),
                     "viaje_id": r.viaje_id,
-                    "pdf_url": r.pdf_url,
-                    "versiones_archivos": [],
+                    "pdf_url": getattr(r, "pdf_url", None),
                 }
             )
 
@@ -1559,7 +1551,7 @@ def get_cfdi_vault_records(
     # 3. COMPLEMENTOS DE PAGO CLIENTES (REP / COM)
     # ==========================================
     elif tipo_documento == "PAGO_CLIENTE":
-        # SUB-PARTE A: Complementos Creados Oficiales (Tipo P)
+        # SUB-PARTE A: Complementos CFDI Oficiales (Tipo P)
         query_cfdi = (
             db.query(models.ReceivableInvoice)
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
@@ -1567,17 +1559,21 @@ def get_cfdi_vault_records(
         )
 
         query_cfdi = query_cfdi.filter(
+            models.ReceivableInvoice.record_status
+            != RecordStatus.ELIMINADO,  # <-- BLINDAJE 1
             or_(
                 models.ReceivableInvoice.status_sat != "ERROR",
                 models.ReceivableInvoice.status_sat.is_(None),
             ),
             or_(
-                models.ReceivableInvoice.tipo_comprobante == "P",
+                models.ReceivableInvoice.tipo_comprobante.ilike(
+                    "P"
+                ),  # <-- BLINDAJE 3 (Flexible a BD)
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
             ),
             or_(
                 models.ReceivableInvoice.viaje_id.is_(None),
-                models.Trip.record_status != "E",
+                models.Trip.record_status != RecordStatus.ELIMINADO,
             ),
         )
 
@@ -1588,25 +1584,19 @@ def get_cfdi_vault_records(
 
         resultados_cfdi = (
             query_cfdi.order_by(desc(models.ReceivableInvoice.fecha_emision))
-            .limit(300)
+            .limit(250)
             .all()
         )
 
         for r in resultados_cfdi:
             status_fiscal = r.status_sat.upper() if r.status_sat else "PROVISIONAL"
-            fecha_dt = (
-                datetime.combine(r.fecha_emision, datetime.min.time())
-                if r.fecha_emision
-                else None
-            )
-
             records.append(
                 {
                     "id": f"cfdi-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
                     "folio": r.folio_interno,
                     "uuid": r.uuid,
-                    "fecha_emision": fecha_dt,
+                    "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
@@ -1614,13 +1604,13 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": r.fecha_cancelacion,
                     "motivo_cancelacion": r.motivo_cancelacion,
+                    "versiones_archivos": getattr(r, "document_history", []),
                     "viaje_id": r.viaje_id,
-                    "pdf_url": r.pdf_url,
-                    "versiones_archivos": [],
+                    "pdf_url": getattr(r, "pdf_url", None),
                 }
             )
 
-        # SUB-PARTE B: Recibos Internos de Tesorería vinculados (Soporta búsquedas por Factura Padre)
+        # SUB-PARTE B: Recibos Internos de Tesorería vinculados
         query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .join(
@@ -1631,6 +1621,11 @@ def get_cfdi_vault_records(
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
         )
 
+        # Filtramos explícitamente los que NO están cancelados para evitar errores visuales
+        query_pagos = query_pagos.filter(
+            models.ReceivableInvoicePayment.estatus != "CANCELADO"
+        )
+
         if start_date and end_date:
             query_pagos = query_pagos.filter(
                 models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
@@ -1638,7 +1633,7 @@ def get_cfdi_vault_records(
 
         resultados_pagos = (
             query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
-            .limit(200)
+            .limit(250)
             .all()
         )
 
@@ -1647,15 +1642,15 @@ def get_cfdi_vault_records(
 
             if val_estatus == "CANCELADO":
                 status_fiscal = "CANCELADO"
-            elif r.complemento_uuid:
+            elif getattr(r, "complemento_uuid", None):
                 status_fiscal = "TIMBRADO"
             else:
                 status_fiscal = "RECIBO INTERNO"
 
-            # 🟢 AMARRE INTELIGENTE: Ponemos el Folio de la Factura Padre para que React lo encuentre al buscar
             folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
+            comp_uuid = getattr(r, "complemento_uuid", None)
 
-            if r.complemento_uuid:
+            if comp_uuid:
                 if r.referencia and "COM" in r.referencia.upper():
                     folio_mostrar = f"{r.referencia} (Fra: {folio_padre})"
                 else:
@@ -1665,31 +1660,28 @@ def get_cfdi_vault_records(
                     f"{r.referencia or f'Recibo-{r.id}'} (Fra: {folio_padre})"
                 )
 
-            fecha_dt = (
-                datetime.combine(r.fecha_pago, datetime.min.time())
-                if r.fecha_pago
-                else None
-            )
-
             records.append(
                 {
                     "id": f"rec-{r.id}",
                     "tipo_documento": "PAGO_CLIENTE",
                     "folio": folio_mostrar,
-                    "uuid": r.complemento_uuid,
-                    "fecha_emision": fecha_dt,
+                    "uuid": comp_uuid,
+                    "fecha_emision": getattr(r, "fecha_pago", None),
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.invoice.client.razon_social
                         if r.invoice and r.invoice.client
                         else "Desconocido"
                     ),
-                    "monto_total": r.monto,
-                    "fecha_cancelacion": r.fecha_cancelacion,
-                    "motivo_cancelacion": r.motivo_cancelacion,
+                    "monto_total": getattr(r, "monto", 0),
+                    "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
+                    "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
+                    "versiones_archivos": getattr(
+                        r, "document_history", []
+                    ),  # <-- BLINDAJE 2: Evita el Crash 500
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
-                    "pdf_url": r.comprobante_url,
-                    "versiones_archivos": [],
+                    "pdf_url": getattr(r, "comprobante_url", None)
+                    or getattr(r, "pdf_url", None),  # <-- BLINDAJE
                 }
             )
 
