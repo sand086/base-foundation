@@ -22,6 +22,8 @@ export interface CFDIHistoryRecord {
   fecha_emision: string | null;
   estatus: string;
   cliente_proveedor_nombre: string;
+  viaje_id?: number | null;
+  pdf_url?: string | null;
   monto_total: number | null;
   fecha_cancelacion: string | null;
   motivo_cancelacion: string | null;

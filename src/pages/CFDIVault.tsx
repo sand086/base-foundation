@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { History, CalendarIcon, X, Check, ChevronsUpDown } from "lucide-react";
+import { CalendarIcon, X, Check, ChevronsUpDown, FileText } from "lucide-react";
 
 import {
   useCfdiVault,
@@ -38,16 +38,10 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
-import { CFDITimelineDrawer } from "@/features/finance/components/CFDITimelineDrawer";
 import { cn } from "@/lib/utils";
 
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
-
-  // Estados para el Drawer
-  const [selectedRecord, setSelectedRecord] =
-    useState<CFDIHistoryRecord | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Estados para nuestros FILTROS PERSONALIZADOS
   const [selectedEntity, setSelectedEntity] = useState<string>("all");
@@ -58,24 +52,33 @@ export default function CFDIVault() {
   // Traemos los datos de la BD
   const { records, isLoading } = useCfdiVault(activeTab);
 
-  // Extraemos listas únicas para llenar los Selects
+  // Filtramos a nivel local cualquier error sat que se haya colado
+  const cleanRecords = useMemo(() => {
+    return records.filter((r) => {
+      const statusStr = r.estatus?.toLowerCase() || "";
+      return statusStr !== "error_sat" && statusStr !== "error";
+    });
+  }, [records]);
+
+  // Extraemos listas únicas para llenar los Selects (usando cleanRecords)
   const uniqueStatuses = useMemo(
-    () => Array.from(new Set(records.map((r) => r.estatus))).filter(Boolean),
-    [records],
+    () =>
+      Array.from(new Set(cleanRecords.map((r) => r.estatus))).filter(Boolean),
+    [cleanRecords],
   );
   const uniqueClients = useMemo(
     () =>
       Array.from(
-        new Set(records.map((r) => r.cliente_proveedor_nombre)),
+        new Set(cleanRecords.map((r) => r.cliente_proveedor_nombre)),
       ).filter(Boolean),
-    [records],
+    [cleanRecords],
   );
 
   // ==========================================
   // MOTOR DE FILTRADO EXTERNO
   // ==========================================
   const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
+    return cleanRecords.filter((r) => {
       // 1. Filtro Cliente / Proveedor
       if (
         selectedEntity !== "all" &&
@@ -109,7 +112,7 @@ export default function CFDIVault() {
 
       return true;
     });
-  }, [records, selectedEntity, selectedStatus, dateRange]);
+  }, [cleanRecords, selectedEntity, selectedStatus, dateRange]);
 
   // ==========================================
   // COMPONENTES DE FILTRO UI
@@ -258,11 +261,26 @@ export default function CFDIVault() {
   );
 
   // ==========================================
-  // DEFINICIÓN DE COLUMNAS (Sin filtros internos)
+  // DEFINICIÓN DE COLUMNAS
   // ==========================================
   const columns: ColumnDef<CFDIHistoryRecord>[] = [
     { key: "folio", header: "Folio" },
     { key: "uuid", header: "UUID" },
+    {
+      key: "viaje_id",
+      header: "Viaje",
+      render: (val) =>
+        val ? (
+          <Badge
+            variant="outline"
+            className="bg-blue-50 text-blue-700 border-blue-200 font-mono"
+          >
+            #{val}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground text-xs">N/A</span>
+        ),
+    },
     {
       key: "cliente_proveedor_nombre",
       header: "Cliente / Proveedor",
@@ -289,22 +307,24 @@ export default function CFDIVault() {
       ),
     },
     {
-      key: "acciones",
-      header: "Auditoría",
+      key: "pdf_url",
+      header: "PDF",
       sortable: false,
-      render: (_, record) => (
+      render: (val) => (
         <div className="text-right">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setSelectedRecord(record);
-              setIsDrawerOpen(true);
-            }}
-          >
-            <History className="h-4 w-4 mr-2" />
-            Ver Historial
-          </Button>
+          {val ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-transparent hover:border-indigo-200"
+              onClick={() => window.open(val, "_blank")}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Ver PDF
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground mr-4">Sin PDF</span>
+          )}
         </div>
       ),
     },
@@ -317,7 +337,8 @@ export default function CFDIVault() {
           Bóveda Digital CFDI
         </h1>
         <p className="text-muted-foreground">
-          Historial de versiones, auditoría y trazabilidad de comprobantes.
+          Historial de comprobantes limpios y cancelados (Excluye rechazos del
+          SAT).
         </p>
       </div>
 
@@ -340,22 +361,16 @@ export default function CFDIVault() {
 
         <CardContent>
           <EnhancedDataTable
-            data={filteredRecords} // Pasamos la data ya filtrada por nuestros controles
+            data={filteredRecords}
             columns={columns}
             isLoading={isLoading}
-            searchPlaceholder="Búsqueda global (Folio, UUID)..."
+            searchPlaceholder="Búsqueda rápida (Folio, UUID)..."
             exportFileName={`Boveda_CFDI_${activeTab}_${format(new Date(), "yyyyMMdd")}`}
             initialSort={{ key: "fecha_emision", direction: "desc" }}
-            customFilters={customFiltersUI} // Inyectamos nuestros filtros en la barra superior
+            customFilters={customFiltersUI}
           />
         </CardContent>
       </Card>
-
-      <CFDITimelineDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        record={selectedRecord}
-      />
     </div>
   );
 }

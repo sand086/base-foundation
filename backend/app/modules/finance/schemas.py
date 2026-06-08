@@ -386,6 +386,8 @@ class CFDIHistoryRecord(BaseModel):
 
     # Lista anidada de versiones de archivos (PDF/XML) y línea de tiempo
     versiones_archivos: List[DocumentHistoryResponse] = Field(default_factory=list)
+    viaje_id: Optional[int] = None
+    pdf_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

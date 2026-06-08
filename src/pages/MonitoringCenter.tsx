@@ -1129,13 +1129,14 @@ export default function MonitoringCenter() {
               Filas por vista
             </span>
             <Select
-              value={String(pageSize)}
+              value={pageSize >= 999999 ? "ALL" : String(pageSize)}
               onValueChange={(val) => {
-                setPageSize(Number(val));
+                setPageSize(val === "ALL" ? 999999 : Number(val));
                 setCurrentPage(1);
               }}
             >
-              <SelectTrigger className="h-10 w-[80px] bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-mono font-bold text-xs text-slate-700 dark:text-white shadow-sm rounded-xl haptic-press">
+              {/* Ampliamos ligeramente el ancho a w-[100px] para que quepa "Todos" sin cortarse */}
+              <SelectTrigger className="h-10 w-[100px] bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 font-mono font-bold text-xs text-slate-700 dark:text-white shadow-sm rounded-xl haptic-press">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="rounded-2xl bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 shadow-2xl">
@@ -1147,6 +1148,18 @@ export default function MonitoringCenter() {
                 </SelectItem>
                 <SelectItem value="50" className="font-mono text-xs">
                   50
+                </SelectItem>
+                <SelectItem value="100" className="font-mono text-xs">
+                  100
+                </SelectItem>
+                <SelectItem value="150" className="font-mono text-xs">
+                  150
+                </SelectItem>
+                <SelectItem value="200" className="font-mono text-xs">
+                  200
+                </SelectItem>
+                <SelectItem value="ALL" className="font-mono text-xs">
+                  Todos
                 </SelectItem>
               </SelectContent>
             </Select>
