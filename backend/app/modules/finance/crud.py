@@ -1426,6 +1426,46 @@ def get_cfdi_vault_records(
     records = []
     MAX_RECORDS = 2000
 
+    # 🚀 MAGIA DINÁMICA: Buscar la columna de relación (sustitución) en ReceivableInvoice
+    # Esto nos permite saber si la Carta Porte ya fue reemplazada por otra factura.
+    relation_col = None
+    for col_name in [
+        "uuid_relacionado",
+        "cfdi_relacionado",
+        "sustituye_uuid",
+        "factura_relacionada_uuid",
+        "cfdi_relacionado_uuid",
+        "uuid_sustituido",
+        "relacion_uuid",
+    ]:
+        if hasattr(models.ReceivableInvoice, col_name):
+            relation_col = getattr(models.ReceivableInvoice, col_name)
+            break
+
+    uuids_sustituidos = set()
+    if relation_col:
+        try:
+            sustituidos_query = (
+                db.query(relation_col).filter(relation_col.isnot(None)).all()
+            )
+            uuids_sustituidos = {
+                str(s[0]).strip().upper() for s in sustituidos_query if s[0]
+            }
+        except:
+            pass
+
+    # Obtener viajes que ya tienen una factura final (Facturas F-)
+    viajes_con_factura_final = (
+        db.query(models.ReceivableInvoice.viaje_id)
+        .filter(
+            models.ReceivableInvoice.viaje_id.isnot(None),
+            models.ReceivableInvoice.folio_interno.ilike("F-%"),
+            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+        .all()
+    )
+    viajes_facturados_set = {v[0] for v in viajes_con_factura_final if v[0]}
+
     # ==========================================
     # 1. FACTURAS DE CLIENTES (Ingreso / Carta Porte)
     # ==========================================
@@ -1447,18 +1487,27 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.status_sat.is_(None),
             ),
             or_(
-                models.ReceivableInvoice.tipo_comprobante != "P",
-                ~models.ReceivableInvoice.tipo_comprobante.ilike("P"),
-                models.ReceivableInvoice.tipo_comprobante.is_(None),
+                models.ReceivableInvoice.tipo_comprobante.notin_(["P", "p"]),
+                models.ReceivableInvoice.tipo_comprobante == None,
             ),
             or_(
                 ~models.ReceivableInvoice.folio_interno.ilike("COM%"),
-                models.ReceivableInvoice.folio_interno.is_(None),
+                models.ReceivableInvoice.folio_interno == None,
             ),
-            # 🟢 Filtro: Ocultar si su Viaje fue eliminado
+            # 🟢 REGLA DEL USUARIO: CP- debe tener viaje activo. F- puede no tenerlo.
             or_(
-                models.ReceivableInvoice.viaje_id == None,
-                models.Trip.record_status != RecordStatus.ELIMINADO,
+                and_(
+                    models.ReceivableInvoice.folio_interno.ilike("CP-%"),
+                    models.ReceivableInvoice.viaje_id.isnot(None),
+                    models.Trip.record_status != RecordStatus.ELIMINADO,
+                ),
+                and_(
+                    ~models.ReceivableInvoice.folio_interno.ilike("CP-%"),
+                    or_(
+                        models.ReceivableInvoice.viaje_id == None,
+                        models.Trip.record_status != RecordStatus.ELIMINADO,
+                    ),
+                ),
             ),
         )
 
@@ -1476,21 +1525,35 @@ def get_cfdi_vault_records(
         for r in resultados:
             sat_val = getattr(r, "status_sat", None) or "PROVISIONAL"
             status_fiscal = str(sat_val).upper()
-
-            estatus_obj = getattr(r, "estatus", "")
-            val_estatus = str(getattr(estatus_obj, "value", estatus_obj)).upper()
-
+            val_estatus = str(
+                getattr(getattr(r, "estatus", ""), "value", getattr(r, "estatus", ""))
+            ).upper()
             rec_status = getattr(r, "record_status", None)
 
+            es_carta_porte = r.folio_interno and r.folio_interno.upper().startswith(
+                "CP-"
+            )
+            es_un_peso = r.monto_total and r.monto_total <= 2.0
+
+            # 🟢 DETECCIÓN DE SUSTITUCIÓN (Para Cartas Porte / 1 peso)
             if (
                 "CANCELAD" in status_fiscal
                 or "CANCELAD" in val_estatus
-                or "SUSTITUID" in status_fiscal
-                or "SUSTITUID" in val_estatus
                 or rec_status == RecordStatus.ELIMINADO
                 or rec_status == "E"
             ):
                 status_fiscal = "CANCELADO"
+            elif es_carta_porte or es_un_peso:
+                uuid_upper = str(r.uuid).strip().upper() if r.uuid else ""
+                # MÁGIA: Si ya la sustituyeron, la marcamos CANCELADA.
+                if (uuid_upper and uuid_upper in uuids_sustituidos) or (
+                    r.viaje_id and r.viaje_id in viajes_facturados_set
+                ):
+                    status_fiscal = "CANCELADO"
+                else:
+                    # Si tiene "A", sigue viva y activa
+                    if rec_status == "A" or rec_status == RecordStatus.ACTIVO:
+                        status_fiscal = "TIMBRADA" if r.uuid else "PROVISIONAL"
 
             records.append(
                 {
@@ -1528,11 +1591,11 @@ def get_cfdi_vault_records(
         query = query.filter(
             or_(
                 models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
-                models.PayableInvoice.uuid.isnot(None),
+                models.PayableInvoice.uuid != None,
             ),
-            # 🟢 Filtro: Ocultar si su Viaje fue eliminado
+            # 🟢 REGLA: CxP no está obligada a tener viaje, así que si viaje_id == None se permite
             or_(
-                models.PayableInvoice.viaje_id.is_(None),
+                models.PayableInvoice.viaje_id == None,
                 models.Trip.record_status != RecordStatus.ELIMINADO,
             ),
         )
@@ -1549,8 +1612,9 @@ def get_cfdi_vault_records(
         )
 
         for r in resultados:
-            estatus_obj = getattr(r, "estatus", "")
-            val_estatus = str(getattr(estatus_obj, "value", estatus_obj)).upper()
+            val_estatus = str(
+                getattr(getattr(r, "estatus", ""), "value", getattr(r, "estatus", ""))
+            ).upper()
             rec_status = getattr(r, "record_status", None)
 
             status_fiscal = "TIMBRADO"
@@ -1599,21 +1663,20 @@ def get_cfdi_vault_records(
         query_cfdi = query_cfdi.filter(
             or_(
                 models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
-                models.ReceivableInvoice.uuid.isnot(None),
+                models.ReceivableInvoice.uuid != None,
             ),
             or_(
                 models.ReceivableInvoice.status_sat != "ERROR",
-                models.ReceivableInvoice.status_sat.is_(None),
+                models.ReceivableInvoice.status_sat == None,
             ),
             or_(
-                models.ReceivableInvoice.tipo_comprobante.ilike("P"),
+                models.ReceivableInvoice.tipo_comprobante.in_(["P", "p"]),
                 models.ReceivableInvoice.folio_interno.ilike("COM%"),
             ),
-            # 🟢 Filtro: Ocultar si su Viaje fue eliminado
-            or_(
-                models.ReceivableInvoice.viaje_id.is_(None),
-                models.Trip.record_status != RecordStatus.ELIMINADO,
-            ),
+            # 🟢 REGLA DEL USUARIO: Los complementos de pago DEBEN tener un viaje
+            # activo y que no esté eliminado
+            models.ReceivableInvoice.viaje_id.isnot(None),
+            models.Trip.record_status != RecordStatus.ELIMINADO,
         )
 
         if start_date and end_date:
@@ -1630,10 +1693,9 @@ def get_cfdi_vault_records(
         for r in resultados_cfdi:
             sat_val = getattr(r, "status_sat", None) or "PROVISIONAL"
             status_fiscal = str(sat_val).upper()
-
-            estatus_obj = getattr(r, "estatus", "")
-            val_estatus = str(getattr(estatus_obj, "value", estatus_obj)).upper()
-
+            val_estatus = str(
+                getattr(getattr(r, "estatus", ""), "value", getattr(r, "estatus", ""))
+            ).upper()
             rec_status = getattr(r, "record_status", None)
 
             if (
@@ -1680,15 +1742,18 @@ def get_cfdi_vault_records(
                 == models.ReceivableInvoice.id,
             )
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
-            # 🚀 FIX: AHORA SÍ unimos la tabla de Viajes para saber si el viaje de la factura original fue eliminado
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
         )
 
-        # 🚀 FIX: Le aplicamos el mismo filtro de viajes eliminados
+        # 🟢 REGLA: Recibos de pago asociados a un viaje eliminado NO se muestran.
+        # Si la factura es Libre (F-) y no tiene viaje, se permite.
         query_pagos = query_pagos.filter(
             or_(
-                models.ReceivableInvoice.viaje_id == None,
-                models.Trip.record_status != RecordStatus.ELIMINADO,
+                and_(
+                    models.ReceivableInvoice.viaje_id.isnot(None),
+                    models.Trip.record_status != RecordStatus.ELIMINADO,
+                ),
+                ~models.ReceivableInvoice.folio_interno.ilike("CP-%"),
             )
         )
 
