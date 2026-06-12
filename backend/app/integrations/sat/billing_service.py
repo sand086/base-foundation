@@ -1335,6 +1335,98 @@ class BillingService:
                 detail=f"Fallo comunicación con el SAT para cancelar: {e}",
             )
 
+    def cancelar_factura_sat(
+        self, invoice_id: int, motivo: str = "02", uuid_sustituto: str = None
+    ):
+        """
+        Método real que se comunica con el PAC para cancelar un CFDI 4.0 en el SAT.
+        Motivos SAT:
+        01 - Comprobante emitido con errores con relación.
+        02 - Comprobante emitido con errores sin relación.
+        03 - No se llevó a cabo la operación.
+        04 - Operación nominativa relacionada en la factura global.
+        """
+        from app.models.models import ReceivableInvoice, AuditLog
+        from datetime import datetime
+
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.id == invoice_id)
+            .first()
+        )
+
+        if not factura or not factura.uuid:
+            raise ValueError("Factura no encontrada o no tiene UUID timbrado.")
+
+        logger.info(
+            f"Iniciando CANCELACIÓN SAT del UUID: {factura.uuid} con Motivo: {motivo}"
+        )
+
+        try:
+            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+
+            # 1. Leer los archivos del CSD (Cer y Key) y convertirlos a Base64 para el PAC
+            with open(self.path_cer, "rb") as f_cer:
+                cer_b64 = base64.b64encode(f_cer.read()).decode("utf-8")
+            with open(self.path_key, "rb") as f_key:
+                key_b64 = base64.b64encode(f_key.read()).decode("utf-8")
+
+            # 2. Estructura de cancelación exigida para CFDI 4.0
+            uuids_array = [
+                {
+                    "uuid": factura.uuid,
+                    "motivo": motivo,
+                    "folioSustituto": (
+                        uuid_sustituto if motivo == "01" and uuid_sustituto else ""
+                    ),
+                }
+            ]
+
+            # 3. 🚨 AQUÍ SÍ LLAMAMOS AL SERVICIO DEL PAC (Solución Factible)
+            resultado = client_zeep.service.cancelar(
+                self.pac_user,
+                self.pac_pass,
+                self.emisor_rfc,
+                uuids_array,
+                cer_b64,
+                key_b64,
+                self.key_password,
+            )
+
+            # 4. Validar la respuesta del PAC
+            if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
+                raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
+
+            # 5. ÉXITO: Actualizar la base de datos
+            factura.status_sat = "CANCELADO"
+            factura.estatus = "cancelado"  # Estatus financiero
+            factura.motivo_cancelacion = motivo
+            factura.fecha_cancelacion = datetime.utcnow()
+
+            # Dejamos huella de auditoría
+            log = AuditLog(
+                user_id=None,
+                accion=f"Factura {factura.folio_interno} cancelada directamente en el SAT",
+                tipo_accion="CANCELACION_SAT",
+                modulo="CUENTAS_POR_COBRAR",
+                detalles=f'{{"uuid": "{factura.uuid}", "motivo": "{motivo}", "pac_msg": "{resultado.mensaje}"}}',
+            )
+            self.db.add(log)
+            self.db.commit()
+
+            return {
+                "status": "success",
+                "message": f"Factura cancelada exitosamente ante el SAT. Mensaje: {resultado.mensaje}",
+                "uuid": factura.uuid,
+            }
+
+        except Exception as e:
+            # Si falla la red o el SAT rechaza la cancelación temporalmente, lo encolamos
+            factura.status_sat = "PENDIENTE_CANCELAR_SAT"
+            factura.motivo_cancelacion = motivo
+            self.db.commit()
+            raise Exception(f"Fallo comunicación con el SAT para cancelar: {e}")
+
     def procesar_cancelaciones_pendientes(self):
         facturas_pendientes = (
             self.db.query(ReceivableInvoice)

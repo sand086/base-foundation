@@ -24,7 +24,7 @@ export const useReceivables = () => {
     refetchOnWindowFocus: true, // Recarga si cambias de ventana y regresas a tu app
   });
 
-  // 2. MUTACIÓN: Eliminar o Cancelar factura (Soporta Cascada)
+  // 2. MUTACIÓN: Eliminar o Cancelar factura local (Soporta Cascada)
   const deleteReceivableMut = useMutation({
     mutationFn: ({ id, cascade }: { id: number; cascade?: boolean }) =>
       receivableService.deleteInvoice(id, cascade),
@@ -89,13 +89,30 @@ export const useReceivables = () => {
     },
   });
 
+  // 7. MUTACIÓN: Cancelar Factura directamente en el SAT
+  const cancelSatMut = useMutation({
+    mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
+      receivableService.cancelInvoiceSAT(id, motivo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+    },
+  });
+
+  // 8. 👇 NUEVO: MUTACIÓN DE PLANCHADO/SINCRONIZACIÓN DE CANCELADAS 👇
+  const syncCancelledMut = useMutation({
+    mutationFn: () => axiosClient.post(`/api/finance/sync-cancelled-invoices`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+    },
+  });
+
   return {
     // ESTADOS
     receivables: (receivablesQuery.data || []) as ReceivableInvoice[],
     isLoadingReceivables: receivablesQuery.isLoading,
     refreshReceivables: receivablesQuery.refetch,
 
-    // ACCIONES
+    // ACCIONES LOCALES
     deleteReceivable: async (id: number, options?: { cascade?: boolean }) => {
       try {
         await deleteReceivableMut.mutateAsync({
@@ -105,7 +122,10 @@ export const useReceivables = () => {
         return true;
       } catch (error: any) {
         toast.error(
-          getErrorMessage(error, "Error al eliminar/cancelar la factura"),
+          getErrorMessage(
+            error,
+            "Error al eliminar/cancelar la factura localmente",
+          ),
         );
         return false;
       }
@@ -174,7 +194,6 @@ export const useReceivables = () => {
       }
     },
 
-    // NUEVA ACCIÓN AISLADA: Para facturas sin viaje
     stampFreeInvoice: async (invoiceId: number) => {
       const toastId = toast.loading(
         "Timbrando factura independiente en el SAT...",
@@ -207,6 +226,56 @@ export const useReceivables = () => {
         return true;
       } catch (error: any) {
         toast.error(getErrorMessage(error, "Error al restaurar la factura"));
+        return false;
+      }
+    },
+
+    // ACCIONES SAT
+    cancelInvoiceSAT: async (id: number, motivo: string = "02") => {
+      const toastId = toast.loading(
+        "Conectando con el SAT para cancelar CFDI...",
+      );
+      try {
+        const res = await cancelSatMut.mutateAsync({ id, motivo });
+        toast.success("CFDI Cancelado", {
+          id: toastId,
+          description:
+            res.message || "La factura se canceló oficialmente ante el SAT.",
+        });
+        return true;
+      } catch (error: any) {
+        toast.error("Rechazo del SAT", {
+          id: toastId,
+          description: getErrorMessage(
+            error,
+            "El SAT no pudo procesar la cancelación.",
+          ),
+        });
+        return false;
+      }
+    },
+
+    // 👇 9. NUEVA ACCIÓN EXPUESTA A LA UI: Sincronizar canceladas 👇
+    syncCancelledInvoices: async () => {
+      const toastId = toast.loading(
+        "Sincronizando estado de facturas canceladas...",
+      );
+      try {
+        await syncCancelledMut.mutateAsync();
+        toast.success("Sincronización Completa", {
+          id: toastId,
+          description:
+            "Las facturas canceladas en el SAT ya no aparecerán como pendientes.",
+        });
+        return true;
+      } catch (error: any) {
+        toast.error("Error de Sincronización", {
+          id: toastId,
+          description: getErrorMessage(
+            error,
+            "No se pudieron sincronizar las facturas.",
+          ),
+        });
         return false;
       }
     },

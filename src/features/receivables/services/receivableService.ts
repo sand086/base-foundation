@@ -46,6 +46,20 @@ export const receivableService = {
     );
   },
 
+  cancelInvoiceSAT: async (
+    invoiceId: number | string,
+    motivo: string = "02",
+  ) => {
+    const { data } = await axiosClient.post(
+      `/api/sat/stamp/cancel/${invoiceId}`,
+      {
+        motivo: motivo,
+        uuid_sustituto: null,
+      },
+    );
+    return data;
+  },
+
   // NUEVO: Endpoint para Timbrar la Factura CXC Provisional
   stampInvoice: async (id: number | string) => {
     const { data } = await axiosClient.post(`/api/sat/stamp/invoice/${id}`);

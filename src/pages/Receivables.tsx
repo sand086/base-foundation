@@ -84,6 +84,7 @@ export default function Receivables() {
     reopenReceivable,
     stampInvoice,
     stampFreeInvoice,
+    cancelInvoiceSAT,
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
@@ -411,6 +412,15 @@ export default function Receivables() {
     if (success) {
       setIsDeleteDialogOpen(false);
       setInvoiceToDelete(null);
+    }
+  };
+
+  const handleCancelInvoiceSAT = async () => {
+    if (!invoiceToCancel) return;
+    const ok = await cancelInvoiceSAT(invoiceToCancel.id, "02");
+    if (ok) {
+      setIsCancelModalOpen(false);
+      setInvoiceToCancel(null);
     }
   };
 
@@ -1092,7 +1102,7 @@ export default function Receivables() {
       })()}
 
       {/* ================================================== */}
-      {/* 🔴 MODAL DE CANCELACIÓN (OPCIONES MÚLTIPLES)         */}
+      {/* 🔴 MODAL DE CANCELACIÓN (INTELIGENTE: LOCAL VS SAT) */}
       {/* ================================================== */}
       <AlertDialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
@@ -1123,68 +1133,96 @@ export default function Receivables() {
                 . ¿Qué deseas hacer exactamente?
               </p>
 
-              <div className="grid gap-4 mt-6">
-                <div className="p-5 bg-white dark:bg-slate-800 border-l-4 border-orange-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
+              {/* LÓGICA BIFURCADA: TIMBRADA VS PROVISIONAL */}
+              {invoiceToCancel?.uuid ? (
+                /* 🔴 SI ESTÁ TIMBRADA, OBLIGAMOS A CANCELAR EN EL SAT */
+                <div className="mt-6 p-5 bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-3">
-                    <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                    <h4 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
-                      1. Solo Eliminar Factura (Liberar Viaje)
+                    <FileSignature className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <h4 className="text-xs sm:text-sm font-black text-purple-900 dark:text-purple-300 uppercase tracking-widest">
+                      Documento Certificado por el SAT
                     </h4>
                   </div>
-                  <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 mb-4">
-                    La factura se eliminará de tu cartera. Las operaciones
-                    (vales y conciliaciones) se mantienen intactas, pero el
-                    viaje quedará libre.{" "}
-                    <b>
-                      Para generar de nuevo la factura, el usuario tendrá que
-                      volver a liquidar el viaje.
-                    </b>
+                  <p className="text-xs sm:text-sm leading-relaxed text-purple-800 dark:text-purple-200/80 mb-4 font-medium">
+                    Esta factura posee un UUID oficial (
+                    <b>{invoiceToCancel.uuid.substring(0, 8)}...</b>). No puede
+                    ser eliminada localmente para evitar discrepancias fiscales.
+                    Debes mandar la orden oficial de cancelación a los
+                    servidores del SAT (Motivo 02).
                   </p>
                   <Button
-                    onClick={() => handleCancelInvoice(false)}
-                    className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 dark:text-orange-300 font-bold shadow-none"
+                    onClick={handleCancelInvoiceSAT}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-purple-600/20 uppercase tracking-widest text-[10px] haptic-press"
                   >
-                    Solo eliminar factura
+                    <Ban className="h-4 w-4 mr-2" /> Solicitar Cancelación al
+                    SAT
                   </Button>
                 </div>
+              ) : (
+                /* 🔵 SI ES PROVISIONAL, MOSTRAMOS LOS BOTONES ORIGINALES (CASCADA O SIMPLE) */
+                <div className="grid gap-4 mt-6">
+                  <div className="p-5 bg-white dark:bg-slate-800 border-l-4 border-orange-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                      <h4 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
+                        1. Solo Eliminar Factura (Liberar Viaje)
+                      </h4>
+                    </div>
+                    <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 mb-4">
+                      La factura se eliminará de tu cartera. Las operaciones
+                      (vales y conciliaciones) se mantienen intactas, pero el
+                      viaje quedará libre.{" "}
+                      <b>
+                        Para generar de nuevo la factura, el usuario tendrá que
+                        volver a liquidar el viaje.
+                      </b>
+                    </p>
+                    <Button
+                      onClick={() => handleCancelInvoice(false)}
+                      className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 dark:text-orange-300 font-bold shadow-none haptic-press"
+                    >
+                      Solo eliminar factura
+                    </Button>
+                  </div>
 
-                <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                    <h4 className="text-xs sm:text-sm font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                      2. Eliminar todo en Cascada (El viaje no se hizo)
-                    </h4>
+                  <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                      <h4 className="text-xs sm:text-sm font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                        2. Eliminar todo en Cascada (El viaje no se hizo)
+                      </h4>
+                    </div>
+                    <div className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 mb-4 font-medium">
+                      Esta acción es{" "}
+                      <b className="uppercase underline">crítica</b> e
+                      irreversible. Destruirá por completo:
+                      <ul className="list-disc pl-5 mt-2 space-y-1">
+                        <li>La factura (CxC)</li>
+                        <li>El viaje completo (Operaciones)</li>
+                        <li>La liquidación del operador</li>
+                        <li>
+                          Cualquier ticket, monitoreo o conciliación relacionada
+                        </li>
+                      </ul>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "¿ESTÁS ABSOLUTAMENTE SEGURO? Esta acción borrará el viaje y la liquidación de forma irreversible.",
+                          )
+                        ) {
+                          handleCancelInvoice(true);
+                        }
+                      }}
+                      className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-rose-600/20 haptic-press"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar todo el
+                      registro
+                    </Button>
                   </div>
-                  <div className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 mb-4 font-medium">
-                    Esta acción es{" "}
-                    <b className="uppercase underline">crítica</b> e
-                    irreversible. Destruirá por completo:
-                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                      <li>La factura (CxC)</li>
-                      <li>El viaje completo (Operaciones)</li>
-                      <li>La liquidación del operador</li>
-                      <li>
-                        Cualquier ticket, monitoreo o conciliación relacionada
-                      </li>
-                    </ul>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "¿ESTÁS ABSOLUTAMENTE SEGURO? Esta acción borrará el viaje y la liquidación de forma irreversible.",
-                        )
-                      ) {
-                        handleCancelInvoice(true);
-                      }
-                    }}
-                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-rose-600/20"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" /> Eliminar todo el
-                    registro
-                  </Button>
                 </div>
-              </div>
+              )}
             </AlertDialogDescription>
           </div>
 

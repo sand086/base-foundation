@@ -695,6 +695,36 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
     return resultado
 
 
+# Importa Optional si no lo tienes arriba
+from typing import Optional
+
+
+class SatCancelPayload(BaseModel):
+    motivo: str = "02"  # Por defecto: Emitido con errores sin relación
+    uuid_sustituto: Optional[str] = None
+
+
+@router.post("/stamp/cancel/{invoice_id}", response_model=dict)
+def cancel_invoice_in_sat(
+    invoice_id: int, payload: SatCancelPayload, db: Session = Depends(get_db)
+):
+    """
+    Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.
+    Aplica para Cuentas por Cobrar (Facturas Libres o Cartas Porte).
+    """
+    service = BillingService(db)
+    try:
+        resultado = service.cancelar_factura_sat(
+            invoice_id=invoice_id,
+            motivo=payload.motivo,
+            uuid_sustituto=payload.uuid_sustituto,
+        )
+        return resultado
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
 @router.post("/stamp/payment", summary="Generar Complemento de Pago")
 def registrar_pago_multiple(
     payload: RegistroPagoPayload, db: Session = Depends(get_db)
