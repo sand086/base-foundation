@@ -100,8 +100,9 @@ export default function Receivables() {
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
   const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
 
-  // NUEVOS: Estados para filtros
+  // NUEVOS: Estados para filtros en la barra superior
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all"); // <-- NUEVO ESTADO DE ESTATUS
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
@@ -183,7 +184,7 @@ export default function Receivables() {
           fechaVencimientoCalculada = `${yyyy}-${mm}-${dd}`;
         }
 
-        // 🚨 SINCRONIZACIÓN DE ESTATUS REAL PARA EL FILTRO INTERNO
+        // SINCRONIZACIÓN DE ESTATUS REAL
         const saldo =
           inv.saldo_pendiente !== undefined
             ? Number(inv.saldo_pendiente)
@@ -192,11 +193,10 @@ export default function Receivables() {
 
         let finalEstatus = "";
 
-        // Si la factura ya viene explícitamente cancelada la respetamos
         if (String(inv.estatus || inv.status).toLowerCase() === "cancelado") {
           finalEstatus = "CANCELADO";
         } else {
-          // Calculamos la etiqueta profesional exacta usando tus reglas de negocio del archivo types.ts
+          // Calculamos la etiqueta oficial EXACTA ("PAGADA", "POR COBRAR", etc.)
           const statusInfoCalculated = getInvoiceStatusInfo({
             ...inv,
             saldo_pendiente: saldo,
@@ -204,7 +204,6 @@ export default function Receivables() {
             fecha_vencimiento: fechaVencimientoCalculada,
           } as any);
 
-          // Esto inyectará con precisión: "PAGADA", "POR COBRAR", "VENCIDA 1-30d", etc.
           finalEstatus = statusInfoCalculated.label;
         }
 
@@ -222,7 +221,7 @@ export default function Receivables() {
           fecha_emision: fechaEmision,
           fecha_vencimiento: fechaVencimientoCalculada,
           dias_credito: diasCredito,
-          estatus: finalEstatus, // <-- USAMOS EL ESTATUS CALCULADO CORRECTO
+          estatus: finalEstatus, // <-- ESTATUS LIMPIO Y EN MAYÚSCULAS
           referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
         };
@@ -241,18 +240,25 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
-  // LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + RANGO DE FECHAS)
+  // LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + ESTATUS + RANGO DE FECHAS)
   const filteredInvoices = useMemo(() => {
     let filtered = formattedInvoices;
 
-    // Filtro por Cliente
+    // 1. Filtro por Cliente
     if (selectedClientId !== "all") {
       filtered = filtered.filter(
         (inv) => String(inv.client_id) === selectedClientId,
       );
     }
 
-    // Filtro por Rango de Fechas (Fecha Emisión)
+    // 2. Filtro por Estatus (NUEVO CONTROL EXTERNO)
+    if (selectedStatus !== "all") {
+      filtered = filtered.filter(
+        (inv) => String(inv.estatus).toUpperCase() === selectedStatus,
+      );
+    }
+
+    // 3. Filtro por Rango de Fechas (Fecha Emisión)
     if (startDate) {
       filtered = filtered.filter((inv) => {
         if (!inv.fecha_emision) return false;
@@ -274,7 +280,7 @@ export default function Receivables() {
     }
 
     return filtered;
-  }, [formattedInvoices, selectedClientId, startDate, endDate]);
+  }, [formattedInvoices, selectedClientId, selectedStatus, startDate, endDate]);
 
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
@@ -441,7 +447,6 @@ export default function Receivables() {
         header: "Folio / Documento",
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
-          // Corrección aplicada también en el render visual de la celda
           const isProvisional =
             row.status_sat === "PROVISIONAL" ||
             row.status_sat === "provisional" ||
@@ -449,7 +454,6 @@ export default function Receivables() {
 
           return (
             <div className="flex flex-col items-start gap-1">
-              {/* 👇 CONTENEDOR CON EL FOLIO Y EL ICONO DE ENLACE 👇 */}
               <div className="flex items-center gap-2">
                 <span
                   className={`font-mono text-sm font-bold uppercase ${statusInfo.status === "danger" ? "text-red-700 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
@@ -457,7 +461,6 @@ export default function Receivables() {
                   {value}
                 </span>
 
-                {/* INYECCIÓN: Icono si tiene uuid_relacionado */}
                 {row.uuid_relacionado && (
                   <div
                     className="p-1 bg-indigo-50 dark:bg-indigo-900/30 rounded border border-indigo-100 dark:border-indigo-800/50 flex items-center justify-center cursor-help transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
@@ -467,7 +470,6 @@ export default function Receivables() {
                   </div>
                 )}
               </div>
-              {/* 👆 ========================================= 👆 */}
 
               {isProvisional && (
                 <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[9px] uppercase tracking-widest border-none mt-0.5">
@@ -601,17 +603,7 @@ export default function Receivables() {
       {
         key: "estatus",
         header: "Estatus",
-        type: "status",
-        // ✅ Estas opciones aparecerán idénticas dentro de la ventana de "Filtros Int."
-        statusOptions: [
-          "POR COBRAR",
-          "VENCIDA 1-30d",
-          "VENCIDA 31-60d",
-          "ATRASADO +90d",
-          "PAGO PARCIAL",
-          "PAGO PARCIAL (+90d)",
-          "PAGADA",
-        ],
+        // 🔴 COMPLETAMENTE ELIMINADO EL FILTRO INTERNO DE ESTA COLUMNA
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
@@ -619,7 +611,8 @@ export default function Receivables() {
               status={statusInfo.status}
               className="uppercase font-bold text-[10px] tracking-wider px-2 py-1"
             >
-              {value} {/* Mostramos el valor real indexado en la fila */}
+              {value}{" "}
+              {/* Mostramos la etiqueta oficial indexada (ej. PAGADA, POR COBRAR) */}
             </StatusBadge>
           );
         },
@@ -633,13 +626,11 @@ export default function Receivables() {
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
 
-          // ✅ LÓGICA CORREGIDA PARA DETECTAR CORRECTAMENTE REGISTROS SIN TIMBRAR
           const isProvisional =
             row.status_sat === "PROVISIONAL" ||
             row.status_sat === "provisional" ||
             !row.uuid;
 
-          // ✅ LÓGICA CORREGIDA PARA DETECTAR FACTURAS TIMBRADAS CUANDO status_sat NO EXISTE
           const isStamped = !!row.uuid;
 
           return (
@@ -702,7 +693,6 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* AQUI ESTA LA LOGICA BIFURCADA Y SEGURA */}
                 {isProvisional && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -711,25 +701,17 @@ export default function Receivables() {
                         if (
                           window.confirm("¿Timbrar esta factura ante el SAT?")
                         ) {
-                          // Extraemos el viaje_id (si es que existe)
                           const viajeId =
                             (row as any).viaje_id || (row as any).trip_id;
 
                           if (viajeId) {
-                            // ==========================================
-                            // LÓGICA ORIGINAL INTACTA (Facturas con Viaje)
-                            // ==========================================
                             await stampInvoice(Number(viajeId));
                           } else {
-                            // ==========================================
-                            // NUEVA LÓGICA (Facturas Cuentas por Cobrar / Libres)
-                            // ==========================================
                             if (!row.id) {
                               return toast.error("Error", {
                                 description: "ID de factura no válido",
                               });
                             }
-                            // Llamamos a la nueva función que no rompe logística
                             await stampFreeInvoice(Number(row.id));
                           }
                         }
@@ -776,7 +758,6 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* NUEVO BOTÓN: Cancelar Factura */}
                 {!hasPayments && row.estatus !== "cancelado" && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
@@ -821,7 +802,7 @@ export default function Receivables() {
       >
         <div className="flex flex-wrap items-center gap-3">
           {/* ======================================= */}
-          {/* BARRA DE FILTROS ACTUALIZADA (CLIENTE + RANGO DE FECHAS) */}
+          {/* BARRA DE FILTROS SUPERIOR (TOTALMENTE INDEPENDIENTE) */}
           {/* ======================================= */}
           <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
             {/* Filtro Cliente */}
@@ -851,12 +832,73 @@ export default function Receivables() {
               </Select>
             </div>
 
-            {/* Botón Limpiar (Solo aparece si hay algún filtro activo) */}
-            {(selectedClientId !== "all" || startDate || endDate) && (
+            {/* 👇 NUEVO: FILTRO EXTERNO DE ESTATUS 👇 */}
+            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[180px]">
+              <AlertCircle className="h-4 w-4 text-slate-400 mr-2" />
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger className="w-full border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
+                  <SelectValue placeholder="Todos los estatus" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="font-bold text-xs">
+                    Todos los estatus
+                  </SelectItem>
+                  <SelectItem
+                    value="POR COBRAR"
+                    className="text-xs font-bold text-amber-600"
+                  >
+                    Por Cobrar
+                  </SelectItem>
+                  <SelectItem
+                    value="PAGO PARCIAL"
+                    className="text-xs font-bold text-blue-500"
+                  >
+                    Pago Parcial
+                  </SelectItem>
+                  <SelectItem
+                    value="VENCIDA 1-30D"
+                    className="text-xs font-bold text-rose-500"
+                  >
+                    Vencida 1-30d
+                  </SelectItem>
+                  <SelectItem
+                    value="VENCIDA 31-60D"
+                    className="text-xs font-bold text-rose-600"
+                  >
+                    Vencida 31-60d
+                  </SelectItem>
+                  <SelectItem
+                    value="ATRASADO +90D"
+                    className="text-xs font-bold text-rose-700"
+                  >
+                    Atrasado +90d
+                  </SelectItem>
+                  <SelectItem
+                    value="PAGADA"
+                    className="text-xs font-bold text-emerald-600"
+                  >
+                    Pagada
+                  </SelectItem>
+                  <SelectItem
+                    value="CANCELADO"
+                    className="text-xs font-bold text-slate-500"
+                  >
+                    Cancelado
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Botón Limpiar */}
+            {(selectedClientId !== "all" ||
+              selectedStatus !== "all" ||
+              startDate ||
+              endDate) && (
               <Button
                 variant="ghost"
                 onClick={() => {
                   setSelectedClientId("all");
+                  setSelectedStatus("all");
                   setStartDate("");
                   setEndDate("");
                 }}
@@ -975,6 +1017,8 @@ export default function Receivables() {
             isRowSelectable={(row) =>
               (row.saldo_pendiente || 0) > 0 && row.status_sat !== "PROVISIONAL"
             }
+            hideGlobalSearch={true} // <-- ELIMINA EL BUSCADOR
+            hideInternalFilters={true} // <-- ELIMINA EL BOTÓN "FILTROS INT."
           />
         </CardContent>
       </Card>

@@ -79,7 +79,8 @@ interface EnhancedDataTableProps<T> {
   onCustomExport?: () => void;
   isRowSelectable?: (row: T) => boolean;
   initialSort?: SortConfig;
-  hideGlobalSearch?: boolean; // <-- NUEVO: Para ocultar buscador global sin romper otros componentes
+  hideGlobalSearch?: boolean; // <-- NUEVA
+  hideInternalFilters?: boolean; // <-- NUEVO: Para ocultar buscador global sin romper otros componentes
 }
 
 interface DateRange {
@@ -130,6 +131,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   isRowSelectable,
   initialSort,
   hideGlobalSearch = false, // <-- NUEVO: Por defecto es falso para no afectar a otros
+  hideInternalFilters = false, // <-- NUEVO: Para ocultar filtros internos sin romper otros componentes
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   //  INICIALIZA EL ORDEN CON LO QUE LE MANDEMOS DESDE EL PADRE
@@ -364,7 +366,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          {hasAdvancedFilters && (
+          {!hideInternalFilters && hasAdvancedFilters && (
             <Popover open={showFilters} onOpenChange={setShowFilters}>
               <PopoverTrigger asChild>
                 <Button
@@ -541,7 +543,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                                       setCurrentPage(1);
                                     }}
                                   >
-                                    {/* AGREGADO: pointer-events-none para que el clic active el div padre */}
                                     <Checkbox
                                       checked={selectedStatuses.includes(
                                         status,
@@ -726,7 +727,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                           className={cn(
                             "px-6 py-4 align-middle transition-all duration-300",
                             "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
-                            //  MAGIA 3: AQUÍ ESTABA EL BUG DE LAS LETRAS BLANCAS. Lo hemos eliminado.
                           )}
                         >
                           {col.render
