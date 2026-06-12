@@ -1340,11 +1340,6 @@ class BillingService:
     ):
         """
         Método real que se comunica con el PAC para cancelar un CFDI 4.0 en el SAT.
-        Motivos SAT:
-        01 - Comprobante emitido con errores con relación.
-        02 - Comprobante emitido con errores sin relación.
-        03 - No se llevó a cabo la operación.
-        04 - Operación nominativa relacionada en la factura global.
         """
         from app.models.models import ReceivableInvoice, AuditLog
         from datetime import datetime
@@ -1365,13 +1360,13 @@ class BillingService:
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
 
-            # 1. Leer los archivos del CSD (Cer y Key) y convertirlos a Base64 para el PAC
+            # 1. Leer los archivos del CSD (Cer y Key) EN BYTES PUROS (Sin Base64 manual)
             with open(self.path_cer, "rb") as f_cer:
-                cer_b64 = base64.b64encode(f_cer.read()).decode("utf-8")
+                cer_bytes = f_cer.read()
             with open(self.path_key, "rb") as f_key:
-                key_b64 = base64.b64encode(f_key.read()).decode("utf-8")
+                key_bytes = f_key.read()
 
-            # 2. Estructura de cancelación exigida para CFDI 4.0
+            # 2. Estructura de cancelación para Solución Factible (CFDI 4.0)
             uuids_array = [
                 {
                     "uuid": factura.uuid,
@@ -1382,22 +1377,22 @@ class BillingService:
                 }
             ]
 
-            # 3. 🚨 AQUÍ SÍ LLAMAMOS AL SERVICIO DEL PAC (Solución Factible)
+            # 3. Llamada al PAC (¡EXACTAMENTE 6 ARGUMENTOS!)
+            # usuario, password, uuids, cerBase64, keyBase64, passwordLlave
             resultado = client_zeep.service.cancelar(
-                self.pac_user,
-                self.pac_pass,
-                self.emisor_rfc,
-                uuids_array,
-                cer_b64,
-                key_b64,
-                self.key_password,
+                usuario=self.pac_user,
+                password=self.pac_pass,
+                uuids=uuids_array,
+                cerBase64=cer_bytes,
+                keyBase64=key_bytes,
+                passwordLlave=self.key_password,
             )
 
             # 4. Validar la respuesta del PAC
             if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
                 raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
 
-            # 5. ÉXITO: Actualizar la base de datos
+            # 5. ÉXITO: Actualizar la base de datos localmente
             factura.status_sat = "CANCELADO"
             factura.estatus = "cancelado"  # Estatus financiero
             factura.motivo_cancelacion = motivo
@@ -1421,11 +1416,11 @@ class BillingService:
             }
 
         except Exception as e:
-            # Si falla la red o el SAT rechaza la cancelación temporalmente, lo encolamos
+            # Si falla la red o el SAT rechaza la cancelación temporalmente
             factura.status_sat = "PENDIENTE_CANCELAR_SAT"
             factura.motivo_cancelacion = motivo
             self.db.commit()
-            raise Exception(f"Fallo comunicación con el SAT para cancelar: {e}")
+            raise Exception(f"{str(e)}")
 
     def procesar_cancelaciones_pendientes(self):
         facturas_pendientes = (

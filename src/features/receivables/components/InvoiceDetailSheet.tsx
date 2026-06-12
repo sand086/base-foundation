@@ -155,21 +155,33 @@ export function InvoiceDetailSheet({
         ? inv.cobros
         : [];
 
-  const handleDownload = (fileType: "pdf" | "xml", targetUuid: string) => {
+  const handleDownload = async (
+    fileType: "pdf" | "xml",
+    targetUuid: string,
+    suggestedFilename: string,
+  ) => {
     const toastId = toast.loading(`Descargando ${fileType.toUpperCase()}...`);
     try {
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
       const baseURL = rawBaseURL.replace(/\/$/, "");
       const fileUrl = `${baseURL}/api/sat/invoice/${targetUuid}/${fileType}`;
 
+      // Usamos fetch para descargar el blob y forzar nuestro nombre personalizado
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error("Error en la descarga");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
       const link = document.createElement("a");
-      link.href = fileUrl;
-      link.target = "_blank";
-      link.setAttribute("download", `CFDI_${targetUuid}.${fileType}`);
+      link.href = url;
+      // Aquí aplicamos tu nomenclatura:
+      link.setAttribute("download", `${suggestedFilename}.${fileType}`);
 
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url); // Limpiamos memoria
 
       toast.success(`${fileType.toUpperCase()} descargado correctamente.`, {
         id: toastId,
@@ -623,6 +635,11 @@ export function InvoiceDetailSheet({
                         p.complemento_uuid ?? p.complementoUuid,
                       );
 
+                      // NUEVO: Construimos tu nomenclatura: COM-folio_RFC_uuid
+                      // Usamos p.folio si existe, o p.id como respaldo
+                      const paymentFolio = p.folio || p.id;
+                      const customFilename = `COM-${paymentFolio}_${entidadRfc}_${complementoUuid}`;
+
                       return (
                         <DataTableRow
                           key={safeStr(p.id)}
@@ -645,8 +662,13 @@ export function InvoiceDetailSheet({
                                   size="icon"
                                   title="Descargar PDF"
                                   className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 dark:hover:bg-rose-900/50 transition-all"
-                                  onClick={() =>
-                                    handleDownload("pdf", complementoUuid)
+                                  onClick={
+                                    () =>
+                                      handleDownload(
+                                        "pdf",
+                                        complementoUuid,
+                                        customFilename,
+                                      ) // <-- Pasamos tu nombre de archivo
                                   }
                                 >
                                   <FileText className="h-4 w-4" />
@@ -656,8 +678,13 @@ export function InvoiceDetailSheet({
                                   size="icon"
                                   title="Descargar XML"
                                   className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 dark:hover:bg-blue-900/50 transition-all"
-                                  onClick={() =>
-                                    handleDownload("xml", complementoUuid)
+                                  onClick={
+                                    () =>
+                                      handleDownload(
+                                        "xml",
+                                        complementoUuid,
+                                        customFilename,
+                                      ) // <-- Pasamos tu nombre de archivo
                                   }
                                 >
                                   <FileCode2 className="h-4 w-4" />
@@ -801,7 +828,13 @@ export function InvoiceDetailSheet({
                               size="icon"
                               title="Descargar PDF"
                               className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
-                              onClick={() => handleDownload("pdf", uuid)}
+                              onClick={() =>
+                                handleDownload(
+                                  "pdf",
+                                  uuid,
+                                  `Factura_${displayFolio}_${entidadRfc}_${uuid}`,
+                                )
+                              }
                             >
                               <FileText className="h-3.5 w-3.5" />
                             </Button>
@@ -812,7 +845,13 @@ export function InvoiceDetailSheet({
                               size="icon"
                               title="Descargar XML"
                               className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
-                              onClick={() => handleDownload("xml", uuid)}
+                              onClick={() =>
+                                handleDownload(
+                                  "xml",
+                                  uuid,
+                                  `Factura_${displayFolio}_${entidadRfc}_${uuid}`,
+                                )
+                              }
                             >
                               <FileCode2 className="h-3.5 w-3.5" />
                             </Button>

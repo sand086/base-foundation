@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Wallet,
   CalendarDays,
+  Search, // <-- NUEVO: Importamos el ícono Search
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -41,6 +42,9 @@ export function AgingExportModal({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+
+  // <-- NUEVO: Estado para el buscador de entidad
+  const [searchEntity, setSearchEntity] = useState("");
 
   // ========================================================
   // MOTOR DE LA TABLA DINÁMICA (Cálculo en Tiempo Real)
@@ -83,6 +87,8 @@ export function AgingExportModal({
         inv.proveedor ||
         inv.client?.razon_social ||
         inv.supplier?.razon_social ||
+        inv.supplier_razon_social ||
+        inv.client_razon_social ||
         "Entidad Desconocida";
 
       if (!summary[entityName]) {
@@ -115,8 +121,13 @@ export function AgingExportModal({
       else summary[entityName].mas90 += saldo;
     });
 
-    return Object.values(summary).sort((a, b) => b.total - a.total);
-  }, [invoices, startDate, endDate]);
+    // <-- NUEVO: Filtramos por el texto ingresado en el buscador antes de ordenar
+    return Object.values(summary)
+      .filter((row: any) =>
+        row.entidad.toLowerCase().includes(searchEntity.toLowerCase()),
+      )
+      .sort((a: any, b: any) => b.total - a.total);
+  }, [invoices, startDate, endDate, searchEntity]); // <-- NUEVO: Agregamos searchEntity a las dependencias
 
   // ========================================================
   // CÁLCULO DE KPIS Y TOTALES GLOBALES
@@ -205,8 +216,14 @@ export function AgingExportModal({
       : "Saldos Totales (Cuentas por Pagar)";
   const entityLabel = type === "cxc" ? "Cliente" : "Proveedor";
 
+  // <-- NUEVO: Función para resetear el buscador al cerrar
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) setSearchEntity("");
+    onOpenChange(isOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-[95vw] md:max-w-7xl bg-slate-50 dark:bg-slate-950 rounded-[2rem] border-none shadow-2xl p-0 overflow-hidden flex flex-col max-h-[92vh]">
         {/* ========================================== */}
         {/* 1. HEADER & CONTROLES */}
@@ -227,6 +244,19 @@ export function AgingExportModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto bg-slate-100/80 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200 dark:border-white/5">
+            {/* <-- NUEVO: BUSCADOR DE ENTIDAD --> */}
+            <div className="flex items-center relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder={`Buscar ${entityLabel.toLowerCase()}...`}
+                value={searchEntity}
+                onChange={(e) => setSearchEntity(e.target.value)}
+                className="h-9 w-[160px] md:w-[200px] pl-8 text-xs font-bold bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl focus:ring-brand-red placeholder:font-medium placeholder:uppercase"
+              />
+            </div>
+            <div className="w-px h-6 bg-slate-300 dark:bg-slate-700 hidden sm:block mx-1"></div>
+            {/* <-- FIN NUEVO --> */}
+
             <div className="flex items-center gap-2">
               <Label className="text-[9px] font-black uppercase text-slate-500 hidden sm:block">
                 Desde
@@ -275,7 +305,7 @@ export function AgingExportModal({
               <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                    Deuda Total
+                    Deuda Total Filtrada
                   </p>
                   <p className="text-2xl font-black text-brand-navy dark:text-white tracking-tighter">
                     {formatMoney(totals.total)}
@@ -296,7 +326,7 @@ export function AgingExportModal({
                     {formatMoney(totals.alCorriente)}
                   </p>
                   <p className="text-[10px] font-bold text-emerald-600 mt-1">
-                    {healthPercentage.toFixed(1)}% del total
+                    {healthPercentage.toFixed(1)}% del total mostrado
                   </p>
                 </div>
               </div>
@@ -330,7 +360,7 @@ export function AgingExportModal({
             <div className="flex flex-col items-center justify-center h-64 text-center opacity-50 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 border-dashed">
               <TrendingUp className="h-12 w-12 text-slate-400 mb-4" />
               <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">
-                No hay deuda pendiente en este rango
+                No hay resultados para tu búsqueda
               </p>
             </div>
           ) : (
@@ -439,7 +469,7 @@ export function AgingExportModal({
                   <tfoot className="sticky bottom-0 z-20 bg-brand-navy dark:bg-slate-900 text-white shadow-[0_-4px_10px_rgba(0,0,0,0.1)] border-t border-brand-red">
                     <tr>
                       <td className="px-5 py-4 font-black text-[10px] uppercase tracking-widest">
-                        TOTALES GLOBALES
+                        TOTALES FILTRADOS
                       </td>
                       <td className="px-5 py-4 text-right font-mono text-[13px] font-bold text-emerald-400 tracking-tight">
                         {formatMoney(totals.alCorriente)}
@@ -473,7 +503,7 @@ export function AgingExportModal({
         <div className="p-4 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-white/10 flex justify-end shrink-0 relative z-20">
           <Button
             variant="ghost"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             className="text-[11px] font-black uppercase tracking-widest h-11 px-8 rounded-xl haptic-press text-slate-500 hover:text-slate-800 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 transition-all"
           >
             <X className="h-4 w-4 mr-2" />
