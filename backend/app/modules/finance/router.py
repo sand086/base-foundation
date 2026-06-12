@@ -1486,3 +1486,74 @@ def export_aging_report(
         raise HTTPException(
             status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
         )
+
+
+# =====================================================================
+# SCRIPT SALVAVIDAS: SINCRONIZAR FACTURAS CANCELADAS SAT VS LOCAL
+# =====================================================================
+
+
+@router.post(
+    "/sync-cancelled-invoices", summary="Planchar Estatus de Facturas Canceladas"
+)
+def sync_cancelled_invoices(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Sincroniza el estatus financiero de las facturas que ya fueron
+    canceladas en el SAT (status_sat == 'CANCELADO' o 'ERROR_SAT')
+    pero que localmente siguen como 'pendiente', 'pagado', etc.
+    """
+    try:
+        # 1. Buscamos todas las facturas CxC que tengan discrepancias
+        facturas_desincronizadas = (
+            db.query(models.ReceivableInvoice)
+            .filter(
+                models.ReceivableInvoice.status_sat.in_(["CANCELADO", "ERROR_SAT"]),
+                models.ReceivableInvoice.estatus != "cancelado",
+            )
+            .all()
+        )
+
+        if not facturas_desincronizadas:
+            return {
+                "status": "success",
+                "message": "Todo está en orden. No hay facturas desincronizadas.",
+            }
+
+        count = 0
+        for factura in facturas_desincronizadas:
+            # 2. Planchamos el estatus financiero
+            factura.estatus = models.InvoiceStatus.CANCELADO
+
+            # 3. Opcional pero recomendado: Asegurarnos de que no deje deudas fantasma
+            factura.saldo_pendiente = factura.monto_total
+
+            count += 1
+
+        # 4. Guardamos los cambios
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"¡Éxito! Se corrigieron {count} facturas que estaban canceladas en el SAT pero pendientes en el sistema.",
+        }
+
+    except Exception as e:
+        db.rollback()
+        import traceback
+
+        error_details = traceback.format_exc()
+        print(
+            "\n"
+            + "=" * 50
+            + "\n💥 ERROR CRÍTICO EN sync_cancelled_invoices 💥\n"
+            + error_details
+            + "\n"
+            + "=" * 50
+            + "\n"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
+        )
