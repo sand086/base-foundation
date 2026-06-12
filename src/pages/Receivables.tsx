@@ -1199,10 +1199,12 @@ export default function Receivables() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* CÓDIGO NUEVO (Línea ~820 en Receivables.tsx): */}
       <AgingExportModal
         open={isAgingModalOpen}
         onOpenChange={setIsAgingModalOpen}
         type="cxc"
+        invoices={formattedInvoices}
       />
     </div>
   );

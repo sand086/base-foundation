@@ -20,7 +20,8 @@ export type InvoiceStatus =
   | "pendiente"
   | "pago_parcial"
   | "pagado"
-  | "cancelado";
+  | "cancelado"
+  | string;
 
 // ==========================================
 // CATEGORÍAS INDIRECTAS

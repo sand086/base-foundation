@@ -172,16 +172,14 @@ export default function Payables() {
   // ESTADOS PARA LOS FILTROS Y SELECCIÓN
   // ==========================================
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all"); // <-- NUEVO: ESTADO ESTATUS UNIFICADO
   const [cecoFilter, setCecoFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [openSupplierCombo, setOpenSupplierCombo] = useState(false);
 
-  //  NUEVO: FILTROS DE RANGO DE FECHAS
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
-  // ESTADO PARA CHECKBOXES
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<number[]>([]);
 
   useEffect(() => {
@@ -219,6 +217,9 @@ export default function Payables() {
     refreshInvoices?.();
   };
 
+  // ==========================================
+  // NORMALIZACIÓN DE DATOS Y CÁLCULO DE ESTATUS
+  // ==========================================
   const normalizedInvoices = useMemo(() => {
     const dataArray = Array.isArray(invoices)
       ? invoices
@@ -227,22 +228,39 @@ export default function Payables() {
         (invoices as any)?.results ||
         [];
 
-    return dataArray.map((inv: any) => ({
-      ...inv,
-      supplier_razon_social:
-        inv.supplier_razon_social ||
-        inv.supplier?.razon_social ||
-        inv.proveedor ||
-        "Desconocido",
-      supplier_id: inv.supplier_id || inv.supplier?.id || null,
-      saldo_pendiente: inv.saldo_pendiente || 0,
-      monto_total: inv.monto_total || 0,
-    })) as PayableInvoice[];
+    return dataArray.map((inv: any) => {
+      const saldo = inv.saldo_pendiente || 0;
+      const monto = inv.monto_total || 0;
+      let finalEstatus = "";
+
+      if (String(inv.estatus || inv.status).toLowerCase() === "cancelado") {
+        finalEstatus = "CANCELADO";
+      } else {
+        // Obtenemos la etiqueta oficial usando getInvoiceStatusInfo global
+        const statusInfoCalculated = getInvoiceStatusInfo({
+          ...inv,
+          saldo_pendiente: saldo,
+          monto_total: monto,
+          fecha_vencimiento: inv.fecha_vencimiento,
+        } as any);
+        finalEstatus = statusInfoCalculated.label;
+      }
+
+      return {
+        ...inv,
+        supplier_razon_social:
+          inv.supplier_razon_social ||
+          inv.supplier?.razon_social ||
+          inv.proveedor ||
+          "Desconocido",
+        supplier_id: inv.supplier_id || inv.supplier?.id || null,
+        saldo_pendiente: saldo,
+        monto_total: monto,
+        estatus: finalEstatus, // <-- ESTATUS LIMPIO Y OFICIAL (Ej. "PAGADA", "POR COBRAR")
+      };
+    }) as PayableInvoice[];
   }, [invoices]);
 
-  // ==========================================
-  // LÓGICA DE FILTRADO Y EXTRACCIÓN DE CECOS
-  // ==========================================
   const uniqueCecos = useMemo(() => {
     const cecosMap = new Map();
     normalizedInvoices.forEach((inv: any) => {
@@ -256,14 +274,10 @@ export default function Payables() {
     }));
   }, [normalizedInvoices]);
 
-  //  SE ACTUALIZÓ PARA INCLUIR EL RANGO DE FECHAS
+  // ==========================================
+  // MOTOR DE FILTRADO
+  // ==========================================
   const filteredInvoices = useMemo(() => {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-
-    const en5Dias = new Date(hoy);
-    en5Dias.setDate(hoy.getDate() + 5);
-
     return normalizedInvoices.filter((inv: any) => {
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch =
@@ -273,21 +287,11 @@ export default function Payables() {
         inv.uuid?.toLowerCase().includes(searchLower) ||
         inv.concepto?.toLowerCase().includes(searchLower);
 
-      let matchesStatus = false;
-      const isActiva = inv.estatus !== "pagado" && inv.estatus !== "cancelado";
-      const fechaVencimiento = new Date(inv.fecha_vencimiento);
-      fechaVencimiento.setHours(0, 0, 0, 0);
-
-      if (statusFilter === "all") {
-        matchesStatus = true;
-      } else if (statusFilter === "vencido") {
-        matchesStatus = isActiva && fechaVencimiento < hoy;
-      } else if (statusFilter === "por_vencer") {
+      // FILTRO POR ESTATUS
+      let matchesStatus = true;
+      if (statusFilter !== "all") {
         matchesStatus =
-          isActiva && fechaVencimiento >= hoy && fechaVencimiento <= en5Dias;
-      } else {
-        matchesStatus =
-          inv.estatus?.toLowerCase() === statusFilter.toLowerCase();
+          String(inv.estatus).toUpperCase() === statusFilter.toUpperCase();
       }
 
       const matchesCeco =
@@ -296,11 +300,10 @@ export default function Payables() {
       const matchesSupplier =
         supplierFilter === "all" || String(inv.supplier_id) === supplierFilter;
 
-      //  NUEVO: Lógica de Filtro por Rango de Fechas (Basado en Emisión o Vencimiento, según necesites, aquí es por Emisión)
+      // Filtro de Fechas
       let matchesDate = true;
       if (startDate || endDate) {
         if (!inv.fecha_vencimiento) {
-          // Si estamos filtrando por fecha y la factura no tiene fecha de vencimiento, la ocultamos
           matchesDate = false;
         } else {
           const vencimiento = inv.fecha_vencimiento.includes("T")
@@ -368,9 +371,6 @@ export default function Payables() {
     });
   }, [filteredInvoices]);
 
-  // ==========================================
-  // KPIs DINÁMICOS Y CÁLCULO DE CHECKBOXES
-  // ==========================================
   const kpis = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -383,25 +383,29 @@ export default function Payables() {
         const fechaVencimiento = new Date(inv.fecha_vencimiento);
         return (
           fechaVencimiento < hoy &&
-          inv.estatus !== "pagado" &&
-          inv.estatus !== "cancelado"
+          inv.estatus !== "PAGADA" &&
+          inv.estatus !== "CANCELADO"
         );
       })
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
     const totalPorPagar = filteredInvoices
-      .filter((inv) => inv.estatus !== "pagado" && inv.estatus !== "cancelado")
+      .filter((inv) => inv.estatus !== "PAGADA" && inv.estatus !== "CANCELADO")
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
     const totalParcial = filteredInvoices
-      .filter((inv) => inv.estatus === "pago_parcial")
+      .filter(
+        (inv) =>
+          inv.estatus === "PAGO PARCIAL" ||
+          inv.estatus === "PAGO PARCIAL (+90d)",
+      )
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
     const compromisos7Dias = filteredInvoices
       .filter((inv) => {
         if (
-          inv.estatus === "pagado" ||
-          inv.estatus === "cancelado" ||
+          inv.estatus === "PAGADA" ||
+          inv.estatus === "CANCELADO" ||
           inv.tipo_comprobante === "E" ||
           (inv.saldo_pendiente || 0) < 0
         )
@@ -511,7 +515,7 @@ export default function Payables() {
   };
 
   // ==========================================
-  // COLUMNAS (AÑADIDA COLUMNA DE SELECCIÓN)
+  // COLUMNAS
   // ==========================================
   const payablesColumns: ColumnDef<PayableInvoice>[] = useMemo(
     () => [
@@ -521,7 +525,7 @@ export default function Payables() {
         sortable: false,
         render: (_, row) => {
           const isDisabled =
-            row.estatus === "pagado" || row.estatus === "cancelado";
+            row.estatus === "PAGADA" || row.estatus === "CANCELADO";
           return (
             <div className="flex justify-center items-center h-full">
               <Checkbox
@@ -598,8 +602,8 @@ export default function Payables() {
         render: (value, row) => {
           const isVencida =
             new Date(value as string) < new Date() &&
-            row.estatus !== "pagado" &&
-            row.estatus !== "cancelado";
+            row.estatus !== "PAGADA" &&
+            row.estatus !== "CANCELADO";
           const diasCredito =
             row.supplier?.dias_credito || (row as any).dias_credito || 0;
 
@@ -652,11 +656,15 @@ export default function Payables() {
       {
         key: "estatus",
         header: "Estatus",
-        render: (v) => {
-          const estatusReal = String(v).toLowerCase();
+        // SE ELIMINÓ EL FILTRO INTERNO type: "status" DE ESTA COLUMNA
+        render: (value, row) => {
+          const statusInfo = getInvoiceStatusInfo(row);
           return (
-            <StatusBadge status={getStatusFromLabel(estatusReal)}>
-              {estatusReal.replace("_", " ")}
+            <StatusBadge
+              status={statusInfo.status}
+              className="uppercase font-bold text-[10px] tracking-wider px-2 py-1"
+            >
+              {value} {/* Muestra la etiqueta oficial */}
             </StatusBadge>
           );
         },
@@ -708,11 +716,11 @@ export default function Payables() {
                     setIsPaymentModalOpen(true);
                   }}
                   disabled={
-                    row.estatus === "cancelado" || row.estatus === "pagado"
+                    row.estatus === "CANCELADO" || row.estatus === "PAGADA"
                   }
                   className={cn(
                     "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                    row.estatus !== "cancelado" && row.estatus !== "pagado"
+                    row.estatus !== "CANCELADO" && row.estatus !== "PAGADA"
                       ? "text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/30"
                       : "opacity-50",
                   )}
@@ -720,7 +728,7 @@ export default function Payables() {
                   <CreditCard className="h-4 w-4 mr-2" /> Registrar Pago
                 </DropdownMenuItem>
 
-                {row.estatus !== "pagado" && row.estatus !== "cancelado" && (
+                {row.estatus !== "PAGADA" && row.estatus !== "CANCELADO" && (
                   <DropdownMenuItem
                     onClick={() => {
                       setInvoiceToCancel(row);
@@ -732,7 +740,7 @@ export default function Payables() {
                   </DropdownMenuItem>
                 )}
 
-                {row.estatus === "cancelado" && (
+                {row.estatus === "CANCELADO" && (
                   <DropdownMenuItem
                     onClick={() => {
                       setInvoiceToReopen(row);
@@ -898,7 +906,6 @@ export default function Payables() {
           BARRA DE FILTROS SUPERIOR
           ========================================== */}
       <div className="bg-white dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm flex flex-col gap-5 relative z-10 transition-all">
-        {/* ENCABEZADO DE FILTROS Y BOTÓN LIMPIAR */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
           <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
             <Filter className="h-4 w-4 text-brand-blue" />
@@ -917,9 +924,7 @@ export default function Payables() {
           </Button>
         </div>
 
-        {/* GRID DE FILTROS */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {/* BÚSQUEDA GENERAL */}
           <div className="relative group col-span-1 md:col-span-2 xl:col-span-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand-blue transition-colors" />
             <Input
@@ -930,7 +935,6 @@ export default function Payables() {
             />
           </div>
 
-          {/* COMBOBOX PROVEEDORES */}
           <div className="col-span-1">
             <Popover
               open={openSupplierCombo}
@@ -1007,7 +1011,6 @@ export default function Payables() {
             </Popover>
           </div>
 
-          {/* ESTATUS */}
           <div className="col-span-1">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus:ring-brand-blue/30 rounded-xl text-slate-600 dark:text-slate-300 font-medium">
@@ -1017,41 +1020,52 @@ export default function Payables() {
                 <SelectItem value="all" className="font-bold text-xs uppercase">
                   Todos los Estatus
                 </SelectItem>
-                <SelectItem value="pendiente" className="text-xs uppercase">
-                  Pendiente
+                <SelectItem
+                  value="POR COBRAR"
+                  className="text-xs uppercase text-amber-600 font-bold"
+                >
+                  Por Pagar
                 </SelectItem>
-                <SelectItem value="pago_parcial" className="text-xs uppercase">
+                <SelectItem
+                  value="PAGO PARCIAL"
+                  className="text-xs uppercase text-blue-600 font-bold"
+                >
                   Pago Parcial
                 </SelectItem>
                 <SelectItem
-                  value="pagado"
-                  className="text-xs uppercase text-emerald-600 dark:text-emerald-400 font-bold"
+                  value="VENCIDA 1-30D"
+                  className="text-xs uppercase text-rose-500 font-bold"
                 >
-                  Pagado
+                  Vencida 1-30d
                 </SelectItem>
                 <SelectItem
-                  value="cancelado"
+                  value="VENCIDA 31-60D"
+                  className="text-xs uppercase text-rose-600 font-bold"
+                >
+                  Vencida 31-60d
+                </SelectItem>
+                <SelectItem
+                  value="ATRASADO +90D"
+                  className="text-xs uppercase text-rose-700 font-bold"
+                >
+                  Atrasado +90d
+                </SelectItem>
+                <SelectItem
+                  value="PAGADA"
+                  className="text-xs uppercase text-emerald-600 font-bold"
+                >
+                  Pagada
+                </SelectItem>
+                <SelectItem
+                  value="CANCELADO"
                   className="text-xs uppercase text-slate-500"
                 >
                   Cancelado
-                </SelectItem>
-                <SelectItem
-                  value="vencido"
-                  className="text-xs uppercase text-rose-600 dark:text-rose-400 font-bold"
-                >
-                  Vencido
-                </SelectItem>
-                <SelectItem
-                  value="por_vencer"
-                  className="text-xs uppercase text-amber-600 dark:text-amber-500 font-bold"
-                >
-                  Por Vencer (5 días)
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* CECO (CENTRO DE COSTOS) */}
           <div className="col-span-1">
             <Select value={cecoFilter} onValueChange={setCecoFilter}>
               <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus:ring-brand-blue/30 rounded-xl text-slate-600 dark:text-slate-300 font-medium">
@@ -1074,7 +1088,6 @@ export default function Payables() {
             </Select>
           </div>
 
-          {/* RANGO DE FECHAS (UNIFICADO EN ESTILO "PÍLDORA" COMPARTIDA) */}
           <div className="col-span-1 md:col-span-2 xl:col-span-4 mt-1">
             <div className="flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 h-11 shadow-inner focus-within:ring-2 focus-within:ring-brand-blue/20 transition-all w-full max-w-2xl group">
               <Calendar className="h-4 w-4 text-slate-400 group-focus-within:text-brand-blue transition-colors mr-3 shrink-0" />
@@ -1148,7 +1161,7 @@ export default function Payables() {
       )}
 
       {/* ==========================================
-          BANNER DE FACTURAS SELECCIONADAS CON CHECKBOXES
+          BANNER DE FACTURAS SELECCIONADAS
           ========================================== */}
       {selectedInvoiceIds.length > 0 && (
         <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in slide-in-from-bottom-4 duration-300 shadow-lg relative z-20">
@@ -1170,7 +1183,7 @@ export default function Payables() {
           <div className="md:text-right border-t md:border-t-0 md:border-l border-emerald-200 dark:border-emerald-800/50 pt-3 md:pt-0 md:pl-5 shrink-0 flex items-center justify-between gap-4">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">
-                Monto Total de Facturas Seleccionadas
+                Monto Total Seleccionado
               </p>
               <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none">
                 {formatMoney(selectedTotalAmount)}
@@ -1639,6 +1652,7 @@ export default function Payables() {
         open={isAgingModalOpen}
         onOpenChange={setIsAgingModalOpen}
         type="cxp"
+        invoices={filteredInvoices} // <-- PASAMOS LA DATA AQUÍ TAMBIÉN
       />
     </div>
   );
