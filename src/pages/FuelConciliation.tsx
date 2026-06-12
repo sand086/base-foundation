@@ -714,18 +714,67 @@ export default function FuelConciliation() {
           </span>
         ),
       },
+
+      // =========================================================
+      // 🔥 NUEVAS COLUMNAS PARA MACHAR LOS DATOS EN LA TABLA 🔥
+      // =========================================================
+      {
+        key: "km_ecm",
+        header: "KM/Hrs ECM",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /(?:Km|Hrs) ECM:\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          return (
+            <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-300">
+              {match ? Number(match[1]).toLocaleString() : "0"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "litros_ecm",
+        header: "Lts ECM",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /Litros ECM:\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          return (
+            <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-300">
+              {match ? Number(match[1]).toFixed(1) : "0.0"} L
+            </span>
+          );
+        },
+      },
+      {
+        key: "litros_vales",
+        header: "Lts Vales",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /Vales:\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          return (
+            <span className="font-mono font-black text-amber-600 dark:text-amber-500 text-xs">
+              {match ? Number(match[1]).toFixed(1) : "0.0"} L
+            </span>
+          );
+        },
+      },
+      // =========================================================
+
       {
         key: "rendimiento",
         header: "Rend. Real",
         render: (_, row: any) => {
+          // Aplicamos la corrección de decimales también aquí para que nunca salga NaN
           const match = row.audit_event?.comments?.match(
-            /Rend Real:\s*([\d.]+)/,
+            /Rend Real:\s*([0-9]+(?:\.[0-9]+)?)/,
           );
           const rend = match ? Number(match[1]).toFixed(2) : "0.00";
           return (
-            <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs flex items-baseline gap-1">
+            <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-xs flex items-baseline gap-1">
               {rend}
-              <span className="text-[9px] opacity-60 uppercase tracking-widest">
+              <span className="text-[9px] font-bold opacity-60 uppercase tracking-widest text-slate-500">
                 {row.is_mg_audit ? "hr/L" : "km/L"}
               </span>
             </span>
@@ -761,7 +810,6 @@ export default function FuelConciliation() {
         header: "",
         sortable: false,
         render: (_, row) => {
-          // BLINDAJE: Detectar si el viaje ya fue pagado
           const isLiquidado = row.status === "liquidado";
 
           return (
@@ -792,7 +840,6 @@ export default function FuelConciliation() {
 
                 <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
 
-                {/* EDITAR (Protegido) */}
                 <DropdownMenuItem
                   onClick={() => {
                     if (isLiquidado) {
@@ -810,7 +857,6 @@ export default function FuelConciliation() {
                   <Pencil className="h-3.5 w-3.5 mr-2" /> Editar / Recalcular
                 </DropdownMenuItem>
 
-                {/* ELIMINAR (Protegido) */}
                 <DropdownMenuItem
                   className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
                   onClick={() => {

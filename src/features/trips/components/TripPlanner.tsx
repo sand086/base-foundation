@@ -36,6 +36,10 @@ import {
   ShieldAlert,
   Snowflake,
   Route as RouteIcon,
+  Filter,
+  Check,
+  ChevronsUpDown,
+  FilterX,
   Container,
   RefreshCw,
 } from "lucide-react";
@@ -60,6 +64,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 // IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
 import {
@@ -214,6 +239,18 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  // ESTADOS PARA FILTROS AVANZADOS
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
+  const [filterClientId, setFilterClientId] = useState<string>("all");
+  const [filterSubclientId, setFilterSubclientId] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterUnit, setFilterUnit] = useState<string>("all");
+  const [filterOperator, setFilterOperator] = useState<string>("all");
+
+  const [openClientCombo, setOpenClientCombo] = useState(false);
+  const [openSubclientCombo, setOpenSubclientCombo] = useState(false);
+
   // ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
   const [tableKey, setTableKey] = useState(Date.now());
 
@@ -262,7 +299,7 @@ export const TripPlanner = () => {
     [trips],
   );
 
-  // ACTUALIZADO: Extracción segura de unidades y motogeneradores + campo de búsqueda
+  // Extracción segura de unidades y motogeneradores + campo de búsqueda
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
     const items: any[] = [];
@@ -276,7 +313,7 @@ export const TripPlanner = () => {
           ) || trip.legs[trip.legs.length - 1];
 
         if (activeLeg) {
-          // 🛡️ Extracción segura para evitar el error ts(2339)
+          // Extracción segura para evitar errores de tipo
           const getUnitName = (objOrString: any, id: any) => {
             if (typeof objOrString === "string") return objOrString;
             if (objOrString?.numero_economico)
@@ -312,6 +349,89 @@ export const TripPlanner = () => {
     }
     return items.sort((a, b) => b.leg.id - a.leg.id);
   }, [trips, unidades]);
+
+  // Extraemos opciones dinámicas según los viajes activos reales
+  const uniqueOptions = useMemo(() => {
+    const clientsMap = new Map();
+    const subclientsMap = new Map();
+    const unitsMap = new Map();
+    const operatorsMap = new Map();
+
+    allActiveLegs.forEach((item) => {
+      const t = item.tripPadre;
+      const l = item.leg;
+
+      if (t.client?.id)
+        clientsMap.set(String(t.client.id), t.client.razon_social);
+      // Solo mostramos sub-clientes si pertenecen al cliente seleccionado (o si no hay cliente filtrado)
+      if (
+        t.sub_client?.id &&
+        (filterClientId === "all" || String(t.client?.id) === filterClientId)
+      ) {
+        subclientsMap.set(
+          String(t.sub_client.id),
+          t.sub_client.nombre || t.sub_client.alias,
+        );
+      }
+      if (l.unit?.numero_economico)
+        unitsMap.set(l.unit.numero_economico, l.unit.numero_economico);
+      if (l.operator?.name) operatorsMap.set(l.operator.name, l.operator.name);
+    });
+
+    return {
+      clients: Array.from(clientsMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      })),
+      subclients: Array.from(subclientsMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      })),
+      units: Array.from(unitsMap.keys()).sort(),
+      operators: Array.from(operatorsMap.keys()).sort(),
+    };
+  }, [allActiveLegs, filterClientId]);
+
+  // Motor principal que evalúa los filtros en cascada
+  const filteredActiveLegs = useMemo(() => {
+    return allActiveLegs.filter((item) => {
+      const t = item.tripPadre;
+      const l = item.leg;
+
+      if (filterStartDate) {
+        const tripDate = t.start_date ? t.start_date.split("T")[0] : "";
+        if (!tripDate || tripDate < filterStartDate) return false;
+      }
+      if (filterEndDate) {
+        const tripDate = t.start_date ? t.start_date.split("T")[0] : "";
+        if (!tripDate || tripDate > filterEndDate) return false;
+      }
+      if (filterClientId !== "all" && String(t.client?.id) !== filterClientId)
+        return false;
+      if (
+        filterSubclientId !== "all" &&
+        String(t.sub_client?.id) !== filterSubclientId
+      )
+        return false;
+      if (filterStatus !== "all" && normalizeStatus(l.status) !== filterStatus)
+        return false;
+      if (filterUnit !== "all" && l.unit?.numero_economico !== filterUnit)
+        return false;
+      if (filterOperator !== "all" && l.operator?.name !== filterOperator)
+        return false;
+
+      return true;
+    });
+  }, [
+    allActiveLegs,
+    filterStartDate,
+    filterEndDate,
+    filterClientId,
+    filterSubclientId,
+    filterStatus,
+    filterUnit,
+    filterOperator,
+  ]);
 
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
@@ -402,7 +522,6 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
-  // ACTUALIZADO: Columnas cambiadas a <any> para aceptar campos calculados
   const tableColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -433,7 +552,6 @@ export const TripPlanner = () => {
           <div className="flex flex-col gap-1">
             <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight flex items-center gap-2">
               {row.tripPadre.client?.razon_social || "CLIENTE GENERAL"}
-              {/* NUEVO: INDICADOR VISUAL MATERIAL PELIGROSO */}
               {row.tripPadre.es_material_peligroso && (
                 <ShieldAlert className="h-3.5 w-3.5 text-amber-500 drop-shadow-sm" />
               )}
@@ -460,7 +578,7 @@ export const TripPlanner = () => {
         ),
       },
       {
-        key: "_asignacionSearch", // MAGIA: Se usa este campo que tiene todos los ecos integrados para el filtro
+        key: "_asignacionSearch",
         header: "Asignación Física",
         render: (value, row) => (
           <div className="flex flex-col gap-1.5">
@@ -477,8 +595,8 @@ export const TripPlanner = () => {
                 if (parts.length === 0) return "S/A";
                 if (parts.length === 1) return parts[0];
                 if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
-                if (parts.length === 3) return `${parts[0]} ${parts[1]}`; // Ej: Abiel Quezada Azamar -> Abiel Quezada
-                return `${parts[0]} ${parts[2]}`; // Ej: Luis Enrique Garcia Martinez -> Luis Garcia
+                if (parts.length === 3) return `${parts[0]} ${parts[1]}`;
+                return `${parts[0]} ${parts[2]}`;
               })()}
             </div>
             {/* MOTOGENERADORES */}
@@ -596,7 +714,7 @@ export const TripPlanner = () => {
             onClick={async () => {
               toast.info("Sincronizando datos...");
               await fetchTrips();
-              setTableKey(Date.now()); // Forzar destrucción y recreación de tabla sin recargar página
+              setTableKey(Date.now());
             }}
             disabled={loading}
             className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
@@ -641,19 +759,345 @@ export const TripPlanner = () => {
         </div>
       </div>
 
-      {/* AQUI REEMPLAZAMOS LA TABLA MANUAL POR LA ENHANCED DATATABLE */}
       {viewMode === "table" && (
-        <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
-          <CardContent className="p-0">
-            <EnhancedDataTable
-              data={allActiveLegs}
-              columns={tableColumns}
-              searchPlaceholder="BUSCAR OPERADOR, UNIDAD, CLIENTE..."
-              exportFileName="Viajes_Operativos"
-              initialSort={{ key: "tripPadre.created_at", direction: "desc" }}
-            />
-          </CardContent>
-        </Card>
+        <div className="space-y-4 animate-in fade-in duration-300">
+          {/* BARRA DE FILTROS */}
+          <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                <Filter className="h-4 w-4 text-blue-500" /> Filtros Avanzados
+              </h3>
+              {(filterStartDate ||
+                filterEndDate ||
+                filterClientId !== "all" ||
+                filterSubclientId !== "all" ||
+                filterStatus !== "all" ||
+                filterUnit !== "all" ||
+                filterOperator !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFilterStartDate("");
+                    setFilterEndDate("");
+                    setFilterClientId("all");
+                    setFilterSubclientId("all");
+                    setFilterStatus("all");
+                    setFilterUnit("all");
+                    setFilterOperator("all");
+                  }}
+                  className="h-7 text-[10px] font-black text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 uppercase tracking-widest px-2"
+                >
+                  <FilterX className="h-3.5 w-3.5 mr-1" /> Limpiar Filtros
+                </Button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
+              {/* Fechas */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Desde
+                </label>
+                <Input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="h-9 text-xs font-mono font-bold shadow-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Hasta
+                </label>
+                <Input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="h-9 text-xs font-mono font-bold shadow-sm"
+                />
+              </div>
+
+              {/* Cliente (Combobox Search) */}
+              <div className="space-y-1 lg:col-span-2">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Cliente
+                </label>
+                <Popover
+                  open={openClientCombo}
+                  onOpenChange={setOpenClientCombo}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full h-9 justify-between text-xs font-bold uppercase shadow-sm"
+                    >
+                      <span className="truncate">
+                        {filterClientId === "all"
+                          ? "Todos los clientes"
+                          : uniqueOptions.clients.find(
+                              (c) => c.id === filterClientId,
+                            )?.name || "Todos"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0 z-[100]">
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar cliente..."
+                        className="text-xs"
+                      />
+                      <CommandEmpty>Sin resultados.</CommandEmpty>
+                      <CommandGroup className="max-h-[200px] overflow-auto">
+                        <CommandItem
+                          onSelect={() => {
+                            setFilterClientId("all");
+                            setFilterSubclientId("all");
+                            setOpenClientCombo(false);
+                          }}
+                          className="text-xs font-bold uppercase"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              filterClientId === "all"
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />{" "}
+                          Todos
+                        </CommandItem>
+                        {uniqueOptions.clients.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            onSelect={() => {
+                              setFilterClientId(c.id);
+                              setFilterSubclientId("all");
+                              setOpenClientCombo(false);
+                            }}
+                            className="text-xs font-bold uppercase"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                filterClientId === c.id
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />{" "}
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Subcliente (Combobox Search) */}
+              <div className="space-y-1 lg:col-span-2">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Sucursal / Sub-cliente
+                </label>
+                <Popover
+                  open={openSubclientCombo}
+                  onOpenChange={setOpenSubclientCombo}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      disabled={uniqueOptions.subclients.length === 0}
+                      className="w-full h-9 justify-between text-xs font-bold uppercase shadow-sm"
+                    >
+                      <span className="truncate">
+                        {filterSubclientId === "all"
+                          ? "Todas las sucursales"
+                          : uniqueOptions.subclients.find(
+                              (c) => c.id === filterSubclientId,
+                            )?.name || "Todas"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0 z-[100]">
+                    <Command>
+                      <CommandInput
+                        placeholder="Buscar sucursal..."
+                        className="text-xs"
+                      />
+                      <CommandEmpty>Sin resultados.</CommandEmpty>
+                      <CommandGroup className="max-h-[200px] overflow-auto">
+                        <CommandItem
+                          onSelect={() => {
+                            setFilterSubclientId("all");
+                            setOpenSubclientCombo(false);
+                          }}
+                          className="text-xs font-bold uppercase"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              filterSubclientId === "all"
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />{" "}
+                          Todas
+                        </CommandItem>
+                        {uniqueOptions.subclients.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            onSelect={() => {
+                              setFilterSubclientId(c.id);
+                              setOpenSubclientCombo(false);
+                            }}
+                            className="text-xs font-bold uppercase"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                filterSubclientId === c.id
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />{" "}
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Unidad (Select Nativo) */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Estatus
+                </label>
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="h-9 text-xs font-bold uppercase shadow-sm">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="all"
+                      className="text-xs font-bold uppercase"
+                    >
+                      Todos
+                    </SelectItem>
+                    <SelectItem
+                      value="creado"
+                      className="text-xs font-bold uppercase"
+                    >
+                      En Ruta / Creado
+                    </SelectItem>
+                    <SelectItem
+                      value="en_transito"
+                      className="text-xs font-bold uppercase"
+                    >
+                      En Tránsito
+                    </SelectItem>
+                    <SelectItem
+                      value="retraso"
+                      className="text-xs font-bold uppercase"
+                    >
+                      Retraso
+                    </SelectItem>
+                    <SelectItem
+                      value="detenido"
+                      className="text-xs font-bold uppercase"
+                    >
+                      Detenido
+                    </SelectItem>
+                    <SelectItem
+                      value="accidente"
+                      className="text-xs font-bold uppercase"
+                    >
+                      Accidente
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+              {/* Eco y Operador */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Unidad / Eco
+                </label>
+                <Select value={filterUnit} onValueChange={setFilterUnit}>
+                  <SelectTrigger className="h-9 text-xs font-bold uppercase shadow-sm">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="all"
+                      className="text-xs font-bold uppercase"
+                    >
+                      Todas
+                    </SelectItem>
+                    {uniqueOptions.units.map((u) => (
+                      <SelectItem
+                        key={u}
+                        value={u}
+                        className="text-xs font-bold uppercase font-mono"
+                      >
+                        {u}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-slate-500 uppercase">
+                  Operador
+                </label>
+                <Select
+                  value={filterOperator}
+                  onValueChange={setFilterOperator}
+                >
+                  <SelectTrigger className="h-9 text-xs font-bold uppercase shadow-sm">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      value="all"
+                      className="text-xs font-bold uppercase"
+                    >
+                      Todos
+                    </SelectItem>
+                    {uniqueOptions.operators.map((o) => (
+                      <SelectItem
+                        key={o}
+                        value={o}
+                        className="text-xs font-bold uppercase"
+                      >
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
+            <CardContent className="p-0">
+              <EnhancedDataTable
+                data={filteredActiveLegs}
+                columns={tableColumns}
+                searchPlaceholder="BUSCAR EN LOS RESULTADOS FILTRADOS..."
+                exportFileName="Viajes_Operativos"
+                initialSort={{ key: "tripPadre.created_at", direction: "desc" }}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {viewMode === "standby" && (
