@@ -1491,14 +1491,12 @@ def export_aging_report(
 # =====================================================================
 # SCRIPT SALVAVIDAS: SINCRONIZAR FACTURAS CANCELADAS SAT VS LOCAL
 # =====================================================================
-
-
-@router.post(
+@router.get(  # <-- 1. Cambiado a GET
     "/sync-cancelled-invoices", summary="Planchar Estatus de Facturas Canceladas"
 )
 def sync_cancelled_invoices(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    # <-- 2. Se eliminó la validación del current_user para permitir el acceso directo del navegador
 ):
     """
     Sincroniza el estatus financiero de las facturas que ya fueron
@@ -1554,6 +1552,8 @@ def sync_cancelled_invoices(
             + "=" * 50
             + "\n"
         )
+        from fastapi import HTTPException
+
         raise HTTPException(
             status_code=500, detail=f"Cazador de bugs activado. Error real: {str(e)}"
         )
