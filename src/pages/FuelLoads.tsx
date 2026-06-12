@@ -327,7 +327,7 @@ const FuelLoads = () => {
     const ahora = new Date();
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // ❄️ BLINDAJE EN KPIs: Separamos matemáticamente los vales (Tracto/Moto)
+    // 1. Filtramos por Tracto o Motogenerador y por unidad seleccionada
     const cargasEquipo = cargas.filter((c) =>
       equipmentFilter === "mg" ? c.is_motogenerator : !c.is_motogenerator,
     );
@@ -341,45 +341,79 @@ const FuelLoads = () => {
       (c) => new Date(c.fecha_hora) >= hace7Dias,
     );
 
-    // 💧 SEPARAMOS UREA DE DIÉSEL PARA NO ARRUINAR EL RENDIMIENTO
     const cargasDieselSemana = cargasSemana.filter(
       (c) => c.tipo_combustible !== "urea",
     );
 
-    // Para el rendimiento, SOLO sumamos litros de DIÉSEL
+    // 2. INDICADORES GLOBALES (Suma TODO, tengan o no tengan odómetro conciliado)
     const litros = cargasDieselSemana.reduce(
       (sum, c) => sum + (Number(c.litros) || 0),
       0,
     );
-
-    // Para Inversión (Dinero Gasto), sumamos AMBOS (Diésel y Urea)
     const inversion = cargasSemana.reduce(
       (sum, c) => sum + (Number(c.total) || 0),
       0,
     );
 
-    const sorted = [...cargasDieselSemana].sort(
-      (a, b) =>
-        new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
-    );
-
-    // ❄️ DETECCIÓN INTELIGENTE: Horómetro si es MG, Odómetro si es tracto
+    // Función inteligente para extraer el ODO
     const getOdo = (c: any) =>
       equipmentFilter === "mg"
         ? Number(c.horometro) || Number(c.odometro) || 0
         : Number(c.odometro) || 0;
 
-    const odoActual = sorted.length > 0 ? getOdo(sorted[0]) : 0;
-    const odoAnterior =
-      sorted.length > 1 ? getOdo(sorted[sorted.length - 1]) : odoActual;
-    const kmRecorridos = Math.abs(odoActual - odoAnterior); // Absoluto para evitar negativos
+    // 3. CÁLCULOS DE RENDIMIENTO (SOLO toma en cuenta los vales ya CONCILIADOS / con ODO > 0)
+    let kmRecorridosTotales = 0;
+    let odoMasRecienteGlobal = 0;
+    let litrosValidosParaRendimiento = 0;
 
+    // Agrupamos los vales por camión para no mezclar kilometrajes
+    const cargasPorUnidad = cargasDieselSemana.reduce(
+      (acc, curr) => {
+        const odo = getOdo(curr);
+        // REGLA CLAVE: Ignoramos los vales con odómetro 0 para el cálculo de distancia
+        if (odo > 0) {
+          if (!acc[curr.unit_id]) acc[curr.unit_id] = [];
+          acc[curr.unit_id].push(curr);
+          litrosValidosParaRendimiento += Number(curr.litros) || 0;
+        }
+        return acc;
+      },
+      {} as Record<string, any[]>,
+    );
+
+    // Por cada camión, calculamos su distancia recorrida en la semana
+    Object.values(cargasPorUnidad).forEach((cargasUnidad) => {
+      // Ordenamos del más reciente al más viejo
+      const sortedUnidad = [...cargasUnidad].sort(
+        (a, b) =>
+          new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
+      );
+
+      if (sortedUnidad.length > 0) {
+        const odoMayor = getOdo(sortedUnidad[0]); // El odómetro de la carga más reciente
+        if (odoMayor > odoMasRecienteGlobal) odoMasRecienteGlobal = odoMayor;
+
+        // Si hay al menos 2 cargas conciliadas del mismo camión, sacamos la diferencia
+        if (sortedUnidad.length > 1) {
+          const odoMenor = getOdo(sortedUnidad[sortedUnidad.length - 1]); // El de la más antigua
+          kmRecorridosTotales += Math.abs(odoMayor - odoMenor);
+        }
+      }
+    });
+
+    // 4. Calculamos el Rendimiento (KM/L) usando solo los litros que sí tenían KM
     const rendimiento =
-      kmRecorridos > 0 && litros > 0
-        ? (kmRecorridos / litros).toFixed(2)
+      kmRecorridosTotales > 0 && litrosValidosParaRendimiento > 0
+        ? (kmRecorridosTotales / litrosValidosParaRendimiento).toFixed(2)
         : "0.00";
 
-    return { litros, inversion, odoActual, kmRecorridos, rendimiento };
+    return {
+      litros,
+      inversion,
+      odoActual: odoMasRecienteGlobal,
+      kmRecorridos: kmRecorridosTotales,
+      rendimiento,
+    };
   }, [cargas, selectedUnitId, equipmentFilter]);
 
   const selectedUnitObj = useMemo(

@@ -13,6 +13,7 @@ import {
   BadgeDollarSign,
   ReceiptText,
   FileSignature,
+  LinkIcon,
   Filter,
   FileText,
   AlertTriangle,
