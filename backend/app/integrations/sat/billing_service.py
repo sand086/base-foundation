@@ -1291,50 +1291,6 @@ class BillingService:
                 status_code=500, detail=f"Error timbrando factura final en BD: {str(e)}"
             )
 
-    def cancelar_factura_nominal(
-        self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
-    ):
-        factura = (
-            self.db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == invoice_id)
-            .first()
-        )
-        if not factura or not factura.uuid:
-            raise ValueError("Factura no encontrada o sin UUID.")
-
-        logger.info(
-            f"Iniciando cancelación en SAT del UUID: {factura.uuid} con Motivo: {motivo}"
-        )
-
-        try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
-            from app.models.models import AuditLog
-            from datetime import datetime
-
-            factura.status_sat = "CANCELADO"
-            factura.motivo_cancelacion = motivo
-            factura.fecha_cancelacion = datetime.utcnow()
-
-            log = AuditLog(
-                user_id=None,
-                accion=f"Comprobante {factura.uuid} cancelado ante el SAT",
-                tipo_accion="CANCELACION",
-                modulo="CUENTAS_POR_COBRAR",
-                detalles=f'{{"uuid": "{factura.uuid}", "motivo": "{motivo}", "sustituto": "{uuid_sustituto}"}}',
-            )
-            self.db.add(log)
-            self.db.commit()
-            logger.info(f"UUID {factura.uuid} cancelado exitosamente en el sistema.")
-
-        except Exception as e:
-            factura.status_sat = "PENDIENTE_CANCELAR_SAT"
-            factura.motivo_cancelacion = motivo
-            self.db.commit()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Fallo comunicación con el SAT para cancelar: {e}",
-            )
-
     def cancelar_factura_sat(
         self, invoice_id: int, motivo: str = "02", uuid_sustituto: str = None
     ):
@@ -1366,32 +1322,28 @@ class BillingService:
             with open(self.path_key, "rb") as f_key:
                 key_bytes = f_key.read()
 
-            # 2. Estructura de cancelación
-            uuids_array = [
-                {
-                    "uuid": factura.uuid,
-                    "motivo": motivo,
-                    "folioSustituto": (
-                        uuid_sustituto if motivo == "01" and uuid_sustituto else ""
-                    ),
-                }
-            ]
+            # 2. 🚨 FORMATO DE TUBERÍA REQUERIDO POR SOLUCIÓN FACTIBLE 4.0 🚨
+            # El formato exacto debe ser: "UUID|Motivo|UuidSustitucion"
+            sustituto_str = uuid_sustituto if uuid_sustituto else ""
+            uuid_formateado_sat = f"{factura.uuid.strip()}|{motivo}|{sustituto_str}"
 
-            # 3. 🚨 LLAMADA AL PAC CON LOS NOMBRES EXACTOS DEL ERROR 🚨
+            uuids_array = [uuid_formateado_sat]
+
+            # 3. Llamada al PAC con las firmas correctas
             resultado = client_zeep.service.cancelar(
                 usuario=self.pac_user,
                 password=self.pac_pass,
                 uuids=uuids_array,
-                derCertCSD=cer_bytes,  # <-- Corregido
-                derKeyCSD=key_bytes,  # <-- Corregido
-                contrasenaCSD=self.key_password,  # <-- Corregido
+                derCertCSD=cer_bytes,
+                derKeyCSD=key_bytes,
+                contrasenaCSD=self.key_password,
             )
 
-            # 4. Validar la respuesta
+            # 4. Validar la respuesta del PAC
             if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
                 raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
 
-            # 5. ÉXITO: Actualizar BD
+            # 5. ÉXITO: Actualizar BD localmente
             factura.status_sat = "CANCELADO"
             factura.estatus = "cancelado"
             factura.motivo_cancelacion = motivo
@@ -1414,6 +1366,7 @@ class BillingService:
             }
 
         except Exception as e:
+            # En caso de fallar, mantenemos la etiqueta para que reintente en el bucle
             factura.status_sat = "PENDIENTE_CANCELAR_SAT"
             factura.motivo_cancelacion = motivo
             self.db.commit()

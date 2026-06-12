@@ -383,7 +383,6 @@ export function AgingExportModal({
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Exportar Excel
             </Button>
           </div>
         </div>

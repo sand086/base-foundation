@@ -55,6 +55,7 @@ import {
   Navigation,
   CalendarPlus,
   FileCheck,
+  FileArchive,
   Briefcase,
   Landmark,
 } from "lucide-react";
@@ -121,6 +122,8 @@ const iconMap: Record<string, React.ElementType> = {
   roles: Shield,
   settings: Settings,
   admin: Settings, // Fallback
+  cfdi_vault: FileArchive,
+  historico_cfdi: FileArchive,
 };
 
 const EMPTY_PERMISO: Permiso = {
@@ -371,6 +374,9 @@ const RolesPermissions: React.FC = () => {
         tesoreria: "treasury", //  FIX: Mapeo de Tesorería
         proveedores: "suppliers", //  FIX: Mapeo de Proveedores
         administracion: "admin", //  FIX: Mapeo de Admin
+        historico_cfdi: "cfdi_vault",
+        historico: "cfdi_vault",
+        cfdi: "cfdi_vault",
       };
 
       modules.forEach((m) => {

@@ -16,6 +16,7 @@ export const ROUTE_TO_PERM_KEYS: Record<string, readonly string[]> = {
   dispatch: ["dispatch", "despacho", "dispatch"],
   treasury: ["treasury", "tesoreria", "tesorería", "finanzas"],
   admin: ["admin", "configuracion", "usuarios", "users"],
+  cfdi_vault: ["cfdi_vault", "historico_cfdi", "cfdi"],
 };
 
 export function pickPermisosInsensitive(
