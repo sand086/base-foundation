@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   FilterX,
   FileSpreadsheet,
+  Search, // <-- NUEVO: Importamos el ícono Search
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,9 +102,10 @@ export default function Receivables() {
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
   const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
 
-  // NUEVOS: Estados para filtros en la barra superior
+  // ESTADOS PARA FILTROS EN LA BARRA SUPERIOR
+  const [searchTerm, setSearchTerm] = useState(""); // <-- NUEVO ESTADO DE BÚSQUEDA LIBRE
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all"); // <-- NUEVO ESTADO DE ESTATUS
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
@@ -241,25 +243,39 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
-  // LÓGICA DE FILTRADO ACTUALIZADA (CLIENTE + ESTATUS + RANGO DE FECHAS)
+  // LÓGICA DE FILTRADO ACTUALIZADA (TEXTO + CLIENTE + ESTATUS + RANGO DE FECHAS)
   const filteredInvoices = useMemo(() => {
     let filtered = formattedInvoices;
 
-    // 1. Filtro por Cliente
+    // 1. Filtro de Búsqueda de Texto (NUEVO)
+    if (searchTerm) {
+      const lowerTerm = searchTerm.toLowerCase();
+      filtered = filtered.filter((inv) => {
+        return (
+          inv.folio_interno?.toLowerCase().includes(lowerTerm) ||
+          inv.cliente?.toLowerCase().includes(lowerTerm) ||
+          inv.uuid?.toLowerCase().includes(lowerTerm) ||
+          inv.concepto?.toLowerCase().includes(lowerTerm) ||
+          inv.uuid_relacionado?.toLowerCase().includes(lowerTerm)
+        );
+      });
+    }
+
+    // 2. Filtro por Cliente
     if (selectedClientId !== "all") {
       filtered = filtered.filter(
         (inv) => String(inv.client_id) === selectedClientId,
       );
     }
 
-    // 2. Filtro por Estatus (NUEVO CONTROL EXTERNO)
+    // 3. Filtro por Estatus
     if (selectedStatus !== "all") {
       filtered = filtered.filter(
         (inv) => String(inv.estatus).toUpperCase() === selectedStatus,
       );
     }
 
-    // 3. Filtro por Rango de Fechas (Fecha Emisión)
+    // 4. Filtro por Rango de Fechas (Fecha Emisión)
     if (startDate) {
       filtered = filtered.filter((inv) => {
         if (!inv.fecha_emision) return false;
@@ -281,7 +297,14 @@ export default function Receivables() {
     }
 
     return filtered;
-  }, [formattedInvoices, selectedClientId, selectedStatus, startDate, endDate]);
+  }, [
+    formattedInvoices,
+    searchTerm,
+    selectedClientId,
+    selectedStatus,
+    startDate,
+    endDate,
+  ]);
 
   const financialSummary = useMemo(() => {
     let totalFacturado = 0;
@@ -613,7 +636,6 @@ export default function Receivables() {
       {
         key: "estatus",
         header: "Estatus",
-        // 🔴 COMPLETAMENTE ELIMINADO EL FILTRO INTERNO DE ESTA COLUMNA
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
@@ -622,7 +644,6 @@ export default function Receivables() {
               className="uppercase font-bold text-[10px] tracking-wider px-2 py-1"
             >
               {value}{" "}
-              {/* Mostramos la etiqueta oficial indexada (ej. PAGADA, POR COBRAR) */}
             </StatusBadge>
           );
         },
@@ -812,12 +833,23 @@ export default function Receivables() {
       >
         <div className="flex flex-wrap items-center gap-3">
           {/* ======================================= */}
-          {/* BARRA DE FILTROS SUPERIOR (TOTALMENTE INDEPENDIENTE) */}
+          {/* BARRA DE FILTROS SUPERIOR (INCLUYE BÚSQUEDA) */}
           {/* ======================================= */}
           <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
+            {/* 👇 NUEVO: INPUT DE BÚSQUEDA LIBRE 👇 */}
+            <div className="flex items-center relative min-w-[200px] lg:min-w-[240px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Buscar folio, cliente, UUID..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 h-10 w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm rounded-lg focus:ring-brand-red placeholder:font-medium placeholder:uppercase"
+              />
+            </div>
+
             {/* Filtro Cliente */}
-            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[220px]">
-              <Filter className="h-4 w-4 text-slate-400 mr-2" />
+            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[180px] lg:min-w-[220px]">
+              <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
               <Select
                 value={selectedClientId}
                 onValueChange={setSelectedClientId}
@@ -842,9 +874,9 @@ export default function Receivables() {
               </Select>
             </div>
 
-            {/* 👇 NUEVO: FILTRO EXTERNO DE ESTATUS 👇 */}
-            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[180px]">
-              <AlertCircle className="h-4 w-4 text-slate-400 mr-2" />
+            {/* Filtro Estatus */}
+            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[160px]">
+              <AlertCircle className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
                 <SelectTrigger className="w-full border-none shadow-none h-8 bg-transparent p-0 pr-2 focus:ring-0 text-xs font-bold text-slate-700 dark:text-slate-300">
                   <SelectValue placeholder="Todos los estatus" />
@@ -900,13 +932,15 @@ export default function Receivables() {
             </div>
 
             {/* Botón Limpiar */}
-            {(selectedClientId !== "all" ||
+            {(searchTerm ||
+              selectedClientId !== "all" ||
               selectedStatus !== "all" ||
               startDate ||
               endDate) && (
               <Button
                 variant="ghost"
                 onClick={() => {
+                  setSearchTerm("");
                   setSelectedClientId("all");
                   setSelectedStatus("all");
                   setStartDate("");
@@ -1027,7 +1061,7 @@ export default function Receivables() {
             isRowSelectable={(row) =>
               (row.saldo_pendiente || 0) > 0 && row.status_sat !== "PROVISIONAL"
             }
-            hideGlobalSearch={true} // <-- ELIMINA EL BUSCADOR
+            hideGlobalSearch={true} // <-- ELIMINA EL BUSCADOR INTERNO POR DEFECTO
             hideInternalFilters={true} // <-- ELIMINA EL BOTÓN "FILTROS INT."
           />
         </CardContent>
@@ -1237,7 +1271,6 @@ export default function Receivables() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* CÓDIGO NUEVO (Línea ~820 en Receivables.tsx): */}
       <AgingExportModal
         open={isAgingModalOpen}
         onOpenChange={setIsAgingModalOpen}
