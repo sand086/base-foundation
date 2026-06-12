@@ -1360,13 +1360,13 @@ class BillingService:
         try:
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
 
-            # 1. Leer los archivos del CSD (Cer y Key) EN BYTES PUROS (Sin Base64 manual)
+            # 1. Leer los archivos del CSD en bytes puros
             with open(self.path_cer, "rb") as f_cer:
                 cer_bytes = f_cer.read()
             with open(self.path_key, "rb") as f_key:
                 key_bytes = f_key.read()
 
-            # 2. Estructura de cancelación para Solución Factible (CFDI 4.0)
+            # 2. Estructura de cancelación
             uuids_array = [
                 {
                     "uuid": factura.uuid,
@@ -1377,28 +1377,26 @@ class BillingService:
                 }
             ]
 
-            # 3. Llamada al PAC (¡EXACTAMENTE 6 ARGUMENTOS!)
-            # usuario, password, uuids, cerBase64, keyBase64, passwordLlave
+            # 3. 🚨 LLAMADA AL PAC CON LOS NOMBRES EXACTOS DEL ERROR 🚨
             resultado = client_zeep.service.cancelar(
                 usuario=self.pac_user,
                 password=self.pac_pass,
                 uuids=uuids_array,
-                cerBase64=cer_bytes,
-                keyBase64=key_bytes,
-                passwordLlave=self.key_password,
+                derCertCSD=cer_bytes,  # <-- Corregido
+                derKeyCSD=key_bytes,  # <-- Corregido
+                contrasenaCSD=self.key_password,  # <-- Corregido
             )
 
-            # 4. Validar la respuesta del PAC
+            # 4. Validar la respuesta
             if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
                 raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
 
-            # 5. ÉXITO: Actualizar la base de datos localmente
+            # 5. ÉXITO: Actualizar BD
             factura.status_sat = "CANCELADO"
-            factura.estatus = "cancelado"  # Estatus financiero
+            factura.estatus = "cancelado"
             factura.motivo_cancelacion = motivo
             factura.fecha_cancelacion = datetime.utcnow()
 
-            # Dejamos huella de auditoría
             log = AuditLog(
                 user_id=None,
                 accion=f"Factura {factura.folio_interno} cancelada directamente en el SAT",
@@ -1411,12 +1409,11 @@ class BillingService:
 
             return {
                 "status": "success",
-                "message": f"Factura cancelada exitosamente ante el SAT. Mensaje: {resultado.mensaje}",
+                "message": f"Cancelada. Mensaje: {resultado.mensaje}",
                 "uuid": factura.uuid,
             }
 
         except Exception as e:
-            # Si falla la red o el SAT rechaza la cancelación temporalmente
             factura.status_sat = "PENDIENTE_CANCELAR_SAT"
             factura.motivo_cancelacion = motivo
             self.db.commit()
