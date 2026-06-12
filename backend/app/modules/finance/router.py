@@ -1567,19 +1567,21 @@ def sync_cancelled_invoices(
 @router.get("/force-cancel-sat-real", summary="Forzar cancelación en el SAT")
 def force_cancel_sat_real(db: Session = Depends(get_db)):
     """
-    Toma todas las facturas que localmente dicen 'CANCELADO' pero que el
-    sistema jamás mandó a cancelar al SAT. Llama al PAC usando los sellos.
+    Toma todas las facturas que localmente dicen 'CANCELADO' o 'PENDIENTE_CANCELAR_SAT'
+    pero que el sistema jamás mandó a cancelar al SAT. Llama al PAC usando los sellos.
     """
     from app.integrations.sat.billing_service import BillingService
 
     service = BillingService(db)
 
-    # 1. Buscar las facturas que dicen estar canceladas localmente
+    # 1. Buscar las facturas que dicen estar canceladas localmente O en sala de espera
     # y que sí tienen un UUID (es decir, que fueron timbradas)
     facturas_fantasmas = (
         db.query(models.ReceivableInvoice)
         .filter(
-            models.ReceivableInvoice.status_sat == "CANCELADO",
+            models.ReceivableInvoice.status_sat.in_(
+                ["CANCELADO", "PENDIENTE_CANCELAR_SAT"]
+            ),  # <--- CORRECCIÓN AQUÍ
             models.ReceivableInvoice.uuid.isnot(None),
         )
         .all()
@@ -1593,8 +1595,7 @@ def force_cancel_sat_real(db: Session = Depends(get_db)):
     # 2. Recorremos una por una y las disparamos al PAC
     for fac in facturas_fantasmas:
         try:
-            # Aquí usamos el método real que programamos hace rato (El que hace la petición SOAP)
-            # Motivo 02 = Comprobante emitido con errores sin relación
+            # Aquí usamos el método real (Motivo 02 = Emitido con errores sin relación)
             res = service.cancelar_factura_sat(invoice_id=fac.id, motivo="02")
 
             resultados.append(
@@ -1606,7 +1607,6 @@ def force_cancel_sat_real(db: Session = Depends(get_db)):
                 }
             )
         except Exception as e:
-            # Si el PAC dice "Ya estaba cancelada" o marca error, lo capturamos
             resultados.append(
                 {
                     "folio": fac.folio_interno,
