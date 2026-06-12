@@ -9,8 +9,8 @@ import {
   ShieldCheck,
   AlertTriangle,
   Wallet,
-  CalendarDays,
-  Search, // <-- NUEVO: Importamos el ícono Search
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -23,6 +23,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
 import axiosClient from "@/api/axiosClient";
 import { cn } from "@/lib/utils";
 
@@ -43,8 +55,26 @@ export function AgingExportModal({
   const [endDate, setEndDate] = useState("");
   const [isExporting, setIsExporting] = useState(false);
 
-  // <-- NUEVO: Estado para el buscador de entidad
-  const [searchEntity, setSearchEntity] = useState("");
+  // <-- NUEVO: Estados para el Combobox de Entidad
+  const [searchEntity, setSearchEntity] = useState("all");
+  const [openCombo, setOpenCombo] = useState(false);
+
+  // <-- NUEVO: Extraemos la lista de entidades únicas para poblar el select
+  const uniqueEntities = useMemo(() => {
+    const entities = new Set<string>();
+    invoices.forEach((inv) => {
+      const entityName =
+        inv.cliente ||
+        inv.proveedor ||
+        inv.client?.razon_social ||
+        inv.supplier?.razon_social ||
+        inv.supplier_razon_social ||
+        inv.client_razon_social ||
+        "Entidad Desconocida";
+      entities.add(entityName);
+    });
+    return Array.from(entities).sort();
+  }, [invoices]);
 
   // ========================================================
   // MOTOR DE LA TABLA DINÁMICA (Cálculo en Tiempo Real)
@@ -121,13 +151,13 @@ export function AgingExportModal({
       else summary[entityName].mas90 += saldo;
     });
 
-    // <-- NUEVO: Filtramos por el texto ingresado en el buscador antes de ordenar
+    // <-- NUEVO: Filtramos usando valor exacto ("all" o el nombre de la entidad seleccionada)
     return Object.values(summary)
       .filter((row: any) =>
-        row.entidad.toLowerCase().includes(searchEntity.toLowerCase()),
+        searchEntity === "all" ? true : row.entidad === searchEntity,
       )
       .sort((a: any, b: any) => b.total - a.total);
-  }, [invoices, startDate, endDate, searchEntity]); // <-- NUEVO: Agregamos searchEntity a las dependencias
+  }, [invoices, startDate, endDate, searchEntity]);
 
   // ========================================================
   // CÁLCULO DE KPIS Y TOTALES GLOBALES
@@ -216,9 +246,11 @@ export function AgingExportModal({
       : "Saldos Totales (Cuentas por Pagar)";
   const entityLabel = type === "cxc" ? "Cliente" : "Proveedor";
 
-  // <-- NUEVO: Función para resetear el buscador al cerrar
+  // Reseteamos filtros al cerrar
   const handleOpenChange = (isOpen: boolean) => {
-    if (!isOpen) setSearchEntity("");
+    if (!isOpen) {
+      setSearchEntity("all");
+    }
     onOpenChange(isOpen);
   };
 
@@ -244,18 +276,79 @@ export function AgingExportModal({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto bg-slate-100/80 dark:bg-slate-800/50 p-2.5 rounded-2xl border border-slate-200 dark:border-white/5">
-            {/* <-- NUEVO: BUSCADOR DE ENTIDAD --> */}
+            {/* <-- NUEVO: COMBOBOX CON BUSCADOR INTEGRADO --> */}
             <div className="flex items-center relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <Input
-                placeholder={`Buscar ${entityLabel.toLowerCase()}...`}
-                value={searchEntity}
-                onChange={(e) => setSearchEntity(e.target.value)}
-                className="h-9 w-[160px] md:w-[200px] pl-8 text-xs font-bold bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl focus:ring-brand-red placeholder:font-medium placeholder:uppercase"
-              />
+              <Popover open={openCombo} onOpenChange={setOpenCombo}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openCombo}
+                    className="h-9 w-[200px] md:w-[240px] justify-between bg-white dark:bg-slate-900 border-none shadow-sm rounded-xl font-bold text-xs hover:bg-white dark:hover:bg-slate-900 transition-all"
+                  >
+                    <span className="truncate text-slate-600 dark:text-slate-300 uppercase tracking-tight">
+                      {searchEntity === "all"
+                        ? `Todos los ${entityLabel}s`
+                        : searchEntity}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[240px] p-0 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 z-50 bg-white dark:bg-slate-900">
+                  <Command>
+                    <CommandInput
+                      placeholder={`Buscar ${entityLabel.toLowerCase()}...`}
+                      className="h-9 text-xs"
+                    />
+                    <CommandEmpty className="text-xs p-4 text-center text-slate-500">
+                      No se encontró la entidad.
+                    </CommandEmpty>
+                    <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                      <CommandItem
+                        onSelect={() => {
+                          setSearchEntity("all");
+                          setOpenCombo(false);
+                        }}
+                        className="cursor-pointer text-xs font-bold uppercase tracking-tight"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 text-brand-blue",
+                            searchEntity === "all"
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        Todos los {entityLabel}s
+                      </CommandItem>
+                      {uniqueEntities.map((ent) => (
+                        <CommandItem
+                          key={ent}
+                          value={ent}
+                          onSelect={() => {
+                            setSearchEntity(ent);
+                            setOpenCombo(false);
+                          }}
+                          className="cursor-pointer text-xs uppercase tracking-tight"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4 text-brand-blue",
+                              searchEntity === ent
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          {ent}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="w-px h-6 bg-slate-300 dark:bg-slate-700 hidden sm:block mx-1"></div>
-            {/* <-- FIN NUEVO --> */}
+            {/* <-- FIN NUEVO COMBOBOX --> */}
 
             <div className="flex items-center gap-2">
               <Label className="text-[9px] font-black uppercase text-slate-500 hidden sm:block">
