@@ -423,15 +423,31 @@ export default function Receivables() {
             row.status_sat === "PROVISIONAL" ||
             row.status_sat === "provisional" ||
             !row.uuid;
+
           return (
-            <div className="flex flex-col items-start">
-              <span
-                className={`font-mono text-sm font-bold uppercase ${statusInfo.status === "danger" ? "text-red-700 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
-              >
-                {value}
-              </span>
+            <div className="flex flex-col items-start gap-1">
+              {/* 👇 CONTENEDOR CON EL FOLIO Y EL ICONO DE ENLACE 👇 */}
+              <div className="flex items-center gap-2">
+                <span
+                  className={`font-mono text-sm font-bold uppercase ${statusInfo.status === "danger" ? "text-red-700 dark:text-red-400" : "text-slate-700 dark:text-slate-300"}`}
+                >
+                  {value}
+                </span>
+
+                {/* INYECCIÓN: Icono si tiene uuid_relacionado */}
+                {row.uuid_relacionado && (
+                  <div
+                    className="p-1 bg-indigo-50 dark:bg-indigo-900/30 rounded border border-indigo-100 dark:border-indigo-800/50 flex items-center justify-center cursor-help transition-all hover:bg-indigo-100 dark:hover:bg-indigo-900/50"
+                    title={`Relacionada al CFDI: ${row.uuid_relacionado}`}
+                  >
+                    <LinkIcon className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
+                  </div>
+                )}
+              </div>
+              {/* 👆 ========================================= 👆 */}
+
               {isProvisional && (
-                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[9px] uppercase tracking-widest border-none mt-1">
+                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 text-[9px] uppercase tracking-widest border-none mt-0.5">
                   PROVISIONAL
                 </Badge>
               )}

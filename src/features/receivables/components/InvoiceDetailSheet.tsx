@@ -313,7 +313,9 @@ export function InvoiceDetailSheet({
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
                     <LinkIcon className="w-3.5 h-3.5 text-indigo-500" />
                     <span className="text-[10px] font-bold text-indigo-600/70 dark:text-indigo-400/70 uppercase">
-                      CP Relacionada:
+                      {inv.is_nominal
+                        ? "CP Relacionada:"
+                        : "Sustituye al CFDI:"}
                     </span>
                     <span className="font-mono text-[10px] font-black text-indigo-700 dark:text-indigo-300 break-all">
                       {uuidRelacionado}

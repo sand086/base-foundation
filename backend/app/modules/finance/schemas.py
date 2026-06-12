@@ -325,6 +325,8 @@ class SatFacturaLibrePayload(BaseModel):
     iva: float
     retenciones: float
     conceptos: List[ConceptoLibre]
+    uuid_relacionado: Optional[str] = None
+    tipo_relacion: Optional[str] = "04"
 
     model_config = ConfigDict(extra="allow")
 

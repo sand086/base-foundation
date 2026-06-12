@@ -1424,6 +1424,11 @@ class BillingService:
         else:
             imp_global = f'<cfdi:Impuestos TotalImpuestosTrasladados="{total_iva:.2f}"><cfdi:Traslados><cfdi:Traslado Base="{total_subtotal:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{total_iva:.2f}" /></cfdi:Traslados></cfdi:Impuestos>'
 
+        relacion_xml = ""
+        if d.get("uuid_relacionado"):
+            tipo_rel = d.get("tipo_relacion", "04")
+            relacion_xml = f'\n    <cfdi:CfdiRelacionados TipoRelacion="{tipo_rel}">\n        <cfdi:CfdiRelacionado UUID="{d["uuid_relacionado"]}" />\n    </cfdi:CfdiRelacionados>'
+
         # 3. FIX DE TOTALES INYECTADOS
         d["subtotal"] = f"{total_subtotal:.2f}"
         d["iva"] = f"{total_iva:.2f}"
@@ -1432,7 +1437,7 @@ class BillingService:
         d["total"] = f"{total_total:.2f}"
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="F" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{total_subtotal:.2f}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{total_total:.2f}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{fecha}" Serie="F" Folio="{folio}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{total_subtotal:.2f}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{total_total:.2f}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{d['cliente_rfc']}" Nombre="{cliente_nombre}" DomicilioFiscalReceptor="{d['cp_receptor']}" RegimenFiscalReceptor="{d.get('regimen_fiscal_receptor', '601')}" UsoCFDI="{d.get('uso_cfdi', 'G03')}" />
     <cfdi:Conceptos>{conceptos_xml}</cfdi:Conceptos>{imp_global}
@@ -1472,6 +1477,8 @@ class BillingService:
             "subtotal": float(factura.subtotal or 0.0),
             "iva": float(factura.iva or 0.0),
             "retenciones": float(factura.retenciones or 0.0),
+            "uuid_relacionado": factura.uuid_relacionado,
+            "tipo_relacion": "04" if factura.uuid_relacionado else None,
             "conceptos": (
                 factura.conceptos_detalle
                 if factura.conceptos_detalle
@@ -1703,6 +1710,7 @@ class BillingService:
             viaje_id=None,
             folio_interno=folio_int,
             uuid=None,
+            uuid_relacionado=d.get("uuid_relacionado"),
             is_nominal=False,
             status_sat="PROCESANDO",
             estatus="pendiente",

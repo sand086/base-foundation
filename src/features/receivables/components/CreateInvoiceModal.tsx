@@ -129,6 +129,9 @@ export function CreateInvoiceModal({
 
   const [metodoPago, setMetodoPago] = useState<"PUE" | "PPD">("PPD");
   const [formaPago, setFormaPago] = useState("99");
+  const [esRefacturacion, setEsRefacturacion] = useState(false);
+  const [uuidRelacionado, setUuidRelacionado] = useState("");
+  const [tipoRelacion, setTipoRelacion] = useState("04");
 
   const [tipoImpuesto, setTipoImpuesto] = useState<
     "FLETE" | "MANIOBRA" | "EXENTO"
@@ -321,6 +324,14 @@ export function CreateInvoiceModal({
       return;
     }
 
+    if (esRefacturacion && !uuidRelacionado.trim()) {
+      toast.error("Falta el UUID", {
+        description:
+          "Si es una refacturación, debes ingresar el UUID del CFDI a sustituir.",
+      });
+      return;
+    }
+
     const payload = {
       client_id: Number(clienteId),
       sub_client_id: subClienteId ? Number(subClienteId) : null,
@@ -341,6 +352,11 @@ export function CreateInvoiceModal({
       dias_credito: diasCredito,
       metodo_pago: metodoPago,
       forma_pago: formaPago,
+      uuid_relacionado:
+        esRefacturacion && uuidRelacionado.trim() !== ""
+          ? uuidRelacionado.trim()
+          : null,
+      tipo_relacion: esRefacturacion ? tipoRelacion : null,
     };
 
     let result;
@@ -827,6 +843,67 @@ export function CreateInvoiceModal({
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="col-span-1 md:col-span-2 space-y-4 pt-4 border-t border-border mt-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="esRefacturacion"
+                      checked={esRefacturacion}
+                      onChange={(e) => setEsRefacturacion(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                    />
+                    <Label
+                      htmlFor="esRefacturacion"
+                      className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest cursor-pointer select-none"
+                    >
+                      ¿Es una refacturación? (Sustitución de CFDI previo por
+                      descuento/error)
+                    </Label>
+                  </div>
+
+                  {esRefacturacion && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in zoom-in-95 duration-200 bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                      <div className="space-y-2">
+                        <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                          UUID a Sustituir *
+                        </Label>
+                        <Input
+                          value={uuidRelacionado}
+                          onChange={(e) => setUuidRelacionado(e.target.value)}
+                          placeholder="Ej. A1B2C3D4-..."
+                          className="h-11 text-xs font-mono shadow-sm bg-white dark:bg-card border-indigo-200 focus:border-indigo-500"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[9px] font-bold text-muted-foreground uppercase">
+                          Tipo de Relación SAT
+                        </Label>
+                        <Select
+                          value={tipoRelacion}
+                          onValueChange={setTipoRelacion}
+                        >
+                          <SelectTrigger className="h-11 text-xs font-bold shadow-sm bg-white dark:bg-card border-indigo-200">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              value="04"
+                              className="font-bold text-xs"
+                            >
+                              04 - Sustitución de CFDI previos
+                            </SelectItem>
+                            <SelectItem
+                              value="01"
+                              className="font-bold text-xs"
+                            >
+                              01 - Nota de crédito
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
