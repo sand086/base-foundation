@@ -124,6 +124,7 @@ const iconMap: Record<string, React.ElementType> = {
   admin: Settings, // Fallback
   cfdi_vault: FileArchive,
   historico_cfdi: FileArchive,
+  historico: FileArchive,
 };
 
 const EMPTY_PERMISO: Permiso = {
@@ -857,15 +858,26 @@ const RolesPermissions: React.FC = () => {
                     <tbody className="divide-y">
                       {/*  5. ITERAMOS LOS MÓDULOS DE LA BD */}
                       {availableModules.map((modulo) => {
-                        const permiso =
-                          draftPermisos[modulo.id.toLowerCase()] ||
-                          EMPTY_PERMISO;
+                        const idLower = modulo.id.toLowerCase(); // 👈 Aseguramos minúsculas para comparar con total seguridad
 
-                        // Resuelve el icono correcto desde el Map (o fallback a Dashboard)
+                        const permiso = draftPermisos[idLower] || EMPTY_PERMISO;
+
+                        // 👈 Buscamos el ícono usando idLower para asegurar que encuentre "historico"
                         const IconComponent =
                           iconMap[modulo.id] ||
+                          iconMap[idLower] ||
                           iconMap[modulo.icono] ||
                           LayoutDashboard;
+
+                        // 👈 Forzamos que visualmente muestre "Histórico CFDI" si coincide con cualquier variante del histórico
+                        const nombreModuloAMostrar = [
+                          "historico",
+                          "cfdi_vault",
+                          "historico_cfdi",
+                          "cfdi",
+                        ].includes(idLower)
+                          ? "Histórico CFDI"
+                          : modulo.nombre;
 
                         const allEnabled =
                           permiso.read &&
@@ -888,7 +900,8 @@ const RolesPermissions: React.FC = () => {
                               <div className="flex items-center gap-3">
                                 <IconComponent className="h-4 w-4 text-muted-foreground" />
                                 <span className="font-medium text-sm">
-                                  {modulo.nombre}
+                                  {nombreModuloAMostrar}{" "}
+                                  {/* 👈 Usamos el nombre corregido aquí */}
                                 </span>
                               </div>
 
