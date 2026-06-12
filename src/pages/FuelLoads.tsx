@@ -102,6 +102,7 @@ interface FuelLoadDisplay extends FuelLoad {
   operador_nombre: string;
   excede_tanque: boolean;
   is_conciliated?: boolean;
+  trip_leg_id?: number | string | null;
 }
 
 const legTypeLabels: Record<string, string> = {
@@ -327,7 +328,6 @@ const FuelLoads = () => {
     const ahora = new Date();
     const hace7Dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // 1. Filtramos por Tracto o Motogenerador y por unidad seleccionada
     const cargasEquipo = cargas.filter((c) =>
       equipmentFilter === "mg" ? c.is_motogenerator : !c.is_motogenerator,
     );
@@ -345,7 +345,6 @@ const FuelLoads = () => {
       (c) => c.tipo_combustible !== "urea",
     );
 
-    // 2. INDICADORES GLOBALES (Suma TODO, tengan o no tengan odómetro conciliado)
     const litros = cargasDieselSemana.reduce(
       (sum, c) => sum + (Number(c.litros) || 0),
       0,
@@ -355,53 +354,68 @@ const FuelLoads = () => {
       0,
     );
 
-    // Función inteligente para extraer el ODO
-    const getOdo = (c: any) =>
-      equipmentFilter === "mg"
-        ? Number(c.horometro) || Number(c.odometro) || 0
-        : Number(c.odometro) || 0;
-
-    // 3. CÁLCULOS DE RENDIMIENTO (SOLO toma en cuenta los vales ya CONCILIADOS / con ODO > 0)
+    // --- NUEVA LÓGICA KILÓMETROS: BUSCAR EN LOS LEGS DEL VIAJE ---
     let kmRecorridosTotales = 0;
-    let odoMasRecienteGlobal = 0;
     let litrosValidosParaRendimiento = 0;
+    let odoMasRecienteGlobal = 0;
 
-    // Agrupamos los vales por camión para no mezclar kilometrajes
-    const cargasPorUnidad = cargasDieselSemana.reduce(
-      (acc, curr) => {
-        const odo = getOdo(curr);
-        // REGLA CLAVE: Ignoramos los vales con odómetro 0 para el cálculo de distancia
-        if (odo > 0) {
-          if (!acc[curr.unit_id]) acc[curr.unit_id] = [];
-          acc[curr.unit_id].push(curr);
-          litrosValidosParaRendimiento += Number(curr.litros) || 0;
-        }
-        return acc;
-      },
-      {} as Record<string, any[]>,
+    // 1. Obtenemos los viajes únicos de esta semana
+    const viajesConciliadosDeLaSemana = Array.from(
+      new Set(cargasDieselSemana.map((c) => c.trip_id).filter(Boolean)),
     );
 
-    // Por cada camión, calculamos su distancia recorrida en la semana
-    Object.values(cargasPorUnidad).forEach((cargasUnidad) => {
-      // Ordenamos del más reciente al más viejo
-      const sortedUnidad = [...cargasUnidad].sort(
-        (a, b) =>
-          new Date(b.fecha_hora).getTime() - new Date(a.fecha_hora).getTime(),
-      );
+    // 2. Sumamos los KM sacados de los Tramos (Legs) del Viaje
+    viajesConciliadosDeLaSemana.forEach((tripId) => {
+      const viajeAsociado = trips.find((t) => String(t.id) === String(tripId));
 
-      if (sortedUnidad.length > 0) {
-        const odoMayor = getOdo(sortedUnidad[0]); // El odómetro de la carga más reciente
-        if (odoMayor > odoMasRecienteGlobal) odoMasRecienteGlobal = odoMayor;
+      let kmDelViaje = 0;
 
-        // Si hay al menos 2 cargas conciliadas del mismo camión, sacamos la diferencia
-        if (sortedUnidad.length > 1) {
-          const odoMenor = getOdo(sortedUnidad[sortedUnidad.length - 1]); // El de la más antigua
-          kmRecorridosTotales += Math.abs(odoMayor - odoMenor);
-        }
+      // Buscamos los KM reales en las fases operativas (legs) del viaje
+      if (viajeAsociado?.legs && viajeAsociado.legs.length > 0) {
+        viajeAsociado.legs.forEach((leg: any) => {
+          const kmTramo =
+            Number(leg.km_recorridos) ||
+            (Number(leg.odometro_final) > 0
+              ? Number(leg.odometro_final) - Number(leg.odometro_inicial)
+              : 0);
+          kmDelViaje += kmTramo;
+        });
+      }
+
+      // Respaldo por si lo guardó en el objeto temporal
+      if (
+        kmDelViaje === 0 &&
+        viajeAsociado?.fuel_reconciliation_data?.km_recorridos
+      ) {
+        kmDelViaje = Number(
+          viajeAsociado.fuel_reconciliation_data.km_recorridos,
+        );
+      }
+
+      // Si encontramos kilómetros, los sumamos al total y sumamos sus litros
+      if (kmDelViaje > 0) {
+        kmRecorridosTotales += kmDelViaje;
+
+        const litrosDelViaje = cargasDieselSemana
+          .filter((c) => String(c.trip_id) === String(tripId))
+          .reduce((sum, c) => sum + (Number(c.litros) || 0), 0);
+
+        litrosValidosParaRendimiento += litrosDelViaje;
       }
     });
 
-    // 4. Calculamos el Rendimiento (KM/L) usando solo los litros que sí tenían KM
+    // 3. Respaldo por si hay vales libres que sí tengan odómetro capturado manual
+    cargasDieselSemana
+      .filter((c) => !c.trip_id)
+      .forEach((valeLibre) => {
+        const odo =
+          equipmentFilter === "mg"
+            ? Number(valeLibre.horometro) || Number(valeLibre.odometro) || 0
+            : Number(valeLibre.odometro) || 0;
+
+        if (odo > odoMasRecienteGlobal) odoMasRecienteGlobal = odo;
+      });
+
     const rendimiento =
       kmRecorridosTotales > 0 && litrosValidosParaRendimiento > 0
         ? (kmRecorridosTotales / litrosValidosParaRendimiento).toFixed(2)
@@ -414,7 +428,7 @@ const FuelLoads = () => {
       kmRecorridos: kmRecorridosTotales,
       rendimiento,
     };
-  }, [cargas, selectedUnitId, equipmentFilter]);
+  }, [cargas, selectedUnitId, equipmentFilter, trips]);
 
   const selectedUnitObj = useMemo(
     () => units.find((u) => String(u.id) === selectedUnitId),
@@ -584,28 +598,96 @@ const FuelLoads = () => {
       {
         key: "odometro",
         header: equipmentFilter === "mg" ? "Horómetro (Hrs)" : "Odómetro (KM)",
-        render: (v, row) => (
-          <span className="font-mono text-[11px] font-bold text-slate-500 flex flex-col">
-            {row.is_motogenerator ? (
-              <>
-                <span className="text-amber-600 dark:text-amber-500">
-                  {Number(row.horometro || row.odometro || 0).toLocaleString()}{" "}
-                  HRS
-                </span>
-                <span className="text-[8px] uppercase tracking-widest text-amber-500 opacity-80">
-                  Horómetro
-                </span>
-              </>
-            ) : (
-              <>
-                <span>{Number(v || 0).toLocaleString()} KM</span>
-                <span className="text-[8px] uppercase tracking-widest text-slate-400">
-                  Odómetro
-                </span>
-              </>
-            )}
-          </span>
-        ),
+        render: (v, row) => {
+          let valorMostrar =
+            Number(
+              equipmentFilter === "mg"
+                ? row.horometro || row.odometro
+                : row.odometro,
+            ) || 0;
+          let esHeredado = false;
+
+          // Si el vale dice 0, buscamos el viaje en la Base de Datos para sacar los KM de la conciliación
+          if (valorMostrar === 0 && row.trip_id) {
+            const viaje = trips.find(
+              (t) => String(t.id) === String(row.trip_id),
+            );
+            let kmDelViaje = 0;
+
+            if (viaje?.legs && viaje.legs.length > 0) {
+              // 🚨 Añadimos ": any" para que TypeScript no se queje de propiedades faltantes
+              const leg: any =
+                viaje.legs.find(
+                  (l: any) => String(l.id) === String(row.trip_leg_id),
+                ) || viaje.legs[0];
+
+              kmDelViaje =
+                Number(leg.km_recorridos) ||
+                (Number(leg.odometro_final) > 0
+                  ? Number(leg.odometro_final) - Number(leg.odometro_inicial)
+                  : 0);
+            }
+
+            // 🚨 Añadimos "(viaje as any)" por la misma razón
+            if (
+              kmDelViaje === 0 &&
+              (viaje as any)?.fuel_reconciliation_data?.km_recorridos
+            ) {
+              kmDelViaje = Number(
+                (viaje as any).fuel_reconciliation_data.km_recorridos,
+              );
+            }
+
+            if (kmDelViaje > 0) {
+              valorMostrar = kmDelViaje;
+              esHeredado = true;
+            }
+          }
+
+          return (
+            <span className="font-mono text-[11px] font-bold text-slate-500 flex flex-col">
+              {row.is_motogenerator ? (
+                <>
+                  <span
+                    className={cn(
+                      esHeredado
+                        ? "text-indigo-600 dark:text-indigo-400"
+                        : "text-amber-600 dark:text-amber-500",
+                    )}
+                  >
+                    {valorMostrar.toLocaleString()} HRS
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[8px] uppercase tracking-widest opacity-80",
+                      esHeredado ? "text-indigo-500" : "text-amber-500",
+                    )}
+                  >
+                    {esHeredado ? "Horas Conciliadas" : "Horómetro"}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className={cn(
+                      esHeredado ? "text-indigo-600 dark:text-indigo-400" : "",
+                    )}
+                  >
+                    {valorMostrar.toLocaleString()} KM
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[8px] uppercase tracking-widest",
+                      esHeredado ? "text-indigo-500" : "text-slate-400",
+                    )}
+                  >
+                    {esHeredado ? "KM Conciliados" : "Odómetro"}
+                  </span>
+                </>
+              )}
+            </span>
+          );
+        },
       },
       {
         key: "operador_nombre",
