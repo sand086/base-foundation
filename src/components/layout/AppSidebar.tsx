@@ -141,7 +141,7 @@ const menuItems: MenuItem[] = [
     title: "Historico CFDI",
     icon: FileCheck,
     path: "/history-cfdi",
-    moduleCode: "cfdi",
+    moduleCode: "historico",
   },
   {
     title: "Tesorería",
