@@ -304,16 +304,30 @@ export const TripPlanner = () => {
     const safeTrips = Array.isArray(trips) ? trips : [];
     const items: any[] = [];
     for (const trip of safeTrips) {
-      if (trip.status === "cerrado") continue;
+      // EXCLUSIÓN ESTRICTA: Ya no aparecerán "entregados" ni "finalizados" (ni "cerrados")
+      if (
+        ["cerrado", "entregado", "finalizado"].includes(
+          normalizeStatus(trip.status),
+        )
+      )
+        continue;
+
       if (trip.legs && trip.legs.length > 0) {
         const activeLeg =
           trip.legs.find(
             (leg) =>
-              !["entregado", "cerrado"].includes(leg.status.toLowerCase()),
+              !["entregado", "cerrado", "finalizado"].includes(
+                normalizeStatus(leg.status),
+              ),
           ) || trip.legs[trip.legs.length - 1];
 
-        if (activeLeg) {
-          // Extracción segura para evitar errores de tipo
+        // Validamos de nuevo la fase activa por si era la última y estaba terminada
+        if (
+          activeLeg &&
+          !["entregado", "cerrado", "finalizado"].includes(
+            normalizeStatus(activeLeg.status),
+          )
+        ) {
           const getUnitName = (objOrString: any, id: any) => {
             if (typeof objOrString === "string") return objOrString;
             if (objOrString?.numero_economico)
@@ -333,16 +347,15 @@ export const TripPlanner = () => {
             (trip as any).motogenerator_2_id,
           );
 
-          // Creamos un string "fantasma" para que el buscador encuentre cualquiera de los elementos
           const asignacionSearch =
             `${activeLeg.unit?.numero_economico || ""} ${activeLeg.operator?.name || ""} ${mg1Str || ""} ${mg2Str || ""}`.trim();
 
           items.push({
             leg: activeLeg,
             tripPadre: trip,
-            mg1: mg1Str, // Inyectamos el nombre final
-            mg2: mg2Str, // Inyectamos el nombre final
-            _asignacionSearch: asignacionSearch, // El nuevo campo clave
+            mg1: mg1Str,
+            mg2: mg2Str,
+            _asignacionSearch: asignacionSearch,
           });
         }
       }
@@ -563,6 +576,34 @@ export const TripPlanner = () => {
         ),
       },
       {
+        key: "tripPadre.sub_client.nombre",
+        header: "Sub-Cliente / Sucursal",
+        sortable: true,
+        render: (value, row) => (
+          <span className="font-bold text-slate-600 dark:text-slate-300 uppercase text-[11px] tracking-widest">
+            {row.tripPadre.sub_client?.nombre ||
+              row.tripPadre.sub_client?.alias ||
+              "N/A"}
+          </span>
+        ),
+      },
+      {
+        key: "tripPadre.route_name",
+        header: "Ruta",
+        sortable: true,
+        render: (value, row) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-bold text-brand-navy dark:text-slate-200 uppercase text-[11px] tracking-widest">
+              {row.tripPadre.route_name || "RUTA NO ESPECIFICADA"}
+            </span>
+            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-tight truncate max-w-[180px]">
+              {row.tripPadre.origin || "N/A"} -{" "}
+              {row.tripPadre.destination || "N/A"}
+            </span>
+          </div>
+        ),
+      },
+      {
         key: "leg.leg_type",
         header: "Fase del Servicio",
         type: "status",
@@ -632,7 +673,6 @@ export const TripPlanner = () => {
         statusOptions: [
           "creado",
           "en_transito",
-          "entregado",
           "detenido",
           "retraso",
           "accidente",
@@ -1089,9 +1129,10 @@ export const TripPlanner = () => {
           <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
             <CardContent className="p-0">
               <EnhancedDataTable
+                key={tableKey}
                 data={filteredActiveLegs}
                 columns={tableColumns}
-                searchPlaceholder="BUSCAR EN LOS RESULTADOS FILTRADOS..."
+                hideGlobalSearch={true}
                 exportFileName="Viajes_Operativos"
                 initialSort={{ key: "tripPadre.created_at", direction: "desc" }}
               />

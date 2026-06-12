@@ -146,7 +146,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    //   Buscador global inteligente
+    // Buscador global inteligente
     if (globalSearch) {
       const searchTerms = globalSearch
         .toLowerCase()
@@ -185,7 +185,11 @@ export function EnhancedDataTable<T extends Record<string, any>>({
             const rowVal = getValue(row, key);
             if (!rowVal) return false;
 
-            const dateValue = new Date(rowVal);
+            // 🚨 CORRECCIÓN: Evitar que la zona horaria retrase el día
+            const cleanDateStr = String(rowVal).includes("T")
+              ? String(rowVal).split("T")[0]
+              : String(rowVal);
+            const dateValue = new Date(`${cleanDateStr}T00:00:00`);
 
             if (range.from) {
               const fromDate = new Date(range.from);
@@ -210,11 +214,18 @@ export function EnhancedDataTable<T extends Record<string, any>>({
 
         result = result.filter((row) => {
           const rawValue = getValue(row, key);
-          const comparableValue = column?.statusNormalizer
-            ? column.statusNormalizer(rawValue)
-            : String(rawValue ?? "");
 
-          return statusValues.includes(comparableValue);
+          // Normalizamos el valor de la fila eliminando espacios y pasando a minúsculas
+          const comparableValue = column?.statusNormalizer
+            ? String(column.statusNormalizer(rawValue)).trim().toLowerCase()
+            : String(rawValue ?? "")
+                .trim()
+                .toLowerCase();
+
+          // Normalizamos también los valores seleccionados del filtro para asegurar el match
+          return statusValues
+            .map((v) => v.trim().toLowerCase())
+            .includes(comparableValue);
         });
       }
     });
@@ -526,11 +537,12 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                                       setCurrentPage(1);
                                     }}
                                   >
+                                    {/* AGREGADO: pointer-events-none para que el clic active el div padre */}
                                     <Checkbox
                                       checked={selectedStatuses.includes(
                                         status,
                                       )}
-                                      className="h-3 w-3 border-current rounded-sm"
+                                      className="h-3 w-3 border-current rounded-sm pointer-events-none"
                                     />
                                     {status}
                                   </div>

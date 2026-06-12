@@ -183,6 +183,37 @@ export default function Receivables() {
           fechaVencimientoCalculada = `${yyyy}-${mm}-${dd}`;
         }
 
+        // 🚨 SINCRONIZACIÓN DE ESTATUS REAL PARA EL FILTRO INTERNO
+        const saldo =
+          inv.saldo_pendiente !== undefined
+            ? Number(inv.saldo_pendiente)
+            : Number(inv.monto_total) || 0;
+        const monto = Number(inv.monto_total) || 0;
+        let finalEstatus = String(
+          inv.estatus || inv.status || "corriente",
+        ).toLowerCase();
+
+        if (finalEstatus !== "pagada" && finalEstatus !== "cancelado") {
+          if (saldo <= 0) {
+            finalEstatus = "pagada";
+          } else if (saldo < monto) {
+            finalEstatus = "pago_parcial";
+          } else if (fechaVencimientoCalculada) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const vencStr = fechaVencimientoCalculada.includes("T")
+              ? fechaVencimientoCalculada.split("T")[0]
+              : fechaVencimientoCalculada;
+            const venc = new Date(`${vencStr}T00:00:00`);
+
+            if (today > venc) {
+              finalEstatus = "vencida";
+            } else {
+              finalEstatus = "corriente";
+            }
+          }
+        }
+
         return {
           ...inv,
           id: inv.id,
@@ -191,16 +222,13 @@ export default function Receivables() {
             inv.folio_interno ||
             (inv.uuid ? inv.uuid.substring(0, 8) : `CXC-${inv.id}`),
           cliente: clienteNombre,
-          monto_total: Number(inv.monto_total) || 0,
-          saldo_pendiente:
-            inv.saldo_pendiente !== undefined
-              ? Number(inv.saldo_pendiente)
-              : Number(inv.monto_total) || 0,
-          requiereREP: (Number(inv.saldo_pendiente) || 0) > 0,
+          monto_total: monto,
+          saldo_pendiente: saldo,
+          requiereREP: saldo > 0,
           fecha_emision: fechaEmision,
           fecha_vencimiento: fechaVencimientoCalculada,
           dias_credito: diasCredito,
-          estatus: inv.estatus || inv.status || "corriente",
+          estatus: finalEstatus, // <-- USAMOS EL ESTATUS CALCULADO CORRECTO
           referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
         };

@@ -321,31 +321,47 @@ def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_
 def update_unit_tires(
     unit_term: str, tires: List[schemas.TireCreate], db: Session = Depends(get_db)
 ):
-    unit = None
-    # 1. Intentamos buscar por ID interno si es un dígito
-    if unit_term.isdigit():
-        unit = crud.get_unit(db, int(unit_term))
+    from urllib.parse import unquote
 
-    # 2. Si falló la búsqueda por ID, buscamos por número económico (Ej: "02")
-    if not unit:
-        from urllib.parse import unquote
+    term_decoded = unquote(unit_term)
 
-        unit = crud.get_unit_by_eco(db, numero_economico=unquote(unit_term))
+    # 1. CORRECCIÓN: SIEMPRE buscar por económico primero (Ej: "02" o "2")
+    unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
+
+    # 2. Si no lo encuentra por económico, y resulta que es un número, intentar por ID interno
+    if not unit and unit_term.isdigit():
+        unit = crud.get_unit(db, unit_id=int(unit_term))
 
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
+    # 3. Eliminamos lógicamente las llantas anteriores de esta unidad
     db.query(models.Tire).filter(models.Tire.unit_id == unit.id).update(
         {"record_status": models.RecordStatus.ELIMINADO.value}
     )
+    # Hacemos commit aquí para asegurarnos de que el status 'ELIMINADO' se guarde
+    # antes de intentar insertar llantas con el mismo código.
+    db.commit()
+
     new_tires = []
     for t in tires:
-        tire_db = models.Tire(**t.dict(), unit_id=unit.id)
+        # 4. CORRECCIÓN: Usamos tu función del CRUD que ejecuta el "TRUCO MAESTRO"
+        # para renombrar la llanta vieja eliminada (Ej: agregarle "_DEL_id")
+        # y así liberar el código interno sin causar IntegrityError.
+        tire_db = crud.create_tire(db, t)
+
+        # 5. Le asignamos la unidad actual a la llanta recién creada
+        tire_db.unit_id = unit.id
         db.add(tire_db)
         new_tires.append(tire_db)
+
+    # Guardamos la asignación de las unidades en la base de datos
     db.commit()
+
+    # Refrescamos los objetos para devolverlos con todos sus datos actualizados
     for t in new_tires:
         db.refresh(t)
+
     return new_tires
 
 
