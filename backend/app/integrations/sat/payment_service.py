@@ -362,7 +362,9 @@ class PaymentComplementService:
             getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
             .upper()
             .replace(" S.A. DE C.V.", "")
-            .replace(".", "")
+            .replace(
+                " SA DE CV", ""
+            )  # Opcional: También es buena idea agregar esta variante sin puntos
             .strip()
         )
 
