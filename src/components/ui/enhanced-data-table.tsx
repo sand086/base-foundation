@@ -79,6 +79,7 @@ interface EnhancedDataTableProps<T> {
   onCustomExport?: () => void;
   isRowSelectable?: (row: T) => boolean;
   initialSort?: SortConfig;
+  hideGlobalSearch?: boolean; // <-- NUEVO: Para ocultar buscador global sin romper otros componentes
 }
 
 interface DateRange {
@@ -128,6 +129,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   onCustomExport,
   isRowSelectable,
   initialSort,
+  hideGlobalSearch = false, // <-- NUEVO: Por defecto es falso para no afectar a otros
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   //  INICIALIZA EL ORDEN CON LO QUE LE MANDEMOS DESDE EL PADRE
@@ -146,8 +148,8 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    // Buscador global inteligente
-    if (globalSearch) {
+    //   Buscador global inteligente
+    if (globalSearch && !hideGlobalSearch) {
       const searchTerms = globalSearch
         .toLowerCase()
         .split(" ")
@@ -231,7 +233,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     });
 
     return result;
-  }, [data, globalSearch, columnFilters, columns]);
+  }, [data, globalSearch, columnFilters, columns, hideGlobalSearch]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig || !sortConfig.direction) return filteredData;
@@ -339,18 +341,20 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
       <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-1 min-w-[250px] max-w-md group">
-            <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
-            <Input
-              placeholder={searchPlaceholder}
-              value={globalSearch}
-              onChange={(e) => {
-                setGlobalSearch(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
-            />
-          </div>
+          {!hideGlobalSearch && (
+            <div className="relative flex-1 min-w-[250px] max-w-md group">
+              <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={globalSearch}
+                onChange={(e) => {
+                  setGlobalSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
+              />
+            </div>
+          )}
 
           {customFilters && (
             <div className="flex flex-wrap items-center gap-2">

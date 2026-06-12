@@ -189,29 +189,23 @@ export default function Receivables() {
             ? Number(inv.saldo_pendiente)
             : Number(inv.monto_total) || 0;
         const monto = Number(inv.monto_total) || 0;
-        let finalEstatus = String(
-          inv.estatus || inv.status || "corriente",
-        ).toLowerCase();
 
-        if (finalEstatus !== "pagada" && finalEstatus !== "cancelado") {
-          if (saldo <= 0) {
-            finalEstatus = "pagada";
-          } else if (saldo < monto) {
-            finalEstatus = "pago_parcial";
-          } else if (fechaVencimientoCalculada) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const vencStr = fechaVencimientoCalculada.includes("T")
-              ? fechaVencimientoCalculada.split("T")[0]
-              : fechaVencimientoCalculada;
-            const venc = new Date(`${vencStr}T00:00:00`);
+        let finalEstatus = "";
 
-            if (today > venc) {
-              finalEstatus = "vencida";
-            } else {
-              finalEstatus = "corriente";
-            }
-          }
+        // Si la factura ya viene explícitamente cancelada la respetamos
+        if (String(inv.estatus || inv.status).toLowerCase() === "cancelado") {
+          finalEstatus = "CANCELADO";
+        } else {
+          // Calculamos la etiqueta profesional exacta usando tus reglas de negocio del archivo types.ts
+          const statusInfoCalculated = getInvoiceStatusInfo({
+            ...inv,
+            saldo_pendiente: saldo,
+            monto_total: monto,
+            fecha_vencimiento: fechaVencimientoCalculada,
+          } as any);
+
+          // Esto inyectará con precisión: "PAGADA", "POR COBRAR", "VENCIDA 1-30d", etc.
+          finalEstatus = statusInfoCalculated.label;
         }
 
         return {
@@ -608,15 +602,24 @@ export default function Receivables() {
         key: "estatus",
         header: "Estatus",
         type: "status",
-        statusOptions: ["corriente", "vencida", "pagada", "pago_parcial"],
-        render: (_, row) => {
+        // ✅ Estas opciones aparecerán idénticas dentro de la ventana de "Filtros Int."
+        statusOptions: [
+          "POR COBRAR",
+          "VENCIDA 1-30d",
+          "VENCIDA 31-60d",
+          "ATRASADO +90d",
+          "PAGO PARCIAL",
+          "PAGO PARCIAL (+90d)",
+          "PAGADA",
+        ],
+        render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <StatusBadge
               status={statusInfo.status}
               className="uppercase font-bold text-[10px] tracking-wider px-2 py-1"
             >
-              {statusInfo.label}
+              {value} {/* Mostramos el valor real indexado en la fila */}
             </StatusBadge>
           );
         },
