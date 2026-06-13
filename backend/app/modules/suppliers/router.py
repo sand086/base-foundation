@@ -45,7 +45,7 @@ def create_invoice(
 
 
 @router.get("", response_model=List[schemas.SupplierResponse])
-def read_suppliers(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_suppliers(skip: int = 0, limit: int = 5000, db: Session = Depends(get_db)):
     """
     Catálogo de proveedores activos.
     """
