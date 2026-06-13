@@ -125,6 +125,7 @@ export type { RoleCreate } from './models/RoleCreate';
 export type { RoleResponse } from './models/RoleResponse';
 export type { RoleUpdate } from './models/RoleUpdate';
 export type { RouteCreate } from './models/RouteCreate';
+export type { SatCancelPayload } from './models/SatCancelPayload';
 export type { SatGenericCreate } from './models/SatGenericCreate';
 export type { SatGenericResponse } from './models/SatGenericResponse';
 export type { SatHazardousMaterialCreate } from './models/SatHazardousMaterialCreate';

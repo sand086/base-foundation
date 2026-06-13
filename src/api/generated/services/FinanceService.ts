@@ -539,4 +539,31 @@ export class FinanceService {
             },
         });
     }
+    /**
+     * Planchar Estatus de Facturas Canceladas
+     * Sincroniza el estatus financiero de las facturas que ya fueron
+     * canceladas en el SAT (status_sat == 'CANCELADO' o 'ERROR_SAT')
+     * pero que localmente siguen como 'pendiente', 'pagado', etc.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncCancelledInvoicesApiFinanceSyncCancelledInvoicesGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/sync-cancelled-invoices',
+        });
+    }
+    /**
+     * Forzar cancelación en el SAT
+     * Toma todas las facturas que localmente dicen 'CANCELADO' o 'PENDIENTE_CANCELAR_SAT'
+     * pero que el sistema jamás mandó a cancelar al SAT. Llama al PAC usando los sellos.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static forceCancelSatRealApiFinanceForceCancelSatRealGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/force-cancel-sat-real',
+        });
+    }
 }
