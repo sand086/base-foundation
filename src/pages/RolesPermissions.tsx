@@ -121,10 +121,12 @@ const iconMap: Record<string, React.ElementType> = {
   users: Users,
   roles: Shield,
   settings: Settings,
-  admin: Settings, // Fallback
+  admin: Settings,
   cfdi_vault: FileArchive,
   historico_cfdi: FileArchive,
   historico: FileArchive,
+  histórico: FileArchive, // <-- NUEVO (Con acento)
+  history: FileArchive, // <-- NUEVO (En inglés)
 };
 
 const EMPTY_PERMISO: Permiso = {
@@ -372,11 +374,13 @@ const RolesPermissions: React.FC = () => {
         usuarios: "users",
         trackingop: "traffic",
         reportes: "reports",
-        tesoreria: "treasury", //  FIX: Mapeo de Tesorería
-        proveedores: "suppliers", //  FIX: Mapeo de Proveedores
-        administracion: "admin", //  FIX: Mapeo de Admin
+        tesoreria: "treasury",
+        proveedores: "suppliers",
+        administracion: "admin",
         historico_cfdi: "cfdi_vault",
         historico: "cfdi_vault",
+        histórico: "cfdi_vault", // <-- NUEVO
+        history: "cfdi_vault", // <-- NUEVO
         cfdi: "cfdi_vault",
       };
 
@@ -869,13 +873,21 @@ const RolesPermissions: React.FC = () => {
                           iconMap[modulo.icono] ||
                           LayoutDashboard;
 
-                        // 👈 Forzamos que visualmente muestre "Histórico CFDI" si coincide con cualquier variante del histórico
-                        const nombreModuloAMostrar = [
-                          "historico",
-                          "cfdi_vault",
-                          "historico_cfdi",
-                          "cfdi",
-                        ].includes(idLower)
+                        // 👈 Validación ultra-robusta para forzar el nombre "Histórico CFDI"
+                        const esHistorico =
+                          [
+                            "historico",
+                            "histórico",
+                            "cfdi_vault",
+                            "historico_cfdi",
+                            "cfdi",
+                            "history",
+                            "vault",
+                          ].includes(idLower) ||
+                          modulo.nombre.toLowerCase().includes("histór") ||
+                          modulo.nombre.toLowerCase().includes("histor");
+
+                        const nombreModuloAMostrar = esHistorico
                           ? "Histórico CFDI"
                           : modulo.nombre;
 

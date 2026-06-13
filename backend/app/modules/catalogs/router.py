@@ -80,6 +80,7 @@ DEFAULT_MODULES = [
     {"id": "suppliers", "nombre": "Proveedores", "icono": "Briefcase"},
     {"id": "payables", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
     {"id": "receivables", "nombre": "Cuentas por Cobrar", "icono": "DollarSign"},
+    {"id": "historico", "nombre": "Histórico CFDI", "icono": "FileArchive"},
     {"id": "treasury", "nombre": "Tesorería", "icono": "Landmark"},
     {"id": "reports", "nombre": "Reportes", "icono": "BarChart3"},
     {"id": "users", "nombre": "Usuarios", "icono": "Users"},
