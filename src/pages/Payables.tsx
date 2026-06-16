@@ -371,6 +371,20 @@ export default function Payables() {
     });
   }, [filteredInvoices]);
 
+  // 🔥 1. SEPARAMOS FACTURAS POSITIVAS DE NEGATIVAS
+  const facturasAPagar = useMemo(() => {
+    return filteredInvoices.filter(
+      (inv: any) => inv.saldo_pendiente > 0 && inv.tipo_comprobante !== "E",
+    );
+  }, [filteredInvoices]);
+
+  const notasDeCredito = useMemo(() => {
+    return filteredInvoices.filter(
+      (inv: any) => inv.saldo_pendiente < 0 || inv.tipo_comprobante === "E",
+    );
+  }, [filteredInvoices]);
+
+  // 🔥 2. CALCULAMOS KPIS SOLO CON LAS FACTURAS POSITIVAS (facturasAPagar)
   const kpis = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -378,7 +392,7 @@ export default function Payables() {
     const en7Dias = new Date(hoy);
     en7Dias.setDate(hoy.getDate() + 7);
 
-    const totalVencido = filteredInvoices
+    const totalVencido = facturasAPagar
       .filter((inv) => {
         const fechaVencimiento = new Date(inv.fecha_vencimiento);
         return (
@@ -389,11 +403,11 @@ export default function Payables() {
       })
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const totalPorPagar = filteredInvoices
+    const totalPorPagar = facturasAPagar
       .filter((inv) => inv.estatus !== "PAGADA" && inv.estatus !== "CANCELADO")
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const totalParcial = filteredInvoices
+    const totalParcial = facturasAPagar
       .filter(
         (inv) =>
           inv.estatus === "PAGO PARCIAL" ||
@@ -401,22 +415,29 @@ export default function Payables() {
       )
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const compromisos7Dias = filteredInvoices
+    const compromisos7Dias = facturasAPagar
       .filter((inv) => {
-        if (
-          inv.estatus === "PAGADA" ||
-          inv.estatus === "CANCELADO" ||
-          inv.tipo_comprobante === "E" ||
-          (inv.saldo_pendiente || 0) < 0
-        )
+        if (inv.estatus === "PAGADA" || inv.estatus === "CANCELADO")
           return false;
         const fechaVencimiento = new Date(inv.fecha_vencimiento);
         return fechaVencimiento >= hoy && fechaVencimiento <= en7Dias;
       })
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    return { totalVencido, totalPorPagar, totalParcial, compromisos7Dias };
-  }, [filteredInvoices]);
+    // TOTAL DE SALDOS A FAVOR (Convirtiendo a positivo para la vista)
+    const totalAFavor = notasDeCredito.reduce(
+      (sum, inv) => sum + Math.abs(inv.saldo_pendiente || 0),
+      0,
+    );
+
+    return {
+      totalVencido,
+      totalPorPagar,
+      totalParcial,
+      compromisos7Dias,
+      totalAFavor,
+    };
+  }, [facturasAPagar, notasDeCredito]);
 
   const selectedTotalAmount = useMemo(() => {
     const selectedInvoicesData = filteredInvoices.filter((inv) =>
@@ -1219,6 +1240,15 @@ export default function Payables() {
               <Receipt className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Pagos Emitidos
             </TabsTrigger>
+
+            {/* NUEVO TAB DE SALDOS */}
+            <TabsTrigger
+              value="saldos"
+              className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-6 transition-all"
+            >
+              <CreditCard className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Saldos a Favor
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1226,7 +1256,7 @@ export default function Payables() {
           value="cuentas"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <Card
               className={cn(
                 "p-6 flex items-center gap-5 group transition-all cursor-default relative overflow-hidden",
@@ -1290,12 +1320,27 @@ export default function Payables() {
                 </p>
               </div>
             </Card>
+
+            {/* AGREGA ESTA NUEVA CARD AL FINAL DEL GRID */}
+            <Card className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default relative overflow-hidden">
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-emerald-600 dark:text-emerald-400">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div className="flex flex-col justify-center relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                  Saldos a Favor
+                </p>
+                <p className="text-2xl font-black leading-none tracking-tighter text-emerald-600 dark:text-emerald-400">
+                  {formatMoney(kpis.totalAFavor)}
+                </p>
+              </div>
+            </Card>
           </div>
 
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
               <EnhancedDataTable
-                data={filteredInvoices}
+                data={facturasAPagar}
                 columns={payablesColumns}
                 exportFileName="cuentas_por_pagar"
               />
@@ -1313,6 +1358,22 @@ export default function Payables() {
                 data={allPayments}
                 columns={paymentsColumns}
                 exportFileName="pagos_emitidos"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* NUEVO TAB CONTENT PARA SALDOS A FAVOR */}
+        <TabsContent
+          value="saldos"
+          className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
+        >
+          <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
+            <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
+              <EnhancedDataTable
+                data={notasDeCredito}
+                columns={payablesColumns}
+                exportFileName="saldos_a_favor"
               />
             </CardContent>
           </Card>
@@ -1652,7 +1713,7 @@ export default function Payables() {
         open={isAgingModalOpen}
         onOpenChange={setIsAgingModalOpen}
         type="cxp"
-        invoices={filteredInvoices} // <-- PASAMOS LA DATA AQUÍ TAMBIÉN
+        invoices={filteredInvoices}
       />
     </div>
   );
