@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { FileText, Loader2, AlertTriangle, ArrowBigRight } from "lucide-react";
 import { useBilling } from "@/features/receivables/hooks/useBilling";
-
+import axiosClient from "@/api/axiosClient";
 interface SmartInvoiceConcept {
   id: string;
   claveProdServ: string;
@@ -128,8 +128,6 @@ export function RefacturarModal({
       return;
     }
 
-    // 1. Armamos el payload clonando la info del cliente de la factura original
-    // 2. INYECTAMOS SILENCIOSAMENTE EL UUID Y LA RELACIÓN 04
     const payload = {
       client_id: invoice.client_id || invoice.client?.id,
       sub_client_id: invoice.sub_client_id,
@@ -160,27 +158,41 @@ export function RefacturarModal({
 
     let result;
 
-    // Si la factura original viene de un viaje (Tiene Carta Porte)
-    if (invoice.viaje_id) {
-      result = await generateOneShotInvoice({
-        ...payload,
-        viaje_id: invoice.viaje_id,
-      });
-    } else {
-      // Si la factura original era Libre (Nomenclatura F)
-      result = await generateFreeInvoice(payload);
-    }
+    try {
+      // 🚨 LA MAGIA OPERATIVA 🚨
+      // Si la factura original viene de un viaje (Tiene Carta Porte)
+      if (invoice.viaje_id) {
+        // 1. Tomamos el nuevo precio que el usuario acaba de corregir en el modal
+        const nuevoFleteBase = conceptos[0]?.precioUnitario || 0;
 
-    if (result) {
-      toast.success("¡Sustitución Exitosa!", {
-        description:
-          "Se generó la nueva factura y se mandó a cancelar la anterior en el SAT.",
-      });
-      if (result.data && result.data.uuid) {
-        window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
+        // 2. Le decimos a la base de datos: "Actualiza el precio del viaje antes de timbrar"
+        await axiosClient.put(`/api/logistics/trips/${invoice.viaje_id}`, {
+          tarifa_base: nuevoFleteBase,
+        });
+
+        // 3. Ahora sí, con la BD actualizada, mandamos la orden de refacturar (One-Shot)
+        result = await generateOneShotInvoice({
+          ...payload,
+          viaje_id: invoice.viaje_id,
+        });
+      } else {
+        // Si la factura original era Libre (Nomenclatura F), el backend lee directo el payload
+        result = await generateFreeInvoice(payload);
       }
-      onSubmit();
-      onOpenChange(false);
+
+      if (result) {
+        toast.success("¡Sustitución Exitosa!", {
+          description:
+            "Se generó la nueva factura y se mandó a cancelar la anterior en el SAT.",
+        });
+        if (result.data && result.data.uuid) {
+          window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
+        }
+        onSubmit(); // Esto recargará los datos del viaje en el TripDetailsModal
+        onOpenChange(false);
+      }
+    } catch (error) {
+      toast.error("Ocurrió un error al procesar la refacturación.");
     }
   };
 
