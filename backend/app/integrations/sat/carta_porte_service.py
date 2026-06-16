@@ -1096,6 +1096,10 @@ class CartaPorteService:
     def generar_carta_porte_one_shot(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
+        # --- NUEVO: Extraemos el UUID de la pantalla (Refacturación) ---
+        uuid_frontend = getattr(invoice_data, "uuid_relacionado", None)
+        # ----------------------------------------------------------------
+
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
             invoice_data.viaje_id, buscar_tramo_carretera=True
         )
@@ -1141,6 +1145,8 @@ class CartaPorteService:
             factura.subtotal = Decimal(str(_clean_float(data["subtotal"])))
             factura.iva = Decimal(str(_clean_float(data["iva"])))
             factura.retenciones = Decimal(str(_clean_float(data["retenciones"])))
+            # --- NUEVO: Actualizamos el UUID relacionado en la BD ---
+            factura.uuid_relacionado = uuid_frontend
         else:
             factura = ReceivableInvoice(
                 client_id=viaje.client_id,
@@ -1148,6 +1154,8 @@ class CartaPorteService:
                 folio_interno=data.get("folio_interno"),
                 viaje_id=viaje.id,
                 uuid=None,
+                # --- NUEVO: Guardamos el UUID relacionado en la BD ---
+                uuid_relacionado=uuid_frontend,
                 is_nominal=False,
                 status_sat="PROCESANDO",
                 estatus="pendiente",
@@ -1170,7 +1178,12 @@ class CartaPorteService:
         self.db.refresh(factura)
 
         try:
-            resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
+            # --- NUEVO: Pasamos el UUID al motor XML para generar el nodo 04 ---
+            resultado_pac = self._importar_comprobante_ws(
+                data, relacion_uuid=uuid_frontend
+            )
+            # -------------------------------------------------------------------
+
             uuid_generado = getattr(resultado_pac, "uuid", None)
 
             factura.uuid = uuid_generado

@@ -62,7 +62,33 @@ def generar_factura_libre(invoice_data: dict, db: Session = Depends(get_db)):
     """
     service = BillingService(db)
     try:
+        # 1. Timbrar la NUEVA factura con el monto corregido
         factura = service.generar_factura_libre(invoice_data)
+
+        # --- INICIO DE NUEVA LÓGICA: CANCELACIÓN AUTOMÁTICA ---
+        uuid_relacionado = invoice_data.get("uuid_relacionado")
+        tipo_relacion = invoice_data.get("tipo_relacion")
+
+        # Si la pantalla indica que es una sustitución 04
+        if uuid_relacionado and tipo_relacion == "04":
+            from app.models import models
+
+            # Buscar la factura "Mala" en la base de datos usando el UUID que mandó la pantalla
+            factura_vieja = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                .first()
+            )
+
+            # Si la encuentra, mandar la orden al SAT de cancelarla con motivo 01
+            if factura_vieja:
+                service.cancelar_factura_sat(
+                    invoice_id=factura_vieja.id,
+                    motivo="01",
+                    uuid_sustituto=factura.uuid,
+                )
+        # --- FIN DE NUEVA LÓGICA ---
+
         return {
             "status": "success",
             "message": "Factura Libre generada exitosamente",
@@ -247,7 +273,35 @@ def generar_carta_porte_one_shot(
     """
     service = CartaPorteService(db)  # CORRECTO: Servicio Operativo
     try:
+        # 1. Timbrar la NUEVA factura (Carta Porte)
         factura = service.generar_carta_porte_one_shot(invoice_data)
+
+        # --- INICIO DE NUEVA LÓGICA: CANCELACIÓN AUTOMÁTICA DE CP VIEJA ---
+        uuid_relacionado = getattr(invoice_data, "uuid_relacionado", None)
+        tipo_relacion = getattr(invoice_data, "tipo_relacion", None)
+
+        # Si la pantalla indica que es una sustitución 04
+        if uuid_relacionado and tipo_relacion == "04":
+            from app.models import models
+            from app.integrations.sat.billing_service import BillingService
+
+            # Buscar la factura "Mala" en la base de datos usando el UUID de la pantalla
+            factura_vieja = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                .first()
+            )
+
+            # Si la encuentra, mandar la orden al SAT de cancelarla con motivo 01
+            if factura_vieja:
+                cancel_service = BillingService(db)
+                cancel_service.cancelar_factura_sat(
+                    invoice_id=factura_vieja.id,
+                    motivo="01",
+                    uuid_sustituto=factura.uuid,
+                )
+        # --- FIN DE NUEVA LÓGICA ---
+
         return {
             "status": "success",
             "message": "Factura Total (Motor 1) generada exitosamente",
