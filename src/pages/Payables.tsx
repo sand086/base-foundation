@@ -172,7 +172,7 @@ export default function Payables() {
   // ESTADOS PARA LOS FILTROS Y SELECCIÓN
   // ==========================================
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all"); // <-- NUEVO: ESTADO ESTATUS UNIFICADO
+  const [statusFilter, setStatusFilter] = useState("all");
   const [cecoFilter, setCecoFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("all");
   const [openSupplierCombo, setOpenSupplierCombo] = useState(false);
@@ -236,7 +236,6 @@ export default function Payables() {
       if (String(inv.estatus || inv.status).toLowerCase() === "cancelado") {
         finalEstatus = "CANCELADO";
       } else {
-        // Obtenemos la etiqueta oficial usando getInvoiceStatusInfo global
         const statusInfoCalculated = getInvoiceStatusInfo({
           ...inv,
           saldo_pendiente: saldo,
@@ -256,7 +255,7 @@ export default function Payables() {
         supplier_id: inv.supplier_id || inv.supplier?.id || null,
         saldo_pendiente: saldo,
         monto_total: monto,
-        estatus: finalEstatus, // <-- ESTATUS LIMPIO Y OFICIAL (Ej. "PAGADA", "POR COBRAR")
+        estatus: finalEstatus,
       };
     }) as PayableInvoice[];
   }, [invoices]);
@@ -371,28 +370,35 @@ export default function Payables() {
     });
   }, [filteredInvoices]);
 
-  // 🔥 1. SEPARAMOS FACTURAS POSITIVAS DE NEGATIVAS
-  const facturasAPagar = useMemo(() => {
+  // 🔥 1. TABLA PRINCIPAL: Muestra TODO el historial (Pagadas, Canceladas, Pendientes)
+  // EXCEPTO las Notas de Crédito / Egresos
+  const facturasTablaPrincipal = useMemo(() => {
     return filteredInvoices.filter(
-      (inv: any) => inv.saldo_pendiente > 0 && inv.tipo_comprobante !== "E",
+      (inv: any) => !(inv.saldo_pendiente < 0 || inv.tipo_comprobante === "E"),
     );
   }, [filteredInvoices]);
 
+  // 🔥 2. NOTAS DE CRÉDITO: Se van a su propia pestaña
   const notasDeCredito = useMemo(() => {
     return filteredInvoices.filter(
       (inv: any) => inv.saldo_pendiente < 0 || inv.tipo_comprobante === "E",
     );
   }, [filteredInvoices]);
 
-  // 🔥 2. CALCULAMOS KPIS SOLO CON LAS FACTURAS POSITIVAS (facturasAPagar)
+  // 🔥 3. KPIS (TARJETAS): Solo calculan matemáticas sobre facturas con saldo > 0
   const kpis = useMemo(() => {
+    // Filtro interno solo para que la matemática sea exacta y no sume pagadas/canceladas
+    const facturasConDeuda = facturasTablaPrincipal.filter(
+      (inv: any) => inv.saldo_pendiente > 0,
+    );
+
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
     const en7Dias = new Date(hoy);
     en7Dias.setDate(hoy.getDate() + 7);
 
-    const totalVencido = facturasAPagar
+    const totalVencido = facturasConDeuda
       .filter((inv) => {
         const fechaVencimiento = new Date(inv.fecha_vencimiento);
         return (
@@ -403,11 +409,11 @@ export default function Payables() {
       })
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const totalPorPagar = facturasAPagar
+    const totalPorPagar = facturasConDeuda
       .filter((inv) => inv.estatus !== "PAGADA" && inv.estatus !== "CANCELADO")
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const totalParcial = facturasAPagar
+    const totalParcial = facturasConDeuda
       .filter(
         (inv) =>
           inv.estatus === "PAGO PARCIAL" ||
@@ -415,7 +421,7 @@ export default function Payables() {
       )
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const compromisos7Dias = facturasAPagar
+    const compromisos7Dias = facturasConDeuda
       .filter((inv) => {
         if (inv.estatus === "PAGADA" || inv.estatus === "CANCELADO")
           return false;
@@ -437,7 +443,7 @@ export default function Payables() {
       compromisos7Dias,
       totalAFavor,
     };
-  }, [facturasAPagar, notasDeCredito]);
+  }, [facturasTablaPrincipal, notasDeCredito]);
 
   const selectedTotalAmount = useMemo(() => {
     const selectedInvoicesData = filteredInvoices.filter((inv) =>
@@ -677,7 +683,6 @@ export default function Payables() {
       {
         key: "estatus",
         header: "Estatus",
-        // SE ELIMINÓ EL FILTRO INTERNO type: "status" DE ESTA COLUMNA
         render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
@@ -1322,7 +1327,7 @@ export default function Payables() {
             </Card>
 
             {/* AGREGA ESTA NUEVA CARD AL FINAL DEL GRID */}
-            {/*           <Card className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default relative overflow-hidden">
+            <Card className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default relative overflow-hidden">
               <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-emerald-600 dark:text-emerald-400">
                 <FileText className="h-6 w-6" />
               </div>
@@ -1334,13 +1339,13 @@ export default function Payables() {
                   {formatMoney(kpis.totalAFavor)}
                 </p>
               </div>
-            </Card> */}
+            </Card>
           </div>
 
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
               <EnhancedDataTable
-                data={facturasAPagar}
+                data={facturasTablaPrincipal}
                 columns={payablesColumns}
                 exportFileName="cuentas_por_pagar"
               />
