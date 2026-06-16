@@ -61,6 +61,10 @@ import { useBilling } from "@/features/receivables/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 
+// --- NUEVO: Importamos el Modal de Refacturación ---
+import { RefacturarModal } from "@/features/trips/components/RefacturarModal";
+// --------------------------------------------------
+
 interface ExtendedTripLeg extends Omit<TripLeg, "status"> {
   status: TripStatus | "liquidado" | string;
 }
@@ -199,6 +203,11 @@ export function TripDetailsModal({
   const [uuidFacturaFinal, setUuidFacturaFinal] = useState<string | null>(null);
 
   const [showUndoDialog, setShowUndoDialog] = useState(false);
+
+  // --- NUEVO: ESTADOS PARA EL MODAL DE REFACTURACIÓN ---
+  const [openRefacturar, setOpenRefacturar] = useState(false);
+  const [facturaToRefacturar, setFacturaToRefacturar] = useState<any>(null);
+  // -----------------------------------------------------
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("es-MX", {
@@ -523,6 +532,34 @@ export function TripDetailsModal({
       handleDownloadXML(uuidToDownload);
     }, 1500);
   };
+
+  // --- NUEVO: PREPARAR DATOS PARA EL MODAL DE REFACTURACIÓN ---
+  const handleOpenRefacturar = () => {
+    const facturas =
+      (localTrip as any)?.receivable_invoices ||
+      (localTrip as any)?.invoices ||
+      [];
+    const facturaFinal = facturas.find(
+      (f: any) => f.uuid === uuidFacturaFinal && f.is_nominal === false,
+    );
+
+    if (facturaFinal) {
+      // Inyectamos el ID del viaje y los datos del cliente para que el modal no tenga que buscarlos
+      const facturaEnriquecida = {
+        ...facturaFinal,
+        viaje_id: localTrip?.id,
+        client: localTrip?.client,
+      };
+      setFacturaToRefacturar(facturaEnriquecida);
+      setOpenRefacturar(true);
+    } else {
+      toast.error("Error al recuperar la factura", {
+        description:
+          "No se encontró el detalle de la factura original en la base de datos.",
+      });
+    }
+  };
+  // -------------------------------------------------------------
 
   const handlePrintNOM087 = async () => {
     if (!localTrip) return;
@@ -1328,7 +1365,7 @@ export function TripDetailsModal({
                                     </span>
                                   </div>
                                 </div>
-                                <div className="flex flex-col gap-3 mt-4">
+                                <div className="flex flex-col gap-3 mt-4 w-full sm:w-auto">
                                   {/* RENDERIZADO CONDICIONAL DECLARATIVO (ESTADO GENERADO VS POR GENERAR) */}
                                   {uuidFacturaFinal ? (
                                     // ESTADO: FACTURA YA GENERADA
@@ -1339,27 +1376,44 @@ export function TripDetailsModal({
                                           Factura Final Generada Exitosamente
                                         </span>
                                       </div>
-                                      <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                      <div className="flex flex-col gap-3 w-full">
+                                        <div className="flex flex-col sm:flex-row gap-3 w-full">
+                                          <Button
+                                            variant="outline"
+                                            className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
+                                            onClick={() =>
+                                              handleDownloadPDF(
+                                                uuidFacturaFinal,
+                                              )
+                                            }
+                                          >
+                                            <FileText className="h-4 w-4 mr-2 text-rose-500" />
+                                            Descargar PDF
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
+                                            onClick={() =>
+                                              handleDownloadXML(
+                                                uuidFacturaFinal,
+                                              )
+                                            }
+                                          >
+                                            <FileCode2 className="h-4 w-4 mr-2 text-blue-500" />
+                                            Descargar XML
+                                          </Button>
+                                        </div>
+
+                                        {/* --- NUEVO: BOTÓN DE REFACTURACIÓN --- */}
                                         <Button
                                           variant="outline"
-                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
-                                          onClick={() =>
-                                            handleDownloadPDF(uuidFacturaFinal)
-                                          }
+                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-amber-200 dark:border-amber-700/50 shadow-sm bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 haptic-press w-full"
+                                          onClick={handleOpenRefacturar}
                                         >
-                                          <FileText className="h-4 w-4 mr-2 text-rose-500" />
-                                          Descargar PDF
+                                          <ArrowRightCircle className="h-4 w-4 mr-2" />
+                                          Corregir Factura (Refacturar)
                                         </Button>
-                                        <Button
-                                          variant="outline"
-                                          className="h-11 px-5 text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 haptic-press flex-1"
-                                          onClick={() =>
-                                            handleDownloadXML(uuidFacturaFinal)
-                                          }
-                                        >
-                                          <FileCode2 className="h-4 w-4 mr-2 text-blue-500" />
-                                          Descargar XML
-                                        </Button>
+                                        {/* -------------------------------------- */}
                                       </div>
                                     </div>
                                   ) : (
@@ -1599,6 +1653,20 @@ export function TripDetailsModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* --- NUEVO: RENDERIZAMOS EL MODAL DE REFACTURACIÓN --- */}
+      {facturaToRefacturar && (
+        <RefacturarModal
+          open={openRefacturar}
+          onOpenChange={setOpenRefacturar}
+          invoice={facturaToRefacturar}
+          onSubmit={async () => {
+            // Al terminar la refacturación, recargamos el viaje para traer el nuevo UUID
+            await refreshLocalTrip();
+          }}
+        />
+      )}
+      {/* ------------------------------------------------------- */}
     </div>
   );
 }
