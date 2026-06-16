@@ -1322,7 +1322,7 @@ export default function Payables() {
             </Card>
 
             {/* AGREGA ESTA NUEVA CARD AL FINAL DEL GRID */}
-            <Card className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default relative overflow-hidden">
+            {/*           <Card className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default relative overflow-hidden">
               <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-emerald-600 dark:text-emerald-400">
                 <FileText className="h-6 w-6" />
               </div>
@@ -1334,7 +1334,7 @@ export default function Payables() {
                   {formatMoney(kpis.totalAFavor)}
                 </p>
               </div>
-            </Card>
+            </Card> */}
           </div>
 
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
