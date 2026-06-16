@@ -544,19 +544,16 @@ export function TripDetailsModal({
     );
 
     if (facturaFinal) {
-      // Inyectamos el ID del viaje y los datos del cliente para que el modal no tenga que buscarlos
       const facturaEnriquecida = {
         ...facturaFinal,
         viaje_id: localTrip?.id,
         client: localTrip?.client,
+        viaje: localTrip, // <--- ¡AGREGA ESTA LÍNEA!
       };
       setFacturaToRefacturar(facturaEnriquecida);
       setOpenRefacturar(true);
     } else {
-      toast.error("Error al recuperar la factura", {
-        description:
-          "No se encontró el detalle de la factura original en la base de datos.",
-      });
+      toast.error("Error al recuperar la factura");
     }
   };
   // -------------------------------------------------------------

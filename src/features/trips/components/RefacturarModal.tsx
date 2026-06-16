@@ -24,6 +24,10 @@ import {
   User,
   Hash,
   FileCheck,
+  Truck,
+  MapPin,
+  Package,
+  Navigation,
 } from "lucide-react";
 import { useBilling } from "@/features/receivables/hooks/useBilling";
 import axiosClient from "@/api/axiosClient";
@@ -59,10 +63,8 @@ export function RefacturarModal({
     "FLETE" | "MANIOBRA" | "EXENTO"
   >("FLETE");
 
-  // Al abrir el modal, precargamos EXACTAMENTE los datos de la factura anterior
   useEffect(() => {
     if (open && invoice) {
-      // Determinamos el tipo de impuesto basado en los montos de la factura original
       if (invoice.retenciones > 0) {
         setTipoImpuesto("FLETE");
       } else if (invoice.iva > 0) {
@@ -71,7 +73,6 @@ export function RefacturarModal({
         setTipoImpuesto("EXENTO");
       }
 
-      // Reconstruimos los conceptos (o creamos uno base si no vienen detallados)
       if (invoice.conceptos_detalle && invoice.conceptos_detalle.length > 0) {
         setConceptos(
           invoice.conceptos_detalle.map((c: any, idx: number) => ({
@@ -100,7 +101,6 @@ export function RefacturarModal({
     }
   }, [open, invoice]);
 
-  // Cálculos en tiempo real
   const subtotal = useMemo(
     () => conceptos.reduce((sum, c) => sum + c.importe, 0),
     [conceptos],
@@ -146,8 +146,6 @@ export function RefacturarModal({
       return;
     }
 
-    // 1. Armamos el payload clonando la info del cliente de la factura original
-    // 2. INYECTAMOS SILENCIOSAMENTE EL UUID Y LA RELACIÓN 04
     const payload = {
       client_id: invoice.client_id || invoice.client?.id,
       sub_client_id: invoice.sub_client_id,
@@ -172,29 +170,24 @@ export function RefacturarModal({
         .split("T")[0],
       metodo_pago: invoice.metodo_pago || "PPD",
       forma_pago: invoice.forma_pago || "99",
-      uuid_relacionado: invoice.uuid, // EL TRUCO ESTÁ AQUÍ
-      tipo_relacion: "04", // Y AQUÍ
+      uuid_relacionado: invoice.uuid,
+      tipo_relacion: "04",
     };
 
     let result;
 
     try {
-      // 🚨 LA MAGIA OPERATIVA 🚨
       if (invoice.viaje_id) {
         const nuevoFleteBase = conceptos[0]?.precioUnitario || 0;
-
-        // Actualiza el precio del viaje en la BD
         await axiosClient.put(`/api/logistics/trips/${invoice.viaje_id}`, {
           tarifa_base: nuevoFleteBase,
         });
 
-        // Manda la orden de refacturar (Carta Porte One-Shot)
         result = await generateOneShotInvoice({
           ...payload,
           viaje_id: invoice.viaje_id,
         });
       } else {
-        // Factura Libre (Nomenclatura F)
         result = await generateFreeInvoice(payload);
       }
 
@@ -216,9 +209,12 @@ export function RefacturarModal({
 
   if (!invoice) return null;
 
+  // Extraemos el tracto y operador principal del viaje
+  const activeLeg = invoice.viaje?.legs?.[0];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:max-w-4xl p-0 flex flex-col max-h-[90vh] bg-card overflow-hidden">
+      <DialogContent className="w-[95vw] sm:max-w-5xl p-0 flex flex-col max-h-[90vh] bg-card overflow-hidden">
         <DialogHeader className="p-6 bg-amber-50 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-900/50">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 shrink-0">
@@ -240,81 +236,124 @@ export function RefacturarModal({
           <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-white/10 flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
             <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              El sistema ya copió todos los datos del cliente y parámetros SAT
+              El sistema ha precargado todos los datos operativos y del cliente
               de la factura original para tu tranquilidad.
               <strong>
                 {" "}
-                Solo corrige el Precio Unitario, las Cantidades o los Impuestos
-                a continuación{" "}
+                Solo corrige los montos y cantidades a continuación{" "}
               </strong>
-              y el sistema hará la sustitución automáticamente.
+              y el motor logístico se encargará de clonar el resto en la nueva
+              Carta Porte.
             </p>
           </div>
 
-          {/* DATOS DE LA FACTURA ORIGINAL (READ ONLY) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-card border border-border shadow-sm text-xs">
-            <div className="col-span-2 md:col-span-4 pb-2 border-b border-border">
-              <h3 className="text-[10px] font-black text-brand-navy dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
-                <User className="h-3 w-3" /> Datos del Cliente (No editables)
-              </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* DATOS DEL CLIENTE */}
+            <div className="grid grid-cols-2 gap-4 p-5 rounded-xl bg-card border border-border shadow-sm text-xs">
+              <div className="col-span-2 pb-2 border-b border-border">
+                <h3 className="text-[10px] font-black text-brand-navy dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
+                  <User className="h-3 w-3" /> Datos del Cliente (No editables)
+                </h3>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <span className="block text-[9px] font-bold text-muted-foreground uppercase">
+                  Razón Social
+                </span>
+                <span className="font-bold text-foreground truncate block">
+                  {invoice.client?.razon_social || "S/A"}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] font-bold text-muted-foreground uppercase">
+                  RFC
+                </span>
+                <span className="font-mono font-bold text-foreground">
+                  {invoice.client?.rfc || "S/A"}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] font-bold text-muted-foreground uppercase">
+                  Régimen / CP
+                </span>
+                <span className="font-bold text-foreground">
+                  {invoice.client?.regimen_fiscal || "601"} - CP:{" "}
+                  {invoice.client?.codigo_postal_fiscal || "S/A"}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] font-bold text-muted-foreground uppercase">
+                  Uso CFDI
+                </span>
+                <span className="font-bold text-foreground">
+                  {invoice.uso_cfdi || "G03"}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] font-bold text-muted-foreground uppercase">
+                  Forma Pago
+                </span>
+                <span className="font-bold text-foreground">
+                  {invoice.forma_pago || "99"} ({invoice.metodo_pago || "PPD"})
+                </span>
+              </div>
             </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                Razón Social
-              </span>
-              <span className="font-bold text-foreground truncate block">
-                {invoice.client?.razon_social || "S/A"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                RFC
-              </span>
-              <span className="font-mono font-bold text-foreground">
-                {invoice.client?.rfc || "S/A"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                Régimen / CP
-              </span>
-              <span className="font-bold text-foreground">
-                {invoice.client?.regimen_fiscal || "601"} - CP:{" "}
-                {invoice.client?.codigo_postal_fiscal || "S/A"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                Uso CFDI
-              </span>
-              <span className="font-bold text-foreground">
-                {invoice.uso_cfdi || "G03"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                Método Pago
-              </span>
-              <span className="font-bold text-foreground">
-                {invoice.metodo_pago || "PPD"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                Forma Pago
-              </span>
-              <span className="font-bold text-foreground">
-                {invoice.forma_pago || "99"}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <span className="block text-[9px] font-bold text-muted-foreground uppercase">
-                Moneda
-              </span>
-              <span className="font-bold text-foreground">
-                {invoice.moneda || "MXN"}
-              </span>
-            </div>
+
+            {/* DATOS OPERATIVOS DEL VIAJE */}
+            {invoice.viaje && (
+              <div className="grid grid-cols-2 gap-4 p-5 rounded-xl bg-emerald-50/30 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 shadow-sm text-xs">
+                <div className="col-span-2 pb-2 border-b border-emerald-100 dark:border-emerald-900/30">
+                  <h3 className="text-[10px] font-black text-emerald-700 dark:text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                    <Navigation className="h-3 w-3" /> Datos Operativos (Se
+                    clonarán exactos)
+                  </h3>
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <span className="block text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase flex items-center gap-1">
+                    <MapPin className="h-3 w-3" /> Ruta
+                  </span>
+                  <span className="font-bold text-foreground truncate block">
+                    {invoice.viaje.origin} → {invoice.viaje.destination}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="block text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase flex items-center gap-1">
+                    <User className="h-3 w-3" /> Operador
+                  </span>
+                  <span className="font-bold text-foreground truncate block">
+                    {activeLeg?.operator?.name || "S/A"}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="block text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase flex items-center gap-1">
+                    <Truck className="h-3 w-3" /> Tracto
+                  </span>
+                  <span className="font-mono font-bold text-foreground">
+                    ECO-{activeLeg?.unit?.numero_economico || "S/A"} (
+                    {activeLeg?.unit?.placas || "S/P"})
+                  </span>
+                </div>
+                {invoice.viaje.remolque_1 && (
+                  <div className="space-y-1">
+                    <span className="block text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase flex items-center gap-1">
+                      <Package className="h-3 w-3" /> Remolque 1
+                    </span>
+                    <span className="font-mono font-bold text-foreground">
+                      ECO-{invoice.viaje.remolque_1.numero_economico}
+                    </span>
+                  </div>
+                )}
+                {invoice.viaje.remolque_2 && (
+                  <div className="space-y-1">
+                    <span className="block text-[9px] font-bold text-emerald-600/70 dark:text-emerald-500/70 uppercase flex items-center gap-1">
+                      <Package className="h-3 w-3" /> Remolque 2
+                    </span>
+                    <span className="font-mono font-bold text-foreground">
+                      ECO-{invoice.viaje.remolque_2.numero_economico}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -324,7 +363,6 @@ export function RefacturarModal({
                 Montos
               </h3>
 
-              {/* SELECTOR DE IMPUESTOS */}
               <div className="w-full sm:w-64 space-y-1">
                 <Label className="text-[9px] font-bold text-muted-foreground uppercase">
                   Esquema de Impuestos
