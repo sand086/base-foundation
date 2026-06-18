@@ -1509,7 +1509,12 @@ def get_cfdi_vault_records(
     if tipo_documento == "FACTURA_CLIENTE":
         query = (
             db.query(models.ReceivableInvoice)
-            .options(joinedload(models.ReceivableInvoice.client))
+            .options(
+                joinedload(models.ReceivableInvoice.client),
+                joinedload(
+                    models.ReceivableInvoice.document_history
+                ),  # <--- CARGAMOS HISTORIAL DE ARCHIVOS
+            )
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
         )
@@ -1552,7 +1557,6 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.fecha_emision.between(start_date, end_date)
             )
 
-        # 🟢 FIX: 2000 directo en lugar de variable
         resultados = (
             query.order_by(desc(models.ReceivableInvoice.fecha_emision))
             .limit(2000)
@@ -1606,12 +1610,12 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
-                    "versiones_archivos": [],
+                    "versiones_archivos": (
+                        r.document_history if hasattr(r, "document_history") else []
+                    ),  # <--- MAPEADO REAL
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
-                    "xml_url": getattr(
-                        r, "xml_url", None
-                    ),  # <--- AGREGADO PARA EL BOTÓN XML
+                    "xml_url": getattr(r, "xml_url", None),
                 }
             )
 
@@ -1621,7 +1625,12 @@ def get_cfdi_vault_records(
     elif tipo_documento == "FACTURA_PROVEEDOR":
         query = (
             db.query(models.PayableInvoice)
-            .options(joinedload(models.PayableInvoice.supplier))
+            .options(
+                joinedload(models.PayableInvoice.supplier),
+                joinedload(
+                    models.PayableInvoice.document_history
+                ),  # <--- CARGAMOS HISTORIAL DE ARCHIVOS
+            )
             .join(
                 models.Supplier, models.PayableInvoice.supplier_id == models.Supplier.id
             )
@@ -1644,7 +1653,6 @@ def get_cfdi_vault_records(
                 models.PayableInvoice.fecha_emision.between(start_date, end_date)
             )
 
-        # 🟢 FIX: 2000 directo
         resultados = (
             query.order_by(desc(models.PayableInvoice.fecha_emision)).limit(2000).all()
         )
@@ -1682,12 +1690,12 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
-                    "versiones_archivos": [],
+                    "versiones_archivos": (
+                        r.document_history if hasattr(r, "document_history") else []
+                    ),  # <--- MAPEADO REAL
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
-                    "xml_url": getattr(
-                        r, "xml_url", None
-                    ),  # <--- AGREGADO PARA EL BOTÓN XML
+                    "xml_url": getattr(r, "xml_url", None),
                 }
             )
 
@@ -1696,10 +1704,15 @@ def get_cfdi_vault_records(
     # ==========================================
     elif tipo_documento == "PAGO_CLIENTE":
 
-        # SUB-PARTE A: Complementos CFDI Oficiales
+        # SUB-PARTE A: Complementos CFDI Oficiales (Desde Cuentas por Cobrar)
         query_cfdi = (
             db.query(models.ReceivableInvoice)
-            .options(joinedload(models.ReceivableInvoice.client))
+            .options(
+                joinedload(models.ReceivableInvoice.client),
+                joinedload(
+                    models.ReceivableInvoice.document_history
+                ),  # <--- CARGAMOS HISTORIAL
+            )
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
         )
@@ -1726,7 +1739,6 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoice.fecha_emision.between(start_date, end_date)
             )
 
-        # 🟢 FIX: 2000 directo
         resultados_cfdi = (
             query_cfdi.order_by(desc(models.ReceivableInvoice.fecha_emision))
             .limit(2000)
@@ -1768,22 +1780,25 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
-                    "versiones_archivos": [],
+                    "versiones_archivos": (
+                        r.document_history if hasattr(r, "document_history") else []
+                    ),  # <--- MAPEADO REAL
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
-                    "xml_url": getattr(
-                        r, "xml_url", None
-                    ),  # <--- AGREGADO PARA EL BOTÓN XML
+                    "xml_url": getattr(r, "xml_url", None),
                 }
             )
 
-        # SUB-PARTE B: Recibos Internos de Tesorería vinculados
+        # SUB-PARTE B: Recibos Internos de Tesorería vinculados (Los pagos reales a facturas)
         query_pagos = (
             db.query(models.ReceivableInvoicePayment)
             .options(
                 joinedload(models.ReceivableInvoicePayment.invoice).joinedload(
                     models.ReceivableInvoice.client
-                )
+                ),
+                joinedload(
+                    models.ReceivableInvoicePayment.document_history
+                ),  # <--- CARGAMOS EL HISTORIAL DE ESTE PAGO
             )
             .join(
                 models.ReceivableInvoice,
@@ -1809,14 +1824,12 @@ def get_cfdi_vault_records(
                 models.ReceivableInvoicePayment.fecha_pago.between(start_date, end_date)
             )
 
-        # 🟢 FIX: 2000 directo
         resultados_pagos = (
             query_pagos.order_by(desc(models.ReceivableInvoicePayment.fecha_pago))
             .limit(2000)
             .all()
         )
 
-        # 🚀 MAGIA DEL FOLIO REAL: Extraer folios y XMLs reales del SAT usando el UUID del complemento
         payment_uuids = [
             r.complemento_uuid
             for r in resultados_pagos
@@ -1862,7 +1875,6 @@ def get_cfdi_vault_records(
             folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
             comp_uuid = getattr(r, "complemento_uuid", None)
 
-            # 🚀 EXTRAEMOS DATOS REALES DE CFDI SI ESTÁ TIMBRADO
             real_cfdi_data = mapa_cfdi_sat.get(comp_uuid) if comp_uuid else None
 
             if comp_uuid:
@@ -1871,14 +1883,12 @@ def get_cfdi_vault_records(
                 elif r.referencia and "COM" in r.referencia.upper():
                     folio_mostrar = f"{r.referencia} (Fra: {folio_padre})"
                 else:
-                    # Se cambió COM- por PAGO- para no dar la ilusión de folio SAT si no lo encontró
                     folio_mostrar = f"PAGO-{r.id} (Fra: {folio_padre})"
             else:
                 folio_mostrar = (
                     f"{r.referencia or f'Recibo-{r.id}'} (Fra: {folio_padre})"
                 )
 
-            # Extraer URLs Reales de la tabla de Facturas o dejar las internas del Recibo
             if real_cfdi_data:
                 pdf_final = real_cfdi_data.get("pdf_url") or getattr(
                     r, "comprobante_url", None
@@ -1892,7 +1902,7 @@ def get_cfdi_vault_records(
                 {
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": folio_mostrar,  # <--- FOLIO ARREGLADO
+                    "folio": folio_mostrar,
                     "uuid": comp_uuid,
                     "fecha_emision": getattr(r, "fecha_pago", None),
                     "estatus": status_fiscal,
@@ -1904,10 +1914,12 @@ def get_cfdi_vault_records(
                     "monto_total": getattr(r, "monto", 0),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
-                    "versiones_archivos": [],
+                    "versiones_archivos": (
+                        r.document_history if hasattr(r, "document_history") else []
+                    ),  # <--- MAPEADO REAL DEL PAGO (AQUÍ ESTÁ EL XML)
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
                     "pdf_url": pdf_final,
-                    "xml_url": xml_final,  # <--- AGREGADO PARA EL BOTÓN XML
+                    "xml_url": xml_final,
                 }
             )
 
