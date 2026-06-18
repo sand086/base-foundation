@@ -344,65 +344,88 @@ export default function CFDIVault() {
       key: "archivos",
       header: "Descargas",
       sortable: false,
-      render: (_, row: any) => (
-        <div className="flex items-center justify-end gap-1.5 pr-2">
-          {/* BOTÓN REFACTURAR (Solo aparece si es Ingreso y si tiene un cliente asociado) */}
-          {activeTab === "FACTURA_CLIENTE" && row.estatus !== "PROVISIONAL" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Refacturar CFDI"
-              className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 border border-transparent hover:border-orange-200 h-8 px-2"
-              onClick={() => {
-                // Mapeamos los datos de la bóveda para simular el objeto de factura que necesita el modal
-                setInvoiceToRefactor({
-                  uuid: row.uuid,
-                  subtotal: row.monto_total / 1.16, // Una aproximación rápida, el usuario puede editarlo
-                  monto_total: row.monto_total,
-                  client: { razon_social: row.cliente_proveedor_nombre },
-                  concepto: `Refacturación de ${row.folio}`,
-                });
-                setRefactorModalOpen(true);
-              }}
-            >
-              <RefreshCw className="h-4 w-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">Refacturar</span>
-            </Button>
-          )}
+      render: (_, row: any) => {
+        // 1. Extraemos de forma segura el arreglo de archivos históricos que manda el backend
+        const listaArchivos = Array.isArray(row.versiones_archivos)
+          ? row.versiones_archivos
+          : [];
 
-          {row.pdf_url ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Ver PDF"
-              className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 h-8 px-2"
-              onClick={() => window.open(row.pdf_url, "_blank")}
-            >
-              <FileText className="h-4 w-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">PDF</span>
-            </Button>
-          ) : (
-            <span className="text-[10px] text-muted-foreground mr-1">
-              No PDF
-            </span>
-          )}
+        // 2. Buscamos dinámicamente el archivo XML (Priorizando el que esté activo "is_active")
+        const xmlDoc =
+          listaArchivos.find(
+            (f: any) => f.document_type === "xml" && f.is_active,
+          ) || listaArchivos.find((f: any) => f.document_type === "xml");
+        const finalXmlUrl = row.xml_url || xmlDoc?.file_url || "";
 
-          {row.xml_url ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              title="Ver XML"
-              className="text-amber-600 hover:text-amber-900 hover:bg-amber-50 border border-transparent hover:border-amber-200 h-8 px-2"
-              onClick={() => window.open(row.xml_url, "_blank")}
-            >
-              <FileCode className="h-4 w-4 sm:mr-1.5" />
-              <span className="hidden sm:inline">XML</span>
-            </Button>
-          ) : (
-            <span className="text-[10px] text-muted-foreground">No XML</span>
-          )}
-        </div>
-      ),
+        // 3. Hacemos lo mismo para el PDF como respaldo de row.pdf_url
+        const pdfDoc =
+          listaArchivos.find(
+            (f: any) => f.document_type === "pdf" && f.is_active,
+          ) || listaArchivos.find((f: any) => f.document_type === "pdf");
+        const finalPdfUrl = row.pdf_url || pdfDoc?.file_url || "";
+
+        return (
+          <div className="flex items-center justify-end gap-1.5 pr-2">
+            {/* BOTÓN REFACTURAR (Solo aparece si es Ingreso y si tiene un cliente asociado) */}
+            {activeTab === "FACTURA_CLIENTE" &&
+              row.estatus !== "PROVISIONAL" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title="Refacturar CFDI"
+                  className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 border border-transparent hover:border-orange-200 h-8 px-2"
+                  onClick={() => {
+                    setInvoiceToRefactor({
+                      uuid: row.uuid,
+                      subtotal: row.monto_total / 1.16,
+                      monto_total: row.monto_total,
+                      client: { razon_social: row.cliente_proveedor_nombre },
+                      concepto: `Refacturación de ${row.folio}`,
+                    });
+                    setRefactorModalOpen(true);
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4 sm:mr-1.5" />
+                  <span className="hidden sm:inline">Refacturar</span>
+                </Button>
+              )}
+
+            {/* BOTÓN PDF CORREGIDO */}
+            {finalPdfUrl ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Ver PDF"
+                className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 h-8 px-2"
+                onClick={() => window.open(finalPdfUrl, "_blank")}
+              >
+                <FileText className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">PDF</span>
+              </Button>
+            ) : (
+              <span className="text-[10px] text-muted-foreground mr-1">
+                No PDF
+              </span>
+            )}
+
+            {/* BOTÓN XML CORREGIDO Y FUNCIONAL PARA CUALQUIER COMPLEMENTO O FACTURA */}
+            {finalXmlUrl ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Ver XML"
+                className="text-amber-600 hover:text-amber-900 hover:bg-amber-50 border border-transparent hover:border-amber-200 h-8 px-2"
+                onClick={() => window.open(finalXmlUrl, "_blank")}
+              >
+                <FileCode className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">XML</span>
+              </Button>
+            ) : (
+              <span className="text-[10px] text-muted-foreground">No XML</span>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
