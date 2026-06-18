@@ -285,6 +285,8 @@ def list_work_orders(
             joinedload(models.WorkOrder.unit),
             joinedload(models.WorkOrder.mechanic),
             joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
+            joinedload(models.WorkOrder.created_by),  # <-- AUDITORÍA: Cargar creador
+            joinedload(models.WorkOrder.updated_by),  # <-- AUDITORÍA: Cargar editor
         )
         .filter(models.WorkOrder.record_status != models.RecordStatus.ELIMINADO)
     )
@@ -298,6 +300,31 @@ def list_work_orders(
     for o in orders:
         o.unit_numero = o.unit.numero_economico if o.unit else None
         o.mechanic_nombre = o.mechanic.nombre if o.mechanic else None
+
+        # --- AUDITORÍA PLANAS PARA EL FRONTEND ---
+        if o.created_by:
+            o.creado_por = (
+                f"{o.created_by.nombre} {o.created_by.apellido or ''}".strip()
+            )
+        else:
+            o.creado_por = "Sistema / Desconocido"
+
+        if o.updated_by:
+            o.editado_por = (
+                f"{o.updated_by.nombre} {o.updated_by.apellido or ''}".strip()
+            )
+        else:
+            o.editado_por = "Sin ediciones"
+        # o.created_at y o.updated_at ya existen automáticamente gracias a AuditMixin
+
+        # --- FIX: Filtrar las partes eliminadas para que no lleguen al Frontend ---
+        partes_activas = [
+            p
+            for p in o.parts
+            if getattr(p, "record_status", "A") != models.RecordStatus.ELIMINADO
+        ]
+        o.parts = partes_activas  # Reemplazamos la lista con las puras activas
+
         for p in o.parts:
             if p.item:
                 p.item_sku = p.item.sku
@@ -316,6 +343,8 @@ def get_work_order(db: Session, order_id: int):
             joinedload(models.WorkOrder.unit),
             joinedload(models.WorkOrder.mechanic),
             joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
+            joinedload(models.WorkOrder.created_by),  # <-- AUDITORÍA: Cargar creador
+            joinedload(models.WorkOrder.updated_by),  # <-- AUDITORÍA: Cargar editor
         )
         .filter(
             models.WorkOrder.id == order_id,
@@ -328,6 +357,31 @@ def get_work_order(db: Session, order_id: int):
 
     order.unit_numero = order.unit.numero_economico if order.unit else None
     order.mechanic_nombre = order.mechanic.nombre if order.mechanic else None
+
+    # --- AUDITORÍA PLANAS PARA EL FRONTEND ---
+    if order.created_by:
+        order.creado_por = (
+            f"{order.created_by.nombre} {order.created_by.apellido or ''}".strip()
+        )
+    else:
+        order.creado_por = "Sistema / Desconocido"
+
+    if order.updated_by:
+        order.editado_por = (
+            f"{order.updated_by.nombre} {order.updated_by.apellido or ''}".strip()
+        )
+    else:
+        order.editado_por = "Sin ediciones"
+    # order.created_at y order.updated_at ya existen automáticamente gracias a AuditMixin
+
+    # --- FIX: Filtrar las partes eliminadas para que no se multipliquen en el Frontend ---
+    partes_activas = [
+        p
+        for p in order.parts
+        if getattr(p, "record_status", "A") != models.RecordStatus.ELIMINADO
+    ]
+    order.parts = partes_activas
+
     for p in order.parts:
         if p.item:
             p.item_sku = p.item.sku
@@ -460,6 +514,7 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
         item = (
             db.query(models.InventoryItem)
             .filter(models.InventoryItem.id == part.inventory_item_id)
+            .with_for_update(of=models.InventoryItem)
             .first()
         )
 
