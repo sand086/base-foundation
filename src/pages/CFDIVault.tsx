@@ -380,27 +380,37 @@ export default function CFDIVault() {
             (f: any) => f.document_type === "xml" && f.is_active,
           ) || listaArchivos.find((f: any) => f.document_type === "xml");
 
-        // PARCHE: Si no hay XML guardado explícitamente pero hay un UUID,
-        // armamos la ruta al endpoint dinámico para descargarlo al vuelo
-        const finalXmlUrl =
-          row.xml_url ||
-          xmlDoc?.file_url ||
-          (row.uuid ? `/api/sat/invoice/${row.uuid}/xml` : "");
-
         const pdfDoc =
           listaArchivos.find(
             (f: any) => f.document_type === "pdf" && f.is_active,
           ) || listaArchivos.find((f: any) => f.document_type === "pdf");
 
-        // PARCHE: Hacemos exactamente lo mismo para el PDF por seguridad
-        const finalPdfUrl =
-          row.pdf_url ||
-          pdfDoc?.file_url ||
-          (row.uuid ? `/api/sat/invoice/${row.uuid}/pdf` : "");
+        // 🔥 LA MAGIA ESTÁ AQUÍ: Forzamos la descarga a través del backend
+        // para que inyecte la estructura: [Folio]_[RFC]_[UUID].pdf/xml
+        const downloadFile = (type: "pdf" | "xml") => {
+          if (row.uuid) {
+            const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "";
+            const baseURL = rawBaseURL.replace(/\/$/, "");
+            window.open(
+              `${baseURL}/api/sat/invoice/${row.uuid}/${type}`,
+              "_blank",
+            );
+          } else {
+            // Fallback si es un documento interno que no fue timbrado
+            const fallbackUrl =
+              type === "pdf"
+                ? row.pdf_url || pdfDoc?.file_url
+                : row.xml_url || xmlDoc?.file_url;
+            if (fallbackUrl) window.open(fallbackUrl, "_blank");
+          }
+        };
+
+        const hasPdf = !!(row.uuid || row.pdf_url || pdfDoc?.file_url);
+        const hasXml = !!(row.uuid || row.xml_url || xmlDoc?.file_url);
 
         return (
           <div className="flex items-center justify-end gap-1 pr-2">
-            {/* BOTÓN NUEVO: VER DETALLE EN MODAL */}
+            {/* BOTÓN: VER DETALLE EN MODAL */}
             <Button
               variant="ghost"
               size="icon"
@@ -411,6 +421,7 @@ export default function CFDIVault() {
               <Eye className="h-4 w-4" />
             </Button>
 
+            {/* BOTÓN REFACTURAR */}
             {activeTab === "FACTURA_CLIENTE" &&
               row.estatus !== "PROVISIONAL" && (
                 <Button
@@ -434,28 +445,34 @@ export default function CFDIVault() {
                 </Button>
               )}
 
-            {finalPdfUrl && (
+            {hasPdf ? (
               <Button
                 variant="ghost"
                 size="icon"
                 title="Descargar PDF"
                 className="text-rose-600 hover:text-rose-900 hover:bg-rose-50 h-8 w-8 rounded"
-                onClick={() => window.open(finalPdfUrl, "_blank")}
+                onClick={() => downloadFile("pdf")}
               >
                 <FileText className="h-4 w-4" />
               </Button>
+            ) : (
+              <span className="text-[10px] text-muted-foreground mr-1">
+                No PDF
+              </span>
             )}
 
-            {finalXmlUrl && (
+            {hasXml ? (
               <Button
                 variant="ghost"
                 size="icon"
                 title="Descargar XML"
                 className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 h-8 w-8 rounded"
-                onClick={() => window.open(finalXmlUrl, "_blank")}
+                onClick={() => downloadFile("xml")}
               >
                 <FileCode className="h-4 w-4" />
               </Button>
+            ) : (
+              <span className="text-[10px] text-muted-foreground">No XML</span>
             )}
           </div>
         );
