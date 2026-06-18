@@ -379,13 +379,24 @@ export default function CFDIVault() {
           listaArchivos.find(
             (f: any) => f.document_type === "xml" && f.is_active,
           ) || listaArchivos.find((f: any) => f.document_type === "xml");
-        const finalXmlUrl = row.xml_url || xmlDoc?.file_url || "";
+
+        // PARCHE: Si no hay XML guardado explícitamente pero hay un UUID,
+        // armamos la ruta al endpoint dinámico para descargarlo al vuelo
+        const finalXmlUrl =
+          row.xml_url ||
+          xmlDoc?.file_url ||
+          (row.uuid ? `/api/sat/invoice/${row.uuid}/xml` : "");
 
         const pdfDoc =
           listaArchivos.find(
             (f: any) => f.document_type === "pdf" && f.is_active,
           ) || listaArchivos.find((f: any) => f.document_type === "pdf");
-        const finalPdfUrl = row.pdf_url || pdfDoc?.file_url || "";
+
+        // PARCHE: Hacemos exactamente lo mismo para el PDF por seguridad
+        const finalPdfUrl =
+          row.pdf_url ||
+          pdfDoc?.file_url ||
+          (row.uuid ? `/api/sat/invoice/${row.uuid}/pdf` : "");
 
         return (
           <div className="flex items-center justify-end gap-1 pr-2">
