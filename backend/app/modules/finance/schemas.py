@@ -390,6 +390,7 @@ class CFDIHistoryRecord(BaseModel):
     versiones_archivos: List[DocumentHistoryResponse] = Field(default_factory=list)
     viaje_id: Optional[int] = None
     pdf_url: Optional[str] = None
+    xml_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

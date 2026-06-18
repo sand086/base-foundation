@@ -22,5 +22,6 @@ export type CFDIHistoryRecord = {
     versiones_archivos?: Array<DocumentHistoryResponse>;
     viaje_id?: (number | null);
     pdf_url?: (string | null);
+    xml_url?: (string | null);
 };
 

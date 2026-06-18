@@ -203,7 +203,7 @@ def delete_mechanic(
     db_mech.record_status = models.RecordStatus.ELIMINADO
     db_mech.updated_by_id = user_id  # <--- AUDITORÍA
 
-    # Liberamos RFC, NSS y Email (los que tengan unique=True en tu modelo)
+    # Liberamos RFC, NSS y Email
     timestamp = int(time.time())
     if db_mech.rfc:
         db_mech.rfc = f"{db_mech.rfc}_DEL_{timestamp}"
@@ -424,7 +424,6 @@ def create_work_order(
         folio = generate_work_order_folio(db)
         now = datetime.now(timezone.utc)
 
-        # 1. Asignamos los datos base y financieros (Mano de obra e IVA)
         db_order = models.WorkOrder(
             folio=folio,
             unit_id=order_in.unit_id,
@@ -443,25 +442,28 @@ def create_work_order(
 
         sum_parts_cost = 0.0
 
+        # 🚀 FIX 1: AGRUPAR REFACCIONES PARA EVITAR DUPLICADOS EN BD
+        partes_agrupadas = {}
         for part in order_in.parts:
+            if part.inventory_item_id in partes_agrupadas:
+                partes_agrupadas[part.inventory_item_id] += part.cantidad
+            else:
+                partes_agrupadas[part.inventory_item_id] = part.cantidad
+
+        # Insertar refacciones agrupadas
+        for item_id, cantidad in partes_agrupadas.items():
             item = (
                 db.query(models.InventoryItem)
-                .filter(models.InventoryItem.id == part.inventory_item_id)
-                .options(lazyload("*"))
-                .with_for_update(of=models.InventoryItem)
+                .filter(models.InventoryItem.id == item_id)
+                .with_for_update(of=models.InventoryItem)  # Bloqueo concurrencia stock
                 .first()
             )
-            if not item:
+            if not item or item.record_status == models.RecordStatus.ELIMINADO:
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Refacción con ID {part.inventory_item_id} no encontrada",
+                    detail=f"Refacción con ID {item_id} no válida",
                 )
-            if item.record_status == models.RecordStatus.ELIMINADO:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Refacción {item.sku} está eliminada",
-                )
-            if item.stock_actual < part.cantidad:
+            if item.stock_actual < cantidad:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Stock insuficiente para {item.sku}. Disponible: {item.stock_actual}",
@@ -470,15 +472,15 @@ def create_work_order(
             db_part = models.WorkOrderPart(
                 work_order_id=db_order.id,
                 inventory_item_id=item.id,
-                cantidad=part.cantidad,
+                cantidad=cantidad,
                 costo_unitario_snapshot=item.precio_unitario,
                 created_at=now,
-                created_by_id=user_id,  # <--- AUDITORÍA: Quién agregó la parte
+                created_by_id=user_id,
             )
-            item.stock_actual -= part.cantidad
+            item.stock_actual -= cantidad
             db.add(db_part)
 
-            sum_parts_cost += part.cantidad * item.precio_unitario
+            sum_parts_cost += cantidad * item.precio_unitario
 
         db_order.subtotal = sum_parts_cost + db_order.costo_mano_obra
         iva_mano_obra = db_order.costo_mano_obra * (db_order.porcentaje_iva / 100)
@@ -500,10 +502,14 @@ def update_work_order(
 ):  # <--- AUDITORÍA PARAM
     db_order = (
         db.query(models.WorkOrder)
+        .options(joinedload(models.WorkOrder.parts))
         .filter(
             models.WorkOrder.id == order_id,
             models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
         )
+        .with_for_update(
+            of=models.WorkOrder
+        )  # 🚀 FIX 2: Bloquear orden para evitar dobles updates
         .first()
     )
 
@@ -515,59 +521,74 @@ def update_work_order(
     db_order.descripcion_problema = order_in.descripcion_problema
     db_order.tipo_mantenimiento = order_in.tipo_mantenimiento
     db_order.trip_id = order_in.trip_id
-
-    db_order.updated_by_id = user_id  # <--- AUDITORÍA: Quién editó
+    db_order.updated_by_id = user_id
 
     if hasattr(order_in, "costo_mano_obra"):
         db_order.costo_mano_obra = order_in.costo_mano_obra
     if hasattr(order_in, "porcentaje_iva"):
         db_order.porcentaje_iva = order_in.porcentaje_iva
 
-    # 3. Manejo de Refacciones (CERO DELETES)
+    # 🚀 FIX 3: Manejo Seguro de Refacciones Viejas (Restaurar Stock Correctamente)
     for old_part in db_order.parts:
         if getattr(old_part, "record_status", "A") != models.RecordStatus.ELIMINADO:
-            if old_part.item:
-                old_part.item.stock_actual += old_part.cantidad
-            if hasattr(old_part, "record_status"):
-                old_part.record_status = models.RecordStatus.ELIMINADO
-                old_part.updated_by_id = user_id  # <--- AUDITORÍA
+            # Buscamos el ítem con bloqueo para asegurar que no se cruce el inventario
+            item = (
+                db.query(models.InventoryItem)
+                .filter(models.InventoryItem.id == old_part.inventory_item_id)
+                .with_for_update(of=models.InventoryItem)
+                .first()
+            )
+            if item:
+                item.stock_actual += old_part.cantidad
+
+            old_part.record_status = models.RecordStatus.ELIMINADO
+            old_part.updated_by_id = user_id
 
     now = datetime.now(timezone.utc)
     sum_parts_cost = 0.0
 
+    # 🚀 FIX 1 (Update): AGRUPAR REFACCIONES ENTRANTES PARA EVITAR DUPLICADOS EN BD
+    partes_agrupadas = {}
     for part in order_in.parts:
+        if part.inventory_item_id in partes_agrupadas:
+            partes_agrupadas[part.inventory_item_id] += part.cantidad
+        else:
+            partes_agrupadas[part.inventory_item_id] = part.cantidad
+
+    # Insertar las nuevas refacciones ya agrupadas
+    for item_id, cantidad in partes_agrupadas.items():
         item = (
             db.query(models.InventoryItem)
-            .filter(models.InventoryItem.id == part.inventory_item_id)
-            .with_for_update(of=models.InventoryItem)  # Bloqueo concurrencia
+            .filter(models.InventoryItem.id == item_id)
+            .with_for_update(of=models.InventoryItem)  # Bloqueo concurrencia stock
             .first()
         )
 
         if not item or item.record_status == models.RecordStatus.ELIMINADO:
             raise HTTPException(
                 status_code=404,
-                detail=f"Refacción ID {part.inventory_item_id} no válida o eliminada",
+                detail=f"Refacción ID {item_id} no válida o eliminada",
             )
 
-        if item.stock_actual < part.cantidad:
+        if item.stock_actual < cantidad:
             raise HTTPException(
                 status_code=400,
                 detail=f"Stock insuficiente para {item.sku}. Disponible: {item.stock_actual}",
             )
 
-        item.stock_actual -= part.cantidad
+        item.stock_actual -= cantidad
 
         new_part = models.WorkOrderPart(
             work_order_id=db_order.id,
             inventory_item_id=item.id,
-            cantidad=part.cantidad,
+            cantidad=cantidad,
             costo_unitario_snapshot=item.precio_unitario,
             created_at=now,
-            created_by_id=user_id,  # <--- AUDITORÍA: Nueva parte insertada
+            created_by_id=user_id,
         )
         db.add(new_part)
 
-        sum_parts_cost += part.cantidad * item.precio_unitario
+        sum_parts_cost += cantidad * item.precio_unitario
 
     db_order.subtotal = sum_parts_cost + getattr(db_order, "costo_mano_obra", 0.0)
     db_order.total = db_order.subtotal * (
@@ -579,9 +600,10 @@ def update_work_order(
     return get_work_order(db, db_order.id)
 
 
-def delete_work_order(db: Session, order_id: int, user_id: int):  # <--- AUDITORÍA PARAM
+def delete_work_order(db: Session, order_id: int, user_id: int):
     order = (
         db.query(models.WorkOrder)
+        .options(joinedload(models.WorkOrder.parts))
         .filter(
             models.WorkOrder.id == order_id,
             models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
@@ -604,7 +626,7 @@ def delete_work_order(db: Session, order_id: int, user_id: int):  # <--- AUDITOR
             )
             if account:
                 account.saldo += costo_total_pagado
-                account.updated_by_id = user_id  # <--- AUDITORÍA en Tesorería
+                account.updated_by_id = user_id
 
                 mov_reverso = models.BankMovement(
                     bank_account_id=1,
@@ -614,23 +636,25 @@ def delete_work_order(db: Session, order_id: int, user_id: int):  # <--- AUDITOR
                     referencia=f"CANC-OT-{order.folio}",
                     origen_modulo="Mantenimiento",
                     fecha=datetime.now(),
-                    created_by_id=user_id,  # <--- AUDITORÍA en el Movimiento
+                    created_by_id=user_id,
                 )
                 db.add(mov_reverso)
 
     if order.status != models.WorkOrderStatus.CANCELADA:
+        # 🚀 FIX 4 CRÍTICO: Solo restaurar stock de las piezas que siguen ACTIVAS
         for part in order.parts:
-            item = (
-                db.query(models.InventoryItem)
-                .filter(models.InventoryItem.id == part.inventory_item_id)
-                .with_for_update(of=models.InventoryItem)
-                .first()
-            )
-            if item:
-                item.stock_actual += part.cantidad
+            if getattr(part, "record_status", "A") != models.RecordStatus.ELIMINADO:
+                item = (
+                    db.query(models.InventoryItem)
+                    .filter(models.InventoryItem.id == part.inventory_item_id)
+                    .with_for_update(of=models.InventoryItem)
+                    .first()
+                )
+                if item:
+                    item.stock_actual += part.cantidad
 
     order.record_status = models.RecordStatus.ELIMINADO
-    order.updated_by_id = user_id  # <--- AUDITORÍA
+    order.updated_by_id = user_id
     db.commit()
     return True
 
@@ -639,10 +663,11 @@ def update_work_order_status(
     db: Session,
     order_id: int,
     status: models.WorkOrderStatus,
-    user_id: int,  # <--- AUDITORÍA PARAM
+    user_id: int,
 ):
     order = (
         db.query(models.WorkOrder)
+        .options(joinedload(models.WorkOrder.parts))
         .filter(
             models.WorkOrder.id == order_id,
             models.WorkOrder.record_status != models.RecordStatus.ELIMINADO,
@@ -657,15 +682,17 @@ def update_work_order_status(
         status == models.WorkOrderStatus.CANCELADA
         and order.status != models.WorkOrderStatus.CANCELADA
     ):
+        # 🚀 FIX 4 CRÍTICO: Solo restaurar stock de las piezas que siguen ACTIVAS
         for part in order.parts:
-            item = (
-                db.query(models.InventoryItem)
-                .filter(models.InventoryItem.id == part.inventory_item_id)
-                .with_for_update(of=models.InventoryItem)
-                .first()
-            )
-            if item:
-                item.stock_actual += part.cantidad
+            if getattr(part, "record_status", "A") != models.RecordStatus.ELIMINADO:
+                item = (
+                    db.query(models.InventoryItem)
+                    .filter(models.InventoryItem.id == part.inventory_item_id)
+                    .with_for_update(of=models.InventoryItem)
+                    .first()
+                )
+                if item:
+                    item.stock_actual += part.cantidad
 
     if (
         status == models.WorkOrderStatus.CERRADA
@@ -694,11 +721,11 @@ def update_work_order_status(
             if not account:
                 raise HTTPException(
                     status_code=404,
-                    detail="Cuenta Bancaria principal (Banamex) no encontrada para el pago.",
+                    detail="Cuenta Bancaria principal no encontrada para el pago.",
                 )
 
             account.saldo -= costo_total_a_pagar
-            account.updated_by_id = user_id  # <--- AUDITORÍA
+            account.updated_by_id = user_id
 
             mov = models.BankMovement(
                 bank_account_id=1,
@@ -708,19 +735,17 @@ def update_work_order_status(
                 referencia=f"OT-{order.folio}",
                 origen_modulo="CxP",
                 fecha=datetime.now(),
-                created_by_id=user_id,  # <--- AUDITORÍA
+                created_by_id=user_id,
             )
             db.add(mov)
 
     order.status = status
-    order.updated_by_id = user_id  # <--- AUDITORÍA
+    order.updated_by_id = user_id
     db.commit()
     return get_work_order(db, order_id)
 
 
-def get_or_create_petty_cash_supplier(
-    db: Session, user_id: int
-):  # <--- AUDITORÍA PARAM
+def get_or_create_petty_cash_supplier(db: Session, user_id: int):
     rfc_generico = "XAXX010101000"
     supplier = (
         db.query(models.Supplier)
@@ -739,7 +764,7 @@ def get_or_create_petty_cash_supplier(
             dias_credito=0,
             limite_credito=0.0,
             estatus=models.SupplierStatus.ACTIVO,
-            created_by_id=user_id,  # <--- AUDITORÍA
+            created_by_id=user_id,
         )
         db.add(supplier)
         db.flush()
