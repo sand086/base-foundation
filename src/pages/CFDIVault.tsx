@@ -1,7 +1,15 @@
 import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon, X, Check, ChevronsUpDown, FileText } from "lucide-react";
+// <-- Añadimos FileCode para el ícono del XML
+import {
+  CalendarIcon,
+  X,
+  Check,
+  ChevronsUpDown,
+  FileText,
+  FileCode,
+} from "lucide-react";
 
 import {
   useCfdiVault,
@@ -314,7 +322,6 @@ export default function CFDIVault() {
         if (s === "PROVISIONAL")
           badgeClass =
             "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300";
-        // 👇 ESTA ES LA LÍNEA NUEVA 👇
         if (s === "RECIBO INTERNO")
           badgeClass =
             "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
@@ -326,24 +333,43 @@ export default function CFDIVault() {
         );
       },
     },
+    // 👇 ESTA ES LA COLUMNA ACTUALIZADA PARA XML Y PDF 👇
     {
-      key: "pdf_url",
-      header: "PDF",
+      key: "archivos",
+      header: "Descargas",
       sortable: false,
-      render: (val) => (
-        <div className="text-right">
-          {val ? (
+      render: (_, row: any) => (
+        <div className="flex items-center justify-end gap-1.5 pr-2">
+          {row.pdf_url ? (
             <Button
               variant="ghost"
               size="sm"
-              className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-transparent hover:border-indigo-200"
-              onClick={() => window.open(val, "_blank")}
+              title="Ver PDF"
+              className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 h-8 px-2"
+              onClick={() => window.open(row.pdf_url, "_blank")}
             >
-              <FileText className="h-4 w-4 mr-2" />
-              Ver PDF
+              <FileText className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">PDF</span>
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground mr-4">Sin PDF</span>
+            <span className="text-[10px] text-muted-foreground mr-1">
+              No PDF
+            </span>
+          )}
+
+          {row.xml_url ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Ver XML"
+              className="text-amber-600 hover:text-amber-900 hover:bg-amber-50 border border-transparent hover:border-amber-200 h-8 px-2"
+              onClick={() => window.open(row.xml_url, "_blank")}
+            >
+              <FileCode className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">XML</span>
+            </Button>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">No XML</span>
           )}
         </div>
       ),
