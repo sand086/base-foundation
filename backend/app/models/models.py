@@ -2078,3 +2078,82 @@ class SatUnitWeight(Base):
     descripcion = Column(Text, nullable=True)
     simbolo = Column(String(20), nullable=True)
     activo = Column(Boolean, default=True)
+
+
+# =========================================================
+# 🛡️ EVENT LISTENER GLOBAL DE AUDITORÍA (AL FINAL DEL ARCHIVO)
+# =========================================================
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import get_history
+
+
+@event.listens_for(Session, "before_flush")
+def generate_global_audit_logs(session, flush_context, instances):
+    """
+    Escucha automáticamente todas las inserciones, ediciones y eliminaciones (Soft/Hard)
+    en todo el sistema y crea un registro en AuditLog para que aparezca en el Frontend.
+    """
+
+    # 1. Detectar registros CREADOS
+    for obj in session.new:
+        # Filtramos para que solo audite modelos que tienen created_by_id y evitamos bucles infinitos en AuditLog
+        if hasattr(obj, "created_by_id") and type(obj).__name__ != "AuditLog":
+            user_id = getattr(obj, "created_by_id", None)
+            if user_id:
+                log = AuditLog(
+                    user_id=user_id,
+                    accion=f"Creó un nuevo registro",
+                    tipo_accion="crear",
+                    modulo=type(obj).__name__,  # Ej: "Client", "Supplier", "Trip"
+                    detalles=f"Inserción en tabla: {getattr(obj, '__tablename__', 'N/A')}",
+                )
+                session.add(log)
+
+    # 2. Detectar registros EDITADOS o ELIMINADOS LÓGICAMENTE (Soft Delete)
+    for obj in session.dirty:
+        if hasattr(obj, "updated_by_id") and type(obj).__name__ != "AuditLog":
+            user_id = getattr(obj, "updated_by_id", None) or getattr(
+                obj, "created_by_id", None
+            )
+            if user_id:
+                tipo_acc = "editar"
+                acc_text = "Editó un registro"
+
+                # Detectar si fue un Soft Delete (cambio de estado a 'E' o ELIMINADO)
+                if hasattr(obj, "record_status"):
+                    hist = get_history(obj, "record_status")
+                    if hist.added:
+                        nuevo_estado = hist.added[0]
+                        # Validamos si el Enum o string es "E" o "ELIMINADO"
+                        if (
+                            str(nuevo_estado) == "E"
+                            or getattr(nuevo_estado, "value", str(nuevo_estado)) == "E"
+                        ):
+                            tipo_acc = "eliminar"
+                            acc_text = "Eliminó un registro (Soft Delete)"
+
+                log = AuditLog(
+                    user_id=user_id,
+                    accion=acc_text,
+                    tipo_accion=tipo_acc,
+                    modulo=type(obj).__name__,
+                    detalles=f"Modificación en tabla: {getattr(obj, '__tablename__', 'N/A')} (ID: {getattr(obj, 'id', 'N/A')})",
+                )
+                session.add(log)
+
+    # 3. Detectar registros ELIMINADOS FÍSICAMENTE (Hard Delete)
+    for obj in session.deleted:
+        # Aquí intentamos sacar el user_id si el objeto lo tenía cargado antes de borrarse
+        user_id = getattr(obj, "updated_by_id", None) or getattr(
+            obj, "created_by_id", None
+        )
+        if type(obj).__name__ != "AuditLog":
+            log = AuditLog(
+                user_id=user_id,  # Puede ser None si era un delete directo por SQL
+                accion="Eliminó un registro permanentemente",
+                tipo_accion="eliminar",
+                modulo=type(obj).__name__,
+                detalles=f"Borrado definitivo en tabla: {getattr(obj, '__tablename__', 'N/A')} (ID: {getattr(obj, 'id', 'N/A')})",
+            )
+            session.add(log)

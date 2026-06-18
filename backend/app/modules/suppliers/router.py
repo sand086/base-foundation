@@ -62,7 +62,11 @@ def read_suppliers(skip: int = 0, limit: int = 5000, db: Session = Depends(get_d
 
 
 @router.post("", response_model=schemas.SupplierResponse)
-def create_supplier(payload: schemas.SupplierCreate, db: Session = Depends(get_db)):
+def create_supplier(
+    payload: schemas.SupplierCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     """
     Registra un nuevo proveedor en el sistema.
     """

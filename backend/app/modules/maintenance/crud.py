@@ -81,7 +81,9 @@ def get_inventory_item(db: Session, item_id: int):
     return item
 
 
-def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
+def create_inventory_item(
+    db: Session, item_in: schemas.InventoryItemCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     # 1. Evitar duplicados
     existe = (
         db.query(models.InventoryItem)
@@ -95,9 +97,9 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
         raise HTTPException(status_code=400, detail="El SKU ya existe.")
 
     # 2. Crear el registro exclusivamente en inventario
-    # Eliminamos la regla que creaba facturas y afectaba caja chica automáticamente
-    # a petición operativa (El gasto entra vía carga de Excel SAT)
-    db_item = models.InventoryItem(**item_in.model_dump(exclude={"bank_account_id"}))
+    db_item = models.InventoryItem(
+        **item_in.model_dump(exclude={"bank_account_id"}), created_by_id=user_id
+    )  # <--- AUDITORÍA
     db.add(db_item)
 
     db.commit()
@@ -106,21 +108,29 @@ def create_inventory_item(db: Session, item_in: schemas.InventoryItemCreate):
 
 
 def update_inventory_item(
-    db: Session, item_id: int, item_in: schemas.InventoryItemUpdate
+    db: Session,
+    item_id: int,
+    item_in: schemas.InventoryItemUpdate,
+    user_id: int,  # <--- AUDITORÍA PARAM
 ):
     db_item = get_inventory_item(db, item_id)
     for k, v in item_in.model_dump(exclude_unset=True).items():
         setattr(db_item, k, v)
+
+    db_item.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     db.refresh(db_item)
     return db_item
 
 
-def delete_inventory_item(db: Session, item_id: int):
+def delete_inventory_item(
+    db: Session, item_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     # Soft delete: record_status = E
     item = get_inventory_item(db, item_id)
     item.record_status = models.RecordStatus.ELIMINADO
     item.sku = f"{item.sku}_DEL_{int(time.time())}"
+    item.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     return True
 
@@ -160,27 +170,38 @@ def get_mechanic(db: Session, mechanic_id: int):
     return mech
 
 
-def create_mechanic(db: Session, mechanic_in: schemas.MechanicCreate):
-    db_mech = models.Mechanic(**mechanic_in.model_dump())
+def create_mechanic(
+    db: Session, mechanic_in: schemas.MechanicCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
+    db_mech = models.Mechanic(
+        **mechanic_in.model_dump(), created_by_id=user_id
+    )  # <--- AUDITORÍA
     db.add(db_mech)
     db.commit()
     db.refresh(db_mech)
     return db_mech
 
 
-def update_mechanic(db: Session, mechanic_id: int, mechanic_in: schemas.MechanicUpdate):
+def update_mechanic(
+    db: Session, mechanic_id: int, mechanic_in: schemas.MechanicUpdate, user_id: int
+):  # <--- AUDITORÍA PARAM
     db_mech = get_mechanic(db, mechanic_id)
     for k, v in mechanic_in.model_dump(exclude_unset=True).items():
         setattr(db_mech, k, v)
+
+    db_mech.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     db.refresh(db_mech)
     return db_mech
 
 
-def delete_mechanic(db: Session, mechanic_id: int):
+def delete_mechanic(
+    db: Session, mechanic_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     db_mech = get_mechanic(db, mechanic_id)
     db_mech.activo = False
     db_mech.record_status = models.RecordStatus.ELIMINADO
+    db_mech.updated_by_id = user_id  # <--- AUDITORÍA
 
     # Liberamos RFC, NSS y Email (los que tengan unique=True en tu modelo)
     timestamp = int(time.time())
@@ -203,6 +224,7 @@ def upload_mechanic_document(
     mechanic_id: int,
     doc_type: str,
     file: UploadFile,
+    user_id: int,  # <--- AUDITORÍA PARAM
     upload_dir: str = "app/uploads/mechanics",
     static_prefix: str = "/static/mechanics",
 ):
@@ -223,6 +245,7 @@ def upload_mechanic_document(
         tipo_documento=doc_type,
         nombre_archivo=file.filename,
         url_archivo=url_publica,
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(db_doc)
     db.commit()
@@ -243,7 +266,9 @@ def list_mechanic_documents(db: Session, mechanic_id: int):
     )
 
 
-def delete_mechanic_document(db: Session, document_id: int):
+def delete_mechanic_document(
+    db: Session, document_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     doc = (
         db.query(models.MechanicDocument)
         .filter(
@@ -264,6 +289,7 @@ def delete_mechanic_document(db: Session, document_id: int):
         pass
 
     doc.record_status = models.RecordStatus.ELIMINADO
+    doc.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     return True
 
@@ -315,7 +341,6 @@ def list_work_orders(
             )
         else:
             o.editado_por = "Sin ediciones"
-        # o.created_at y o.updated_at ya existen automáticamente gracias a AuditMixin
 
         # --- FIX: Filtrar las partes eliminadas para que no lleguen al Frontend ---
         partes_activas = [
@@ -372,9 +397,8 @@ def get_work_order(db: Session, order_id: int):
         )
     else:
         order.editado_por = "Sin ediciones"
-    # order.created_at y order.updated_at ya existen automáticamente gracias a AuditMixin
 
-    # --- FIX: Filtrar las partes eliminadas para que no se multipliquen en el Frontend ---
+    # --- FIX: Filtrar las partes eliminadas ---
     partes_activas = [
         p
         for p in order.parts
@@ -393,10 +417,12 @@ def get_work_order(db: Session, order_id: int):
     return order
 
 
-def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
+def create_work_order(
+    db: Session, order_in: schemas.WorkOrderCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     try:
         folio = generate_work_order_folio(db)
-        now = datetime.now(timezone.utc)  # Generamos la hora en Python
+        now = datetime.now(timezone.utc)
 
         # 1. Asignamos los datos base y financieros (Mano de obra e IVA)
         db_order = models.WorkOrder(
@@ -410,21 +436,19 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
             trip_id=order_in.trip_id,
             costo_mano_obra=getattr(order_in, "costo_mano_obra", 0.0),
             porcentaje_iva=getattr(order_in, "porcentaje_iva", 16.0),
+            created_by_id=user_id,  # <--- AUDITORÍA: Quién creó la orden
         )
         db.add(db_order)
-        db.flush()  # obtiene id sin commit
+        db.flush()
 
         sum_parts_cost = 0.0
 
-        # 2. Partes: bloquear inventario, validar stock, snapshot costo
         for part in order_in.parts:
             item = (
                 db.query(models.InventoryItem)
                 .filter(models.InventoryItem.id == part.inventory_item_id)
                 .options(lazyload("*"))
-                .with_for_update(
-                    of=models.InventoryItem
-                )  # Especificamos bloquear solo esta tabla
+                .with_for_update(of=models.InventoryItem)
                 .first()
             )
             if not item:
@@ -449,15 +473,13 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
                 cantidad=part.cantidad,
                 costo_unitario_snapshot=item.precio_unitario,
                 created_at=now,
+                created_by_id=user_id,  # <--- AUDITORÍA: Quién agregó la parte
             )
             item.stock_actual -= part.cantidad
             db.add(db_part)
 
-            # Acumulamos el costo de refacciones
             sum_parts_cost += part.cantidad * item.precio_unitario
 
-        # 3. CÁLCULO FINANCIERO EXACTO
-        # Como las refacciones ya incluyen IVA, el porcentaje solo aplica a la mano de obra
         db_order.subtotal = sum_parts_cost + db_order.costo_mano_obra
         iva_mano_obra = db_order.costo_mano_obra * (db_order.porcentaje_iva / 100)
         db_order.total = sum_parts_cost + db_order.costo_mano_obra + iva_mano_obra
@@ -473,8 +495,9 @@ def create_work_order(db: Session, order_in: schemas.WorkOrderCreate):
         raise HTTPException(status_code=500, detail=f"Error al crear orden: {str(e)}")
 
 
-def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCreate):
-    # 1. Buscar la orden activa
+def update_work_order(
+    db: Session, order_id: int, order_in: schemas.WorkOrderCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     db_order = (
         db.query(models.WorkOrder)
         .filter(
@@ -487,12 +510,13 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
     if not db_order:
         _not_found("Orden de trabajo")
 
-    # 2. Actualizar campos generales y financieros
     db_order.unit_id = order_in.unit_id
     db_order.mechanic_id = order_in.mechanic_id
     db_order.descripcion_problema = order_in.descripcion_problema
     db_order.tipo_mantenimiento = order_in.tipo_mantenimiento
     db_order.trip_id = order_in.trip_id
+
+    db_order.updated_by_id = user_id  # <--- AUDITORÍA: Quién editó
 
     if hasattr(order_in, "costo_mano_obra"):
         db_order.costo_mano_obra = order_in.costo_mano_obra
@@ -506,6 +530,7 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
                 old_part.item.stock_actual += old_part.cantidad
             if hasattr(old_part, "record_status"):
                 old_part.record_status = models.RecordStatus.ELIMINADO
+                old_part.updated_by_id = user_id  # <--- AUDITORÍA
 
     now = datetime.now(timezone.utc)
     sum_parts_cost = 0.0
@@ -514,7 +539,7 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
         item = (
             db.query(models.InventoryItem)
             .filter(models.InventoryItem.id == part.inventory_item_id)
-            .with_for_update(of=models.InventoryItem)
+            .with_for_update(of=models.InventoryItem)  # Bloqueo concurrencia
             .first()
         )
 
@@ -538,13 +563,12 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
             cantidad=part.cantidad,
             costo_unitario_snapshot=item.precio_unitario,
             created_at=now,
+            created_by_id=user_id,  # <--- AUDITORÍA: Nueva parte insertada
         )
         db.add(new_part)
 
-        # Acumulamos el costo de refacciones nuevas
         sum_parts_cost += part.cantidad * item.precio_unitario
 
-    # 4. CÁLCULO FINANCIERO EXACTO (Actualizado)
     db_order.subtotal = sum_parts_cost + getattr(db_order, "costo_mano_obra", 0.0)
     db_order.total = db_order.subtotal * (
         1 + (getattr(db_order, "porcentaje_iva", 16.0) / 100)
@@ -555,8 +579,7 @@ def update_work_order(db: Session, order_id: int, order_in: schemas.WorkOrderCre
     return get_work_order(db, db_order.id)
 
 
-def delete_work_order(db: Session, order_id: int):
-    # Bloqueamos la orden para evitar errores
+def delete_work_order(db: Session, order_id: int, user_id: int):  # <--- AUDITORÍA PARAM
     order = (
         db.query(models.WorkOrder)
         .filter(
@@ -569,9 +592,7 @@ def delete_work_order(db: Session, order_id: int):
     if not order:
         _not_found("Orden de trabajo")
 
-    # 1. REVERSO DE TESORERÍA (Si la orden ya estaba cerrada y pagada)
     if order.status == models.WorkOrderStatus.CERRADA:
-        # Ya no sumamos las piezas, usamos el TOTAL EXACTO (piezas + mano de obra + IVA)
         costo_total_pagado = getattr(order, "total", 0.0)
 
         if costo_total_pagado > 0:
@@ -582,10 +603,9 @@ def delete_work_order(db: Session, order_id: int):
                 .first()
             )
             if account:
-                # Regresamos el dinero a la cuenta
                 account.saldo += costo_total_pagado
+                account.updated_by_id = user_id  # <--- AUDITORÍA en Tesorería
 
-                # Dejamos rastro en Tesorería de que el dinero regresó por eliminación
                 mov_reverso = models.BankMovement(
                     bank_account_id=1,
                     tipo="ingreso",
@@ -594,13 +614,12 @@ def delete_work_order(db: Session, order_id: int):
                     referencia=f"CANC-OT-{order.folio}",
                     origen_modulo="Mantenimiento",
                     fecha=datetime.now(),
+                    created_by_id=user_id,  # <--- AUDITORÍA en el Movimiento
                 )
                 db.add(mov_reverso)
 
-    # 2. DEVOLUCIÓN DE INVENTARIO (Si no estaba cancelada, devolvemos stock)
     if order.status != models.WorkOrderStatus.CANCELADA:
         for part in order.parts:
-            # Bloqueamos el inventario para regresarle las piezas seguro
             item = (
                 db.query(models.InventoryItem)
                 .filter(models.InventoryItem.id == part.inventory_item_id)
@@ -610,16 +629,18 @@ def delete_work_order(db: Session, order_id: int):
             if item:
                 item.stock_actual += part.cantidad
 
-    # 3. Soft delete de la orden
     order.record_status = models.RecordStatus.ELIMINADO
+    order.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     return True
 
 
 def update_work_order_status(
-    db: Session, order_id: int, status: models.WorkOrderStatus
+    db: Session,
+    order_id: int,
+    status: models.WorkOrderStatus,
+    user_id: int,  # <--- AUDITORÍA PARAM
 ):
-    # Aplicamos bloqueo de concurrencia (with_for_update) a la orden
     order = (
         db.query(models.WorkOrder)
         .filter(
@@ -632,13 +653,11 @@ def update_work_order_status(
     if not order:
         _not_found("Orden de trabajo")
 
-    # Devolver el stock si se cancela (y no estaba ya cancelada)
     if (
         status == models.WorkOrderStatus.CANCELADA
         and order.status != models.WorkOrderStatus.CANCELADA
     ):
         for part in order.parts:
-            # Bloqueamos el inventario para regresarle las piezas seguro
             item = (
                 db.query(models.InventoryItem)
                 .filter(models.InventoryItem.id == part.inventory_item_id)
@@ -648,14 +667,12 @@ def update_work_order_status(
             if item:
                 item.stock_actual += part.cantidad
 
-    # --- LÓGICA DE CIERRE Y TESORERÍA ---
     if (
         status == models.WorkOrderStatus.CERRADA
         and order.status != models.WorkOrderStatus.CERRADA
     ):
         order.fecha_cierre = datetime.now(timezone.utc)
 
-        # 1. Liberar Mecánico
         if order.mechanic_id:
             mechanic = (
                 db.query(models.Mechanic)
@@ -665,10 +682,8 @@ def update_work_order_status(
             if mechanic and hasattr(mechanic, "estatus"):
                 mechanic.estatus = "Disponible"
 
-        # 2. Tomamos el TOTAL EXACTO YA CALCULADO EN LA BD (Piezas + Mano Obra + IVA)
         costo_total_a_pagar = getattr(order, "total", 0.0)
 
-        # 3. Afectar Tesorería (Cuenta Banamex ID 1) si hubo un costo
         if costo_total_a_pagar > 0:
             account = (
                 db.query(models.BankAccount)
@@ -682,28 +697,30 @@ def update_work_order_status(
                     detail="Cuenta Bancaria principal (Banamex) no encontrada para el pago.",
                 )
 
-            # Descontamos el dinero
             account.saldo -= costo_total_a_pagar
+            account.updated_by_id = user_id  # <--- AUDITORÍA
 
-            # Creamos el registro del movimiento para el libro mayor de Tesorería
             mov = models.BankMovement(
                 bank_account_id=1,
                 tipo="egreso",
                 monto=costo_total_a_pagar,
                 concepto=f"OT: {order.folio}",
                 referencia=f"OT-{order.folio}",
-                origen_modulo="CxP",  # Lo marcamos como CxP para que Tesorería sepa que fue un pago de Mantenimiento
+                origen_modulo="CxP",
                 fecha=datetime.now(),
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(mov)
 
-    # Actualizamos el estatus general
     order.status = status
+    order.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     return get_work_order(db, order_id)
 
 
-def get_or_create_petty_cash_supplier(db: Session):
+def get_or_create_petty_cash_supplier(
+    db: Session, user_id: int
+):  # <--- AUDITORÍA PARAM
     rfc_generico = "XAXX010101000"
     supplier = (
         db.query(models.Supplier)
@@ -722,6 +739,7 @@ def get_or_create_petty_cash_supplier(db: Session):
             dias_credito=0,
             limite_credito=0.0,
             estatus=models.SupplierStatus.ACTIVO,
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(supplier)
         db.flush()

@@ -1,3 +1,4 @@
+# --- Fuente: maintenance/router.py ---
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
@@ -5,6 +6,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.db.database import get_db
+
+# <--- AUDITORÍA IMPORTACIONES: Para poder obtener al usuario actual
+from app.models import models
+from app.modules.auth.router import get_current_user
 
 #  importacion LOCAL (FSD): Busca dentro de la misma carpeta "maintenance"
 from . import schemas, crud
@@ -24,10 +29,14 @@ def read_inventory(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
 
 @router.post("/inventory", response_model=schemas.InventoryItemResponse)
 def create_inventory_item(
-    item: schemas.InventoryItemCreate, db: Session = Depends(get_db)
+    item: schemas.InventoryItemCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
 ):
     try:
-        return crud.create_inventory_item(db, item)
+        return crud.create_inventory_item(
+            db, item, user_id=current_user.id
+        )  # <--- AUDITORÍA
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -38,10 +47,15 @@ def create_inventory_item(
 
 @router.put("/inventory/{item_id}", response_model=schemas.InventoryItemResponse)
 def update_inventory_item(
-    item_id: int, item: schemas.InventoryItemUpdate, db: Session = Depends(get_db)
+    item_id: int,
+    item: schemas.InventoryItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
 ):
     try:
-        db_item = crud.update_inventory_item(db, item_id, item)
+        db_item = crud.update_inventory_item(
+            db, item_id, item, user_id=current_user.id
+        )  # <--- AUDITORÍA
         if not db_item:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Item no encontrado"
@@ -56,9 +70,15 @@ def update_inventory_item(
 
 
 @router.delete("/inventory/{item_id}")
-def delete_inventory_item(item_id: int, db: Session = Depends(get_db)):
+def delete_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
+):
     try:
-        if not crud.delete_inventory_item(db, item_id):
+        if not crud.delete_inventory_item(
+            db, item_id, user_id=current_user.id
+        ):  # <--- AUDITORÍA
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Item no encontrado"
             )
@@ -82,9 +102,15 @@ def read_mechanics(db: Session = Depends(get_db)):
 
 
 @router.post("/mechanics", response_model=schemas.MechanicResponse)
-def create_mechanic(mechanic: schemas.MechanicCreate, db: Session = Depends(get_db)):
+def create_mechanic(
+    mechanic: schemas.MechanicCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
+):
     try:
-        return crud.create_mechanic(db, mechanic)
+        return crud.create_mechanic(
+            db, mechanic, user_id=current_user.id
+        )  # <--- AUDITORÍA
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -95,10 +121,15 @@ def create_mechanic(mechanic: schemas.MechanicCreate, db: Session = Depends(get_
 
 @router.put("/mechanics/{mechanic_id}", response_model=schemas.MechanicResponse)
 def update_mechanic(
-    mechanic_id: int, mechanic: schemas.MechanicUpdate, db: Session = Depends(get_db)
+    mechanic_id: int,
+    mechanic: schemas.MechanicUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
 ):
     try:
-        db_mech = crud.update_mechanic(db, mechanic_id, mechanic)
+        db_mech = crud.update_mechanic(
+            db, mechanic_id, mechanic, user_id=current_user.id
+        )  # <--- AUDITORÍA
         if not db_mech:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Mecánico no encontrado"
@@ -118,9 +149,12 @@ def upload_mechanic_document(
     doc_type: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
 ):
     try:
-        return crud.upload_mechanic_document(db, mechanic_id, doc_type, file)
+        return crud.upload_mechanic_document(
+            db, mechanic_id, doc_type, file, user_id=current_user.id
+        )  # <--- AUDITORÍA
     except IntegrityError:
         db.rollback()
         raise HTTPException(
@@ -144,8 +178,14 @@ def get_mechanic_documents(mechanic_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/mechanics/documents/{document_id}")
-def delete_mechanic_document(document_id: int, db: Session = Depends(get_db)):
-    if not crud.delete_mechanic_document(db, document_id):
+def delete_mechanic_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
+):
+    if not crud.delete_mechanic_document(
+        db, document_id, user_id=current_user.id
+    ):  # <--- AUDITORÍA
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado"
         )
@@ -163,9 +203,15 @@ def read_work_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 
 @router.post("/work-orders", response_model=schemas.WorkOrderResponse)
-def create_work_order(order: schemas.WorkOrderCreate, db: Session = Depends(get_db)):
+def create_work_order(
+    order: schemas.WorkOrderCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
+):
     try:
-        return crud.create_work_order(db, order)
+        return crud.create_work_order(
+            db, order, user_id=current_user.id
+        )  # <--- AUDITORÍA
     except IntegrityError as e:
         db.rollback()
         raise HTTPException(
@@ -181,9 +227,12 @@ def update_order_status(
     order_id: int,
     payload: schemas.WorkOrderStatusUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
 ):
     try:
-        order = crud.update_work_order_status(db, order_id, payload.status)
+        order = crud.update_work_order_status(
+            db, order_id, payload.status, user_id=current_user.id
+        )  # <--- AUDITORÍA
         if not order:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada"
@@ -199,14 +248,25 @@ def update_order_status(
 
 @router.put("/work-orders/{order_id}", response_model=schemas.WorkOrderResponse)
 def update_work_order(
-    order_id: int, order: schemas.WorkOrderCreate, db: Session = Depends(get_db)
+    order_id: int,
+    order: schemas.WorkOrderCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
 ):
-    updated_order = crud.update_work_order(db=db, order_id=order_id, order_in=order)
+    updated_order = crud.update_work_order(
+        db=db, order_id=order_id, order_in=order, user_id=current_user.id
+    )  # <--- AUDITORÍA
     return updated_order
 
 
 @router.delete("/work-orders/{order_id}")
-def delete_work_order(order_id: int, db: Session = Depends(get_db)):
+def delete_work_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA
+):
     # Llama a tu función que hace el Soft Delete perfecto
-    crud.delete_work_order(db=db, order_id=order_id)
+    crud.delete_work_order(
+        db=db, order_id=order_id, user_id=current_user.id
+    )  # <--- AUDITORÍA
     return {"message": "Orden de trabajo eliminada correctamente"}

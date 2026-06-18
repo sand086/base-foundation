@@ -28,7 +28,9 @@ def get_bank_accounts(db: Session):
 
 def create_bank_account(db: Session, account: schemas.BankAccountCreate, user_id: int):
     """Crea una nueva cuenta bancaria."""
-    db_account = models.BankAccount(**account.model_dump(), created_by_id=user_id)
+    db_account = models.BankAccount(
+        **account.model_dump(), created_by_id=user_id
+    )  # <--- AUDITORÍA (Ya lo tenías aquí)
     db.add(db_account)
     db.commit()
     db.refresh(db_account)
@@ -56,12 +58,16 @@ def update_bank_account(db: Session, account_id: int, account_data: dict, user_i
         if hasattr(account, key) and value is not None:
             setattr(account, key, value)
 
+    account.updated_by_id = user_id  # <--- AUDITORÍA: Quién actualizó la cuenta
+
     db.commit()
     db.refresh(account)
     return account
 
 
-def delete_bank_account(db: Session, account_id: int):
+def delete_bank_account(
+    db: Session, account_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     """
     Realiza un SOFT DELETE (Archivado) de la cuenta bancaria.
     No se elimina de la base de datos para no romper reportes históricos.
@@ -81,6 +87,7 @@ def delete_bank_account(db: Session, account_id: int):
     # MAGIA: SOFT DELETE
     account.estatus = "inactivo"
     account.record_status = RecordStatus.ELIMINADO
+    account.updated_by_id = user_id  # <--- AUDITORÍA: Quién eliminó la cuenta
 
     db.commit()
     return True
@@ -133,6 +140,10 @@ def create_bank_movement(
     elif movement_data.tipo == "egreso":
         account.saldo -= movement_data.monto
 
+    account.updated_by_id = (
+        current_user_id  # <--- AUDITORÍA: El movimiento afectó la cuenta bancaria
+    )
+
     # 🚨 EXTRAEMOS LA FECHA (Si no viene, usamos la de hoy para proteger la BD)
     fecha_mov = getattr(movement_data, "fecha", None)
     if not fecha_mov:
@@ -150,7 +161,7 @@ def create_bank_movement(
             movement_data, "origen_modulo", None
         ),  #  FIX: Aseguramos el módulo (CxC o CxP)
         fecha=fecha_mov,
-        created_by_id=current_user_id,
+        created_by_id=current_user_id,  # <--- AUDITORÍA (Ya lo tenías)
     )
 
     db.add(nuevo_movimiento)
@@ -163,7 +174,9 @@ def create_bank_movement(
 # =====================================================================
 
 
-def process_bulk_payables(db: Session, payload_data: list[dict]):
+def process_bulk_payables(
+    db: Session, payload_data: list[dict], user_id: int
+):  # <--- AUDITORÍA PARAM
     """
     Procesa un array de diccionarios proveniente del Excel del SAT.
     Reglas de negocio:
@@ -219,6 +232,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
                 rfc=rfc,
                 dias_credito=dias_credito_excel,
                 estatus=models.SupplierStatus.ACTIVO,  # FIX: Enum estricto
+                created_by_id=user_id,  # <--- AUDITORÍA: Quién subió el Excel que creó al proveedor
             )
             db.add(supplier)
             db.flush()  # Guardar temporalmente para obtener el ID
@@ -269,6 +283,7 @@ def process_bulk_payables(db: Session, payload_data: list[dict]):
             moneda=str(item.get("moneda") or "MXN").strip()[:3],
             estatus=models.InvoiceStatus.PENDIENTE,  # FIX: Enum Estricto
             clasificacion="gasto_indirecto_variable",  # Clasificación por defecto al subir
+            created_by_id=user_id,  # <--- AUDITORÍA: Quién subió el Excel
         )
         db.add(invoice)
         facturas_creadas += 1
@@ -338,7 +353,7 @@ def register_payable_payment(
                     alias="Caja General Virtual",
                     tipo_cuenta="virtual",
                     saldo=0.0,
-                    created_by_id=user_id,
+                    created_by_id=user_id,  # <--- AUDITORÍA (Ya estaba)
                 )
                 db.add(caja_general)
                 db.flush()  # Guardamos temporalmente para obtener su ID
@@ -364,7 +379,7 @@ def register_payable_payment(
             referencia=payment_data.get("referencia", ""),
             cuenta_retiro=payment_data.get("cuenta_retiro", ""),
             complemento_uuid=payment_data.get("complemento_uuid"),
-            created_by_id=user_id,
+            created_by_id=user_id,  # <--- AUDITORÍA (Ya estaba)
         )
         db.add(nuevo_pago)
 
@@ -375,6 +390,10 @@ def register_payable_payment(
             invoice.estatus = models.InvoiceStatus.PAGADO
         else:
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+
+        invoice.updated_by_id = (
+            user_id  # <--- AUDITORÍA: El usuario actualizó el saldo de la factura
+        )
 
         # 3. Crear el Egreso en Tesorería (Flujo de Caja)
         #  FIX: AÑADIMOS origen_modulo="CxP" PARA TESORERÍA
@@ -471,6 +490,7 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
         forma_pago=data.get("forma_pago", "99"),
         tipo_comprobante="I",
         estatus=models.InvoiceStatus.PENDIENTE,
+        created_by_id=user_id,  # <--- AUDITORÍA: Quién creó la factura manual
     )
 
     db.add(nueva_factura)
@@ -480,7 +500,9 @@ def create_manual_receivable(db: Session, data: dict, user_id: int):
     return nueva_factura
 
 
-def process_sat_master_report(db: Session, payload_data: list, original_file_name: str):
+def process_sat_master_report(
+    db: Session, payload_data: list, original_file_name: str, user_id: int
+):  # <--- AUDITORÍA PARAM
     from datetime import datetime, timedelta, date
 
     facturas_creadas = 0
@@ -919,6 +941,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
                 rfc=rfc_emisor,
                 estatus=models.SupplierStatus.ACTIVO,  # FIX: Enum estricto
                 dias_credito=datos_sugeridos["dias"],
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(supplier)
             db.flush()
@@ -951,7 +974,10 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
                 # Si no existe, lo creamos y actualizamos el mapa
                 nuevo_ceco_codigo = ceco_a_buscar[:15].upper().replace(" ", "-")
                 nuevo_ceco = models.CostCenter(
-                    codigo=nuevo_ceco_codigo, nombre=ceco_a_buscar, activo=True
+                    codigo=nuevo_ceco_codigo,
+                    nombre=ceco_a_buscar,
+                    activo=True,
+                    created_by_id=user_id,  # <--- AUDITORÍA
                 )
                 db.add(nuevo_ceco)
                 db.flush()
@@ -962,6 +988,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             # Si el proveedor era nuevo o no tenía CECO, le heredamos este para futuras facturas
             if not supplier.cost_center_id:
                 supplier.cost_center_id = cost_center_id
+                supplier.updated_by_id = user_id  # <--- AUDITORÍA
                 db.add(supplier)
 
         # =========================================================
@@ -1011,6 +1038,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             dias_credito = datos_sugeridos["dias"]
             if dias_credito > 0:
                 supplier.dias_credito = dias_credito
+                supplier.updated_by_id = user_id  # <--- AUDITORÍA
                 db.add(supplier)
 
         fecha_vencimiento_limpia = fecha_emision_limpia + timedelta(
@@ -1044,6 +1072,7 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
             forma_pago=forma_pago,
             tipo_comprobante=tipo_comprobante,  # <- Aquí inyectamos I, E o P
             estatus=estatus,  # <- Aquí inyectamos el estatus corregido
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(nueva_factura)
         facturas_creadas += 1
@@ -1056,7 +1085,9 @@ def process_sat_master_report(db: Session, payload_data: list, original_file_nam
     }
 
 
-def conciliate_bank_movement(db: Session, movement_id: int):
+def conciliate_bank_movement(
+    db: Session, movement_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     movement = (
         db.query(models.BankMovement)
         .filter(
@@ -1069,12 +1100,15 @@ def conciliate_bank_movement(db: Session, movement_id: int):
         return None
     movement.conciliado = True
     movement.fecha_conciliacion = date.today()
+    movement.updated_by_id = user_id  # <--- AUDITORÍA
     db.commit()
     db.refresh(movement)
     return movement
 
 
-def delete_bank_movement(db: Session, movement_id: int):
+def delete_bank_movement(
+    db: Session, movement_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     """
      FIX: Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
     Si proviene de CxC o CxP, también revierte el pago en la factura y restaura su saldo.
@@ -1105,6 +1139,8 @@ def delete_bank_movement(db: Session, movement_id: int):
                 account.saldo -= movement.monto
             elif movement.tipo == "egreso":
                 account.saldo += movement.monto
+
+            account.updated_by_id = user_id  # <--- AUDITORÍA
 
         # 1. ROLLBACK CxC Y CANCELACIÓN SAT
         if movement.origen_modulo == "CxC":
@@ -1152,6 +1188,8 @@ def delete_bank_movement(db: Session, movement_id: int):
                     else:
                         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
+                    invoice.updated_by_id = user_id  # <--- AUDITORÍA
+
                 # ====== SOFT DELETE DEL PAGO ======
                 # FIX CRÍTICO: No usamos db.delete(pago_cxc) para no perder la historia del UUID cancelado
                 from datetime import datetime
@@ -1159,6 +1197,7 @@ def delete_bank_movement(db: Session, movement_id: int):
                 pago_cxc.estatus = "CANCELADO"
                 pago_cxc.motivo_cancelacion = "02"
                 pago_cxc.fecha_cancelacion = datetime.now()
+                pago_cxc.updated_by_id = user_id  # <--- AUDITORÍA
 
         # 2. ROLLBACK CxP
         elif movement.origen_modulo == "CxP":
@@ -1184,9 +1223,14 @@ def delete_bank_movement(db: Session, movement_id: int):
                         invoice.estatus = models.InvoiceStatus.PENDIENTE
                     else:
                         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
-                db.delete(pago_cxp)
+
+                    invoice.updated_by_id = user_id  # <--- AUDITORÍA
+                db.delete(
+                    pago_cxp
+                )  # O podrías hacer soft-delete, pero sigo tu lógica actual
 
         movement.record_status = RecordStatus.ELIMINADO
+        movement.updated_by_id = user_id  # <--- AUDITORÍA
         db.commit()
         return True
 
@@ -1255,7 +1299,7 @@ def process_operator_settlement(
                 ),
                 snapshot_base_salary=leg.monto_sueldo,
                 created_at=timestamp,
-                created_by_id=user_id,
+                created_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
             )
             db.add(settlement_detail)
             db.flush()
@@ -1269,10 +1313,12 @@ def process_operator_settlement(
                         tipo=models.SettlementConceptType.INGRESO,
                         amount=leg.monto_sueldo,
                         is_automatic=True,  # CRÍTICO para filtro de PDF
+                        created_by_id=user_id,  # <--- AUDITORÍA
                     )
                 )
 
             leg.status = models.TripStatus.LIQUIDADO
+            leg.updated_by_id = user_id  # <--- AUDITORÍA
             if leg.leg_type == models.TripLegType.RUTA:
                 viajes_a_facturar.add(leg.trip_id)
 
@@ -1286,6 +1332,7 @@ def process_operator_settlement(
                         tipo=concept.tipo,
                         amount=concept.amount,
                         is_automatic=False,  # Se mostrará en el PDF
+                        created_by_id=user_id,  # <--- AUDITORÍA
                     )
                 )
 
@@ -1320,7 +1367,7 @@ def process_operator_settlement(
                             saldo_pendiente=total,
                             fecha_emision=date.today(),
                             estatus=models.InvoiceStatus.PENDIENTE,  # FIX: Enum
-                            created_by_id=user_id,
+                            created_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
                         )
                     )
 
@@ -1354,7 +1401,9 @@ def create_indirect_category(
     db: Session, cat_in: schemas.IndirectCategoryCreate, user_id: int = None
 ):
     db_cat = models.IndirectExpenseCategory(
-        **cat_in.model_dump(), created_by_id=user_id, updated_by_id=user_id
+        **cat_in.model_dump(),
+        created_by_id=user_id,
+        updated_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
     )
     db.add(db_cat)
     db.commit()
@@ -1380,7 +1429,7 @@ def update_indirect_category(
     for k, v in data.items():
         setattr(db_cat, k, v)
 
-    db_cat.updated_by_id = user_id
+    db_cat.updated_by_id = user_id  # <--- AUDITORÍA (Ya lo tenías)
     db.add(db_cat)
     db.commit()
     db.refresh(db_cat)
@@ -1398,7 +1447,7 @@ def delete_indirect_category(db: Session, cat_id: int, user_id: int = None):
 
     # Soft delete (Borrado lógico)
     db_cat.record_status = RecordStatus.ELIMINADO
-    db_cat.updated_by_id = user_id
+    db_cat.updated_by_id = user_id  # <--- AUDITORÍA (Ya lo tenías)
     db.add(db_cat)
     db.commit()
     return True

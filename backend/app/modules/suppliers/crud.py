@@ -55,12 +55,13 @@ def get_supplier(db: Session, supplier_id: int):
     )
 
 
-def create_supplier(db: Session, supplier_in: schemas.SupplierCreate):
+def create_supplier(db: Session, supplier_in: schemas.SupplierCreate, user_id: int):
     """
     Crea un nuevo registro en la tabla de proveedores.
     """
     try:
-        db_supplier = models.Supplier(**supplier_in.model_dump())
+        # <--- AUDITORÍA: Guardar quién lo creó
+        db_supplier = models.Supplier(**supplier_in.model_dump(), created_by_id=user_id)
         db.add(db_supplier)
         db.commit()
         db.refresh(db_supplier)
@@ -77,7 +78,9 @@ def create_supplier(db: Session, supplier_in: schemas.SupplierCreate):
         raise HTTPException(status_code=500, detail="Error interno al crear proveedor")
 
 
-def update_supplier(db: Session, supplier_id: int, supplier_in: schemas.SupplierUpdate):
+def update_supplier(
+    db: Session, supplier_id: int, supplier_in: schemas.SupplierUpdate, user_id: int
+):
     """
     Actualiza los datos de un proveedor (incluyendo banco, clabe y ceco_id).
     """
@@ -89,6 +92,9 @@ def update_supplier(db: Session, supplier_id: int, supplier_in: schemas.Supplier
         data = supplier_in.model_dump(exclude_unset=True)
         for k, v in data.items():
             setattr(db_supplier, k, v)
+
+        # <--- AUDITORÍA: Guardar quién lo editó
+        db_supplier.updated_by_id = user_id
 
         db.add(db_supplier)
         db.commit()
@@ -106,7 +112,9 @@ def update_supplier(db: Session, supplier_id: int, supplier_in: schemas.Supplier
         raise HTTPException(status_code=500, detail="Error al actualizar proveedor")
 
 
-def delete_supplier(db: Session, supplier_id: int):
+def delete_supplier(
+    db: Session, supplier_id: int, user_id: int
+):  # <--- AUDITORÍA PARAM
     """
     Aplica Soft Delete al proveedor.
     """
@@ -116,6 +124,7 @@ def delete_supplier(db: Session, supplier_id: int):
 
     try:
         db_supplier.record_status = RecordStatus.ELIMINADO
+        db_supplier.updated_by_id = user_id  # <--- AUDITORÍA: Quién lo eliminó
         db.add(db_supplier)
         db.commit()
         return True
@@ -169,7 +178,9 @@ def get_invoice(db: Session, invoice_id: int):
     return invoice
 
 
-def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
+def create_invoice(
+    db: Session, invoice_in: schemas.PayableInvoiceCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     try:
         payload = invoice_in.model_dump(exclude={"payments", "orden_compra_id"})
         monto_total = payload.get("monto_total") or 0.0
@@ -178,6 +189,7 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
             **payload,
             saldo_pendiente=monto_total,
             estatus=models.InvoiceStatus.PENDIENTE,
+            created_by_id=user_id,  # <--- AUDITORÍA: Quién creó la factura
         )
 
         #  HERENCIA AUTOMÁTICA: Si el proveedor tiene un CECO, se le asigna a la factura
@@ -193,7 +205,9 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
         if pagos:
             for p in pagos:
                 db_payment = models.InvoicePayment(
-                    invoice_id=db_invoice.id, **p.model_dump()
+                    invoice_id=db_invoice.id,
+                    **p.model_dump(),
+                    created_by_id=user_id,  # <--- AUDITORÍA: Quién creó los pagos iniciales
                 )
                 db.add(db_payment)
                 db_invoice.saldo_pendiente = max(
@@ -215,7 +229,9 @@ def create_invoice(db: Session, invoice_in: schemas.PayableInvoiceCreate):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def update_invoice(db: Session, invoice_id: int, payload: schemas.PayableInvoiceUpdate):
+def update_invoice(
+    db: Session, invoice_id: int, payload: schemas.PayableInvoiceUpdate, user_id: int
+):  # <--- AUDITORÍA PARAM
     """
     Actualiza la factura. Aquí inyectamos la lógica de Cancelación Lógica y Reapertura.
     """
@@ -267,12 +283,15 @@ def update_invoice(db: Session, invoice_id: int, payload: schemas.PayableInvoice
     for key, value in data.items():
         setattr(invoice, key, value)
 
+    # <--- AUDITORÍA: Quién editó la factura
+    invoice.updated_by_id = user_id
+
     db.commit()
     db.refresh(invoice)
     return invoice
 
 
-def delete_invoice(db: Session, invoice_id: int):
+def delete_invoice(db: Session, invoice_id: int, user_id: int):  # <--- AUDITORÍA PARAM
     """
     Eliminación definitiva (oculta de todo el sistema).
     """
@@ -292,6 +311,10 @@ def delete_invoice(db: Session, invoice_id: int):
 
     invoice.record_status = RecordStatus.ELIMINADO
     invoice.estatus = models.InvoiceStatus.CANCELADO
+
+    # <--- AUDITORÍA: Quién la eliminó
+    invoice.updated_by_id = user_id
+
     db.commit()
     return True
 
@@ -301,7 +324,9 @@ def delete_invoice(db: Session, invoice_id: int):
 # =========================================================
 
 
-def register_payment(db: Session, invoice_id: int, payment_in: dict):
+def register_payment(
+    db: Session, invoice_id: int, payment_in: dict, user_id: int
+):  # <--- AUDITORÍA PARAM
     from sqlalchemy.exc import IntegrityError
     import traceback
 
@@ -350,7 +375,10 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
         # -----------------------------------
 
         # 3. Guardar el registro del pago en la tabla InvoicePayment
-        db_payment = models.InvoicePayment(invoice_id=invoice_id, **payment_in)
+        # <--- AUDITORÍA: Quién registró el pago
+        db_payment = models.InvoicePayment(
+            invoice_id=invoice_id, **payment_in, created_by_id=user_id
+        )
         db.add(db_payment)
 
         # 4. Actualizar el saldo de la factura de forma segura
@@ -365,6 +393,9 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
             invoice.saldo_pendiente = 0.0
         else:
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+
+        # <--- AUDITORÍA: El usuario también causó la edición de la factura
+        invoice.updated_by_id = user_id
 
         # 5. AFECTAR LA TESORERÍA (El Estado de Cuenta de la Empresa)
         bank_account_id = payment_in.get("bank_account_id")
@@ -382,6 +413,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
 
             # Descontamos el dinero de la cuenta de banco (Si el pago es de $0, la cuenta no se afecta)
             account.saldo = round((account.saldo or 0.0) - monto_pago, 2)
+            account.updated_by_id = user_id  # <--- AUDITORÍA en cuenta bancaria
 
             proveedor_nombre = (
                 invoice.supplier.razon_social
@@ -406,6 +438,7 @@ def register_payment(db: Session, invoice_id: int, payment_in: dict):
                 referencia=referencia_clara,
                 origen_modulo="CxP",
                 fecha=fecha_movimiento,
+                created_by_id=user_id,  # <--- AUDITORÍA en el movimiento
             )
             db.add(mov)
 
@@ -452,8 +485,12 @@ def delete_payment(db: Session, payment_id: int, user_id: int):
             .first()
         )
 
+        # <--- AUDITORÍA: Marcar quién eliminó el pago y alteró la factura
         payment.record_status = RecordStatus.ELIMINADO
+        payment.updated_by_id = user_id
+
         invoice.saldo_pendiente += payment.monto
+        invoice.updated_by_id = user_id
 
         if invoice.saldo_pendiente >= invoice.monto_total:
             invoice.saldo_pendiente = invoice.monto_total
@@ -465,13 +502,15 @@ def delete_payment(db: Session, payment_id: int, user_id: int):
             account = db.query(models.BankAccount).get(payment.bank_account_id)
             if account:
                 account.saldo += payment.monto
+                account.updated_by_id = user_id  # <--- AUDITORÍA
+
                 reverso = models.BankMovement(
                     bank_account_id=account.id,
                     tipo="ingreso",
                     monto=payment.monto,
                     concepto=f"Reverso de Pago Cancelado - Fra {invoice.id}",
                     referencia=f"CANC-{payment.id}",
-                    created_by_id=user_id,
+                    created_by_id=user_id,  # Ya lo tenías aquí, ¡bien hecho!
                 )
                 db.add(reverso)
 

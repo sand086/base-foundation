@@ -162,7 +162,8 @@ def delete_bank_account(
     current_user: models.User = Depends(get_current_active_user),
 ):
     try:
-        success = crud.delete_bank_account(db, account_id)
+        # <--- AUDITORÍA PARAM (Añadimos el user.id al CRUD)
+        success = crud.delete_bank_account(db, account_id, user_id=current_user.id)
         if not success:
             raise HTTPException(status_code=404, detail="Cuenta bancaria no encontrada")
         return {"message": "Cuenta archivada exitosamente"}
@@ -209,9 +210,18 @@ def read_movements(db: Session = Depends(get_db)):
 @router.patch(
     "/movements/{movement_id}/conciliation", response_model=schemas.BankMovementResponse
 )
-def conciliate_movement(movement_id: int, db: Session = Depends(get_db)):
+def conciliate_movement(
+    movement_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
     try:
-        movement = crud.conciliate_bank_movement(db, movement_id)
+        # <--- AUDITORÍA PARAM (Pasamos el ID a la función conciliar)
+        movement = crud.conciliate_bank_movement(
+            db, movement_id, user_id=current_user.id
+        )
         if not movement:
             raise HTTPException(status_code=404, detail="Movimiento no encontrado")
         return movement
@@ -241,7 +251,8 @@ def delete_bank_movement(
     current_user: models.User = Depends(get_current_active_user),
 ):
     try:
-        success = crud.delete_bank_movement(db, movement_id)
+        # <--- AUDITORÍA PARAM (Pasamos el ID de quién elimina el movimiento al CRUD)
+        success = crud.delete_bank_movement(db, movement_id, user_id=current_user.id)
         if not success:
             raise HTTPException(status_code=404, detail="Movimiento no encontrado")
         return {"message": "Movimiento eliminado y saldo restaurado correctamente"}
@@ -311,8 +322,12 @@ async def bulk_upload_invoices(
             shutil.copyfileobj(file.file, buffer)
 
         data = json.loads(json_data)
+        # <--- AUDITORÍA PARAM (Pasamos current_user.id para la masiva de facturas)
         resultado = crud.process_sat_master_report(
-            db=db, payload_data=data, original_file_name=file.filename
+            db=db,
+            payload_data=data,
+            original_file_name=file.filename,
+            user_id=current_user.id,
         )
         return {**resultado, "file_stored": file_path}
     except Exception as e:
@@ -473,7 +488,12 @@ def get_receivable_invoices(
 
 @router.delete("/receivables/{invoice_id}")
 def delete_receivable_invoice(
-    invoice_id: int, cascade: bool = False, db: Session = Depends(get_db)
+    invoice_id: int,
+    cascade: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
 ):
     """FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)"""
     try:
@@ -494,6 +514,9 @@ def delete_receivable_invoice(
         # 1. ACCIÓN PRINCIPAL: Cancelar Factura
         invoice.estatus = models.InvoiceStatus.CANCELADO
         invoice.record_status = models.RecordStatus.ELIMINADO
+        invoice.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: El usuario eliminó esto
 
         # RESPALDO DEL VIAJE Y LIBERACIÓN
         trip_id_respaldo = invoice.viaje_id
@@ -515,6 +538,7 @@ def delete_receivable_invoice(
                 # A. Eliminar el Viaje principal
                 trip.record_status = models.RecordStatus.ELIMINADO
                 trip.status = models.TripStatus.CERRADO
+                trip.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                 # B. Recorrer tramos (legs) del viaje
                 legs = (
@@ -524,6 +548,7 @@ def delete_receivable_invoice(
                 )
                 for leg in legs:
                     leg.record_status = models.RecordStatus.ELIMINADO
+                    leg.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                     # --- Liberar Unidad (Si estaba en ruta) ---
                     if leg.unit_id:
@@ -534,6 +559,7 @@ def delete_receivable_invoice(
                         )
                         if unit and unit.status == models.UnitStatus.EN_RUTA:
                             unit.status = models.UnitStatus.DISPONIBLE
+                            unit.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                     # --- Liberar Operador (Si estaba en ruta) ---
                     if leg.operator_id:
@@ -547,6 +573,7 @@ def delete_receivable_invoice(
                             and operator.status == models.OperatorStatus.EN_RUTA
                         ):
                             operator.status = models.OperatorStatus.ACTIVO
+                            operator.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                     # --- 💥 TRAZABILIDAD (TIMELINE) ---
                     # Apagamos los eventos de rastreo para que no queden flotando
@@ -557,6 +584,7 @@ def delete_receivable_invoice(
                     )
                     for event in timeline_events:
                         event.record_status = models.RecordStatus.ELIMINADO
+                        event.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                     # --- 💥 VALES DE DIÉSEL Y CONCILIACIÓN ---
                     fuel_logs = (
@@ -575,6 +603,7 @@ def delete_receivable_invoice(
                         fuel.rendimiento_sm = None
                         fuel.diferencia_litros = None
                         fuel.rendimiento_real = None
+                        fuel.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                     # --- 💥 LIQUIDACIÓN DEL OPERADOR Y SUS DESGLOSES ---
                     settlements = (
@@ -584,6 +613,7 @@ def delete_receivable_invoice(
                     )
                     for st in settlements:
                         st.record_status = models.RecordStatus.ELIMINADO
+                        st.updated_by_id = current_user.id  # <--- AUDITORÍA
 
                         # También apagamos los conceptos internos (sueldo base, maniobras, etc)
                         concepts = (
@@ -596,6 +626,7 @@ def delete_receivable_invoice(
                         )
                         for concept in concepts:
                             concept.record_status = models.RecordStatus.ELIMINADO
+                            concept.updated_by_id = current_user.id  # <--- AUDITORÍA
 
         db.commit()
         return {
@@ -669,6 +700,10 @@ def register_receivable_payment(
             invoice.estatus = models.InvoiceStatus.PAGADO
         else:
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+
+        invoice.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: Refleja cobro en la factura
 
         movimiento_schema = schemas.BankMovementCreate(
             bank_account_id=int(cuenta_id),
@@ -808,6 +843,8 @@ async def upload_payment_xml(
                 else:
                     factura.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
+                factura.updated_by_id = current_user.id  # <--- AUDITORÍA
+
                 mov_schema = schemas.BankMovementCreate(
                     bank_account_id=banco_xml.id,
                     tipo="ingreso",
@@ -889,6 +926,9 @@ def fix_orphan_payments(
             crud.create_bank_movement(db, mov_schema, current_user.id)
 
             pago.cuenta_deposito = str(cuenta_destino_id)
+            pago.updated_by_id = (
+                current_user.id
+            )  # <--- AUDITORÍA: El script fue activado por un humano
 
         db.commit()
         return {
@@ -986,6 +1026,9 @@ def reopen_receivable_invoice(
                 )
                 if cuenta:
                     cuenta.saldo -= pago.monto
+                    cuenta.updated_by_id = (
+                        current_user.id
+                    )  # <--- AUDITORÍA: El usuario quitó este dinero
 
                     # Dejamos huella de auditoría en la cuenta
                     reverso = models.BankMovement(
@@ -1001,11 +1044,14 @@ def reopen_receivable_invoice(
                     db.add(reverso)
 
             # 3. Borramos el recibo de pago
-            db.delete(pago)
+            db.delete(pago)  # Aquí usabas delete físico, pero al menos dejas el reverso
 
         # 4. Restauramos el saldo de la factura
         invoice.saldo_pendiente = invoice.monto_total
         invoice.estatus = models.InvoiceStatus.PENDIENTE
+        invoice.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: El usuario reabrió la factura
 
         if invoice.status_sat == "ERROR":
             invoice.status_sat = "PROVISIONAL"

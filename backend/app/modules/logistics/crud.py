@@ -135,7 +135,9 @@ def get_trip(db: Session, trip_id: str):
     )
 
 
-def create_trip(db: Session, trip: schemas.TripCreate):
+def create_trip(
+    db: Session, trip: schemas.TripCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     try:
         trip_data = trip.model_dump(
             exclude={
@@ -147,7 +149,7 @@ def create_trip(db: Session, trip: schemas.TripCreate):
             }
         )
 
-        db_trip = models.Trip(**trip_data)
+        db_trip = models.Trip(**trip_data, created_by_id=user_id)  # <--- AUDITORÍA
         db.add(db_trip)
         db.flush()
 
@@ -176,6 +178,7 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 odometro_inicial=leg_data.odometro_inicial,
                 nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
                 start_date=db_trip.start_date,
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(db_leg_1)
 
@@ -194,6 +197,7 @@ def create_trip(db: Session, trip: schemas.TripCreate):
                 anticipo_combustible=0.0,
                 monto_neto_pagado=0.0,
                 start_date=db_trip.start_date,
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(db_leg_2)
 
@@ -209,7 +213,11 @@ def create_trip(db: Session, trip: schemas.TripCreate):
 
 
 def update_trip_status(
-    db: Session, trip_id: str, status: str, location: str | None = None
+    db: Session,
+    trip_id: str,
+    status: str,
+    user_id: int,
+    location: str | None = None,  # <--- AUDITORÍA PARAM
 ):
     trip = get_trip(db, trip_id)
     if not trip:
@@ -240,6 +248,7 @@ def update_trip_status(
         trip.status = status
 
     trip.last_update = dt_utcnow.utcnow()
+    trip.updated_by_id = user_id  # <--- AUDITORÍA
 
     if active_leg:
         if active_leg.status in estados_finales and status not in estados_finales:
@@ -249,6 +258,8 @@ def update_trip_status(
         active_leg.last_update = dt_utcnow.utcnow()
         if location:
             active_leg.last_location = location
+
+        active_leg.updated_by_id = user_id  # <--- AUDITORÍA
 
     if status in [models.TripStatus.ENTREGADO, models.TripStatus.CERRADO]:
         if active_leg:
@@ -262,6 +273,7 @@ def update_trip_status(
             time=dt_utcnow.utcnow(),
             event=f"Status actualizado a {status}",
             event_type="status_change",
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(event)
 
@@ -271,7 +283,9 @@ def update_trip_status(
     return trip
 
 
-def update_trip(db: Session, trip_id: int, trip_update_data: dict):
+def update_trip(
+    db: Session, trip_id: int, trip_update_data: dict, user_id: int
+):  # <--- AUDITORÍA PARAM
     db_trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not db_trip:
         return None
@@ -280,12 +294,14 @@ def update_trip(db: Session, trip_id: int, trip_update_data: dict):
         if hasattr(db_trip, key):
             setattr(db_trip, key, value)
 
+    db_trip.updated_by_id = user_id  # <--- AUDITORÍA
+
     db.commit()
     db.refresh(db_trip)
     return db_trip
 
 
-def delete_trip(db: Session, trip_id: str):
+def delete_trip(db: Session, trip_id: str, user_id: int):  # <--- AUDITORÍA PARAM
     try:
         tid = int(trip_id)
     except (TypeError, ValueError):
@@ -303,8 +319,10 @@ def delete_trip(db: Session, trip_id: str):
         return False
 
     trip.record_status = RecordStatus.ELIMINADO
+    trip.updated_by_id = user_id  # <--- AUDITORÍA
     for leg in trip.legs:
         leg.record_status = RecordStatus.ELIMINADO
+        leg.updated_by_id = user_id  # <--- AUDITORÍA
 
     db.add(trip)
     db.commit()
@@ -312,7 +330,10 @@ def delete_trip(db: Session, trip_id: str):
 
 
 def add_timeline_event(
-    db: Session, trip_id: int, payload: schemas.TripTimelineEventCreatePayload
+    db: Session,
+    trip_id: int,
+    payload: schemas.TripTimelineEventCreatePayload,
+    user_id: int,  # <--- AUDITORÍA PARAM
 ):
     trip = get_trip(db, str(trip_id))
     if not trip:
@@ -353,6 +374,7 @@ def add_timeline_event(
         trip.status = mapped_status
 
     trip.last_update = dt_utcnow.utcnow()
+    trip.updated_by_id = user_id  # <--- AUDITORÍA
 
     if hasattr(payload, "terminal_entrega_vacio") and payload.terminal_entrega_vacio:
         trip.terminal_entrega_vacio = payload.terminal_entrega_vacio
@@ -365,6 +387,7 @@ def add_timeline_event(
 
         active_leg.last_update = dt_utcnow.utcnow()
         active_leg.last_location = payload.location
+        active_leg.updated_by_id = user_id  # <--- AUDITORÍA
 
         if payload.status == "entregado":
             active_leg.actual_arrival = dt_utcnow.utcnow()
@@ -390,7 +413,10 @@ def add_timeline_event(
                 models.FuelLog.trip_leg_id == active_leg.id,
                 models.FuelLog.record_status == "A",
                 models.FuelLog.is_conciliated == False,
-            ).update({"is_conciliated": True}, synchronize_session=False)
+            ).update(
+                {"is_conciliated": True, "updated_by_id": user_id},
+                synchronize_session=False,
+            )  # <--- AUDITORÍA
 
         db_event = models.TripTimelineEvent(
             trip_leg_id=active_leg.id,
@@ -401,6 +427,7 @@ def add_timeline_event(
             lat=payload.lat,
             lng=payload.lng,
             comments=payload.comments,
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(db_event)
 
@@ -415,7 +442,9 @@ def add_timeline_event(
 # =====================================================================
 
 
-def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload):
+def settle_trip_legs_batch(
+    db: Session, payload: schemas.BatchSettlementPayload, user_id: int
+):  # <--- AUDITORÍA PARAM
     logger.info(
         f"🟢 [1] INICIANDO liquidación de lote para {len(payload.leg_ids)} tramos."
     )
@@ -481,12 +510,14 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
             leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
             leg.desglose_conceptos = conceptos_json
             leg.actual_arrival = dt_utcnow.utcnow()
+            leg.updated_by_id = user_id  # <--- AUDITORÍA
 
             event = models.TripTimelineEvent(
                 trip_leg_id=leg.id,
                 time=dt_utcnow.utcnow(),
                 event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f}",
                 event_type="success",
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(event)
             trips_to_check.add(leg.trip)
@@ -505,6 +536,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                 logger.info(f"🟢 [4.1] Cerrando viaje ID {trip.id} por completo.")
                 trip.status = "cerrado"
                 trip.closed_at = dt_utcnow.utcnow()
+                trip.updated_by_id = user_id  # <--- AUDITORÍA
 
             carretera_liquidada = any(
                 (
@@ -562,6 +594,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         uuid_relacionado = cp_nominal.uuid
                         cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
                         cp_nominal.motivo_cancelacion = "01"
+                        cp_nominal.updated_by_id = user_id  # <--- AUDITORÍA
                         db.add(cp_nominal)
 
                     logger.info("🟢 [5.3] Insertando registro de CXC...")
@@ -584,6 +617,7 @@ def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload)
                         is_nominal=False,
                         uuid_relacionado=uuid_relacionado,
                         status_sat="PROVISIONAL",
+                        created_by_id=user_id,  # <--- AUDITORÍA
                     )
                     db.add(nueva_cxc)
                     db.flush()
@@ -872,252 +906,9 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     )
 
 
-def settle_trip_legs_batch(db: Session, payload: schemas.BatchSettlementPayload):
-    logger.info(
-        f"🟢 [1] INICIANDO liquidación de lote para {len(payload.leg_ids)} tramos."
-    )
-
-    legs = (
-        db.query(models.TripLeg)
-        .filter(
-            models.TripLeg.id.in_(payload.leg_ids),
-            models.TripLeg.record_status != RecordStatus.ELIMINADO,
-        )
-        .all()
-    )
-    if not legs:
-        logger.warning("🟡 [1] No se encontraron tramos válidos para liquidar.")
-        return None
-
-    try:
-        trips_to_check = set()
-        num_legs = len(legs)
-
-        logger.info("🟢 [2] Juntando conceptos extra...")
-        conceptos_json = (
-            [
-                c.model_dump() if hasattr(c, "model_dump") else dict(c)
-                for c in payload.conceptos_extra
-            ]
-            if payload.conceptos_extra
-            else []
-        )
-
-        if payload.monto_sueldo > 0:
-            conceptos_json.append(
-                {
-                    "id": str(uuid.uuid4())[:8],
-                    "tipo": "ingreso",
-                    "categoria": "tarifa",
-                    "descripcion": "Sueldo Base Pactado",
-                    "monto": payload.monto_sueldo / num_legs,
-                    "esAutomatico": True,
-                }
-            )
-
-        if payload.monto_penalizaciones > 0:
-            conceptos_json.append(
-                {
-                    "id": str(uuid.uuid4())[:8],
-                    "tipo": "deduccion",
-                    "categoria": "combustible",
-                    "descripcion": "Cargo por Diésel (Monto excedente)",
-                    "monto": payload.monto_penalizaciones / num_legs,
-                    "esAutomatico": True,
-                }
-            )
-
-        logger.info("🟢 [3] Actualizando cada tramo seleccionado...")
-        for leg in legs:
-            leg.status = "liquidado"
-            leg.monto_sueldo = payload.monto_sueldo / num_legs
-            leg.monto_bonos = payload.monto_bonos / num_legs
-            leg.monto_maniobras = payload.monto_maniobras / num_legs
-            leg.monto_penalizaciones = payload.monto_penalizaciones / num_legs
-            leg.saldo_operador = payload.neto_a_pagar / num_legs
-            leg.monto_neto_pagado = payload.neto_a_pagar / num_legs
-            leg.desglose_conceptos = conceptos_json
-            leg.actual_arrival = dt_utcnow.utcnow()
-
-            event = models.TripTimelineEvent(
-                trip_leg_id=leg.id,
-                time=dt_utcnow.utcnow(),
-                event=f"Tramo Liquidado en Lote. Saldo acreditado: ${(payload.neto_a_pagar/num_legs):,.2f}",
-                event_type="success",
-            )
-            db.add(event)
-            trips_to_check.add(leg.trip)
-
-        cxc_creadas = 0
-
-        logger.info(
-            f"🟢 [4] Verificando cierres de viaje para {len(trips_to_check)} viaje(s)."
-        )
-        for trip in trips_to_check:
-            all_completed = all(
-                l.status in ["entregado", "cerrado", "liquidado"] for l in trip.legs
-            )
-
-            if all_completed and trip.status not in ["cerrado", "liquidado"]:
-                logger.info(f"🟢 [4.1] Cerrando viaje ID {trip.id} por completo.")
-                trip.status = "cerrado"
-                trip.closed_at = dt_utcnow.utcnow()
-
-            # Verificamos si en este LOTE que se liquidó venía la RUTA principal
-            carretera_liquidada = any(
-                (
-                    l.leg_type
-                    in [
-                        "ruta_carretera",
-                        getattr(models.TripLegType, "RUTA", "ruta_carretera"),
-                    ]
-                )
-                and l.status in ["liquidado", "cerrado"]
-                for l in trip.legs
-            )
-
-            if carretera_liquidada:
-                logger.info(
-                    f"🟢 [5] Evaluando creación y Timbrado de CXC para viaje ID {trip.id}"
-                )
-                existing_cxc = (
-                    db.query(models.ReceivableInvoice)
-                    .filter(
-                        models.ReceivableInvoice.viaje_id == trip.id,
-                        models.ReceivableInvoice.record_status
-                        != RecordStatus.ELIMINADO,
-                        models.ReceivableInvoice.is_nominal == False,
-                    )
-                    .first()
-                )
-
-                if not existing_cxc:
-                    logger.info(
-                        "🟢 [5.1] No existe CXC definitiva. Procediendo a Auto-Timbrar Factura 4.0..."
-                    )
-
-                    # =======================================================
-                    # MAGIA SAT: AUTO-TIMBRADO Y CANCELACIÓN EN EL LOTE (BATCH)
-                    # =======================================================
-                    cp_nominal = (
-                        db.query(models.ReceivableInvoice)
-                        .filter(
-                            models.ReceivableInvoice.viaje_id == trip.id,
-                            models.ReceivableInvoice.is_nominal == True,
-                            models.ReceivableInvoice.status_sat == "TIMBRADA",
-                        )
-                        .first()
-                    )
-
-                    uuid_relacionado = cp_nominal.uuid if cp_nominal else None
-
-                    # Importación dinámica
-                    from app.integrations.sat.billing_service import BillingService
-
-                    try:
-                        billing = BillingService(db)
-                        invoice_data = schemas.ReceivableInvoiceCreate(
-                            viaje_id=trip.id,
-                            is_nominal=False,
-                            uuid_relacionado=uuid_relacionado,
-                        )
-
-                        # 1. TIMBRAR FACTURA 4.0 DE INGRESO
-                        factura_real = billing.generar_factura_final_relacionada(
-                            invoice_data
-                        )
-                        logger.info(
-                            f" Factura 4.0 Batch generada. UUID: {factura_real.uuid}"
-                        )
-                        cxc_creadas += 1
-
-                        # 2. CANCELAR CARTA PORTE VIEJA
-                        if cp_nominal and uuid_relacionado:
-                            cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
-                            cp_nominal.motivo_cancelacion = "01"
-                            db.add(cp_nominal)
-                            db.flush()
-
-                            try:
-                                logger.info(
-                                    f"🟢 Solicitando cancelación CP Nominal UUID: {uuid_relacionado}"
-                                )
-                                billing.cancelar_factura_nominal(
-                                    invoice_id=cp_nominal.id,
-                                    motivo="01",
-                                    uuid_sustituto=factura_real.uuid,
-                                )
-                            except Exception as cancel_err:
-                                logger.warning(
-                                    f"🟡 Falló cancelación en vivo CP Nominal (fondo): {cancel_err}"
-                                )
-
-                    except Exception as e:
-                        logger.error(
-                            f"❌ Error al Auto-Timbrar Factura 4.0 en Batch: {str(e)}"
-                        )
-                        logger.error(traceback.format_exc())
-                        # FALLBACK DE SEGURIDAD: Si falla el PAC del SAT, de todos modos creamos la CxC interna
-                        # para que tu operador cobre sin problemas, y finanzas la timbra después.
-                        base = float(trip.tarifa_base or 0.0)
-                        subtotal = base
-                        iva = subtotal * 0.16
-                        retencion = subtotal * 0.04
-                        monto_total = subtotal + iva - retencion
-                        dias_credito = (
-                            trip.client.dias_credito
-                            if trip.client and trip.client.dias_credito
-                            else 15
-                        )
-
-                        nueva_cxc = models.ReceivableInvoice(
-                            client_id=trip.client_id,
-                            sub_client_id=trip.sub_client_id,
-                            viaje_id=trip.id,
-                            folio_interno=f"CXC-TRP-{trip.public_id or trip.id}",
-                            concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
-                            subtotal=subtotal,
-                            iva=iva,
-                            retenciones=retencion,
-                            monto_total=monto_total,
-                            saldo_pendiente=monto_total,
-                            fecha_emision=date.today(),
-                            fecha_vencimiento=date.today()
-                            + timedelta(days=dias_credito),
-                            estatus="pendiente",
-                            metodo_pago="PPD",
-                            tipo_comprobante="I",
-                            is_nominal=False,
-                            uuid_relacionado=uuid_relacionado,
-                            status_sat="PROVISIONAL",
-                        )
-                        db.add(nueva_cxc)
-                        db.flush()
-                        cxc_creadas += 1
-                    # =======================================================
-
-                else:
-                    logger.info(
-                        f"🟡 [5.1] La CXC ya existe (ID: {existing_cxc.id}). Saltando creación."
-                    )
-
-        logger.info("🟢 [6] Guardando todos los cambios en la BD...")
-        db.commit()
-        return {
-            "message": "Liquidación completada y Recursos Liberados",
-            "legs_procesados": len(legs),
-            "cxc_generadas": cxc_creadas,
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error("❌ ERROR CRÍTICO 500 EN LIQUIDACIÓN BATCH ❌")
-        logger.error(f"Mensaje: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise e
-
-
-def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
+def create_next_leg(
+    db: Session, trip_id: str, payload: schemas.TripLegCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     tid = int(trip_id)
     trip = (
         db.query(models.Trip)
@@ -1140,12 +931,14 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
             last_leg.status = models.TripStatus.ENTREGADO
             last_leg.actual_arrival = dt_utcnow.utcnow()
             last_leg.last_update = dt_utcnow.utcnow()
+            last_leg.updated_by_id = user_id  # <--- AUDITORÍA
 
             db_event = models.TripTimelineEvent(
                 trip_leg_id=last_leg.id,
                 time=dt_utcnow.utcnow(),
                 event="Tramo concluido por Desenganche / Cambio de operador.",
                 event_type="info",
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(db_event)
             db.add(last_leg)
@@ -1165,12 +958,14 @@ def create_next_leg(db: Session, trip_id: str, payload: schemas.TripLegCreate):
         odometro_inicial=payload.odometro_inicial,
         nivel_tanque_inicial=payload.nivel_tanque_inicial,
         start_date=dt_utcnow.utcnow(),
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(new_leg)
     db.flush()
 
     trip.status = models.TripStatus.EN_TRANSITO
     trip.last_update = dt_utcnow.utcnow()
+    trip.updated_by_id = user_id  # <--- AUDITORÍA
     db.add(trip)
 
     db.commit()
@@ -1323,7 +1118,7 @@ def get_last_unit_odometer(db: Session, unit_id: int) -> int:
     return last_fuel.odometro if last_fuel else 0
 
 
-def undo_last_leg(db: Session, trip_id: str):
+def undo_last_leg(db: Session, trip_id: str, user_id: int):  # <--- AUDITORÍA PARAM
     tid = int(trip_id)
     trip = (
         db.query(models.Trip)
@@ -1354,14 +1149,18 @@ def undo_last_leg(db: Session, trip_id: str):
     ]:
         current_leg.status = models.TripStatus.EN_TRANSITO
         current_leg.actual_arrival = None
+        current_leg.updated_by_id = user_id  # <--- AUDITORÍA
+
         trip.status = models.TripStatus.EN_TRANSITO
         trip.closed_at = None
+        trip.updated_by_id = user_id  # <--- AUDITORÍA
 
         db_event = models.TripTimelineEvent(
             trip_leg_id=current_leg.id,
             time=dt_utcnow.utcnow(),
             event="Reverso Operativo: Se deshizo la Entrega. El tramo regresa a En Tránsito.",
             event_type="warning",
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(db_event)
 
@@ -1372,8 +1171,11 @@ def undo_last_leg(db: Session, trip_id: str):
             previous_leg = active_legs[-2]
             previous_leg.status = models.TripStatus.EN_TRANSITO
             previous_leg.actual_arrival = None
+            previous_leg.updated_by_id = user_id  # <--- AUDITORÍA
+
             trip.status = models.TripStatus.EN_TRANSITO
             trip.closed_at = None
+            trip.updated_by_id = user_id  # <--- AUDITORÍA
 
             # 🔥 FIX: Ponemos la bitácora en la fase ANTERIOR para que no de error
             db_event = models.TripTimelineEvent(
@@ -1381,6 +1183,7 @@ def undo_last_leg(db: Session, trip_id: str):
                 time=dt_utcnow.utcnow(),
                 event=f"Reverso Operativo: Se eliminó la fase posterior ({current_leg.leg_type}). Retorno a esta fase.",
                 event_type="warning",
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(db_event)
 
@@ -1395,6 +1198,7 @@ def undo_last_leg(db: Session, trip_id: str):
             # El viaje regresa a ser "Planeado" (Stand-By)
             trip.status = models.TripStatus.CREADO
             trip.closed_at = None
+            trip.updated_by_id = user_id  # <--- AUDITORÍA
             # No agregamos bitácora porque ya no existen fases a donde amarrarla.
 
     db.commit()
@@ -1402,7 +1206,7 @@ def undo_last_leg(db: Session, trip_id: str):
     return trip
 
 
-def reset_leg_audit(db: Session, leg_id: int):
+def reset_leg_audit(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA PARAM
     leg = (
         db.query(models.TripLeg)
         .filter(
@@ -1416,9 +1220,11 @@ def reset_leg_audit(db: Session, leg_id: int):
 
     leg.odometro_final = None
     leg.monto_penalizaciones = 0.0
+    leg.updated_by_id = user_id  # <--- AUDITORÍA
 
     db.query(models.FuelLog).filter(models.FuelLog.trip_leg_id == leg.id).update(
-        {"is_conciliated": False}, synchronize_session=False
+        {"is_conciliated": False, "updated_by_id": user_id},
+        synchronize_session=False,  # <--- AUDITORÍA
     )
 
     event = models.TripTimelineEvent(
@@ -1426,6 +1232,7 @@ def reset_leg_audit(db: Session, leg_id: int):
         time=dt_utcnow.utcnow(),
         event="Registro de detalles de combustible revertida por el usuario. Fase pendiente de conciliación.",
         event_type="info",
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(event)
 
@@ -1434,7 +1241,7 @@ def reset_leg_audit(db: Session, leg_id: int):
     return leg
 
 
-def unhook_in_yard(db: Session, trip_id: str):
+def unhook_in_yard(db: Session, trip_id: str, user_id: int):  # <--- AUDITORÍA PARAM
     tid = int(trip_id)
     trip = (
         db.query(models.Trip)
@@ -1460,9 +1267,11 @@ def unhook_in_yard(db: Session, trip_id: str):
     active_leg.status = models.TripStatus.ENTREGADO
     active_leg.actual_arrival = dt_utcnow.utcnow()
     active_leg.last_update = dt_utcnow.utcnow()
+    active_leg.updated_by_id = user_id  # <--- AUDITORÍA
 
     trip.status = models.TripStatus.DETENIDO
     trip.last_update = dt_utcnow.utcnow()
+    trip.updated_by_id = user_id  # <--- AUDITORÍA
 
     db_event = models.TripTimelineEvent(
         trip_leg_id=active_leg.id,
@@ -1470,6 +1279,7 @@ def unhook_in_yard(db: Session, trip_id: str):
         event="Desenganche en patio. Carga en espera de asignación de carretera.",
         event_type="info",
         location="Patio de Operaciones",
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(db_event)
 
@@ -1478,7 +1288,7 @@ def unhook_in_yard(db: Session, trip_id: str):
     return trip
 
 
-def reopen_trip_leg(db: Session, leg_id: int):
+def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA PARAM
     """
     Revierte la liquidación de un tramo, sus saldos, y anula la CxC si es posible.
     """
@@ -1529,6 +1339,7 @@ def reopen_trip_leg(db: Session, leg_id: int):
         # Si no tiene pagos, aplicamos ELIMINADO LÓGICO para que el sistema
         # genere una nueva limpia al volver a liquidar.
         cxc.record_status = RecordStatus.ELIMINADO
+        cxc.updated_by_id = user_id  # <--- AUDITORÍA
         db.add(cxc)
 
         # =================================================================
@@ -1537,7 +1348,7 @@ def reopen_trip_leg(db: Session, leg_id: int):
         from app.models.models import AuditLog
 
         log = AuditLog(
-            user_id=None,  # Ideal si tienes current_user
+            user_id=user_id,  # <--- AUDITORÍA FIX: Ahora sí tiene user_id
             accion=f"CxC {cxc.folio_interno} eliminada lógicamente (Reapertura de liquidación).",
             tipo_accion="ELIMINACION",
             modulo="CUENTAS_POR_COBRAR",
@@ -1558,11 +1369,13 @@ def reopen_trip_leg(db: Session, leg_id: int):
     leg.saldo_operador = 0.0
     leg.monto_neto_pagado = 0.0
     leg.desglose_conceptos = []  # Borramos el recibo
+    leg.updated_by_id = user_id  # <--- AUDITORÍA
 
     # 4. REVERSIÓN DE ESTADO DEL VIAJE (Si se había cerrado, lo reabrimos)
     if trip.status in [models.TripStatus.CERRADO, models.TripStatus.LIQUIDADO]:
         trip.status = models.TripStatus.ENTREGADO
         trip.closed_at = None
+        trip.updated_by_id = user_id  # <--- AUDITORÍA
         db.add(trip)
 
     # 5. REGISTRO EN BITÁCORA (Timeline)
@@ -1571,6 +1384,7 @@ def reopen_trip_leg(db: Session, leg_id: int):
         time=dt_utcnow.utcnow(),
         event="Liquidación revertida por el usuario. Estatus devuelto a CERRADO. La CxC vinculada fue anulada.",
         event_type="warning",
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(event)
 
@@ -1582,6 +1396,7 @@ def reopen_trip_leg(db: Session, leg_id: int):
     )
     for s in settlements:
         s.record_status = RecordStatus.ELIMINADO
+        s.updated_by_id = user_id  # <--- AUDITORÍA
         db.add(s)
 
     db.add(leg)

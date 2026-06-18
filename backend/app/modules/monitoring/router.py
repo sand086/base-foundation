@@ -28,12 +28,19 @@ router = APIRouter(tags=["Monitoring & Notifications"])
 
 
 @router.get("/config", response_model=schemas.AlertConfigResponse)
-def get_alert_config(db: Session = Depends(get_db)):
+def get_alert_config(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
     config = db.query(AlertConfig).first()
 
     # Si no existe configuración en la BD, creamos la que viene por defecto
     if not config:
-        config = AlertConfig()
+        config = AlertConfig(
+            created_by_id=current_user.id
+        )  # <--- AUDITORÍA: Registrar quién activó la creación de la config por defecto
         db.add(config)
         db.commit()
         db.refresh(config)
@@ -43,16 +50,24 @@ def get_alert_config(db: Session = Depends(get_db)):
 
 @router.put("/config", response_model=schemas.AlertConfigResponse)
 def update_alert_config(
-    config_in: schemas.AlertConfigUpdate, db: Session = Depends(get_db)
+    config_in: schemas.AlertConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
 ):
     config = db.query(AlertConfig).first()
 
     if not config:
-        config = AlertConfig()
+        config = AlertConfig(created_by_id=current_user.id)  # <--- AUDITORÍA
         db.add(config)
 
     for field, value in config_in.model_dump().items():
         setattr(config, field, value)
+
+    config.updated_by_id = (
+        current_user.id
+    )  # <--- AUDITORÍA: Registrar quién editó las alertas
 
     db.commit()
     db.refresh(config)
@@ -65,7 +80,12 @@ def update_alert_config(
 
 
 @router.get("/templates", response_model=List[schemas.EmailTemplateResponse])
-def get_all_templates(db: Session = Depends(get_db)):
+def get_all_templates(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
     templates = db.query(EmailTemplate).all()
 
     # "Semilla" automática: Si la tabla está vacía, mete las 3 plantillas por defecto
@@ -76,18 +96,21 @@ def get_all_templates(db: Session = Depends(get_db)):
                 nombre="Notificación de Cliente - Estatus",
                 asunto="Actualización de su envío [SERVICIO_ID]",
                 cuerpo="Estimado cliente,\n\nLe informamos que su envío con número de servicio [SERVICIO_ID] ha sido actualizado.\n\nEstado actual: [ESTATUS]\nUbicación: [UBICACION]\nHora de actualización: [FECHA_HORA]\n\nAtentamente,\nRápidos 3T",
+                created_by_id=current_user.id,  # <--- AUDITORÍA
             ),
             EmailTemplate(
                 codigo="TPL-002",
                 nombre="Notificación de Factura",
                 asunto="Nueva factura [FACTURA_ID] - Rápidos 3T",
                 cuerpo="Estimado cliente,\n\nAdjunto encontrará la factura [FACTURA_ID] correspondiente a los servicios prestados.\n\nMonto total: [MONTO]\nFecha de vencimiento: [FECHA_VENCIMIENTO]\n\nAgradecemos su preferencia.\n\nAtentamente,\nRápidos 3T",
+                created_by_id=current_user.id,  # <--- AUDITORÍA
             ),
             EmailTemplate(
                 codigo="TPL-003",
                 nombre="Alerta de Documento Vencido",
                 asunto="URGENTE: Documento próximo a vencer - [UNIDAD]",
                 cuerpo="Atención,\n\nEl documento [TIPO_DOCUMENTO] de la unidad [UNIDAD] vencerá el [FECHA_VENCIMIENTO].\n\nPor favor, tome las acciones necesarias para renovarlo a la brevedad.\n\nSistema de Alertas\nRápidos 3T",
+                created_by_id=current_user.id,  # <--- AUDITORÍA
             ),
         ]
         db.bulk_save_objects(defaults)
@@ -102,6 +125,9 @@ def update_template(
     template_id: int,
     template_in: schemas.EmailTemplateUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
 ):
     template = db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
 
@@ -110,6 +136,10 @@ def update_template(
 
     for field, value in template_in.model_dump(exclude_unset=True).items():
         setattr(template, field, value)
+
+    template.updated_by_id = (
+        current_user.id
+    )  # <--- AUDITORÍA: Registrar quién alteró esta plantilla
 
     db.commit()
     db.refresh(template)
@@ -136,7 +166,7 @@ async def create_notification(
         event_type=payload.event_type,
         reference_id=payload.reference_id,
         metadata_info=payload.metadata_info,
-        created_by_id=current_user.id,
+        created_by_id=current_user.id,  # <--- AUDITORÍA (Este ya lo tenías correctamente aplicado)
     )
 
     db.add(db_notif)
@@ -220,6 +250,9 @@ def mark_notification_as_read(
 
     if notif:
         notif.is_read = True
+        notif.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: Guardar quién la marcó como leída
         db.commit()
         return {"message": "Marcada como leída"}
 
@@ -234,7 +267,9 @@ def mark_all_as_read(
     db.query(UserNotification).filter(
         UserNotification.user_id == current_user.id,
         UserNotification.is_read == False,
-    ).update({"is_read": True})
+    ).update(
+        {"is_read": True, "updated_by_id": current_user.id}
+    )  # <--- AUDITORÍA: Actualización masiva de auditoría
 
     db.commit()
     return {"message": "Todas las notificaciones marcadas como leídas"}

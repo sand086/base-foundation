@@ -6,11 +6,11 @@ from datetime import date, timedelta, datetime as dt_utcnow
 from pathlib import Path
 from typing import List, Optional
 import requests  # <-- NUEVO: Para la API de mapas OSRM
-import traceback
+import traceback  # <-- PARA IMPRIMIR EL ERROR EXACTO EN CONSOLA
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
-from sqlalchemy.orm import Session, contains_eager, joinedload
+from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, or_  # <-- NUEVO: Agregado or_ para la consulta masiva
 from jinja2 import Environment, FileSystemLoader
@@ -534,11 +534,15 @@ def read_trip(trip_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips", response_model=schemas.TripResponse)
-def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
+def create_trip(
+    trip: schemas.TripCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     #  LIBERADO: Ya no bloqueamos la unidad en el router, permite multiasignación en patio
 
     # Generamos el viaje de la forma tradicional
-    db_trip = crud.create_trip(db, trip)
+    db_trip = crud.create_trip(db, trip, user_id=current_user.id)  # <--- AUDITORÍA
 
     # CALCULAMOS LA DISTANCIA AUTOMÁTICA EN SEGUNDO PLANO Y SILENCIOSAMENTE
     if db_trip.origin and db_trip.destination:
@@ -563,17 +567,27 @@ def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
 
 @router.patch("/trips/{trip_id}/status", response_model=schemas.TripResponse)
 def update_status(
-    trip_id: int, status: str, location: str = None, db: Session = Depends(get_db)
+    trip_id: int,
+    status: str,
+    location: str = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.update_trip_status(db, str(trip_id), status, location)
+    trip = crud.update_trip_status(
+        db, str(trip_id), status, user_id=current_user.id, location=location
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
 
 
 @router.delete("/trips/{trip_id}", response_model=dict)
-def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
-    success = crud.delete_trip(db, trip_id)
+def delete_trip_endpoint(
+    trip_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
+    success = crud.delete_trip(db, trip_id, user_id=current_user.id)  # <--- AUDITORÍA
     if not success:
         raise HTTPException(
             status_code=404, detail="Viaje no encontrado o ya eliminado"
@@ -583,11 +597,17 @@ def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
 
 @router.put("/trips/{trip_id}", response_model=schemas.TripResponse)
 def update_trip_endpoint(
-    trip_id: int, payload: schemas.TripUpdate, db: Session = Depends(get_db)
+    trip_id: int,
+    payload: schemas.TripUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     update_data = payload.dict(exclude_unset=True)
     updated_trip = crud.update_trip(
-        db=db, trip_id=trip_id, trip_update_data=update_data
+        db=db,
+        trip_id=trip_id,
+        trip_update_data=update_data,
+        user_id=current_user.id,  # <--- AUDITORÍA
     )
     if not updated_trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
@@ -599,8 +619,11 @@ def create_timeline_event(
     trip_id: int,
     payload: schemas.TripTimelineEventCreatePayload,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.add_timeline_event(db, trip_id, payload)
+    trip = crud.add_timeline_event(
+        db, trip_id, payload, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
@@ -638,8 +661,12 @@ def close_trip_settlement(
     trip_leg_id: int,
     payload: schemas.CloseSettlementPayload,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.close_trip_settlement(db, trip_leg_id, payload)
+    # NOTA: Asegúrate de actualizar crud.close_trip_settlement para recibir el user_id si no lo hemos hecho en crud_logistics.py
+    trip = crud.close_trip_settlement(
+        db, trip_leg_id, payload, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
     return trip
@@ -647,16 +674,26 @@ def close_trip_settlement(
 
 @router.post("/trips/{trip_id}/next-leg", response_model=schemas.TripResponse)
 def create_next_leg_endpoint(
-    trip_id: int, payload: schemas.TripLegCreate, db: Session = Depends(get_db)
+    trip_id: int,
+    payload: schemas.TripLegCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.create_next_leg(db, str(trip_id), payload)
+    trip = crud.create_next_leg(
+        db, str(trip_id), payload, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
 
 
 @router.post("/trips/legs/{leg_id}/settle")
-def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+def settle_trip_leg(
+    leg_id: int,
+    data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
@@ -664,6 +701,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     # 1. ACTUALIZAMOS EL TRAMO ACTUAL
     leg.status = "cerrado"
     leg.saldo_operador = data.get("neto_a_pagar", 0.0)
+    leg.updated_by_id = current_user.id  # <--- AUDITORÍA: Quién cerró el tramo
     db.commit()
     db.refresh(leg)
 
@@ -678,6 +716,9 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     if all_completed and trip.status != "cerrado":
         trip.status = "cerrado"
         trip.closed_at = func.now()
+        trip.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: Quién provocó que se cierre el viaje
 
     # 3. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
     carretera_liquidada = any(
@@ -735,6 +776,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 uuid_relacionado = cp_nominal.uuid
                 cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
                 cp_nominal.motivo_cancelacion = "01"
+                cp_nominal.updated_by_id = current_user.id  # <--- AUDITORÍA
                 db.add(cp_nominal)
             # =========================================================
 
@@ -757,6 +799,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 is_nominal=False,
                 uuid_relacionado=uuid_relacionado,
                 status_sat="PROVISIONAL",
+                created_by_id=current_user.id,  # <--- AUDITORÍA: Quién desencadenó la generación de la CxC
             )
             db.add(nueva_cxc)
             db.flush()  #  FIX: OBLIGAMOS QUE SE GRABE ANTES DE SOLTAR EL CANDADO
@@ -982,7 +1025,9 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
 
 @router.post("/trips/legs/settle-batch")
 def settle_trip_legs_batch(
-    payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
+    payload: schemas.BatchSettlementPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     try:
         # 1. Imprimimos qué está llegando exactamente desde React
@@ -990,7 +1035,9 @@ def settle_trip_legs_batch(
         print(payload.model_dump())
 
         # 2. Intentamos ejecutar la magia
-        result = crud.settle_trip_legs_batch(db, payload)
+        result = crud.settle_trip_legs_batch(
+            db, payload, user_id=current_user.id
+        )  # <--- AUDITORÍA
 
         if not result:
             raise HTTPException(status_code=404, detail="No se encontraron los tramos")
@@ -1020,8 +1067,14 @@ def preview_batch_settlement_endpoint(
 
 
 @router.post("/trips/{trip_id}/undo-leg", response_model=schemas.TripResponse)
-def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
-    trip = crud.undo_last_leg(db, str(trip_id))
+def undo_trip_leg_endpoint(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
+    trip = crud.undo_last_leg(
+        db, str(trip_id), user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(
             status_code=400, detail="No se puede deshacer la fase inicial."
@@ -1030,7 +1083,11 @@ def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/trips/timeline/{event_id}")
-def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
+def delete_timeline_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     event = (
         db.query(models.TripTimelineEvent)
         .filter(models.TripTimelineEvent.id == event_id)
@@ -1041,13 +1098,17 @@ def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
 
     #  FIX: SOFT DELETE EN LUGAR DE DB.DELETE PARA NO ROMPER INTEGRIDAD REFERENCIAL
     event.record_status = RecordStatus.ELIMINADO
+    event.updated_by_id = current_user.id  # <--- AUDITORÍA: Quién eliminó este evento
     db.commit()
     return {"message": "Evento eliminado correctamente"}
 
 
 @router.put("/trips/timeline/{event_id}")
 def update_timeline_event(
-    event_id: int, payload: dict = Body(...), db: Session = Depends(get_db)
+    event_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     event = (
         db.query(models.TripTimelineEvent)
@@ -1071,6 +1132,10 @@ def update_timeline_event(
     status_label = payload.get("status", "Reporte").replace("_", " ").title()
     event.event = f"{status_label} en {payload.get('location')}"
 
+    event.updated_by_id = (
+        current_user.id
+    )  # <--- AUDITORÍA: Quién actualizó este evento de timeline
+
     db.commit()
     return {"message": "Evento actualizado correctamente"}
 
@@ -1081,7 +1146,11 @@ def update_timeline_event(
 
 
 @router.post("/trips/{trip_id}/stamp-real", response_model=schemas.TripResponse)
-def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+def stamp_real_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     # 1. IMPORTAMOS EL SERVICIO DE FINANZAS
     from app.integrations.sat.billing_service import BillingService
     from app.integrations.sat.payment_service import PaymentComplementService
@@ -1118,6 +1187,9 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     #  FIX: Usar Soft Delete para no causar un Error 500 al borrar la provisional
     if cxc_provisional and cxc_provisional.id != factura.id:
         cxc_provisional.record_status = RecordStatus.ELIMINADO
+        cxc_provisional.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: El usuario forzó el timbrado real y ocultó la provisoria
         db.commit()
 
     trip = crud.get_trip(db, str(trip_id))
@@ -1126,7 +1198,10 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
 @router.put("/trips/{trip_id}/dispatch", response_model=schemas.TripResponse)
 def dispatch_trip(
-    trip_id: int, payload: schemas.TripCreate, db: Session = Depends(get_db)
+    trip_id: int,
+    payload: schemas.TripCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
@@ -1145,6 +1220,8 @@ def dispatch_trip(
     )
     for key, value in trip_data.items():
         setattr(trip, key, value)
+
+    trip.updated_by_id = current_user.id  # <--- AUDITORÍA: Quién despachó el viaje
 
     #   MOTOR DUAL: GUARDAR LAS PIERNAS DEL VIAJE
     if payload.initial_leg:
@@ -1165,6 +1242,7 @@ def dispatch_trip(
             existing_leg.anticipo_combustible = leg_data.anticipo_combustible
             existing_leg.monto_neto_pagado = monto_pagar
             existing_leg.status = trip.status
+            existing_leg.updated_by_id = current_user.id  # <--- AUDITORÍA
         else:
             new_leg = models.TripLeg(
                 trip_id=trip.id,
@@ -1179,6 +1257,7 @@ def dispatch_trip(
                 odometro_inicial=leg_data.odometro_inicial,
                 nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
                 start_date=trip.start_date,
+                created_by_id=current_user.id,  # <--- AUDITORÍA
             )
             db.add(new_leg)
 
@@ -1188,6 +1267,7 @@ def dispatch_trip(
             if len(trip.legs) > 1:
                 trip.legs[1].unit_id = leg_final.unit_id
                 trip.legs[1].operator_id = leg_final.operator_id
+                trip.legs[1].updated_by_id = current_user.id  # <--- AUDITORÍA
             else:
                 new_leg_2 = models.TripLeg(
                     trip_id=trip.id,
@@ -1196,6 +1276,7 @@ def dispatch_trip(
                     unit_id=leg_final.unit_id,
                     operator_id=leg_final.operator_id,
                     start_date=trip.start_date,
+                    created_by_id=current_user.id,  # <--- AUDITORÍA
                 )
                 db.add(new_leg_2)
 
@@ -1208,9 +1289,15 @@ def dispatch_trip(
 
 
 @router.post("/trips/{trip_id}/unhook", response_model=schemas.TripResponse)
-def unhook_trip_in_yard(trip_id: int, db: Session = Depends(get_db)):
+def unhook_trip_in_yard(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     try:
-        trip = crud.unhook_in_yard(db, str(trip_id))
+        trip = crud.unhook_in_yard(
+            db, str(trip_id), user_id=current_user.id
+        )  # <--- AUDITORÍA
         if not trip:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
         return trip
@@ -1273,7 +1360,11 @@ def sync_distances(db: Session = Depends(get_db)):
 
 
 @router.post("/trips/legs/{leg_id}/reopen")
-def reopen_trip_leg_endpoint(leg_id: int, db: Session = Depends(get_db)):
+def reopen_trip_leg_endpoint(
+    leg_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     """
     Reabre un tramo liquidado:
     - Borra saldos
@@ -1281,7 +1372,9 @@ def reopen_trip_leg_endpoint(leg_id: int, db: Session = Depends(get_db)):
     - Anula la CxC generada (Si no tiene pagos)
     """
     try:
-        leg = crud.reopen_trip_leg(db, leg_id)
+        leg = crud.reopen_trip_leg(
+            db, leg_id, user_id=current_user.id
+        )  # <--- AUDITORÍA
 
         return {
             "message": "Tramo reabierto con éxito. Listo para una nueva liquidación.",
