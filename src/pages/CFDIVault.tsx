@@ -8,7 +8,8 @@ import {
   ChevronsUpDown,
   FileText,
   FileCode,
-  RefreshCw, // <--- NUEVO ICONO
+  RefreshCw,
+  Eye, // NUEVO ICONO PARA VER DETALLE
 } from "lucide-react";
 
 import {
@@ -48,26 +49,30 @@ import {
 } from "@/components/ui/enhanced-data-table";
 import { cn } from "@/lib/utils";
 
-// <--- IMPORTAMOS EL MODAL DE CREACIÓN/REFACTURACIÓN
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
+import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
+import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
 
-  // Estados para nuestros FILTROS PERSONALIZADOS
+  // Filtros
   const [selectedEntity, setSelectedEntity] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [entityComboOpen, setEntityOpen] = useState(false);
 
-  // <--- ESTADOS PARA EL MODAL DE REFACTURACIÓN
+  // Estados para Modales (Refacturación)
   const [refactorModalOpen, setRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
-  // Traemos los datos de la BD
-  const { records, isLoading, refetch } = useCfdiVault(activeTab); // <--- AGREGAMOS mutate (si usas SWR) o recarga
+  // NUEVO: ESTADOS PARA PANELES DE DETALLE
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
+  const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // Filtramos a nivel local cualquier error sat que se haya colado
+  const { records, isLoading, refetch } = useCfdiVault(activeTab);
+
   const cleanRecords = useMemo(() => {
     return records.filter((r) => {
       const statusStr = r.estatus?.toLowerCase() || "";
@@ -75,7 +80,6 @@ export default function CFDIVault() {
     });
   }, [records]);
 
-  // Extraemos listas únicas para llenar los Selects (usando cleanRecords)
   const uniqueStatuses = useMemo(
     () =>
       Array.from(new Set(cleanRecords.map((r) => r.estatus))).filter(Boolean),
@@ -89,26 +93,19 @@ export default function CFDIVault() {
     [cleanRecords],
   );
 
-  // ==========================================
-  // MOTOR DE FILTRADO EXTERNO
-  // ==========================================
   const filteredRecords = useMemo(() => {
     return cleanRecords.filter((r) => {
-      // 1. Filtro Cliente / Proveedor
       if (
         selectedEntity !== "all" &&
         r.cliente_proveedor_nombre !== selectedEntity
       )
         return false;
 
-      // 2. Filtro Estatus
       if (selectedStatus !== "all" && r.estatus !== selectedStatus)
         return false;
 
-      // 3. Filtro Rango de Fechas
       if (dateRange?.from || dateRange?.to) {
         if (!r.fecha_emision) return false;
-
         const recordDate = new Date(r.fecha_emision);
         recordDate.setHours(0, 0, 0, 0);
 
@@ -124,17 +121,12 @@ export default function CFDIVault() {
           if (recordDate > toDate) return false;
         }
       }
-
       return true;
     });
   }, [cleanRecords, selectedEntity, selectedStatus, dateRange]);
 
-  // ==========================================
-  // COMPONENTES DE FILTRO UI
-  // ==========================================
   const customFiltersUI = (
     <>
-      {/* 1. COMBOBOX: Cliente / Proveedor con Búsqueda */}
       <Popover open={entityComboOpen} onOpenChange={setEntityOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -175,9 +167,8 @@ export default function CFDIVault() {
                 {uniqueClients.map((client) => (
                   <CommandItem
                     key={client}
-                    value={client} // Shadcn command internamente lo pasa a minúsculas
+                    value={client}
                     onSelect={(currentValue) => {
-                      // Recuperamos el valor original con mayúsculas de la lista
                       const originalValue =
                         uniqueClients.find(
                           (c) => c.toLowerCase() === currentValue,
@@ -201,7 +192,6 @@ export default function CFDIVault() {
         </PopoverContent>
       </Popover>
 
-      {/* 2. SELECT NORMAL: Estatus */}
       <Select value={selectedStatus} onValueChange={setSelectedStatus}>
         <SelectTrigger className="w-[180px] h-11 bg-white dark:bg-slate-900 border-slate-200">
           <SelectValue placeholder="Estatus" />
@@ -216,7 +206,6 @@ export default function CFDIVault() {
         </SelectContent>
       </Select>
 
-      {/* 3. DATE RANGE PICKER: Intervalo de Fechas */}
       <Popover>
         <PopoverTrigger asChild>
           <Button
@@ -256,7 +245,6 @@ export default function CFDIVault() {
         </PopoverContent>
       </Popover>
 
-      {/* BOTÓN: Limpiar Filtros */}
       {(selectedEntity !== "all" ||
         selectedStatus !== "all" ||
         dateRange.from) && (
@@ -275,9 +263,49 @@ export default function CFDIVault() {
     </>
   );
 
-  // ==========================================
-  // DEFINICIÓN DE COLUMNAS
-  // ==========================================
+  const handleOpenDetail = (row: any) => {
+    // Si viene de Cuentas por Pagar (Proveedores) abrimos su respectivo panel
+    if (activeTab === "FACTURA_PROVEEDOR") {
+      // Re-armar el objeto simulando lo que recibe el panel (id, supplier, montos)
+      setSelectedInvoice({
+        id: row.id,
+        folio_interno: row.folio,
+        uuid: row.uuid,
+        estatus: row.estatus,
+        monto_total: row.monto_total,
+        fecha_emision: row.fecha_emision,
+        fecha_cancelacion: row.fecha_cancelacion,
+        motivo_cancelacion: row.motivo_cancelacion,
+        pdf_url: row.pdf_url,
+        xml_url: row.xml_url,
+        document_history: row.versiones_archivos || [],
+        supplier: { razon_social: row.cliente_proveedor_nombre },
+        viaje_id: row.viaje_id,
+        saldo_pendiente: row.estatus === "TIMBRADO" ? row.monto_total : 0,
+      });
+      setPayableDetailDrawerOpen(true);
+    } else {
+      // Si es Factura de Cliente o Complemento, usamos el panel de CxC
+      setSelectedInvoice({
+        id: row.id,
+        folio_interno: row.folio,
+        uuid: row.uuid,
+        estatus: row.estatus,
+        monto_total: row.monto_total,
+        fecha_emision: row.fecha_emision,
+        fecha_cancelacion: row.fecha_cancelacion,
+        motivo_cancelacion: row.motivo_cancelacion,
+        pdf_url: row.pdf_url,
+        xml_url: row.xml_url,
+        document_history: row.versiones_archivos || [],
+        client: { razon_social: row.cliente_proveedor_nombre },
+        viaje_id: row.viaje_id,
+        saldo_pendiente: row.estatus === "TIMBRADA" ? row.monto_total : 0,
+      });
+      setDetailDrawerOpen(true);
+    }
+  };
+
   const columns: ColumnDef<CFDIHistoryRecord>[] = [
     { key: "folio", header: "Folio" },
     { key: "uuid", header: "UUID" },
@@ -298,7 +326,7 @@ export default function CFDIVault() {
     },
     {
       key: "cliente_proveedor_nombre",
-      header: "Cliente / Proveedor",
+      header: "Entidad",
       width: "max-w-[250px] truncate",
     },
     {
@@ -317,10 +345,8 @@ export default function CFDIVault() {
       header: "Estatus",
       render: (val) => {
         const s = (val || "").toUpperCase();
-
-        // Asignamos colores semánticos basados en el SAT
         let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
-        if (s === "TIMBRADO")
+        if (s === "TIMBRADA" || s === "TIMBRADO")
           badgeClass =
             "bg-green-100 text-green-800 hover:bg-green-200 border-green-300";
         if (s === "CANCELADO")
@@ -342,22 +368,19 @@ export default function CFDIVault() {
     },
     {
       key: "archivos",
-      header: "Descargas",
+      header: "Acciones",
       sortable: false,
       render: (_, row: any) => {
-        // 1. Extraemos de forma segura el arreglo de archivos históricos que manda el backend
         const listaArchivos = Array.isArray(row.versiones_archivos)
           ? row.versiones_archivos
           : [];
 
-        // 2. Buscamos dinámicamente el archivo XML (Priorizando el que esté activo "is_active")
         const xmlDoc =
           listaArchivos.find(
             (f: any) => f.document_type === "xml" && f.is_active,
           ) || listaArchivos.find((f: any) => f.document_type === "xml");
         const finalXmlUrl = row.xml_url || xmlDoc?.file_url || "";
 
-        // 3. Hacemos lo mismo para el PDF como respaldo de row.pdf_url
         const pdfDoc =
           listaArchivos.find(
             (f: any) => f.document_type === "pdf" && f.is_active,
@@ -365,8 +388,18 @@ export default function CFDIVault() {
         const finalPdfUrl = row.pdf_url || pdfDoc?.file_url || "";
 
         return (
-          <div className="flex items-center justify-end gap-1.5 pr-2">
-            {/* BOTÓN REFACTURAR (Solo aparece si es Ingreso y si tiene un cliente asociado) */}
+          <div className="flex items-center justify-end gap-1 pr-2">
+            {/* BOTÓN NUEVO: VER DETALLE EN MODAL */}
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Ver Detalle"
+              onClick={() => handleOpenDetail(row)}
+              className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 h-8 w-8 rounded-lg transition-colors"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+
             {activeTab === "FACTURA_CLIENTE" &&
               row.estatus !== "PROVISIONAL" && (
                 <Button
@@ -390,38 +423,28 @@ export default function CFDIVault() {
                 </Button>
               )}
 
-            {/* BOTÓN PDF CORREGIDO */}
-            {finalPdfUrl ? (
+            {finalPdfUrl && (
               <Button
                 variant="ghost"
-                size="sm"
-                title="Ver PDF"
-                className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 h-8 px-2"
+                size="icon"
+                title="Descargar PDF"
+                className="text-rose-600 hover:text-rose-900 hover:bg-rose-50 h-8 w-8 rounded"
                 onClick={() => window.open(finalPdfUrl, "_blank")}
               >
-                <FileText className="h-4 w-4 sm:mr-1.5" />
-                <span className="hidden sm:inline">PDF</span>
+                <FileText className="h-4 w-4" />
               </Button>
-            ) : (
-              <span className="text-[10px] text-muted-foreground mr-1">
-                No PDF
-              </span>
             )}
 
-            {/* BOTÓN XML CORREGIDO Y FUNCIONAL PARA CUALQUIER COMPLEMENTO O FACTURA */}
-            {finalXmlUrl ? (
+            {finalXmlUrl && (
               <Button
                 variant="ghost"
-                size="sm"
-                title="Ver XML"
-                className="text-amber-600 hover:text-amber-900 hover:bg-amber-50 border border-transparent hover:border-amber-200 h-8 px-2"
+                size="icon"
+                title="Descargar XML"
+                className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 h-8 w-8 rounded"
                 onClick={() => window.open(finalXmlUrl, "_blank")}
               >
-                <FileCode className="h-4 w-4 sm:mr-1.5" />
-                <span className="hidden sm:inline">XML</span>
+                <FileCode className="h-4 w-4" />
               </Button>
-            ) : (
-              <span className="text-[10px] text-muted-foreground">No XML</span>
             )}
           </div>
         );
@@ -480,9 +503,28 @@ export default function CFDIVault() {
         }}
         invoiceToRefactor={invoiceToRefactor}
         onSubmit={() => {
-          // Usamos refetch para recargar la tabla desde la BD
           if (refetch) refetch();
         }}
+      />
+
+      {/* DETALLE FACTURAS CLIENTES Y COMPLEMENTOS */}
+      <InvoiceDetailSheet
+        open={detailDrawerOpen}
+        onOpenChange={(isOpen) => {
+          setDetailDrawerOpen(isOpen);
+          if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
+        }}
+        invoice={selectedInvoice}
+      />
+
+      {/* DETALLE FACTURAS PROVEEDORES */}
+      <InvoicePayablesDetailSheet
+        open={payableDetailDrawerOpen}
+        onOpenChange={(isOpen) => {
+          setPayableDetailDrawerOpen(isOpen);
+          if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
+        }}
+        invoice={selectedInvoice}
       />
     </div>
   );

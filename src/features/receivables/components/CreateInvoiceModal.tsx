@@ -178,15 +178,29 @@ export function CreateInvoiceModal({
     };
   }, [selectedClient, subClienteId]);
 
-  // Autofill Inteligente Dividido
+  // ========================================================
+  // 1. AUTOFILL INTELIGENTE (Inyecta RFC y CP al detectar cliente)
+  // ========================================================
   useEffect(() => {
     if (selectedClient) {
       if (invoiceToRefactor) {
-        // Si es refacturación, mantenemos la Razón Social y RFC de la factura vieja,
-        // pero inyectamos el C.P. y configuraciones SAT vigentes desde el catálogo de clientes
+        // Inyectamos las llaves fiscales obligatorias del catálogo vigente
         setCpEditable(selectedClient.codigo_postal_fiscal || "");
         setRegimenEditable(selectedClient.regimen_fiscal || "601");
         setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
+
+        // FALLBACK CRÍTICO: Si la factura vieja no traía RFC o Nombre,
+        // lo rescatamos con la información oficial del catálogo
+        const oldRfc =
+          invoiceToRefactor.client?.rfc || invoiceToRefactor.cliente_rfc || "";
+        setRfcEditable(oldRfc || selectedClient.rfc || "");
+
+        const oldName =
+          invoiceToRefactor.client?.razon_social ||
+          invoiceToRefactor.cliente ||
+          "";
+        setRazonSocialEditable(oldName || selectedClient.razon_social || "");
+
         if (!emailEditable) {
           setEmailEditable(selectedClient.email || "");
         }
@@ -203,12 +217,34 @@ export function CreateInvoiceModal({
   }, [selectedClient, subClienteId, invoiceToRefactor]);
 
   // ========================================================
-  // INICIALIZACIÓN MÁGICA (AQUÍ ENTRA LA REFACTURACIÓN)
+  // 2. MOTOR DE ENLACE REACTIVO POR NOMBRE (Esencial para la Bóveda)
+  // ========================================================
+  useEffect(() => {
+    if (open && invoiceToRefactor && !clienteId) {
+      const razonSocialBuscada =
+        invoiceToRefactor.client?.razon_social ||
+        invoiceToRefactor.cliente ||
+        "";
+      if (razonSocialBuscada && clients.length > 0) {
+        const match = clients.find(
+          (c) =>
+            c.razon_social?.toLowerCase().trim() ===
+            razonSocialBuscada.toLowerCase().trim(),
+        );
+        if (match) {
+          setClienteId(match.id.toString());
+        }
+      }
+    }
+  }, [clients, invoiceToRefactor, open, clienteId]);
+
+  // ========================================================
+  // 3. INICIALIZACIÓN MÁGICA Y CARGA DE CONCEPTOS
   // ========================================================
   useEffect(() => {
     if (open) {
       if (invoiceToRefactor) {
-        // 1. CARGAMOS DATOS DE LA FACTURA VIEJA (Con fallbacks seguros)
+        // CARGAMOS DATOS BASE DISPONIBLES DE LA FACTURA VIEJA
         setClienteId(
           invoiceToRefactor.client_id?.toString() ||
             invoiceToRefactor.client?.id?.toString() ||
@@ -289,7 +325,7 @@ export function CreateInvoiceModal({
         }
         setConceptos(loadedConcepts);
       } else if (importedServices && importedServices.length > 0) {
-        // 2. LÓGICA EXISTENTE DE SERVICIOS IMPORTADOS
+        // LÓGICA EXISTENTE DE SERVICIOS IMPORTADOS
         setClienteId(importedServices[0].clienteId.toString());
         setSubClienteId("");
         setTipoImpuesto("FLETE");
@@ -307,7 +343,7 @@ export function CreateInvoiceModal({
         );
         setConceptos(newConceptos);
       } else {
-        // 3. LIMPIEZA TOTAL PARA FACTURA NUEVA EN BLANCO
+        // LIMPIEZA TOTAL PARA FACTURA NUEVA EN BLANCO
         setClienteId("");
         setSubClienteId("");
         setRazonSocialEditable("");
