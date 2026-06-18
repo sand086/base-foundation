@@ -94,6 +94,7 @@ export default function Receivables() {
   const { hasPermission } = usePermissions();
   const canCancel = hasPermission("finance:cancel_invoice");
   const canStamp = hasPermission("sat:stamp_cfdi");
+  const canCreate = hasPermission("finance:create_invoice");
 
   // Estados UI
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -1022,16 +1023,18 @@ export default function Receivables() {
             Exportar consolidado
           </Button>
 
-          <ActionButton
-            size="md"
-            className="bg-brand-navy hover:bg-brand-navy/90"
-            onClick={() => {
-              setImportedServices(undefined);
-              setIsCreateModalOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4 mr-2" /> Nueva Factura
-          </ActionButton>
+          {canCreate && (
+            <ActionButton
+              size="md"
+              className="bg-brand-navy hover:bg-brand-navy/90"
+              onClick={() => {
+                setImportedServices(undefined);
+                setIsCreateModalOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-2" /> Nueva Factura
+            </ActionButton>
+          )}
         </div>
       </PageHeader>
 

@@ -1,4 +1,3 @@
-// src/pages/RolesPermissions.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +24,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-//  1. IMPORTAMOS TODOS LOS ICONOS DEL SIDEBAR
 import {
   Shield,
   Plus,
@@ -33,13 +31,10 @@ import {
   Save,
   Loader2,
   LayoutDashboard,
-  Radio,
   Users,
   Truck,
   Fuel,
   DollarSign,
-  FileText,
-  Receipt,
   CreditCard,
   BarChart3,
   Eye,
@@ -65,13 +60,13 @@ import { CreatePermissionModal } from "@/features/users/components/CreatePermiss
 import { ManageModulesModal } from "@/features/users/components/ManageModulesModal";
 import { AuditLogPanel } from "@/features/audit/components/AuditLogPanel";
 import { useRoles } from "@/features/users/hooks/useRoles";
-import { ca } from "date-fns/locale";
 
 /**
- *  2. TIPOS ACTUALIZADOS AL INGLÉS (Homologado con BD)
+ * 1. TIPO PERMISO CORREGIDO (SE AÑADIÓ 'create')
  */
 type Permiso = {
   read: boolean;
+  create: boolean; // <-- SOLUCIÓN: Faltaba este permiso crítico
   update: boolean;
   delete: boolean;
   export: boolean;
@@ -102,7 +97,6 @@ type MeUser = {
   avatar_url?: string | null;
 };
 
-//  3. MAPA DE ICONOS DINÁMICOS PARA EMPATAR CON EL SIDEBAR
 const iconMap: Record<string, React.ElementType> = {
   dashboard: LayoutDashboard,
   clients: Users,
@@ -125,12 +119,13 @@ const iconMap: Record<string, React.ElementType> = {
   cfdi_vault: FileArchive,
   historico_cfdi: FileArchive,
   historico: FileArchive,
-  histórico: FileArchive, // <-- NUEVO (Con acento)
-  history: FileArchive, // <-- NUEVO (En inglés)
+  histórico: FileArchive,
+  history: FileArchive,
 };
 
 const EMPTY_PERMISO: Permiso = {
   read: false,
+  create: false,
   update: false,
   delete: false,
   export: false,
@@ -171,7 +166,6 @@ async function fetchMeUser(): Promise<MeUser | null> {
     });
 
     if (!res.ok) return null;
-
     const data = (await res.json()) as MeUser;
     return data;
   } catch {
@@ -248,7 +242,6 @@ const RolesPermissions: React.FC = () => {
   const myRoleResolved = useMemo(() => {
     const roleId = meUser?.role_id ?? null;
     const found = roleId ? roles.find((r) => r.id === roleId) : undefined;
-
     const key =
       found?.name_key?.toLowerCase().trim() ||
       (found?.nombre ? found.nombre.toLowerCase().trim() : "") ||
@@ -281,39 +274,233 @@ const RolesPermissions: React.FC = () => {
   const [showAuditLogPanel, setShowAuditLogPanel] = useState(false);
   const [showManageModules, setShowManageModules] = useState(false);
 
+  // 2. FILTRO ANTI-DUPLICADOS PARA MÓDULOS
+  const uniqueModules = useMemo(() => {
+    const seen = new Set<string>();
+    return availableModules.filter((m) => {
+      const key = m.id.toLowerCase();
+      // Normalizamos las variantes de histórico a una sola llave
+      const isHist = [
+        "historico",
+        "histórico",
+        "cfdi_vault",
+        "historico_cfdi",
+        "history",
+      ].includes(key);
+      const dedupeKey = isHist ? "cfdi_vault" : key;
+
+      if (seen.has(dedupeKey)) return false; // Ya lo vimos, lo omitimos
+      seen.add(dedupeKey);
+      return true;
+    });
+  }, [availableModules]);
+
   const currentRole = useMemo(
     () => roles.find((r) => r.id === selectedRoleId),
     [roles, selectedRoleId],
   );
 
-  const currentPermisos: PermisosMap = useMemo(() => {
+  const normalizePerms = (raw: any, modules: Module[]): PermisosMap => {
     const out: PermisosMap = {};
-    const raw = currentRole?.permisos;
+
+    modules.forEach((m) => {
+      out[m.id.toLowerCase()] = { ...EMPTY_PERMISO };
+    });
+
     if (!raw) return out;
 
+    let permsData = raw;
     try {
-      const permsData =
-        typeof raw === "string" ? (JSON.parse(raw) as unknown) : raw;
-
-      if (Array.isArray(permsData)) {
-        (permsData as any[]).forEach((p) => {
-          if (p?.moduloId) out[String(p.moduloId).toLowerCase()] = p as Permiso;
-        });
-      } else if (typeof permsData === "object" && permsData !== null) {
-        Object.keys(permsData as Record<string, unknown>).forEach((k) => {
-          out[String(k).toLowerCase()] = (permsData as any)[k] as Permiso;
-        });
-      }
-    } catch (error) {
-      console.error("Error al procesar permisos del rol:", error);
+      if (typeof raw === "string") permsData = JSON.parse(raw);
+    } catch {
+      console.error("Error al parsear permisos:", raw);
     }
 
+    if (typeof permsData === "object" && permsData !== null) {
+      const isAll = permsData.all === true;
+
+      const translationMap: Record<string, string> = {
+        monitoreo: "monitoring",
+        flota: "fleet",
+        combustible: "fuel",
+        tarifas: "rates",
+        despacho: "dispatch",
+        cxc: "receivables",
+        cxp: "payables",
+        configuracion: "settings",
+        usuarios: "users",
+        trackingop: "traffic",
+        reportes: "reports",
+        tesoreria: "treasury",
+        proveedores: "suppliers",
+        administracion: "admin",
+        historico_cfdi: "cfdi_vault",
+        historico: "cfdi_vault",
+        histórico: "cfdi_vault",
+        history: "cfdi_vault",
+        cfdi: "cfdi_vault",
+      };
+
+      modules.forEach((m) => {
+        const id = m.id.toLowerCase();
+        const englishKey = translationMap[id] || id;
+        const val = permsData[id] || permsData[englishKey];
+
+        if (isAll) {
+          out[id] = {
+            read: true,
+            create: true,
+            update: true,
+            delete: true,
+            export: true,
+          };
+        } else if (typeof val === "boolean") {
+          out[id] = {
+            read: val,
+            create: val,
+            update: val,
+            delete: val,
+            export: val,
+          };
+        } else if (typeof val === "object" && val !== null) {
+          out[id] = {
+            read: !!(val.read || val.ver || val.view),
+            create: !!(val.create || val.crear), // <-- INYECTADO
+            update: !!(val.update || val.editar || val.edit),
+            delete: !!(val.delete || val.eliminar || val.cancel),
+            export: !!(val.export || val.exportar),
+          };
+        }
+      });
+    }
     return out;
-  }, [currentRole?.permisos]);
+  };
 
   const getPermiso = (moduloId: string): Permiso => {
     const idStr = String(moduloId).toLowerCase();
-    return currentPermisos[idStr] || EMPTY_PERMISO;
+    return draftPermisos[idStr] || EMPTY_PERMISO;
+  };
+
+  const handleTogglePermiso = (
+    moduloId: string,
+    field: keyof Permiso,
+  ): void => {
+    const key = moduloId.toLowerCase();
+    setDraftPermisos((prev) => {
+      const currentPerm = prev[key] || { ...EMPTY_PERMISO };
+      return {
+        ...prev,
+        [key]: { ...currentPerm, [field]: !currentPerm[field] },
+      };
+    });
+  };
+
+  const handleToggleAllModulePermisos = (moduloId: string): void => {
+    const key = moduloId.toLowerCase();
+    const p = draftPermisos[key] || EMPTY_PERMISO;
+    const allEnabled = p.read && p.create && p.update && p.delete && p.export;
+
+    setDraftPermisos((prev) => ({
+      ...prev,
+      [key]: {
+        read: !allEnabled,
+        create: !allEnabled,
+        update: !allEnabled,
+        delete: !allEnabled,
+        export: !allEnabled,
+      },
+    }));
+  };
+
+  const handleToggleColumnPermiso = (field: keyof Permiso): void => {
+    const allEnabled = uniqueModules.every((m) => getPermiso(m.id)[field]);
+
+    setDraftPermisos((prev) => {
+      const nextPerms = { ...prev };
+      uniqueModules.forEach((m) => {
+        const idStr = m.id.toLowerCase();
+        const modPerms = nextPerms[idStr] || { ...EMPTY_PERMISO };
+        nextPerms[idStr] = { ...modPerms, [field]: !allEnabled };
+      });
+      return nextPerms;
+    });
+  };
+
+  const handleSavePermisos = async (): Promise<void> => {
+    if (!selectedRoleId && !isCreatingRole) return;
+
+    setIsSaving(true);
+    try {
+      // 3. INYECCIÓN DE ALIAS PARA COMPATIBILIDAD CON BACKEND
+      const finalPerms: Record<string, any> = {};
+
+      Object.keys(draftPermisos).forEach((mod) => {
+        const p = draftPermisos[mod];
+        finalPerms[mod] = {
+          read: p.read,
+          view: p.read,
+          create: p.create,
+          refactor: p.create, // <-- Si puede crear, puede refacturar
+          update: p.update,
+          edit: p.update,
+          delete: p.delete,
+          cancel: p.delete, // <-- Si puede eliminar, puede cancelar
+          export: p.export,
+        };
+      });
+
+      let success = false;
+      if (isCreatingRole) {
+        success = await createRole(newRoleName, newRoleDescription, finalPerms);
+      } else {
+        success = await updateRole(selectedRoleId!, {
+          nombre: newRoleName,
+          descripcion: newRoleDescription,
+          permisos: finalPerms,
+        });
+      }
+
+      if (success) {
+        setShowRoleEditor(false);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openRoleEditor = (roleId: number): void => {
+    const role = roles.find((r) => r.id === roleId);
+    setSelectedRoleId(roleId);
+    setIsCreatingRole(false);
+    setNewRoleName(role?.nombre || "");
+    setNewRoleDescription(role?.descripcion || "");
+    setDraftPermisos(normalizePerms(role?.permisos, uniqueModules));
+    setShowRoleEditor(true);
+  };
+
+  const openNewRoleEditor = (): void => {
+    setIsCreatingRole(true);
+    setNewRoleName("");
+    setNewRoleDescription("");
+    setSelectedRoleId(null);
+    setDraftPermisos(normalizePerms(null, uniqueModules));
+    setShowRoleEditor(true);
+  };
+
+  const handleDeleteRole = async (): Promise<void> => {
+    if (!roleToDelete) return;
+    const success = await deleteRole(roleToDelete);
+    if (success) {
+      setShowDeleteDialog(false);
+      setRoleToDelete(null);
+      toast.success("Rol eliminado exitosamente");
+    }
+  };
+
+  const promptDeleteRole = (roleId: number, e: React.MouseEvent): void => {
+    e.stopPropagation();
+    setRoleToDelete(roleId);
+    setShowDeleteDialog(true);
   };
 
   const getRoleBadgeColor = (rolNameKey: string) => {
@@ -336,219 +523,6 @@ const RolesPermissions: React.FC = () => {
         return "bg-gray-100 text-gray-700";
     }
   };
-  const normalizePerms = (raw: any, modules: Module[]): PermisosMap => {
-    const out: PermisosMap = {};
-
-    // Inicializamos todo en falso para que no haya undefined
-    modules.forEach((m) => {
-      out[m.id.toLowerCase()] = { ...EMPTY_PERMISO };
-    });
-
-    if (!raw) {
-      // console.log("No hay permisos, regresando todo en falso.");
-      return out;
-    }
-
-    let permsData = raw;
-    try {
-      if (typeof raw === "string") permsData = JSON.parse(raw);
-    } catch {
-      console.error("Error al parsear permisos:", raw);
-    }
-
-    // console.log("  Permisos parseados como Objeto:", permsData);
-
-    if (typeof permsData === "object" && permsData !== null) {
-      const isAll = permsData.all === true;
-
-      //   MAPA DE TRADUCCIÓN:
-      const translationMap: Record<string, string> = {
-        monitoreo: "monitoring",
-        flota: "fleet",
-        combustible: "fuel",
-        tarifas: "rates",
-        despacho: "dispatch",
-        cxc: "receivables",
-        cxp: "payables",
-        configuracion: "settings",
-        usuarios: "users",
-        trackingop: "traffic",
-        reportes: "reports",
-        tesoreria: "treasury",
-        proveedores: "suppliers",
-        administracion: "admin",
-        historico_cfdi: "cfdi_vault",
-        historico: "cfdi_vault",
-        histórico: "cfdi_vault", // <-- NUEVO
-        history: "cfdi_vault", // <-- NUEVO
-        cfdi: "cfdi_vault",
-      };
-
-      modules.forEach((m) => {
-        const id = m.id.toLowerCase();
-        const englishKey = translationMap[id] || id;
-
-        // Buscamos el permiso usando el ID original o su traducción al inglés
-        const val = permsData[id] || permsData[englishKey];
-
-        // console.log( `     Evaluando módulo: [${id}] -> Buscando llave en JSON: [${englishKey}] -> Encontró:`,  val,);
-
-        if (isAll) {
-          out[id] = { read: true, update: true, delete: true, export: true };
-        } else if (typeof val === "boolean") {
-          out[id] = { read: val, update: val, delete: val, export: val };
-        } else if (typeof val === "object" && val !== null) {
-          out[id] = {
-            read: !!(val.read || val.ver),
-            update: !!(val.update || val.editar),
-            delete: !!(val.delete || val.eliminar),
-            export: !!(val.export || val.exportar),
-          };
-        }
-      });
-    }
-
-    // console.log("4️⃣ Matriz final generada para las casillas (Draft):", out);
-    // console.log("=========================================");
-
-    return out;
-  };
-
-  //  4. TOGGLES REFACTORIZADOS AL INGLÉS
-
-  const handleTogglePermiso = (
-    moduloId: string,
-    field: keyof Permiso,
-  ): void => {
-    const key = moduloId.toLowerCase();
-    setDraftPermisos((prev) => {
-      // SOLUCIÓN: Fallback seguro si no existe el prev[key]
-      const currentPerm = prev[key] || { ...EMPTY_PERMISO };
-
-      return {
-        ...prev,
-        [key]: { ...currentPerm, [field]: !currentPerm[field] },
-      };
-    });
-  };
-
-  const handleToggleAllModulePermisos = (moduloId: string): void => {
-    const key = moduloId.toLowerCase();
-    const p = draftPermisos[key] || EMPTY_PERMISO;
-    const allEnabled = p.read && p.update && p.delete && p.export;
-
-    setDraftPermisos((prev) => ({
-      ...prev,
-      [key]: {
-        read: !allEnabled,
-        update: !allEnabled,
-        delete: !allEnabled,
-        export: !allEnabled,
-      },
-    }));
-  };
-
-  const handleToggleColumnPermiso = (field: keyof Permiso): void => {
-    const allEnabled = availableModules.every((m) => getPermiso(m.id)[field]);
-
-    setRoles((prev) =>
-      prev.map((r) => {
-        if (r.id !== selectedRoleId) return r;
-
-        const safePerms: PermisosMap =
-          typeof r.permisos === "object" &&
-          r.permisos !== null &&
-          !Array.isArray(r.permisos)
-            ? ({ ...(r.permisos as PermisosMap) } as PermisosMap)
-            : {};
-
-        availableModules.forEach((m) => {
-          const idStr = String(m.id).toLowerCase();
-          const modPerms = safePerms[idStr] || EMPTY_PERMISO;
-          safePerms[idStr] = { ...modPerms, [field]: !allEnabled };
-        });
-
-        return { ...r, permisos: safePerms };
-      }),
-    );
-  };
-
-  const handleSavePermisos = async (): Promise<void> => {
-    // Solo abortar si NO hay un ID seleccionado Y TAMPOCO estamos creando uno nuevo
-    if (!selectedRoleId && !isCreatingRole) return;
-
-    setIsSaving(true);
-    try {
-      let success = false;
-
-      if (isCreatingRole) {
-        // 1. Lógica para CREAR un nuevo rol
-        success = await createRole(
-          newRoleName,
-          newRoleDescription,
-          draftPermisos,
-        );
-      } else {
-        // 2. Lógica para ACTUALIZAR un rol existente
-        success = await updateRole(selectedRoleId!, {
-          nombre: newRoleName,
-          descripcion: newRoleDescription,
-          permisos: draftPermisos,
-        });
-      }
-
-      // 3. Si todo salió bien, cerramos el modal
-      if (success) {
-        setShowRoleEditor(false);
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const openRoleEditor = (roleId: number): void => {
-    const role = roles.find((r) => r.id === roleId);
-    setSelectedRoleId(roleId);
-    setIsCreatingRole(false);
-    setNewRoleName(role?.nombre || "");
-    setNewRoleDescription(role?.descripcion || "");
-
-    //  AQUÍ CARGAMOS EL BORRADOR LIMPIO
-    setDraftPermisos(normalizePerms(role?.permisos, availableModules));
-    setShowRoleEditor(true);
-  };
-
-  const openNewRoleEditor = (): void => {
-    setIsCreatingRole(true);
-    setNewRoleName("");
-    setNewRoleDescription("");
-    setSelectedRoleId(null);
-
-    setDraftPermisos(normalizePerms(null, availableModules));
-
-    setShowRoleEditor(true);
-  };
-
-  const handleDeleteRole = async (): Promise<void> => {
-    if (!roleToDelete) return;
-
-    // Llamamos a la API. Si falla, el interceptor muestra el Toast con el mensaje de FastAPI.
-    const success = await deleteRole(roleToDelete);
-
-    // Solo si success es true, cerramos el modal y limpiamos el estado
-    if (success) {
-      setShowDeleteDialog(false);
-      setRoleToDelete(null);
-      // El toast de éxito puede quedarse aquí o en el hook
-      toast.success("Rol eliminado exitosamente");
-    }
-  };
-
-  const promptDeleteRole = (roleId: number, e: React.MouseEvent): void => {
-    e.stopPropagation();
-    setRoleToDelete(roleId);
-    setShowDeleteDialog(true);
-  };
 
   if (isLoading) {
     return (
@@ -565,7 +539,7 @@ const RolesPermissions: React.FC = () => {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Roles y Permisos"
-        description="Define permisos por acción para cada módulo (lectura, edición, eliminación, exportación)."
+        description="Define permisos por acción para cada módulo (lectura, creación, edición, eliminación, exportación)."
         icon={<Shield className="h-8 w-8 text-brand-red" />}
       >
         <Button
@@ -595,7 +569,6 @@ const RolesPermissions: React.FC = () => {
               >
                 <Key className="h-4 w-4" /> Crear Módulo
               </Button>
-
               <Button
                 variant="outline"
                 onClick={() => setShowManageModules(true)}
@@ -614,7 +587,7 @@ const RolesPermissions: React.FC = () => {
               try {
                 localPermsRaw =
                   typeof rol.permisos === "string"
-                    ? (JSON.parse(rol.permisos) as unknown)
+                    ? JSON.parse(rol.permisos)
                     : rol.permisos;
               } catch {
                 localPermsRaw = {};
@@ -627,27 +600,20 @@ const RolesPermissions: React.FC = () => {
                   ? (localPermsRaw as PermisosMap)
                   : {};
 
-              // Cálculo de total con llaves en inglés
               const totalPermisos = Object.values(localPerms).reduce(
-                (acc: number, p: Permiso) =>
+                (acc: number, p: any) =>
                   acc +
-                  (p?.read ? 1 : 0) +
-                  (p?.update ? 1 : 0) +
-                  (p?.delete ? 1 : 0) +
+                  (p?.read || p?.view ? 1 : 0) +
+                  (p?.create ? 1 : 0) +
+                  (p?.update || p?.edit ? 1 : 0) +
+                  (p?.delete || p?.cancel ? 1 : 0) +
                   (p?.export ? 1 : 0),
                 0,
               );
 
-              const maxPermisos = availableModules.length * 4;
-
+              const maxPermisos = uniqueModules.length * 5; // <-- Cambiado de 4 a 5
               const canDeleteByUser = isAdminUser;
               const deleteDisabled = !canDeleteByUser;
-
-              const deleteDisabledReason = `No cuentas con permisos para eliminar roles. Tu rol actual es ${
-                myRoleResolved.roleKey?.toUpperCase() ||
-                myRoleResolved.roleId ||
-                "N/A"
-              }.`;
 
               const roleKeyNormalized = String(rol.name_key || rol.nombre || "")
                 .toLowerCase()
@@ -664,7 +630,6 @@ const RolesPermissions: React.FC = () => {
                       <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
                         <Shield className="h-6 w-6 text-brand-primary" />
                       </div>
-
                       <div className="flex items-center gap-2">
                         {["admin", "operativo", "finanzas"].includes(
                           roleKeyNormalized,
@@ -673,7 +638,6 @@ const RolesPermissions: React.FC = () => {
                             <Lock className="h-3 w-3 mr-1" /> Sistema
                           </Badge>
                         )}
-
                         <Badge
                           variant="outline"
                           className={cn(
@@ -689,7 +653,6 @@ const RolesPermissions: React.FC = () => {
                     </div>
 
                     <h3 className="font-semibold text-lg mb-1">{rol.nombre}</h3>
-
                     <p className="text-sm text-muted-foreground mb-4 line-clamp-2 min-h-[40px]">
                       {rol.descripcion || "Sin descripción"}
                     </p>
@@ -704,7 +667,6 @@ const RolesPermissions: React.FC = () => {
                             }}
                           />
                         </div>
-
                         <span className="text-xs text-muted-foreground">
                           {totalPermisos}/{maxPermisos}
                         </span>
@@ -713,12 +675,16 @@ const RolesPermissions: React.FC = () => {
                       <span
                         className="shrink-0"
                         title={
-                          deleteDisabled ? deleteDisabledReason : "Eliminar Rol"
+                          deleteDisabled
+                            ? "No tienes permisos para eliminar"
+                            : "Eliminar Rol"
                         }
                         onClick={(e) => {
                           if (deleteDisabled) {
                             e.stopPropagation();
-                            toast.error(deleteDisabledReason);
+                            toast.error(
+                              "No cuentas con permisos para eliminar roles.",
+                            );
                           }
                         }}
                       >
@@ -747,32 +713,38 @@ const RolesPermissions: React.FC = () => {
             })}
           </div>
 
+          {/* LEYENDA DE PERMISOS */}
           <div className="mt-6 p-4 bg-muted/50 rounded-lg">
             <h4 className="font-medium mb-3 text-sm">Leyenda de Permisos</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="flex items-center gap-2">
                 <Eye className="h-4 w-4 text-blue-500" />
-                <span className="text-sm">Ver: Acceso de lectura</span>
+                <span className="text-sm">Ver</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Plus className="h-4 w-4 text-emerald-500" />
+                <span className="text-sm">Crear / Emitir</span>
               </div>
               <div className="flex items-center gap-2">
                 <Pencil className="h-4 w-4 text-amber-500" />
-                <span className="text-sm">Editar: Modificar datos</span>
+                <span className="text-sm">Editar</span>
               </div>
               <div className="flex items-center gap-2">
                 <Trash2 className="h-4 w-4 text-red-500" />
-                <span className="text-sm">Eliminar: Borrar registros</span>
+                <span className="text-sm">Eliminar / Cancelar</span>
               </div>
               <div className="flex items-center gap-2">
-                <Download className="h-4 w-4 text-green-500" />
-                <span className="text-sm">Exportar: Descargar datos</span>
+                <Download className="h-4 w-4 text-purple-500" />
+                <span className="text-sm">Exportar</span>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* MODAL EDITOR DE ROL */}
       <Sheet open={showRoleEditor} onOpenChange={setShowRoleEditor}>
-        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
           <SheetHeader className="space-y-3">
             <SheetTitle className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-slate-500 dark:text-white/70" />
@@ -792,7 +764,6 @@ const RolesPermissions: React.FC = () => {
                   placeholder="Ej: Auditor"
                 />
               </div>
-
               <div className="space-y-2">
                 <label className="text-sm font-medium">Descripción</label>
                 <Input
@@ -816,7 +787,6 @@ const RolesPermissions: React.FC = () => {
                         <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                           Módulo
                         </th>
-
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
@@ -826,7 +796,15 @@ const RolesPermissions: React.FC = () => {
                             <Eye className="h-4 w-4 text-blue-500 mx-auto" />
                           </button>
                         </th>
-
+                        <th className="text-center px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleColumnPermiso("create")}
+                            className="hover:text-brand-primary"
+                          >
+                            <Plus className="h-4 w-4 text-emerald-500 mx-auto" />
+                          </button>
+                        </th>
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
@@ -836,7 +814,6 @@ const RolesPermissions: React.FC = () => {
                             <Pencil className="h-4 w-4 text-amber-500 mx-auto" />
                           </button>
                         </th>
-
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
@@ -846,53 +823,41 @@ const RolesPermissions: React.FC = () => {
                             <Trash2 className="h-4 w-4 text-red-500 mx-auto" />
                           </button>
                         </th>
-
                         <th className="text-center px-3 py-3">
                           <button
                             type="button"
                             onClick={() => handleToggleColumnPermiso("export")}
                             className="hover:text-brand-primary"
                           >
-                            <Download className="h-4 w-4 text-green-500 mx-auto" />
+                            <Download className="h-4 w-4 text-purple-500 mx-auto" />
                           </button>
                         </th>
                       </tr>
                     </thead>
 
                     <tbody className="divide-y">
-                      {/*  5. ITERAMOS LOS MÓDULOS DE LA BD */}
-                      {availableModules.map((modulo) => {
-                        const idLower = modulo.id.toLowerCase(); // 👈 Aseguramos minúsculas para comparar con total seguridad
-
+                      {uniqueModules.map((modulo) => {
+                        const idLower = modulo.id.toLowerCase();
                         const permiso = draftPermisos[idLower] || EMPTY_PERMISO;
 
-                        // 👈 Buscamos el ícono usando idLower para asegurar que encuentre "historico"
                         const IconComponent =
                           iconMap[modulo.id] ||
                           iconMap[idLower] ||
                           iconMap[modulo.icono] ||
                           LayoutDashboard;
 
-                        // 👈 Validación ultra-robusta para forzar el nombre "Histórico CFDI"
-                        const esHistorico =
-                          [
-                            "historico",
-                            "histórico",
-                            "cfdi_vault",
-                            "historico_cfdi",
-                            "cfdi",
-                            "history",
-                            "vault",
-                          ].includes(idLower) ||
-                          modulo.nombre.toLowerCase().includes("histór") ||
-                          modulo.nombre.toLowerCase().includes("histor");
-
+                        const esHistorico = [
+                          "cfdi_vault",
+                          "historico",
+                          "historico_cfdi",
+                        ].includes(idLower);
                         const nombreModuloAMostrar = esHistorico
-                          ? "Histórico CFDI"
+                          ? "Histórico CFDI / Bóveda"
                           : modulo.nombre;
 
                         const allEnabled =
                           permiso.read &&
+                          permiso.create &&
                           permiso.update &&
                           permiso.delete &&
                           permiso.export;
@@ -912,19 +877,16 @@ const RolesPermissions: React.FC = () => {
                               <div className="flex items-center gap-3">
                                 <IconComponent className="h-4 w-4 text-muted-foreground" />
                                 <span className="font-medium text-sm">
-                                  {nombreModuloAMostrar}{" "}
-                                  {/* 👈 Usamos el nombre corregido aquí */}
+                                  {nombreModuloAMostrar}
                                 </span>
                               </div>
-
                               {modulo.descripcion && (
-                                <p className=" text-muted-foreground pl-7 text-xs mt-1">
+                                <p className="text-muted-foreground pl-7 text-[10px] mt-1 line-clamp-1">
                                   {modulo.descripcion}
                                 </p>
                               )}
                             </td>
 
-                            {/* CHECKBOX: READ */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -934,11 +896,21 @@ const RolesPermissions: React.FC = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "read")
                                 }
-                                className="data-[state=checked]:bg-blue-500"
+                                className="data-[state=checked]:bg-blue-500 border-blue-200"
                               />
                             </td>
-
-                            {/* CHECKBOX: UPDATE */}
+                            <td
+                              className="text-center px-3 py-3"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Checkbox
+                                checked={permiso.create}
+                                onCheckedChange={() =>
+                                  handleTogglePermiso(modulo.id, "create")
+                                }
+                                className="data-[state=checked]:bg-emerald-500 border-emerald-200"
+                              />
+                            </td>
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -948,11 +920,9 @@ const RolesPermissions: React.FC = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "update")
                                 }
-                                className="data-[state=checked]:bg-amber-500"
+                                className="data-[state=checked]:bg-amber-500 border-amber-200"
                               />
                             </td>
-
-                            {/* CHECKBOX: DELETE */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -962,11 +932,9 @@ const RolesPermissions: React.FC = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "delete")
                                 }
-                                className="data-[state=checked]:bg-red-500"
+                                className="data-[state=checked]:bg-red-500 border-red-200"
                               />
                             </td>
-
-                            {/* CHECKBOX: EXPORT */}
                             <td
                               className="text-center px-3 py-3"
                               onClick={(e) => e.stopPropagation()}
@@ -976,7 +944,7 @@ const RolesPermissions: React.FC = () => {
                                 onCheckedChange={() =>
                                   handleTogglePermiso(modulo.id, "export")
                                 }
-                                className="data-[state=checked]:bg-green-500"
+                                className="data-[state=checked]:bg-purple-500 border-purple-200"
                               />
                             </td>
                           </tr>
@@ -993,7 +961,6 @@ const RolesPermissions: React.FC = () => {
             <Button variant="outline" onClick={() => setShowRoleEditor(false)}>
               Cancelar
             </Button>
-
             <Button
               onClick={handleSavePermisos}
               disabled={isSaving || !newRoleName.trim()}
@@ -1010,19 +977,15 @@ const RolesPermissions: React.FC = () => {
         </SheetContent>
       </Sheet>
 
-      {/* Diálogo de Eliminación con Alerta Crítica */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent className="border-destructive/50">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5 text-slate-500 dark:text-white/70" />{" "}
-              Eliminar Rol Crítico
+              <AlertTriangle className="h-5 w-5" /> Eliminar Rol Crítico
             </AlertDialogTitle>
-
             <AlertDialogDescription className="text-base text-foreground mt-4">
               ¿Estás completamente seguro de que deseas eliminar este rol?
             </AlertDialogDescription>
-
             <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-md mt-4">
               <p className="text-sm font-medium text-destructive">
                 ATENCIÓN: Esta función es irreversible y afectará el
@@ -1031,7 +994,6 @@ const RolesPermissions: React.FC = () => {
               </p>
             </div>
           </AlertDialogHeader>
-
           <AlertDialogFooter className="mt-6">
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
