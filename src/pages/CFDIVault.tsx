@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-// <-- Añadimos FileCode para el ícono del XML
 import {
   CalendarIcon,
   X,
@@ -9,6 +8,7 @@ import {
   ChevronsUpDown,
   FileText,
   FileCode,
+  RefreshCw, // <--- NUEVO ICONO
 } from "lucide-react";
 
 import {
@@ -48,6 +48,9 @@ import {
 } from "@/components/ui/enhanced-data-table";
 import { cn } from "@/lib/utils";
 
+// <--- IMPORTAMOS EL MODAL DE CREACIÓN/REFACTURACIÓN
+import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
+
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
 
@@ -57,8 +60,12 @@ export default function CFDIVault() {
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [entityComboOpen, setEntityOpen] = useState(false);
 
+  // <--- ESTADOS PARA EL MODAL DE REFACTURACIÓN
+  const [refactorModalOpen, setRefactorModalOpen] = useState(false);
+  const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
+
   // Traemos los datos de la BD
-  const { records, isLoading } = useCfdiVault(activeTab);
+  const { records, isLoading, refetch } = useCfdiVault(activeTab); // <--- AGREGAMOS mutate (si usas SWR) o recarga
 
   // Filtramos a nivel local cualquier error sat que se haya colado
   const cleanRecords = useMemo(() => {
@@ -333,13 +340,36 @@ export default function CFDIVault() {
         );
       },
     },
-    // 👇 ESTA ES LA COLUMNA ACTUALIZADA PARA XML Y PDF 👇
     {
       key: "archivos",
       header: "Descargas",
       sortable: false,
       render: (_, row: any) => (
         <div className="flex items-center justify-end gap-1.5 pr-2">
+          {/* BOTÓN REFACTURAR (Solo aparece si es Ingreso y si tiene un cliente asociado) */}
+          {activeTab === "FACTURA_CLIENTE" && row.estatus !== "PROVISIONAL" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Refacturar CFDI"
+              className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 border border-transparent hover:border-orange-200 h-8 px-2"
+              onClick={() => {
+                // Mapeamos los datos de la bóveda para simular el objeto de factura que necesita el modal
+                setInvoiceToRefactor({
+                  uuid: row.uuid,
+                  subtotal: row.monto_total / 1.16, // Una aproximación rápida, el usuario puede editarlo
+                  monto_total: row.monto_total,
+                  client: { razon_social: row.cliente_proveedor_nombre },
+                  concepto: `Refacturación de ${row.folio}`,
+                });
+                setRefactorModalOpen(true);
+              }}
+            >
+              <RefreshCw className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Refacturar</span>
+            </Button>
+          )}
+
           {row.pdf_url ? (
             <Button
               variant="ghost"
@@ -417,6 +447,20 @@ export default function CFDIVault() {
           />
         </CardContent>
       </Card>
+
+      {/* MODAL DE REFACTURACIÓN */}
+      <CreateInvoiceModal
+        open={refactorModalOpen}
+        onOpenChange={(isOpen) => {
+          setRefactorModalOpen(isOpen);
+          if (!isOpen) setInvoiceToRefactor(null);
+        }}
+        invoiceToRefactor={invoiceToRefactor}
+        onSubmit={() => {
+          // Usamos refetch para recargar la tabla desde la BD
+          if (refetch) refetch();
+        }}
+      />
     </div>
   );
 }

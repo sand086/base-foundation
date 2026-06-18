@@ -20,6 +20,7 @@ import {
   FilterX,
   FileSpreadsheet,
   Search, // <-- NUEVO: Importamos el ícono Search
+  RefreshCw, // <-- NUEVO: Icono para refacturar
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,10 @@ export default function Receivables() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+  // Estados para Refacturación
+  const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
+  const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
   // Modales de Eliminación/Cancelación
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -412,7 +417,9 @@ export default function Receivables() {
 
   const handleCreateInvoice = async () => {
     setIsCreateModalOpen(false);
+    setIsRefactorModalOpen(false);
     setImportedServices(undefined);
+    setInvoiceToRefactor(null);
 
     if (refreshReceivables) {
       await refreshReceivables();
@@ -699,6 +706,18 @@ export default function Receivables() {
                 {isStamped && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
+
+                    {/* BOTÓN REFACTURAR */}
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setInvoiceToRefactor(row);
+                        setIsRefactorModalOpen(true);
+                      }}
+                      className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-orange-600 dark:text-orange-400 dark:focus:bg-orange-950/30"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" /> Refacturar CFDI
+                    </DropdownMenuItem>
+
                     <DropdownMenuItem
                       onClick={() =>
                         window.open(
@@ -1095,6 +1114,7 @@ export default function Receivables() {
         </div>
       )}
 
+      {/* MODAL DE CREACIÓN / EDICIÓN NORMAL */}
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -1104,11 +1124,24 @@ export default function Receivables() {
         onSubmit={handleCreateInvoice}
         importedServices={importedServices}
       />
+
+      {/* MODAL PARA REFACTURAR FACTURAS TIMBRADAS */}
+      <CreateInvoiceModal
+        open={isRefactorModalOpen}
+        onOpenChange={(isOpen) => {
+          setIsRefactorModalOpen(isOpen);
+          if (!isOpen) setInvoiceToRefactor(null);
+        }}
+        invoiceToRefactor={invoiceToRefactor}
+        onSubmit={handleCreateInvoice}
+      />
+
       <InvoiceDetailSheet
         open={isDetailSheetOpen}
         onOpenChange={setIsDetailSheetOpen}
         invoice={selectedInvoice}
       />
+
       <ClientRegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}

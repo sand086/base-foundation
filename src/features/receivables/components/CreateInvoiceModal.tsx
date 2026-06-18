@@ -21,6 +21,7 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
+  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -64,6 +65,8 @@ interface CreateInvoiceModalProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: () => void;
   importedServices?: FinalizableService[];
+  // NUEVA PROP PARA REFACTURACIÓN
+  invoiceToRefactor?: any | null;
 }
 
 const creditDaysOptions = [
@@ -95,6 +98,7 @@ export function CreateInvoiceModal({
   onOpenChange,
   onSubmit,
   importedServices,
+  invoiceToRefactor, // <-- Lo extraemos
 }: CreateInvoiceModalProps) {
   const { clients, isLoading: loadingClients } = useClients();
   const { products: satProducts, loading: loadingSatProducts } =
@@ -105,9 +109,9 @@ export function CreateInvoiceModal({
     useBilling();
 
   const [clienteId, setClienteId] = useState("");
-  const [subClienteId, setSubClienteId] = useState(""); // <-- Estado para el sub_client seleccionado
+  const [subClienteId, setSubClienteId] = useState("");
   const [openCombobox, setOpenCombobox] = useState(false);
-  const [openSubCombobox, setOpenSubCombobox] = useState(false); // <-- Estado para abrir/cerrar el popover del sub_client
+  const [openSubCombobox, setOpenSubCombobox] = useState(false);
 
   const [openSatPopoverId, setOpenSatPopoverId] = useState<string | null>(null);
   const [openUnidadPopoverId, setOpenUnidadPopoverId] = useState<string | null>(
@@ -152,7 +156,6 @@ export function CreateInvoiceModal({
       (s) => s.id.toString() === subClienteId,
     );
 
-    // Si seleccionó una sucursal, leemos las propiedades de SubClientResponse
     if (subClient) {
       return {
         type: "Sucursal",
@@ -168,7 +171,6 @@ export function CreateInvoiceModal({
       };
     }
 
-    // Si no, leemos las propiedades de ClientResponse (Matriz)
     return {
       type: "Matriz",
       contacto: selectedClient.contacto_principal,
@@ -179,23 +181,85 @@ export function CreateInvoiceModal({
 
   // Autofill Inteligente Dividido
   useEffect(() => {
-    if (selectedClient) {
-      // 1. DATOS FISCALES OBLIGATORIOS (SIEMPRE DE LA MATRIZ - ClientResponse)
+    // Solo sobreescribir si NO estamos refacturando, para evitar pisar datos custom de la factura vieja
+    if (selectedClient && !invoiceToRefactor) {
       setRazonSocialEditable(selectedClient.razon_social || "");
       setRfcEditable(selectedClient.rfc || "");
       setCpEditable(selectedClient.codigo_postal_fiscal || "");
       setRegimenEditable(selectedClient.regimen_fiscal || "601");
       setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
-
-      // 2. CORREO (EL SUB-CLIENTE NO TIENE CORREO, SE TOMA DE LA MATRIZ O SE PUEDE EDITAR MANUALMENTE)
       setEmailEditable(selectedClient.email || "");
     }
-  }, [selectedClient, subClienteId]);
+  }, [selectedClient, subClienteId, invoiceToRefactor]);
 
-  // Inicialización de Conceptos Inteligentes y Reseteos
+  // ========================================================
+  // INICIALIZACIÓN MÁGICA (AQUÍ ENTRA LA REFACTURACIÓN)
+  // ========================================================
   useEffect(() => {
     if (open) {
-      if (importedServices && importedServices.length > 0) {
+      if (invoiceToRefactor) {
+        // 1. CARGAMOS DATOS DE LA FACTURA VIEJA
+        setClienteId(invoiceToRefactor.client?.id?.toString() || "");
+        setRazonSocialEditable(invoiceToRefactor.client?.razon_social || "");
+        setRfcEditable(invoiceToRefactor.client?.rfc || "");
+        setCpEditable(invoiceToRefactor.client?.codigo_postal_fiscal || "");
+
+        setMoneda(invoiceToRefactor.moneda === "USD" ? "USD" : "MXN");
+        setMetodoPago(invoiceToRefactor.metodo_pago === "PUE" ? "PUE" : "PPD");
+        setFormaPago(invoiceToRefactor.forma_pago || "99");
+
+        // Activamos los switches de refacturación
+        setEsRefacturacion(true);
+        setUuidRelacionado(invoiceToRefactor.uuid || "");
+        setTipoRelacion("04");
+
+        // Inferir tipo de impuesto según montos
+        if (
+          invoiceToRefactor.retenciones &&
+          invoiceToRefactor.retenciones > 0
+        ) {
+          setTipoImpuesto("FLETE");
+        } else if (invoiceToRefactor.iva && invoiceToRefactor.iva > 0) {
+          setTipoImpuesto("MANIOBRA");
+        } else {
+          setTipoImpuesto("EXENTO");
+        }
+
+        // Cargar los conceptos (si los tiene guardados, si no, uno general)
+        let loadedConcepts: SmartInvoiceConcept[] = [];
+        if (
+          invoiceToRefactor.conceptos_detalle &&
+          invoiceToRefactor.conceptos_detalle.length > 0
+        ) {
+          loadedConcepts = invoiceToRefactor.conceptos_detalle.map(
+            (c: any, idx: number) => ({
+              id: `REF-${idx}-${Date.now()}`,
+              claveProdServ: c.claveProdServ || "84111506",
+              claveUnidad: c.claveUnidad || "E48",
+              descripcion:
+                c.descripcion || invoiceToRefactor.concepto || "Servicio",
+              cantidad: c.cantidad || 1,
+              precioUnitario:
+                c.precioUnitario || c.importe || invoiceToRefactor.subtotal,
+              importe: c.importe || invoiceToRefactor.subtotal,
+            }),
+          );
+        } else {
+          loadedConcepts = [
+            {
+              id: `REF-0-${Date.now()}`,
+              claveProdServ: "84111506",
+              claveUnidad: "E48",
+              descripcion: invoiceToRefactor.concepto || "Factura Libre",
+              cantidad: 1,
+              precioUnitario: invoiceToRefactor.subtotal || 0,
+              importe: invoiceToRefactor.subtotal || 0,
+            },
+          ];
+        }
+        setConceptos(loadedConcepts);
+      } else if (importedServices && importedServices.length > 0) {
+        // 2. LÓGICA EXISTENTE DE SERVICIOS IMPORTADOS
         setClienteId(importedServices[0].clienteId.toString());
         setSubClienteId("");
         setTipoImpuesto("FLETE");
@@ -203,7 +267,7 @@ export function CreateInvoiceModal({
         const newConceptos: SmartInvoiceConcept[] = importedServices.map(
           (srv, idx) => ({
             id: `IMP-${idx}-${Date.now()}`,
-            claveProdServ: "78101802", // Transporte de carga
+            claveProdServ: "78101802",
             claveUnidad: "E48",
             descripcion: `Servicio de transporte: ${srv.ruta} (${srv.tipoUnidad})`,
             cantidad: 1,
@@ -213,6 +277,7 @@ export function CreateInvoiceModal({
         );
         setConceptos(newConceptos);
       } else {
+        // 3. LIMPIEZA TOTAL PARA FACTURA NUEVA EN BLANCO
         setClienteId("");
         setSubClienteId("");
         setRazonSocialEditable("");
@@ -223,10 +288,14 @@ export function CreateInvoiceModal({
         setUsoCfdiEditable("G03");
         setTipoImpuesto("MANIOBRA");
 
+        // Limpiamos refacturación
+        setEsRefacturacion(false);
+        setUuidRelacionado("");
+
         setConceptos([
           {
             id: "1",
-            claveProdServ: "78101800", // Maniobras por defecto
+            claveProdServ: "78101800",
             claveUnidad: "E48",
             descripcion: "",
             cantidad: 1,
@@ -236,7 +305,7 @@ export function CreateInvoiceModal({
         ]);
       }
     }
-  }, [importedServices, open]);
+  }, [importedServices, invoiceToRefactor, open]);
 
   const fechaVencimiento = useMemo(() => {
     const date = new Date(fechaEmision);
@@ -392,9 +461,11 @@ export function CreateInvoiceModal({
             </div>
             <div className="flex flex-col gap-1 text-left min-w-0">
               <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-foreground heading-crisp leading-none">
-                {importedServices
-                  ? "Facturar Servicios"
-                  : "Nueva Factura Directa"}
+                {invoiceToRefactor
+                  ? "Refacturar Servicio"
+                  : importedServices
+                    ? "Facturar Servicios"
+                    : "Nueva Factura Directa"}
               </DialogTitle>
               <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mt-1">
                 Cuentas por cobrar • Validar Datos CFDI 4.0
@@ -424,11 +495,15 @@ export function CreateInvoiceModal({
                         role="combobox"
                         aria-expanded={openCombobox}
                         className="w-full h-11 justify-between font-bold shadow-sm bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400 uppercase overflow-hidden"
-                        disabled={loadingClients || !!importedServices}
+                        disabled={
+                          loadingClients ||
+                          !!importedServices ||
+                          !!invoiceToRefactor
+                        }
                       >
                         <span className="truncate">
                           {clienteId
-                            ? `✓ ${clients.find((c) => c.id.toString() === clienteId)?.razon_social || "Cliente Seleccionado"}`
+                            ? `✓ ${clients.find((c) => c.id.toString() === clienteId)?.razon_social || razonSocialEditable || "Cliente Seleccionado"}`
                             : loadingClients
                               ? "Cargando..."
                               : "Seleccionar cliente..."}
@@ -857,8 +932,7 @@ export function CreateInvoiceModal({
                       htmlFor="esRefacturacion"
                       className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest cursor-pointer select-none"
                     >
-                      ¿Es una refacturación? (Sustitución de CFDI previo por
-                      descuento/error)
+                      ¿Es una refacturación? (Sustitución de CFDI previo)
                     </Label>
                   </div>
 
@@ -1251,6 +1325,8 @@ export function CreateInvoiceModal({
                   <Loader2 className="h-4 w-4 animate-spin mr-2" /> Timbrando
                   SAT...
                 </>
+              ) : invoiceToRefactor ? (
+                "Timbrar Refacturación"
               ) : (
                 "Generar Factura Directa"
               )}
