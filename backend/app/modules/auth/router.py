@@ -805,3 +805,53 @@ def setup_2fa_temp(
         qr_code=f"data:image/png;base64,{security.generate_qr_code(uri)}",
         manual_entry_key=secret,
     )
+
+
+# -----------------------------------------------------------------------------
+# NUEVO: DEPENDENCY DE PERMISOS (RBAC)
+# -----------------------------------------------------------------------------
+class RequirePermission:
+    def __init__(self, required_permission: str):
+        self.required_permission = required_permission
+
+    def __call__(self, current_user: models.User = Depends(get_current_active_user)):
+        # 1. Bypass para Super Administradores (Opcional, ajusta el name_key a tu gusto)
+        if current_user.role and current_user.role.name_key == "superadmin":
+            return current_user
+
+        # 2. Verificar que tenga rol y permisos asignados
+        if not current_user.role or not current_user.role.permisos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acceso denegado. No tienes permisos configurados.",
+            )
+
+        permisos = current_user.role.permisos
+
+        # 3. Lógica de evaluación flexible del JSONB
+        # Soporta formato plano: {"finance:cancel_invoice": True}
+        if (
+            isinstance(permisos, dict)
+            and permisos.get(self.required_permission) is True
+        ):
+            return current_user
+
+        # Soporta formato anidado: {"finance": {"cancel_invoice": True}}
+        parts = self.required_permission.split(":")
+        if len(parts) == 2:
+            module, action = parts
+            if (
+                isinstance(permisos.get(module), dict)
+                and permisos[module].get(action) is True
+            ):
+                return current_user
+
+        # Soporta formato de lista plana: ["finance:cancel_invoice"]
+        if isinstance(permisos, list) and self.required_permission in permisos:
+            return current_user
+
+        # Si no pasó ninguna validación, se rechaza la petición
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permiso denegado. Requiere el privilegio: '{self.required_permission}'",
+        )

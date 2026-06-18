@@ -767,3 +767,80 @@ class PaymentComplementService:
         HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
             str(pdf_path)
         )
+
+    def cancelar_pago_sat(
+        self, payment_id: int, motivo: str = "02", uuid_sustituto: str = None
+    ):
+        """
+        Cancela el REP (Complemento de Pago) ante el SAT evaluando estados asíncronos.
+        """
+        from app.models.models import ReceivableInvoicePayment
+        from datetime import datetime
+
+        pago = (
+            self.db.query(ReceivableInvoicePayment)
+            .filter(ReceivableInvoicePayment.id == payment_id)
+            .first()
+        )
+        if not pago or not pago.complemento_uuid:
+            raise ValueError("Pago no encontrado o sin UUID timbrado.")
+
+        logger.info(f"Cancelando REP UUID: {pago.complemento_uuid} Motivo: {motivo}")
+
+        try:
+            # 1. Leer Certificados en bytes puros
+            with open(self.path_cer, "rb") as f_cer:
+                cer_bytes = f_cer.read()
+            with open(self.path_key, "rb") as f_key:
+                key_bytes = f_key.read()
+
+            # 2. FORMATO DE TUBERÍA REQUERIDO POR SOLUCIÓN FACTIBLE 4.0 (UUID|Motivo|UuidSustitucion)
+            sustituto_str = uuid_sustituto if uuid_sustituto else ""
+            uuid_formateado_sat = (
+                f"{pago.complemento_uuid.strip()}|{motivo}|{sustituto_str}"
+            )
+
+            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+
+            resultado = client_zeep.service.cancelar(
+                usuario=self.pac_user,
+                password=self.pac_pass,
+                uuids=[uuid_formateado_sat],
+                derCertCSD=cer_bytes,
+                derKeyCSD=key_bytes,
+                contrasenaCSD=self.key_password,
+            )
+
+            if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
+                raise Exception(
+                    f"Rechazo del PAC: {getattr(resultado, 'mensaje', 'Error desconocido')}"
+                )
+
+            res_sat = resultado.resultados[0]
+            codigo_sat = int(getattr(res_sat, "status", 0))
+            mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
+
+            # 3. EVALUACIÓN ASÍNCRONA (201: En Proceso, 202/200: Cancelado Inmediato)
+            if codigo_sat == 201 or "proceso" in mensaje_sat:
+                pago.estatus = "PROCESO_CANCELACION"
+                logger.info(
+                    f"REP {pago.complemento_uuid} en espera de aceptación (PROCESO_CANCELACION)."
+                )
+            else:
+                pago.estatus = "CANCELADO"
+                logger.info(f"REP {pago.complemento_uuid} CANCELADO Inmediatamente.")
+
+            pago.motivo_cancelacion = motivo
+            pago.fecha_cancelacion = datetime.now()
+            self.db.commit()
+
+            return {
+                "status": "success",
+                "estado_sat": pago.estatus,
+                "mensaje": res_sat.mensaje,
+            }
+
+        except Exception as e:
+            logger.error(f"Error cancelando REP {pago.complemento_uuid}: {e}")
+            self.db.rollback()
+            raise ValueError(f"Fallo en PAC al cancelar REP: {str(e)}")

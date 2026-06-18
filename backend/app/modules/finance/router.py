@@ -27,6 +27,7 @@ from lxml import etree
 from app.db.database import get_db
 from app.models import models
 from app.modules.auth.router import get_current_active_user
+from app.modules.auth.router import RequirePermission
 
 # IMPORTACIONES LOCALES (FSD)
 from . import schemas, crud
@@ -248,7 +249,7 @@ def conciliate_movement(
 def delete_bank_movement(
     movement_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(RequirePermission("finance:delete_movement")),
 ):
     try:
         # <--- AUDITORÍA PARAM (Pasamos el ID de quién elimina el movimiento al CRUD)
@@ -491,9 +492,7 @@ def delete_receivable_invoice(
     invoice_id: int,
     cascade: bool = False,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        get_current_active_user
-    ),  # <--- AUDITORÍA PARAM
+    current_user: models.User = Depends(RequirePermission("finance:cancel_invoice")),
 ):
     """FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)"""
     try:
@@ -990,7 +989,7 @@ def register_petty_cash(
 def reopen_receivable_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(RequirePermission("finance:reopen_invoice")),
 ):
     """FIX CRÍTICO TESORERÍA: Revertir cobros antes de reabrir factura"""
     try:

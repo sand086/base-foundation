@@ -21,7 +21,6 @@ import {
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList,
 } from "@/components/ui/command";
 import {
   Popover,
@@ -181,14 +180,25 @@ export function CreateInvoiceModal({
 
   // Autofill Inteligente Dividido
   useEffect(() => {
-    // Solo sobreescribir si NO estamos refacturando, para evitar pisar datos custom de la factura vieja
-    if (selectedClient && !invoiceToRefactor) {
-      setRazonSocialEditable(selectedClient.razon_social || "");
-      setRfcEditable(selectedClient.rfc || "");
-      setCpEditable(selectedClient.codigo_postal_fiscal || "");
-      setRegimenEditable(selectedClient.regimen_fiscal || "601");
-      setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
-      setEmailEditable(selectedClient.email || "");
+    if (selectedClient) {
+      if (invoiceToRefactor) {
+        // Si es refacturación, mantenemos la Razón Social y RFC de la factura vieja,
+        // pero inyectamos el C.P. y configuraciones SAT vigentes desde el catálogo de clientes
+        setCpEditable(selectedClient.codigo_postal_fiscal || "");
+        setRegimenEditable(selectedClient.regimen_fiscal || "601");
+        setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
+        if (!emailEditable) {
+          setEmailEditable(selectedClient.email || "");
+        }
+      } else {
+        // Flujo normal para facturas nuevas desde cero
+        setRazonSocialEditable(selectedClient.razon_social || "");
+        setRfcEditable(selectedClient.rfc || "");
+        setCpEditable(selectedClient.codigo_postal_fiscal || "");
+        setRegimenEditable(selectedClient.regimen_fiscal || "601");
+        setUsoCfdiEditable(selectedClient.uso_cfdi || "G03");
+        setEmailEditable(selectedClient.email || "");
+      }
     }
   }, [selectedClient, subClienteId, invoiceToRefactor]);
 
@@ -198,11 +208,20 @@ export function CreateInvoiceModal({
   useEffect(() => {
     if (open) {
       if (invoiceToRefactor) {
-        // 1. CARGAMOS DATOS DE LA FACTURA VIEJA
-        setClienteId(invoiceToRefactor.client?.id?.toString() || "");
-        setRazonSocialEditable(invoiceToRefactor.client?.razon_social || "");
-        setRfcEditable(invoiceToRefactor.client?.rfc || "");
-        setCpEditable(invoiceToRefactor.client?.codigo_postal_fiscal || "");
+        // 1. CARGAMOS DATOS DE LA FACTURA VIEJA (Con fallbacks seguros)
+        setClienteId(
+          invoiceToRefactor.client_id?.toString() ||
+            invoiceToRefactor.client?.id?.toString() ||
+            "",
+        );
+        setRazonSocialEditable(
+          invoiceToRefactor.client?.razon_social ||
+            invoiceToRefactor.cliente ||
+            "",
+        );
+        setRfcEditable(
+          invoiceToRefactor.client?.rfc || invoiceToRefactor.cliente_rfc || "",
+        );
 
         setMoneda(invoiceToRefactor.moneda === "USD" ? "USD" : "MXN");
         setMetodoPago(invoiceToRefactor.metodo_pago === "PUE" ? "PUE" : "PPD");
@@ -226,29 +245,40 @@ export function CreateInvoiceModal({
         }
 
         // Cargar los conceptos (si los tiene guardados, si no, uno general)
+        const originalConcepts =
+          invoiceToRefactor.conceptos || invoiceToRefactor.conceptos_detalle;
         let loadedConcepts: SmartInvoiceConcept[] = [];
-        if (
-          invoiceToRefactor.conceptos_detalle &&
-          invoiceToRefactor.conceptos_detalle.length > 0
-        ) {
-          loadedConcepts = invoiceToRefactor.conceptos_detalle.map(
-            (c: any, idx: number) => ({
-              id: `REF-${idx}-${Date.now()}`,
-              claveProdServ: c.claveProdServ || "84111506",
-              claveUnidad: c.claveUnidad || "E48",
-              descripcion:
-                c.descripcion || invoiceToRefactor.concepto || "Servicio",
-              cantidad: c.cantidad || 1,
-              precioUnitario:
-                c.precioUnitario || c.importe || invoiceToRefactor.subtotal,
-              importe: c.importe || invoiceToRefactor.subtotal,
-            }),
-          );
+
+        if (originalConcepts && originalConcepts.length > 0) {
+          loadedConcepts = originalConcepts.map((c: any, idx: number) => ({
+            id: `REF-${idx}-${Date.now()}`,
+            claveProdServ:
+              c.claveProdServ ||
+              c.clave_prod_serv ||
+              (invoiceToRefactor.retenciones > 0 ? "78101802" : "84111506"),
+            claveUnidad: c.claveUnidad || c.clave_unidad || "E48",
+            descripcion:
+              c.descripcion || invoiceToRefactor.concepto || "Servicio",
+            cantidad: c.cantidad || 1,
+            precioUnitario:
+              c.precioUnitario ||
+              c.precio_unitario ||
+              c.importe ||
+              invoiceToRefactor.subtotal ||
+              0,
+            importe:
+              c.importe ||
+              (c.cantidad || 1) *
+                (c.precioUnitario || c.precio_unitario || 0) ||
+              invoiceToRefactor.subtotal ||
+              0,
+          }));
         } else {
           loadedConcepts = [
             {
               id: `REF-0-${Date.now()}`,
-              claveProdServ: "84111506",
+              claveProdServ:
+                invoiceToRefactor.retenciones > 0 ? "78101802" : "84111506",
               claveUnidad: "E48",
               descripcion: invoiceToRefactor.concepto || "Factura Libre",
               cantidad: 1,
@@ -431,13 +461,27 @@ export function CreateInvoiceModal({
     let result;
 
     if (importedServices && importedServices.length > 0) {
+      // 1. GENERAR NUEVA CARTA PORTE (Desde Despacho)
       const dataWithTrip = {
         ...payload,
         viaje_id: importedServices[0].id,
         servicios_relacionados: importedServices.map((s) => s.id),
       };
       result = await generateOneShotInvoice(dataWithTrip);
+    } else if (
+      esRefacturacion &&
+      invoiceToRefactor &&
+      (invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id)
+    ) {
+      // 2. REFACTURACIÓN DE CARTA PORTE (Sustitución)
+      const viajeId = invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id;
+      const dataWithTrip = {
+        ...payload,
+        viaje_id: viajeId,
+      };
+      result = await generateOneShotInvoice(dataWithTrip);
     } else {
+      // 3. FACTURA LIBRE (Nueva o Refacturación)
       result = await generateFreeInvoice(payload);
     }
 

@@ -1328,6 +1328,9 @@ class CartaPorteService:
     def cancelar_factura_nominal(
         self, invoice_id: int, motivo: str = "01", uuid_sustituto: str = None
     ):
+        from app.models.models import ReceivableInvoice
+        from datetime import datetime
+
         factura = (
             self.db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.id == invoice_id)
@@ -1336,25 +1339,52 @@ class CartaPorteService:
         if not factura or not factura.uuid:
             raise ValueError("Factura no encontrada o sin UUID.")
 
-        logger.info(
-            f"Iniciando cancelación en SAT del UUID: {factura.uuid} con Motivo: {motivo}"
-        )
+        logger.info(f"Cancelando en SAT UUID: {factura.uuid} Motivo: {motivo}")
 
         try:
+            with open(self.path_cer, "rb") as f_cer:
+                cer_bytes = f_cer.read()
+            with open(self.path_key, "rb") as f_key:
+                key_bytes = f_key.read()
+
+            sustituto_str = uuid_sustituto if uuid_sustituto else ""
+            uuid_formateado_sat = f"{factura.uuid.strip()}|{motivo}|{sustituto_str}"
+
             client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
-            factura.status_sat = "CANCELADO"
+
+            resultado = client_zeep.service.cancelar(
+                usuario=self.pac_user,
+                password=self.pac_pass,
+                uuids=[uuid_formateado_sat],
+                derCertCSD=cer_bytes,
+                derKeyCSD=key_bytes,
+                contrasenaCSD=self.key_password,
+            )
+
+            if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
+                raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
+
+            res_sat = resultado.resultados[0]
+            codigo_sat = int(getattr(res_sat, "status", 0))
+            mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
+
+            # Lógica Asíncrona (201 es En Proceso, 202/200 es Cancelado)
+            if codigo_sat == 201 or "proceso" in mensaje_sat:
+                factura.status_sat = "PROCESO_CANCELACION"
+            else:
+                factura.status_sat = "CANCELADO"
+
+            factura.motivo_cancelacion = motivo
+            factura.fecha_cancelacion = datetime.utcnow()
             self.db.commit()
-            logger.info(f"UUID {factura.uuid} cancelado exitosamente en el sistema.")
+            return {"status": "success", "estado": factura.status_sat}
 
         except Exception as e:
             logger.error(f"Error al cancelar UUID {factura.uuid}: {e}")
-            factura.status_sat = "PENDIENTE_CANCELAR_SAT"
-            factura.motivo_cancelacion = motivo
+            factura.status_sat = "ERROR_SAT"
+            factura.motivo_cancelacion = str(e)[:5]
             self.db.commit()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Fallo comunicación con el SAT para cancelar: {e}",
-            )
+            raise HTTPException(status_code=500, detail=f"Fallo comunicación PAC: {e}")
 
     def procesar_cancelaciones_pendientes(self):
         facturas_pendientes = (

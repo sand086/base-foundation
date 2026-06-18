@@ -19,8 +19,8 @@ import {
   AlertTriangle,
   FilterX,
   FileSpreadsheet,
-  Search, // <-- NUEVO: Importamos el ícono Search
-  RefreshCw, // <-- NUEVO: Icono para refacturar
+  Search,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,7 @@ import { cn } from "@/lib/utils";
 
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useReceivables } from "@/features/receivables/hooks/useReceivables";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function Receivables() {
   const {
@@ -90,6 +91,9 @@ export default function Receivables() {
   } = useReceivables();
 
   const { bankAccounts = [] } = useBankAccounts();
+  const { hasPermission } = usePermissions();
+  const canCancel = hasPermission("finance:cancel_invoice");
+  const canStamp = hasPermission("sat:stamp_cfdi");
 
   // Estados UI
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -108,7 +112,7 @@ export default function Receivables() {
   const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
 
   // ESTADOS PARA FILTROS EN LA BARRA SUPERIOR
-  const [searchTerm, setSearchTerm] = useState(""); // <-- NUEVO ESTADO DE BÚSQUEDA LIBRE
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
@@ -201,7 +205,11 @@ export default function Receivables() {
 
         let finalEstatus = "";
 
-        if (String(inv.estatus || inv.status).toLowerCase() === "cancelado") {
+        if (inv.status_sat === "PROCESO_CANCELACION") {
+          finalEstatus = "PROCESO_CANCELACION";
+        } else if (
+          String(inv.estatus || inv.status).toLowerCase() === "cancelado"
+        ) {
           finalEstatus = "CANCELADO";
         } else {
           // Calculamos la etiqueta oficial EXACTA ("PAGADA", "POR COBRAR", etc.)
@@ -644,6 +652,15 @@ export default function Receivables() {
         key: "estatus",
         header: "Estatus",
         render: (value, row) => {
+          if (value === "PROCESO_CANCELACION") {
+            return (
+              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[9px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 py-1">
+                <Loader2 className="h-3 w-3 mr-1.5 animate-spin inline-block" />
+                En Proceso Cancelación
+              </Badge>
+            );
+          }
+
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <StatusBadge
@@ -670,6 +687,8 @@ export default function Receivables() {
             !row.uuid;
 
           const isStamped = !!row.uuid;
+          // Bloqueamos acciones si está en proceso de cancelación con el SAT
+          const isInProcess = row.estatus === "PROCESO_CANCELACION";
 
           return (
             <DropdownMenu>
@@ -703,20 +722,26 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {isStamped && (
+                {/* 👇 APLICAMOS PERMISOS (canStamp y canCancel) y evitamos acciones si está en proceso 👇 */}
+                {isStamped && !isInProcess && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
 
-                    {/* BOTÓN REFACTURAR */}
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setInvoiceToRefactor(row);
-                        setIsRefactorModalOpen(true);
-                      }}
-                      className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-orange-600 dark:text-orange-400 dark:focus:bg-orange-950/30"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" /> Refacturar CFDI
-                    </DropdownMenuItem>
+                    {canStamp && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setInvoiceToRefactor({
+                            ...row,
+                            // FIX CRÍTICO: Aseguramos mapear el viaje_id
+                            viaje_id: row.viaje_id || (row as any).trip_id,
+                          });
+                          setIsRefactorModalOpen(true);
+                        }}
+                        className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-orange-600 dark:text-orange-400 dark:focus:bg-orange-950/30"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" /> Refacturar CFDI
+                      </DropdownMenuItem>
+                    )}
 
                     <DropdownMenuItem
                       onClick={() =>
@@ -743,7 +768,7 @@ export default function Receivables() {
                   </>
                 )}
 
-                {isProvisional && (
+                {isProvisional && canStamp && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
@@ -753,15 +778,13 @@ export default function Receivables() {
                         ) {
                           const viajeId =
                             (row as any).viaje_id || (row as any).trip_id;
-
                           if (viajeId) {
                             await stampInvoice(Number(viajeId));
                           } else {
-                            if (!row.id) {
+                            if (!row.id)
                               return toast.error("Error", {
                                 description: "ID de factura no válido",
                               });
-                            }
                             await stampFreeInvoice(Number(row.id));
                           }
                         }
@@ -774,23 +797,25 @@ export default function Receivables() {
                   </>
                 )}
 
-                {(row.saldo_pendiente || 0) > 0 && !isProvisional && (
-                  <>
-                    <DropdownMenuSeparator className="dark:bg-white/10" />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setInvoicesToPay([row]);
-                        setIsPaymentModalOpen(true);
-                      }}
-                      className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-900/30"
-                    >
-                      <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro y
-                      REP
-                    </DropdownMenuItem>
-                  </>
-                )}
+                {(row.saldo_pendiente || 0) > 0 &&
+                  !isProvisional &&
+                  !isInProcess && (
+                    <>
+                      <DropdownMenuSeparator className="dark:bg-white/10" />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setInvoicesToPay([row]);
+                          setIsPaymentModalOpen(true);
+                        }}
+                        className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-900/30"
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro
+                        y REP
+                      </DropdownMenuItem>
+                    </>
+                  )}
 
-                {hasPayments && (
+                {hasPayments && canCancel && !isInProcess && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
                     <DropdownMenuItem
@@ -808,20 +833,23 @@ export default function Receivables() {
                   </>
                 )}
 
-                {!hasPayments && row.estatus !== "cancelado" && (
-                  <>
-                    <DropdownMenuSeparator className="dark:bg-white/10" />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setInvoiceToCancel(row);
-                        setIsCancelModalOpen(true);
-                      }}
-                      className="gap-2 font-bold text-xs uppercase tracking-tight text-orange-600 dark:text-orange-500 cursor-pointer dark:focus:bg-orange-950/30"
-                    >
-                      <Ban className="h-4 w-4 mr-2" /> Cancelar Factura
-                    </DropdownMenuItem>
-                  </>
-                )}
+                {!hasPayments &&
+                  row.estatus !== "cancelado" &&
+                  !isInProcess &&
+                  canCancel && (
+                    <>
+                      <DropdownMenuSeparator className="dark:bg-white/10" />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setInvoiceToCancel(row);
+                          setIsCancelModalOpen(true);
+                        }}
+                        className="gap-2 font-bold text-xs uppercase tracking-tight text-orange-600 dark:text-orange-500 cursor-pointer dark:focus:bg-orange-950/30"
+                      >
+                        <Ban className="h-4 w-4 mr-2" /> Cancelar Factura
+                      </DropdownMenuItem>
+                    </>
+                  )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -1080,8 +1108,8 @@ export default function Receivables() {
             isRowSelectable={(row) =>
               (row.saldo_pendiente || 0) > 0 && row.status_sat !== "PROVISIONAL"
             }
-            hideGlobalSearch={true} // <-- ELIMINA EL BUSCADOR INTERNO POR DEFECTO
-            hideInternalFilters={true} // <-- ELIMINA EL BOTÓN "FILTROS INT."
+            hideGlobalSearch={true}
+            hideInternalFilters={true}
           />
         </CardContent>
       </Card>

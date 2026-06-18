@@ -1343,15 +1343,24 @@ class BillingService:
             if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
                 raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
 
-            # 5. ÉXITO: Actualizar BD localmente
-            factura.status_sat = "CANCELADO"
-            factura.estatus = "cancelado"
+            res_sat = resultado.resultados[0]
+            codigo_sat = int(getattr(res_sat, "status", 0))
+            mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
+
+            # 5. ÉXITO: Actualizar BD localmente evaluando el estado Asíncrono
+            if codigo_sat == 201 or "proceso" in mensaje_sat:
+                factura.status_sat = "PROCESO_CANCELACION"
+                # OJO: No cambiamos estatus a "cancelado" aún, sigue pendiente en nuestro ERP
+            else:
+                factura.status_sat = "CANCELADO"
+                factura.estatus = "cancelado"  # Liberamos la deuda en el ERP
+
             factura.motivo_cancelacion = motivo
             factura.fecha_cancelacion = datetime.utcnow()
 
             log = AuditLog(
                 user_id=None,
-                accion=f"Factura {factura.folio_interno} cancelada directamente en el SAT",
+                accion=f"Factura {factura.folio_interno} enviada a cancelar al SAT. Estado: {factura.status_sat}",
                 tipo_accion="CANCELACION_SAT",
                 modulo="CUENTAS_POR_COBRAR",
                 detalles=f'{{"uuid": "{factura.uuid}", "motivo": "{motivo}", "pac_msg": "{resultado.mensaje}"}}',

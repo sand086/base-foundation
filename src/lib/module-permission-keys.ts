@@ -3,20 +3,34 @@
  * del rol suele usar los id del catálogo (español o legacy), igual que en
  * RolesPermissions.tsx (translationMap). Mantener ambos lados alineados aquí.
  */
-export const ROUTE_TO_PERM_KEYS: Record<string, readonly string[]> = {
-  monitoring: ["monitoring", "monitoreo"],
-  traffic: ["traffic", "trackingop"],
-  fleet: ["fleet", "flota"],
-  fuel: ["fuel", "combustible"],
-  clients: ["clients", "clientes"],
-  settlements: ["settlements", "liquidaciones", "liquidacion"],
-  receivables: ["receivables", "cxc"],
-  payables: ["payables", "cxp"],
-  rates: ["rates", "tarifas"],
-  dispatch: ["dispatch", "despacho", "dispatch"],
-  treasury: ["treasury", "tesoreria", "tesorería", "finanzas"],
-  admin: ["admin", "configuracion", "usuarios", "users"],
-  cfdi_vault: ["cfdi_vault", "historico_cfdi", "cfdi", "historico"],
+export const MODULE_PERMISSIONS: Record<string, string[]> = {
+  dashboard: ["view"],
+  clients: ["view", "create", "edit", "delete"],
+  rates: ["view", "create", "edit", "delete"],
+  fleet: ["view", "create", "edit", "delete"],
+  monitoring: ["view", "create", "edit", "delete"],
+  traffic: ["view", "create", "edit", "delete"],
+  dispatch: ["view", "create", "edit", "delete"],
+  fuel: ["view", "create", "edit", "delete"],
+  settlements: ["view", "create", "edit", "delete"],
+  suppliers: ["view", "create", "edit", "delete"],
+  payables: ["view", "create", "edit", "delete"],
+
+  receivables: [
+    "view",
+    "create",
+    "cancel",
+    "refactor",
+    "register_payment",
+    "export",
+  ],
+  historico: ["view", "refactor", "export"],
+  treasury: ["view", "create", "edit", "delete", "export"],
+
+  reports: ["view", "export"],
+  users: ["view", "create", "edit", "delete"],
+  roles: ["view", "create", "edit", "delete"],
+  settings: ["view", "edit"],
 };
 
 export function pickPermisosInsensitive(

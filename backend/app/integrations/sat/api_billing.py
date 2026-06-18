@@ -28,6 +28,7 @@ from app.modules.auth.router import get_current_active_user
 from app.core.security import verify_password
 import base64
 import traceback  # Importante para los errores
+from app.modules.auth.router import RequirePermission
 
 router = APIRouter()
 
@@ -264,7 +265,9 @@ def generar_carta_porte_nominal(
 # ================================================
 @router.post("/stamp/one-shot", response_model=dict)
 def generar_carta_porte_one_shot(
-    invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)
+    invoice_data: ReceivableInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RequirePermission("sat:stamp_cfdi")),
 ):
     """
     Endpoint Motor 1 (1 Solo Timbre):
@@ -760,7 +763,10 @@ class SatCancelPayload(BaseModel):
 
 @router.post("/stamp/cancel/{invoice_id}", response_model=dict)
 def cancel_invoice_in_sat(
-    invoice_id: int, payload: SatCancelPayload, db: Session = Depends(get_db)
+    invoice_id: int,
+    payload: SatCancelPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RequirePermission("sat:cancel_cfdi")),
 ):
     """
     Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.

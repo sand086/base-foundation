@@ -179,6 +179,7 @@ class InvoiceStatus(str, PyEnum):
     PENDIENTE = "pendiente"
     PAGO_PARCIAL = "pago_parcial"
     PAGADO = "pagado"
+    PROCESO_CANCELACION = "proceso_cancelacion"
     CANCELADO = "cancelado"
 
 
