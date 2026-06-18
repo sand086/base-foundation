@@ -30,7 +30,7 @@ def create_bank_account(db: Session, account: schemas.BankAccountCreate, user_id
     """Crea una nueva cuenta bancaria."""
     db_account = models.BankAccount(
         **account.model_dump(), created_by_id=user_id
-    )  # <--- AUDITORÍA (Ya lo tenías aquí)
+    )  # <--- AUDITORÍA
     db.add(db_account)
     db.commit()
     db.refresh(db_account)
@@ -161,7 +161,7 @@ def create_bank_movement(
             movement_data, "origen_modulo", None
         ),  #  FIX: Aseguramos el módulo (CxC o CxP)
         fecha=fecha_mov,
-        created_by_id=current_user_id,  # <--- AUDITORÍA (Ya lo tenías)
+        created_by_id=current_user_id,
     )
 
     db.add(nuevo_movimiento)
@@ -232,7 +232,7 @@ def process_bulk_payables(
                 rfc=rfc,
                 dias_credito=dias_credito_excel,
                 estatus=models.SupplierStatus.ACTIVO,  # FIX: Enum estricto
-                created_by_id=user_id,  # <--- AUDITORÍA: Quién subió el Excel que creó al proveedor
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(supplier)
             db.flush()  # Guardar temporalmente para obtener el ID
@@ -283,7 +283,7 @@ def process_bulk_payables(
             moneda=str(item.get("moneda") or "MXN").strip()[:3],
             estatus=models.InvoiceStatus.PENDIENTE,  # FIX: Enum Estricto
             clasificacion="gasto_indirecto_variable",  # Clasificación por defecto al subir
-            created_by_id=user_id,  # <--- AUDITORÍA: Quién subió el Excel
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(invoice)
         facturas_creadas += 1
@@ -353,7 +353,7 @@ def register_payable_payment(
                     alias="Caja General Virtual",
                     tipo_cuenta="virtual",
                     saldo=0.0,
-                    created_by_id=user_id,  # <--- AUDITORÍA (Ya estaba)
+                    created_by_id=user_id,
                 )
                 db.add(caja_general)
                 db.flush()  # Guardamos temporalmente para obtener su ID
@@ -379,7 +379,7 @@ def register_payable_payment(
             referencia=payment_data.get("referencia", ""),
             cuenta_retiro=payment_data.get("cuenta_retiro", ""),
             complemento_uuid=payment_data.get("complemento_uuid"),
-            created_by_id=user_id,  # <--- AUDITORÍA (Ya estaba)
+            created_by_id=user_id,
         )
         db.add(nuevo_pago)
 
@@ -941,7 +941,7 @@ def process_sat_master_report(
                 rfc=rfc_emisor,
                 estatus=models.SupplierStatus.ACTIVO,  # FIX: Enum estricto
                 dias_credito=datos_sugeridos["dias"],
-                created_by_id=user_id,  # <--- AUDITORÍA
+                created_by_id=user_id,
             )
             db.add(supplier)
             db.flush()
@@ -977,7 +977,7 @@ def process_sat_master_report(
                     codigo=nuevo_ceco_codigo,
                     nombre=ceco_a_buscar,
                     activo=True,
-                    created_by_id=user_id,  # <--- AUDITORÍA
+                    created_by_id=user_id,
                 )
                 db.add(nuevo_ceco)
                 db.flush()
@@ -988,7 +988,7 @@ def process_sat_master_report(
             # Si el proveedor era nuevo o no tenía CECO, le heredamos este para futuras facturas
             if not supplier.cost_center_id:
                 supplier.cost_center_id = cost_center_id
-                supplier.updated_by_id = user_id  # <--- AUDITORÍA
+                supplier.updated_by_id = user_id
                 db.add(supplier)
 
         # =========================================================
@@ -1038,7 +1038,7 @@ def process_sat_master_report(
             dias_credito = datos_sugeridos["dias"]
             if dias_credito > 0:
                 supplier.dias_credito = dias_credito
-                supplier.updated_by_id = user_id  # <--- AUDITORÍA
+                supplier.updated_by_id = user_id
                 db.add(supplier)
 
         fecha_vencimiento_limpia = fecha_emision_limpia + timedelta(
@@ -1072,7 +1072,7 @@ def process_sat_master_report(
             forma_pago=forma_pago,
             tipo_comprobante=tipo_comprobante,  # <- Aquí inyectamos I, E o P
             estatus=estatus,  # <- Aquí inyectamos el estatus corregido
-            created_by_id=user_id,  # <--- AUDITORÍA
+            created_by_id=user_id,
         )
         db.add(nueva_factura)
         facturas_creadas += 1
@@ -1085,9 +1085,7 @@ def process_sat_master_report(
     }
 
 
-def conciliate_bank_movement(
-    db: Session, movement_id: int, user_id: int
-):  # <--- AUDITORÍA PARAM
+def conciliate_bank_movement(db: Session, movement_id: int, user_id: int):
     movement = (
         db.query(models.BankMovement)
         .filter(
@@ -1100,15 +1098,13 @@ def conciliate_bank_movement(
         return None
     movement.conciliado = True
     movement.fecha_conciliacion = date.today()
-    movement.updated_by_id = user_id  # <--- AUDITORÍA
+    movement.updated_by_id = user_id
     db.commit()
     db.refresh(movement)
     return movement
 
 
-def delete_bank_movement(
-    db: Session, movement_id: int, user_id: int
-):  # <--- AUDITORÍA PARAM
+def delete_bank_movement(db: Session, movement_id: int, user_id: int):
     """
      FIX: Elimina un movimiento (Soft Delete) y revierte el impacto en el saldo de la cuenta.
     Si proviene de CxC o CxP, también revierte el pago en la factura y restaura su saldo.
@@ -1140,7 +1136,7 @@ def delete_bank_movement(
             elif movement.tipo == "egreso":
                 account.saldo += movement.monto
 
-            account.updated_by_id = user_id  # <--- AUDITORÍA
+            account.updated_by_id = user_id
 
         # 1. ROLLBACK CxC Y CANCELACIÓN SAT
         if movement.origen_modulo == "CxC":
@@ -1188,7 +1184,7 @@ def delete_bank_movement(
                     else:
                         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-                    invoice.updated_by_id = user_id  # <--- AUDITORÍA
+                    invoice.updated_by_id = user_id
 
                 # ====== SOFT DELETE DEL PAGO ======
                 # FIX CRÍTICO: No usamos db.delete(pago_cxc) para no perder la historia del UUID cancelado
@@ -1197,7 +1193,7 @@ def delete_bank_movement(
                 pago_cxc.estatus = "CANCELADO"
                 pago_cxc.motivo_cancelacion = "02"
                 pago_cxc.fecha_cancelacion = datetime.now()
-                pago_cxc.updated_by_id = user_id  # <--- AUDITORÍA
+                pago_cxc.updated_by_id = user_id
 
         # 2. ROLLBACK CxP
         elif movement.origen_modulo == "CxP":
@@ -1224,13 +1220,11 @@ def delete_bank_movement(
                     else:
                         invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-                    invoice.updated_by_id = user_id  # <--- AUDITORÍA
-                db.delete(
-                    pago_cxp
-                )  # O podrías hacer soft-delete, pero sigo tu lógica actual
+                    invoice.updated_by_id = user_id
+                db.delete(pago_cxp)
 
         movement.record_status = RecordStatus.ELIMINADO
-        movement.updated_by_id = user_id  # <--- AUDITORÍA
+        movement.updated_by_id = user_id
         db.commit()
         return True
 
@@ -1299,7 +1293,7 @@ def process_operator_settlement(
                 ),
                 snapshot_base_salary=leg.monto_sueldo,
                 created_at=timestamp,
-                created_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
+                created_by_id=user_id,
             )
             db.add(settlement_detail)
             db.flush()
@@ -1313,12 +1307,12 @@ def process_operator_settlement(
                         tipo=models.SettlementConceptType.INGRESO,
                         amount=leg.monto_sueldo,
                         is_automatic=True,  # CRÍTICO para filtro de PDF
-                        created_by_id=user_id,  # <--- AUDITORÍA
+                        created_by_id=user_id,
                     )
                 )
 
             leg.status = models.TripStatus.LIQUIDADO
-            leg.updated_by_id = user_id  # <--- AUDITORÍA
+            leg.updated_by_id = user_id
             if leg.leg_type == models.TripLegType.RUTA:
                 viajes_a_facturar.add(leg.trip_id)
 
@@ -1332,7 +1326,7 @@ def process_operator_settlement(
                         tipo=concept.tipo,
                         amount=concept.amount,
                         is_automatic=False,  # Se mostrará en el PDF
-                        created_by_id=user_id,  # <--- AUDITORÍA
+                        created_by_id=user_id,
                     )
                 )
 
@@ -1367,7 +1361,7 @@ def process_operator_settlement(
                             saldo_pendiente=total,
                             fecha_emision=date.today(),
                             estatus=models.InvoiceStatus.PENDIENTE,  # FIX: Enum
-                            created_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
+                            created_by_id=user_id,
                         )
                     )
 
@@ -1401,9 +1395,7 @@ def create_indirect_category(
     db: Session, cat_in: schemas.IndirectCategoryCreate, user_id: int = None
 ):
     db_cat = models.IndirectExpenseCategory(
-        **cat_in.model_dump(),
-        created_by_id=user_id,
-        updated_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
+        **cat_in.model_dump(), created_by_id=user_id, updated_by_id=user_id
     )
     db.add(db_cat)
     db.commit()
@@ -1429,7 +1421,7 @@ def update_indirect_category(
     for k, v in data.items():
         setattr(db_cat, k, v)
 
-    db_cat.updated_by_id = user_id  # <--- AUDITORÍA (Ya lo tenías)
+    db_cat.updated_by_id = user_id
     db.add(db_cat)
     db.commit()
     db.refresh(db_cat)
@@ -1447,15 +1439,11 @@ def delete_indirect_category(db: Session, cat_id: int, user_id: int = None):
 
     # Soft delete (Borrado lógico)
     db_cat.record_status = RecordStatus.ELIMINADO
-    db_cat.updated_by_id = user_id  # <--- AUDITORÍA (Ya lo tenías)
+    db_cat.updated_by_id = user_id
     db.add(db_cat)
     db.commit()
     return True
 
-
-# =====================================================================
-# BÓVEDA DIGITAL / HISTORIAL CFDI (CON FACTURAS PADRE EN PAGOS)
-# =====================================================================
 
 # =====================================================================
 # BÓVEDA DIGITAL / HISTORIAL CFDI (VERSION FINAL BLINDADA)
@@ -1621,6 +1609,9 @@ def get_cfdi_vault_records(
                     "versiones_archivos": [],
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
+                    "xml_url": getattr(
+                        r, "xml_url", None
+                    ),  # <--- AGREGADO PARA EL BOTÓN XML
                 }
             )
 
@@ -1694,6 +1685,9 @@ def get_cfdi_vault_records(
                     "versiones_archivos": [],
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
+                    "xml_url": getattr(
+                        r, "xml_url", None
+                    ),  # <--- AGREGADO PARA EL BOTÓN XML
                 }
             )
 
@@ -1777,6 +1771,9 @@ def get_cfdi_vault_records(
                     "versiones_archivos": [],
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
+                    "xml_url": getattr(
+                        r, "xml_url", None
+                    ),  # <--- AGREGADO PARA EL BOTÓN XML
                 }
             )
 
@@ -1819,6 +1816,32 @@ def get_cfdi_vault_records(
             .all()
         )
 
+        # 🚀 MAGIA DEL FOLIO REAL: Extraer folios y XMLs reales del SAT usando el UUID del complemento
+        payment_uuids = [
+            r.complemento_uuid
+            for r in resultados_pagos
+            if getattr(r, "complemento_uuid", None)
+        ]
+        mapa_cfdi_sat = {}
+        if payment_uuids:
+            cfdis_sat = (
+                db.query(
+                    models.ReceivableInvoice.uuid,
+                    models.ReceivableInvoice.folio_interno,
+                    models.ReceivableInvoice.pdf_url,
+                    models.ReceivableInvoice.xml_url,
+                )
+                .filter(models.ReceivableInvoice.uuid.in_(payment_uuids))
+                .all()
+            )
+            for c_uuid, c_folio, c_pdf, c_xml in cfdis_sat:
+                if c_uuid:
+                    mapa_cfdi_sat[c_uuid] = {
+                        "folio": c_folio,
+                        "pdf_url": c_pdf,
+                        "xml_url": c_xml,
+                    }
+
         for r in resultados_pagos:
             estatus_obj = getattr(r, "estatus", "")
             val_estatus = str(getattr(estatus_obj, "value", estatus_obj)).upper()
@@ -1839,21 +1862,37 @@ def get_cfdi_vault_records(
             folio_padre = r.invoice.folio_interno if r.invoice else "S/F"
             comp_uuid = getattr(r, "complemento_uuid", None)
 
+            # 🚀 EXTRAEMOS DATOS REALES DE CFDI SI ESTÁ TIMBRADO
+            real_cfdi_data = mapa_cfdi_sat.get(comp_uuid) if comp_uuid else None
+
             if comp_uuid:
-                if r.referencia and "COM" in r.referencia.upper():
+                if real_cfdi_data and real_cfdi_data["folio"]:
+                    folio_mostrar = f"{real_cfdi_data['folio']} (Fra: {folio_padre})"
+                elif r.referencia and "COM" in r.referencia.upper():
                     folio_mostrar = f"{r.referencia} (Fra: {folio_padre})"
                 else:
-                    folio_mostrar = f"COM-{r.id} (Fra: {folio_padre})"
+                    # Se cambió COM- por PAGO- para no dar la ilusión de folio SAT si no lo encontró
+                    folio_mostrar = f"PAGO-{r.id} (Fra: {folio_padre})"
             else:
                 folio_mostrar = (
                     f"{r.referencia or f'Recibo-{r.id}'} (Fra: {folio_padre})"
                 )
 
+            # Extraer URLs Reales de la tabla de Facturas o dejar las internas del Recibo
+            if real_cfdi_data:
+                pdf_final = real_cfdi_data.get("pdf_url") or getattr(
+                    r, "comprobante_url", None
+                )
+                xml_final = real_cfdi_data.get("xml_url")
+            else:
+                pdf_final = getattr(r, "comprobante_url", None)
+                xml_final = None
+
             records.append(
                 {
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": folio_mostrar,
+                    "folio": folio_mostrar,  # <--- FOLIO ARREGLADO
                     "uuid": comp_uuid,
                     "fecha_emision": getattr(r, "fecha_pago", None),
                     "estatus": status_fiscal,
@@ -1867,8 +1906,8 @@ def get_cfdi_vault_records(
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "versiones_archivos": [],
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
-                    "pdf_url": getattr(r, "comprobante_url", None)
-                    or getattr(r, "pdf_url", None),
+                    "pdf_url": pdf_final,
+                    "xml_url": xml_final,  # <--- AGREGADO PARA EL BOTÓN XML
                 }
             )
 
