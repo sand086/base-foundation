@@ -5,6 +5,7 @@ from typing import List
 from app.db.database import get_db
 from app.models.models import Brand, RecordStatus
 from .schemas import BrandResponse, BrandCreate
+from app.modules.auth.router import get_current_active_user  # <--- AUDITORÍA IMPORT
 
 router = APIRouter()
 
@@ -20,7 +21,11 @@ def get_brands(db: Session = Depends(get_db)):
 
 
 @router.post("/brand", response_model=BrandResponse)
-def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
+def create_brand(
+    obj_in: BrandCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user),  # <--- AUDITORÍA PARAM
+):
     # Evitar duplicados por nombre
     nombre_limpio = obj_in.nombre.strip().upper()
 
@@ -34,6 +39,9 @@ def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
             existing.tipo_activo = (
                 obj_in.tipo_activo.upper() if obj_in.tipo_activo else None
             )
+            existing.updated_by_id = (
+                current_user.id
+            )  # <--- AUDITORÍA: Registrar quién la revivió
             db.commit()
             db.refresh(existing)
             return existing
@@ -43,6 +51,7 @@ def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
     new_brand = Brand(
         nombre=nombre_limpio,
         tipo_activo=obj_in.tipo_activo.upper() if obj_in.tipo_activo else None,
+        created_by_id=current_user.id,  # <--- AUDITORÍA
     )
     db.add(new_brand)
     db.commit()
@@ -301,6 +310,7 @@ def delete_route_catalog(
 
     # <-- SOFT DELETE EN LUGAR DE db.delete(route)
     route.record_status = RecordStatus.ELIMINADO
+    route.updated_by_id = current_user.id  # <--- AUDITORÍA: Registro de borrado de ruta
     db.commit()
     return {"message": "Ruta eliminada"}
 
@@ -614,6 +624,9 @@ def create_terminal(
         # Si existe pero fue eliminada, la "revivimos"
         if exist.record_status == RecordStatus.ELIMINADO:
             exist.record_status = RecordStatus.ACTIVO
+            exist.updated_by_id = (
+                user.id
+            )  # <--- AUDITORÍA: El usuario revivió la terminal
             db.commit()
             db.refresh(exist)
             return exist
