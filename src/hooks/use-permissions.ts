@@ -17,7 +17,6 @@ export type PermissionSnapshot = {
 function flagsFromPermValue(
   modulePerms: unknown,
 ): Omit<PermissionSnapshot, "isAdmin"> {
-  // Si todo el módulo está en "true"
   if (typeof modulePerms === "boolean") {
     return {
       canRead: modulePerms,
@@ -27,14 +26,13 @@ function flagsFromPermValue(
       canExport: modulePerms,
     };
   }
-  // Si el módulo es un objeto (ej: { view: true, edit: false, cancel: true })
   if (typeof modulePerms === "object" && modulePerms !== null) {
     const o = modulePerms as Record<string, unknown>;
     return {
       canRead: !!(o.view || o.read || o.ver),
       canCreate: !!(o.create || o.crear),
       canUpdate: !!(o.edit || o.update || o.editar),
-      canDelete: !!(o.delete || o.eliminar),
+      canDelete: !!(o.delete || o.eliminar || o.cancel),
       canExport: !!(o.export || o.exportar),
     };
   }
@@ -51,13 +49,9 @@ function resolveModulePermBlock(
   permisos: Record<string, unknown>,
   moduleCode: string,
 ): unknown {
-  // Buscamos el permiso usando tu función insensible a mayúsculas
   return pickPermisosInsensitive(permisos, moduleCode);
 }
 
-/**
- * Lógica base para evaluar permisos genéricos de lectura/escritura de un módulo.
- */
 export function getPermissionSnapshot(
   user: User | null | undefined,
   moduleCode?: string,
@@ -94,7 +88,6 @@ export function getPermissionSnapshot(
     };
   }
 
-  // Agrupación para el dashboard de administración
   if (moduleCode === "admin") {
     const adminKeys = ["users", "roles", "settings"];
     let canRead = false;
@@ -149,43 +142,43 @@ export const usePermissions = (moduleCode?: string) => {
   const { user } = useAuth();
   const snapshot = getPermissionSnapshot(user, moduleCode);
 
-  /**
-   * Validador Granular:
-   * Permite evaluar acciones específicas combinadas, por ejemplo:
-   * hasPermission("receivables:cancel") o hasPermission("sat:stamp_cfdi")
-   */
   const hasPermission = (permissionKey: string): boolean => {
-    // Si es superadmin, tiene pase libre
     if (snapshot.isAdmin) return true;
 
     const permisos = (user?.role?.permisos || {}) as Record<string, any>;
 
-    // 1. Búsqueda en formato plano: {"finance:cancel_invoice": true}
     if (permisos[permissionKey] === true) return true;
 
-    // 2. Búsqueda en formato de módulo y acción: {"receivables": {"cancel": true}}
     const parts = permissionKey.split(":");
     if (parts.length === 2) {
       const [mod, action] = parts;
 
-      // Mapeos especiales si usaste "finance" en el router pero tu DB dice "receivables"
       const moduleName =
         mod === "finance" ? "receivables" : mod === "sat" ? "receivables" : mod;
-      // Normalización de llaves de acción para que hagan match
+
+      // 👇 FIX CRÍTICO: Traductor exacto Backend -> DB
       const actionName =
         action === "cancel_invoice"
           ? "cancel"
-          : action === "stamp_cfdi"
-            ? "view"
-            : action;
+          : action === "create_invoice"
+            ? "create"
+            : action === "stamp_cfdi"
+              ? "create"
+              : action === "reopen_invoice"
+                ? "update"
+                : action === "delete_movement"
+                  ? "delete"
+                  : action;
 
       const modulePerms = pickPermisosInsensitive(permisos, moduleName) as any;
       if (modulePerms && typeof modulePerms === "object") {
+        // Mapeo inverso de seguridad: Si pide "cancel" y tiene "delete", lo dejamos pasar
         if (modulePerms[actionName] === true) return true;
+        if (actionName === "cancel" && modulePerms["delete"] === true)
+          return true;
       }
     }
 
-    // 3. Búsqueda en formato Array de strings: ["receivables:cancel"]
     if (Array.isArray(permisos) && permisos.includes(permissionKey)) {
       return true;
     }

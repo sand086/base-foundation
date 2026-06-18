@@ -92,6 +92,8 @@ export default function Receivables() {
 
   const { bankAccounts = [] } = useBankAccounts();
   const { hasPermission } = usePermissions();
+
+  // PERMISOS GRANULARES
   const canCancel = hasPermission("finance:cancel_invoice");
   const canStamp = hasPermission("sat:stamp_cfdi");
   const canCreate = hasPermission("finance:create_invoice");
@@ -261,7 +263,6 @@ export default function Receivables() {
   const filteredInvoices = useMemo(() => {
     let filtered = formattedInvoices;
 
-    // 1. Filtro de Búsqueda de Texto (NUEVO)
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
       filtered = filtered.filter((inv) => {
@@ -275,21 +276,18 @@ export default function Receivables() {
       });
     }
 
-    // 2. Filtro por Cliente
     if (selectedClientId !== "all") {
       filtered = filtered.filter(
         (inv) => String(inv.client_id) === selectedClientId,
       );
     }
 
-    // 3. Filtro por Estatus
     if (selectedStatus !== "all") {
       filtered = filtered.filter(
         (inv) => String(inv.estatus).toUpperCase() === selectedStatus,
       );
     }
 
-    // 4. Filtro por Rango de Fechas (Fecha Emisión)
     if (startDate) {
       filtered = filtered.filter((inv) => {
         if (!inv.fecha_emision) return false;
@@ -723,17 +721,16 @@ export default function Receivables() {
                   Ver Detalle
                 </DropdownMenuItem>
 
-                {/* 👇 APLICAMOS PERMISOS (canStamp y canCancel) y evitamos acciones si está en proceso 👇 */}
                 {isStamped && !isInProcess && (
                   <>
                     <DropdownMenuSeparator className="dark:bg-white/10" />
 
-                    {canStamp && (
+                    {/* 👇 FIX: REQUIERE canCreate Y canStamp para Refacturar */}
+                    {canCreate && canStamp && (
                       <DropdownMenuItem
                         onClick={() => {
                           setInvoiceToRefactor({
                             ...row,
-                            // FIX CRÍTICO: Aseguramos mapear el viaje_id
                             viaje_id: row.viaje_id || (row as any).trip_id,
                           });
                           setIsRefactorModalOpen(true);
@@ -779,6 +776,7 @@ export default function Receivables() {
                         ) {
                           const viajeId =
                             (row as any).viaje_id || (row as any).trip_id;
+
                           if (viajeId) {
                             await stampInvoice(Number(viajeId));
                           } else {
@@ -857,7 +855,15 @@ export default function Receivables() {
         },
       },
     ],
-    [selectedRows.length, reopenReceivable, stampInvoice, stampFreeInvoice],
+    [
+      selectedRows.length,
+      reopenReceivable,
+      stampInvoice,
+      stampFreeInvoice,
+      canCreate,
+      canStamp,
+      canCancel,
+    ],
   );
 
   if (isLoadingReceivables) {
@@ -880,11 +886,7 @@ export default function Receivables() {
         description="Gestión de cartera, métricas de ingresos y cobranza a clientes."
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* ======================================= */}
-          {/* BARRA DE FILTROS SUPERIOR (INCLUYE BÚSQUEDA) */}
-          {/* ======================================= */}
           <div className="flex flex-wrap md:flex-nowrap items-center gap-3">
-            {/* 👇 NUEVO: INPUT DE BÚSQUEDA LIBRE 👇 */}
             <div className="flex items-center relative min-w-[200px] lg:min-w-[240px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
@@ -895,7 +897,6 @@ export default function Receivables() {
               />
             </div>
 
-            {/* Filtro Cliente */}
             <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[180px] lg:min-w-[220px]">
               <Filter className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
               <Select
@@ -922,7 +923,6 @@ export default function Receivables() {
               </Select>
             </div>
 
-            {/* Filtro Estatus */}
             <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg px-2 h-10 shadow-sm min-w-[160px]">
               <AlertCircle className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
@@ -979,7 +979,6 @@ export default function Receivables() {
               </Select>
             </div>
 
-            {/* Botón Limpiar */}
             {(searchTerm ||
               selectedClientId !== "all" ||
               selectedStatus !== "all" ||
@@ -1000,7 +999,6 @@ export default function Receivables() {
               </Button>
             )}
           </div>
-          {/* ======================================= */}
 
           <Button
             variant="outline"
@@ -1023,6 +1021,7 @@ export default function Receivables() {
             Exportar consolidado
           </Button>
 
+          {/* 👇 FIX: BOTÓN DE NUEVA FACTURA PROTEGIDO 👇 */}
           {canCreate && (
             <ActionButton
               size="md"
@@ -1199,9 +1198,6 @@ export default function Receivables() {
         );
       })()}
 
-      {/* ================================================== */}
-      {/* 🔴 MODAL DE CANCELACIÓN (INTELIGENTE: LOCAL VS SAT) */}
-      {/* ================================================== */}
       <AlertDialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
@@ -1231,9 +1227,7 @@ export default function Receivables() {
                 . ¿Qué deseas hacer exactamente?
               </p>
 
-              {/* LÓGICA BIFURCADA: TIMBRADA VS PROVISIONAL */}
               {invoiceToCancel?.uuid ? (
-                /* 🔴 SI ESTÁ TIMBRADA, OBLIGAMOS A CANCELAR EN EL SAT */
                 <div className="mt-6 p-5 bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-3">
                     <FileSignature className="h-4 w-4 text-purple-600 dark:text-purple-400" />
@@ -1257,7 +1251,6 @@ export default function Receivables() {
                   </Button>
                 </div>
               ) : (
-                /* 🔵 SI ES PROVISIONAL, MOSTRAMOS LOS BOTONES ORIGINALES (CASCADA O SIMPLE) */
                 <div className="grid gap-4 mt-6">
                   <div className="p-5 bg-white dark:bg-slate-800 border-l-4 border-orange-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex items-center gap-2 mb-3">
