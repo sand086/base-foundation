@@ -1892,40 +1892,12 @@ def get_cfdi_vault_records(
 
             real_cfdi_data = mapa_cfdi_sat.get(comp_uuid) if comp_uuid else None
 
-            # 🛠️ ESCÁNER MAESTRO: ABRIR EL XML REAL DE DISCO PARA SACAR EL FOLIO PAC 🛠️
-            xml_folio = None
+            # 1. LÓGICA LIMPIA Y SEGURA (Lee directo de la nueva columna de la BD)
             if comp_uuid:
-                rutas_disco = [
-                    "storage/xml_timbrados",
-                    "backend/storage/xml_timbrados",
-                    "app/storage/xml_timbrados",
-                    "/home/desarrolloas/base-foundation/backend/storage/xml_timbrados",
-                ]
-                for b_path in rutas_disco:
-                    p_file = os.path.join(b_path, f"{comp_uuid}.xml")
-                    if os.path.exists(p_file):
-                        try:
-                            with open(
-                                p_file, "r", encoding="utf-8", errors="ignore"
-                            ) as fxml:
-                                head = fxml.read(2000)
-                                m = re.search(r'Folio="([^"]+)"', head) or re.search(
-                                    r"Folio='([^']+)'", head
-                                )
-                                if m:
-                                    xml_folio = m.group(1)
-                                    break
-                        except:
-                            pass
-
-            # Si el escáner leyó el XML físico, usamos ese número real (ej: 2574)
-            if xml_folio:
-                folio_mostrar = f"COM-{xml_folio}"
-            elif comp_uuid:
-                if real_cfdi_data and real_cfdi_data.get("folio"):
-                    folio_mostrar = f"{real_cfdi_data['folio']}"
-                elif r.referencia and "COM" in r.referencia.upper():
-                    folio_mostrar = f"{r.referencia}"
+                if getattr(r, "folio_complemento", None):
+                    folio_mostrar = r.folio_complemento
+                elif r.referencia and "COM-" in r.referencia.upper():
+                    folio_mostrar = r.referencia.split(" | ")[0]
                 else:
                     folio_mostrar = f"PAGO-{r.id}"
             else:
@@ -1944,8 +1916,8 @@ def get_cfdi_vault_records(
                 {
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": folio_mostrar,  # <--- ¡MANDA EL REAL EXTRACTADO DEL XML! (ej: "COM-2574")
-                    "folio_relacionado": folio_padre,  # <--- ORIGEN SEPARADO (ej: "CP-17691")
+                    "folio": folio_mostrar,  # <--- FOLIO PURO (Ej. "COM-2574" o "PAGO-28")
+                    "folio_relacionado": folio_padre,
                     "uuid": comp_uuid,
                     "fecha_emision": getattr(r, "fecha_pago", None),
                     "estatus": status_fiscal,
@@ -1958,7 +1930,7 @@ def get_cfdi_vault_records(
                         r.invoice.client.rfc
                         if r.invoice and r.invoice.client
                         else "XAXX010101000"
-                    ),  # <--- ¡RFC ENVIADO CORRECTAMENTE!
+                    ),
                     "monto_total": getattr(r, "monto", 0),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
