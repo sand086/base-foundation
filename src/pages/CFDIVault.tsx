@@ -9,7 +9,7 @@ import {
   FileText,
   FileCode,
   RefreshCw,
-  Eye, // NUEVO ICONO PARA VER DETALLE
+  Eye,
 } from "lucide-react";
 
 import {
@@ -66,7 +66,7 @@ export default function CFDIVault() {
   const [refactorModalOpen, setRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
-  // NUEVO: ESTADOS PARA PANELES DE DETALLE
+  // ESTADOS PARA PANELES DE DETALLE
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -264,9 +264,7 @@ export default function CFDIVault() {
   );
 
   const handleOpenDetail = (row: any) => {
-    // Si viene de Cuentas por Pagar (Proveedores) abrimos su respectivo panel
     if (activeTab === "FACTURA_PROVEEDOR") {
-      // Re-armar el objeto simulando lo que recibe el panel (id, supplier, montos)
       setSelectedInvoice({
         id: row.id,
         folio_interno: row.folio,
@@ -285,7 +283,6 @@ export default function CFDIVault() {
       });
       setPayableDetailDrawerOpen(true);
     } else {
-      // Si es Factura de Cliente o Complemento, usamos el panel de CxC
       setSelectedInvoice({
         id: row.id,
         folio_interno: row.folio,
@@ -306,179 +303,250 @@ export default function CFDIVault() {
     }
   };
 
-  const columns: ColumnDef<CFDIHistoryRecord>[] = [
-    { key: "folio", header: "Folio" },
-    { key: "uuid", header: "UUID" },
-    {
-      key: "viaje_id",
-      header: "Viaje",
-      render: (val) =>
-        val ? (
-          <Badge
-            variant="outline"
-            className="bg-blue-50 text-blue-700 border-blue-200 font-mono"
-          >
-            #{val}
+  // ==========================================
+  // CONFIGURACIÓN DINÁMICA DE COLUMNAS
+  // ==========================================
+  const columns = useMemo(() => {
+    const baseColumns: ColumnDef<any>[] = [
+      { key: "folio", header: "Folio" },
+      { key: "uuid", header: "UUID" },
+    ];
+
+    // INYECCIÓN DE COLUMNAS ESPECÍFICAS PARA COMPLEMENTO DE PAGO
+    if (activeTab === "PAGO_CLIENTE") {
+      baseColumns.push({
+        key: "numero_complemento",
+        header: "No. Complemento",
+        render: (_, row: any) => (
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700">
+            {row.numero_complemento || row.folio || "N/A"}
           </Badge>
-        ) : (
-          <span className="text-muted-foreground text-xs">N/A</span>
         ),
-    },
-    {
-      key: "cliente_proveedor_nombre",
-      header: "Entidad",
-      width: "max-w-[250px] truncate",
-    },
-    {
-      key: "fecha_emision",
-      header: "Emisión",
-      render: (val) => (val ? format(new Date(val), "dd/MMM/yyyy") : "N/A"),
-    },
-    {
-      key: "monto_total",
-      header: "Monto",
-      render: (val) =>
-        `$${(val || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
-    },
-    {
-      key: "estatus",
-      header: "Estatus",
-      render: (val) => {
-        const s = (val || "").toUpperCase();
-        let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
-        if (s === "TIMBRADA" || s === "TIMBRADO")
-          badgeClass =
-            "bg-green-100 text-green-800 hover:bg-green-200 border-green-300";
-        if (s === "CANCELADO")
-          badgeClass =
-            "bg-red-100 text-red-800 hover:bg-red-200 border-red-300";
-        if (s === "PROVISIONAL")
-          badgeClass =
-            "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300";
-        if (s === "RECIBO INTERNO")
-          badgeClass =
-            "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
-
-        return (
-          <Badge variant="outline" className={badgeClass}>
-            {s}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: "archivos",
-      header: "Acciones",
-      sortable: false,
-      render: (_, row: any) => {
-        const listaArchivos = Array.isArray(row.versiones_archivos)
-          ? row.versiones_archivos
-          : [];
-
-        const xmlDoc =
-          listaArchivos.find(
-            (f: any) => f.document_type === "xml" && f.is_active,
-          ) || listaArchivos.find((f: any) => f.document_type === "xml");
-
-        const pdfDoc =
-          listaArchivos.find(
-            (f: any) => f.document_type === "pdf" && f.is_active,
-          ) || listaArchivos.find((f: any) => f.document_type === "pdf");
-
-        // 🔥 LA MAGIA ESTÁ AQUÍ: Forzamos la descarga a través del backend
-        // para que inyecte la estructura: [Folio]_[RFC]_[UUID].pdf/xml
-        const downloadFile = (type: "pdf" | "xml") => {
-          if (row.uuid) {
-            const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "";
-            const baseURL = rawBaseURL.replace(/\/$/, "");
-            window.open(
-              `${baseURL}/api/sat/invoice/${row.uuid}/${type}`,
-              "_blank",
-            );
-          } else {
-            // Fallback si es un documento interno que no fue timbrado
-            const fallbackUrl =
-              type === "pdf"
-                ? row.pdf_url || pdfDoc?.file_url
-                : row.xml_url || xmlDoc?.file_url;
-            if (fallbackUrl) window.open(fallbackUrl, "_blank");
-          }
-        };
-
-        const hasPdf = !!(row.uuid || row.pdf_url || pdfDoc?.file_url);
-        const hasXml = !!(row.uuid || row.xml_url || xmlDoc?.file_url);
-
-        return (
-          <div className="flex items-center justify-end gap-1 pr-2">
-            {/* BOTÓN: VER DETALLE EN MODAL */}
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Ver Detalle"
-              onClick={() => handleOpenDetail(row)}
-              className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 h-8 w-8 rounded-lg transition-colors"
+      });
+      baseColumns.push({
+        key: "folio_relacionado",
+        header: "Origen (CP/F)",
+        render: (_, row: any) => (
+          <span className="font-mono text-xs text-slate-500">
+            {row.folio_relacionado || "N/A"}
+          </span>
+        ),
+      });
+    } else {
+      baseColumns.push({
+        key: "viaje_id",
+        header: "Viaje",
+        render: (val) =>
+          val ? (
+            <Badge
+              variant="outline"
+              className="bg-blue-50 text-blue-700 border-blue-200 font-mono"
             >
-              <Eye className="h-4 w-4" />
-            </Button>
+              #{val}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground text-xs">N/A</span>
+          ),
+      });
+    }
 
-            {/* BOTÓN REFACTURAR */}
-            {activeTab === "FACTURA_CLIENTE" &&
-              row.estatus !== "PROVISIONAL" && (
+    baseColumns.push(
+      {
+        key: "cliente_proveedor_nombre",
+        header: "Entidad",
+        width: "max-w-[250px] truncate",
+      },
+      {
+        key: "fecha_emision",
+        header: "Emisión",
+        render: (val) => (val ? format(new Date(val), "dd/MMM/yyyy") : "N/A"),
+      },
+      {
+        key: "monto_total",
+        header: "Monto",
+        render: (val) =>
+          `$${(val || 0).toLocaleString("es-MX", { minimumFractionDigits: 2 })}`,
+      },
+      {
+        key: "estatus",
+        header: "Estatus",
+        render: (val) => {
+          const s = (val || "").toUpperCase();
+          let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
+          if (s === "TIMBRADA" || s === "TIMBRADO")
+            badgeClass =
+              "bg-green-100 text-green-800 hover:bg-green-200 border-green-300";
+          if (s === "CANCELADO")
+            badgeClass =
+              "bg-red-100 text-red-800 hover:bg-red-200 border-red-300";
+          if (s === "PROVISIONAL")
+            badgeClass =
+              "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300";
+          if (s === "RECIBO INTERNO")
+            badgeClass =
+              "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
+
+          return (
+            <Badge variant="outline" className={badgeClass}>
+              {s}
+            </Badge>
+          );
+        },
+      },
+      {
+        key: "archivos",
+        header: "Acciones",
+        sortable: false,
+        render: (_, row: any) => {
+          const listaArchivos = Array.isArray(row.versiones_archivos)
+            ? row.versiones_archivos
+            : [];
+
+          const xmlDoc =
+            listaArchivos.find(
+              (f: any) => f.document_type === "xml" && f.is_active,
+            ) || listaArchivos.find((f: any) => f.document_type === "xml");
+
+          const pdfDoc =
+            listaArchivos.find(
+              (f: any) => f.document_type === "pdf" && f.is_active,
+            ) || listaArchivos.find((f: any) => f.document_type === "pdf");
+
+          // LÓGICA DE DESCARGA FORZADA PARA RENOMBRAR LOS ARCHIVOS
+          const forceDownloadCustomName = async (
+            fileUrl: string,
+            customName: string,
+          ) => {
+            try {
+              const response = await fetch(fileUrl);
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = customName;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              window.URL.revokeObjectURL(url);
+            } catch (error) {
+              console.error("No se pudo renombrar, abriendo normal...", error);
+              window.open(fileUrl, "_blank");
+            }
+          };
+
+          const downloadFile = (type: "pdf" | "xml") => {
+            let fileUrl = "";
+
+            if (row.uuid) {
+              const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "";
+              const baseURL = rawBaseURL.replace(/\/$/, "");
+              fileUrl = `${baseURL}/api/sat/invoice/${row.uuid}/${type}`;
+            } else {
+              fileUrl =
+                type === "pdf"
+                  ? row.pdf_url || pdfDoc?.file_url
+                  : row.xml_url || xmlDoc?.file_url;
+            }
+
+            if (!fileUrl) return;
+
+            // SI ES COMPLEMENTO DE PAGO, FORZAR EL NOMBRE COM-folio_rfc_uuid
+            if (activeTab === "PAGO_CLIENTE") {
+              const rfc = row.rfc_cliente || "RFC_PENDIENTE";
+              const targetFolio = row.folio || row.numero_complemento || "SF";
+              const targetUuid = row.uuid || "SIN_UUID";
+              const customName = `COM-${targetFolio}_${rfc}_${targetUuid}.${type}`;
+
+              forceDownloadCustomName(fileUrl, customName);
+            } else {
+              // Comportamiento normal para Facturas regulares
+              window.open(fileUrl, "_blank");
+            }
+          };
+
+          const hasPdf = !!(row.uuid || row.pdf_url || pdfDoc?.file_url);
+          const hasXml = !!(row.uuid || row.xml_url || xmlDoc?.file_url);
+
+          return (
+            <div className="flex items-center justify-end gap-1 pr-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Ver Detalle"
+                onClick={() => handleOpenDetail(row)}
+                className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 h-8 w-8 rounded-lg transition-colors"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+
+              {activeTab === "FACTURA_CLIENTE" &&
+                row.estatus !== "PROVISIONAL" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title="Refacturar CFDI"
+                    className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 border border-transparent hover:border-orange-200 h-8 px-2"
+                    onClick={() => {
+                      setInvoiceToRefactor({
+                        uuid: row.uuid,
+                        subtotal: row.monto_total / 1.16,
+                        monto_total: row.monto_total,
+                        client: { razon_social: row.cliente_proveedor_nombre },
+                        concepto: `Refacturación de ${row.folio}`,
+                      });
+                      setRefactorModalOpen(true);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Refacturar</span>
+                  </Button>
+                )}
+
+              {hasPdf ? (
                 <Button
                   variant="ghost"
-                  size="sm"
-                  title="Refacturar CFDI"
-                  className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 border border-transparent hover:border-orange-200 h-8 px-2"
-                  onClick={() => {
-                    setInvoiceToRefactor({
-                      uuid: row.uuid,
-                      subtotal: row.monto_total / 1.16,
-                      monto_total: row.monto_total,
-                      client: { razon_social: row.cliente_proveedor_nombre },
-                      concepto: `Refacturación de ${row.folio}`,
-                    });
-                    setRefactorModalOpen(true);
-                  }}
+                  size="icon"
+                  title="Descargar PDF"
+                  className="text-rose-600 hover:text-rose-900 hover:bg-rose-50 h-8 w-8 rounded"
+                  onClick={() => downloadFile("pdf")}
                 >
-                  <RefreshCw className="h-4 w-4 sm:mr-1.5" />
-                  <span className="hidden sm:inline">Refacturar</span>
+                  <FileText className="h-4 w-4" />
                 </Button>
+              ) : (
+                <span className="text-[10px] text-muted-foreground mr-1">
+                  No PDF
+                </span>
               )}
 
-            {hasPdf ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Descargar PDF"
-                className="text-rose-600 hover:text-rose-900 hover:bg-rose-50 h-8 w-8 rounded"
-                onClick={() => downloadFile("pdf")}
-              >
-                <FileText className="h-4 w-4" />
-              </Button>
-            ) : (
-              <span className="text-[10px] text-muted-foreground mr-1">
-                No PDF
-              </span>
-            )}
-
-            {hasXml ? (
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Descargar XML"
-                className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 h-8 w-8 rounded"
-                onClick={() => downloadFile("xml")}
-              >
-                <FileCode className="h-4 w-4" />
-              </Button>
-            ) : (
-              <span className="text-[10px] text-muted-foreground">No XML</span>
-            )}
-          </div>
-        );
+              {hasXml ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Descargar XML"
+                  className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 h-8 w-8 rounded"
+                  onClick={() => downloadFile("xml")}
+                >
+                  <FileCode className="h-4 w-4" />
+                </Button>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">
+                  No XML
+                </span>
+              )}
+            </div>
+          );
+        },
       },
-    },
-  ];
+    );
+
+    return baseColumns;
+  }, [activeTab]);
+
+  // Nombre de exportación dinámico para Excel
+  const excelExportName =
+    activeTab === "PAGO_CLIENTE"
+      ? `COM_Reporte_REP_${format(new Date(), "yyyyMMdd")}`
+      : `Boveda_CFDI_${activeTab}_${format(new Date(), "yyyyMMdd")}`;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -515,7 +583,7 @@ export default function CFDIVault() {
             columns={columns}
             isLoading={isLoading}
             searchPlaceholder="Búsqueda rápida (Folio, UUID)..."
-            exportFileName={`Boveda_CFDI_${activeTab}_${format(new Date(), "yyyyMMdd")}`}
+            exportFileName={excelExportName}
             initialSort={{ key: "fecha_emision", direction: "desc" }}
             customFilters={customFiltersUI}
           />
