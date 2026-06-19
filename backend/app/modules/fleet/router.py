@@ -73,7 +73,11 @@ def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 
 @router.post("/units", response_model=schemas.UnitResponse, tags=["Fleet - Units"])
-def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
+def create_unit(
+    unit: schemas.UnitCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
     clean_eco = clean_eco_prefix(unit.numero_economico)
     if db.query(models.Unit).filter(models.Unit.numero_economico == clean_eco).first():
         raise HTTPException(
@@ -87,7 +91,9 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
         unit_data["numero_economico"] = clean_eco
 
         db_unit = models.Unit(
-            **unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}"
+            **unit_data,
+            public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}",
+            created_by_id=current_user.id,  # <--- 2. AGREGAR ESTO PARA LA AUDITORÍA
         )
         db.add(db_unit)
         db.commit()
@@ -261,7 +267,12 @@ def read_unit(term: str, db: Session = Depends(get_db)):
 @router.put(
     "/units/{unit_id}", response_model=schemas.UnitResponse, tags=["Fleet - Units"]
 )
-def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
+def update_unit(
+    unit_id: str,
+    unit: schemas.UnitUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
     try:
         if unit.numero_economico:
             unit.numero_economico = clean_eco_prefix(unit.numero_economico)
@@ -277,7 +288,7 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
             if hasattr(unit, field) and getattr(unit, field) == "":
                 setattr(unit, field, None)
 
-        db_unit = crud.update_unit(db, unit_id, unit)
+        db_unit = crud.update_unit(db, unit_id, unit, current_user.id)
         if not db_unit:
             raise HTTPException(status_code=404, detail="Unidad no encontrada")
         return db_unit
@@ -294,8 +305,12 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
 
 
 @router.delete("/units/{unit_id}", tags=["Fleet - Units"])
-def delete_unit(unit_id: str, db: Session = Depends(get_db)):
-    if not crud.delete_unit(db, unit_id):
+def delete_unit(
+    unit_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
+    if not crud.delete_unit(db, unit_id, current_user.id):
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
     return {"message": "Unidad eliminada"}
 
@@ -319,7 +334,10 @@ def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_
     tags=["Fleet - Units"],
 )
 def update_unit_tires(
-    unit_term: str, tires: List[schemas.TireCreate], db: Session = Depends(get_db)
+    unit_term: str,
+    tires: List[schemas.TireCreate],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
 ):
     from urllib.parse import unquote
 
@@ -348,7 +366,7 @@ def update_unit_tires(
         # 4. CORRECCIÓN: Usamos tu función del CRUD que ejecuta el "TRUCO MAESTRO"
         # para renombrar la llanta vieja eliminada (Ej: agregarle "_DEL_id")
         # y así liberar el código interno sin causar IntegrityError.
-        tire_db = crud.create_tire(db, t)
+        tire_db = crud.create_tire(db, t, current_user.id)
 
         # 5. Le asignamos la unidad actual a la llanta recién creada
         tire_db.unit_id = unit.id
@@ -429,12 +447,16 @@ async def upload_unit_document(
     tags=["Fleet - Units"],
 )
 def update_unit_load_status(
-    unit_id: int, load_status: bool, db: Session = Depends(get_db)
+    unit_id: int,
+    load_status: bool,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     db_unit = crud.get_unit(db, unit_id=unit_id)
     if not db_unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
     db_unit.is_loaded = load_status
+    db_unit.updated_by_id = current_user.id  # <--- 2. AGREGAR LÍNEA DE AUDITORÍA
     db.commit()
     db.refresh(db_unit)
     return db_unit
@@ -480,14 +502,19 @@ def read_operators(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
 @router.post(
     "/operators", response_model=schemas.OperatorResponse, tags=["Fleet - Operators"]
 )
-def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_db)):
+def create_operator(
+    operator: schemas.OperatorCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if (
         db.query(models.Operator)
         .filter(models.Operator.license_number == operator.license_number)
         .first()
     ):
         raise HTTPException(status_code=400, detail="Licencia ya registrada")
-    return crud.create_operator(db, operator)
+    # <--- 2. PASAR current_user.id
+    return crud.create_operator(db, operator, current_user.id)
 
 
 @router.put(
@@ -496,17 +523,26 @@ def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_
     tags=["Fleet - Operators"],
 )
 def update_operator(
-    operator_id: int, operator: schemas.OperatorUpdate, db: Session = Depends(get_db)
+    operator_id: int,
+    operator: schemas.OperatorUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
 ):
-    db_op = crud.update_operator(db, operator_id, operator)
+    # <--- 2. PASAR current_user.id
+    db_op = crud.update_operator(db, operator_id, operator, current_user.id)
     if not db_op:
         raise HTTPException(status_code=404, detail="Operador no encontrado")
     return db_op
 
 
 @router.delete("/operators/{operator_id}", tags=["Fleet - Operators"])
-def delete_operator(operator_id: int, db: Session = Depends(get_db)):
-    if not crud.delete_operator(db, operator_id):
+def delete_operator(
+    operator_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
+    # <--- 2. PASAR current_user.id
+    if not crud.delete_operator(db, operator_id, current_user.id):
         raise HTTPException(status_code=404, detail="Operador no encontrado")
     return {"message": "Operador eliminado"}
 
@@ -611,7 +647,11 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["Fleet - Tires"],
 )
-def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
+def create_tire(
+    tire: schemas.TireCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     try:
         # 1. Buscamos la llanta directamente en la BD, ignorando cualquier filtro
         llanta_existente = (
@@ -631,10 +671,12 @@ def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
             ).upper()
 
             if estatus_db == "E":
-                # ¡EL TRUCO DEFINITIVO! Renombramos la llanta muerta para liberar tu código
                 llanta_existente.codigo_interno = (
                     f"{llanta_existente.codigo_interno}_DEL_{llanta_existente.id}"
                 )
+                llanta_existente.updated_by_id = (
+                    current_user.id
+                )  # <--- 2. AGREGAR ESTA LÍNEA DE AUDITORÍA
                 db.add(llanta_existente)
                 db.flush()  # Ejecutamos el cambio de nombre en la BD al instante
             else:
@@ -644,7 +686,7 @@ def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
                 )
 
         # 3. Mandamos a crear tu nueva llanta, ya con el camino despejado
-        return crud.create_tire(db, tire)
+        return crud.create_tire(db, tire, current_user.id)
 
     except HTTPException:
         # Dejamos pasar la alerta roja a la pantalla
@@ -664,10 +706,13 @@ def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
 
 @router.post("/tires/{tire_id}/assign", tags=["Fleet - Tires"])
 def assign_tire(
-    tire_id: int, payload: schemas.AssignTirePayload, db: Session = Depends(get_db)
+    tire_id: int,
+    payload: schemas.AssignTirePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        tire = crud.assign_tire(db, tire_id, payload)
+        tire = crud.assign_tire(db, tire_id, payload, current_user.id)
         if not tire:
             raise HTTPException(status_code=404, detail="Llanta no encontrada")
         return {"message": "Asignación exitosa", "id": tire.id}
@@ -677,9 +722,12 @@ def assign_tire(
 
 @router.post("/tires/{tire_id}/maintenance", tags=["Fleet - Tires"])
 def maintenance_tire(
-    tire_id: int, payload: schemas.MaintenanceTirePayload, db: Session = Depends(get_db)
+    tire_id: int,
+    payload: schemas.MaintenanceTirePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    tire = crud.register_maintenance(db, tire_id, payload)
+    tire = crud.register_maintenance(db, tire_id, payload, current_user.id)
     if not tire:
         raise HTTPException(status_code=404, detail="Llanta no encontrada")
     return {"message": "Maintenance registrado", "id": tire.id}
@@ -689,17 +737,24 @@ def maintenance_tire(
     "/tires/{tire_id}", response_model=schemas.TireResponse, tags=["Fleet - Tires"]
 )
 def update_tire(
-    tire_id: int, tire_in: schemas.TireUpdate, db: Session = Depends(get_db)
+    tire_id: int,
+    tire_in: schemas.TireUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    tire = crud.update_tire(db, tire_id, tire_in)
+    tire = crud.update_tire(db, tire_id, tire_in, current_user.id)
     if not tire:
         raise HTTPException(status_code=404, detail="Llanta no encontrada")
     return tire
 
 
 @router.delete("/tires/{tire_id}", tags=["Fleet - Tires"])
-def delete_tire(tire_id: int, db: Session = Depends(get_db)):
-    if not crud.delete_tire(db, tire_id):
+def delete_tire(
+    tire_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not crud.delete_tire(db, tire_id, current_user.id):
         raise HTTPException(status_code=404, detail="Llanta no encontrada")
     return {"message": "Llanta eliminada"}
 
@@ -715,7 +770,7 @@ def delete_tire(tire_id: int, db: Session = Depends(get_db)):
 def get_fuel_logs(
     unit_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     try:
         stmt = (
@@ -916,6 +971,7 @@ def delete_fuel_log(
     if not log:
         raise HTTPException(status_code=404, detail="No encontrado")
     log.record_status = "E"
+    log.updated_by_id = current_user.id  # <--- AGREGAR ESTO
     db.commit()
     return {"message": "Registro eliminado"}
 
