@@ -307,19 +307,14 @@ export default function CFDIVault() {
   // CONFIGURACIÓN DINÁMICA DE COLUMNAS
   // ==========================================
   const columns = useMemo(() => {
-    const baseColumns: ColumnDef<any>[] = [
-      { key: "folio", header: "Folio" },
-      { key: "uuid", header: "UUID" },
-    ];
+    const cols: ColumnDef<any>[] = [];
 
-    // INYECCIÓN DE COLUMNAS ESPECÍFICAS PARA COMPLEMENTO DE PAGO
+    // SI ESTAMOS EN LA PESTAÑA DE PAGOS, ESTAS SON LAS COLUMNAS BASE
     if (activeTab === "PAGO_CLIENTE") {
-      baseColumns.push({
+      cols.push({
         key: "numero_complemento",
         header: "No. Complemento",
         render: (_, row: any) => {
-          // Extraemos el folio real, ignorando el ID interno si es un número,
-          // quitamos "PAGO-" o "COM-" original y forzamos el formato limpio.
           const rawFolio = String(
             row.folio_interno || row.folio || row.numero_complemento || "N/A",
           );
@@ -337,7 +332,8 @@ export default function CFDIVault() {
           );
         },
       });
-      baseColumns.push({
+      cols.push({ key: "uuid", header: "UUID" });
+      cols.push({
         key: "folio_relacionado",
         header: "Origen (CP/F)",
         render: (_, row: any) => (
@@ -346,8 +342,12 @@ export default function CFDIVault() {
           </span>
         ),
       });
-    } else {
-      baseColumns.push({
+    }
+    // PARA FACTURAS NORMALES DE CLIENTES O PROVEEDORES, ESTAS SON LAS COLUMNAS BASE
+    else {
+      cols.push({ key: "folio", header: "Folio" });
+      cols.push({ key: "uuid", header: "UUID" });
+      cols.push({
         key: "viaje_id",
         header: "Viaje",
         render: (val) =>
@@ -364,7 +364,8 @@ export default function CFDIVault() {
       });
     }
 
-    baseColumns.push(
+    // COLUMNAS COMUNES PARA TODAS LAS PESTAÑAS (Entidad, Emisión, Monto, Estatus, Acciones)
+    cols.push(
       {
         key: "cliente_proveedor_nombre",
         header: "Entidad",
@@ -468,7 +469,6 @@ export default function CFDIVault() {
             if (activeTab === "PAGO_CLIENTE") {
               const rfc =
                 row.rfc_cliente || row.cliente_proveedor_rfc || "RFC_PENDIENTE";
-
               const rawFolio = String(
                 row.folio_interno ||
                   row.folio ||
@@ -562,7 +562,7 @@ export default function CFDIVault() {
       },
     );
 
-    return baseColumns;
+    return cols;
   }, [activeTab]);
 
   // Nombre de exportación dinámico para Excel
