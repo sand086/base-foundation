@@ -1462,6 +1462,9 @@ def get_cfdi_vault_records(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ):
+    import os
+    import re
+
     records = []
 
     # 🚀 MAGIA DINÁMICA: Buscar la columna de relación (sustitución) en ReceivableInvoice
@@ -1601,9 +1604,7 @@ def get_cfdi_vault_records(
                     "id": r.id,
                     "tipo_documento": "FACTURA_CLIENTE",
                     "folio": r.folio_interno,
-                    "folio_relacionado": getattr(
-                        r, "uuid_relacionado", None
-                    ),  # <--- CORREGIDO ORIGEN
+                    "folio_relacionado": getattr(r, "uuid_relacionado", None),
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
@@ -1612,7 +1613,7 @@ def get_cfdi_vault_records(
                     ),
                     "cliente_proveedor_rfc": (
                         r.client.rfc if r.client else "XAXX010101000"
-                    ),  # <--- CORREGIDO RFC
+                    ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
@@ -1696,7 +1697,7 @@ def get_cfdi_vault_records(
                     ),
                     "cliente_proveedor_rfc": (
                         r.supplier.rfc if r.supplier else "XEXX010101000"
-                    ),  # <--- CORREGIDO RFC
+                    ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
@@ -1781,9 +1782,7 @@ def get_cfdi_vault_records(
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
                     "folio": r.folio_interno,
-                    "folio_relacionado": getattr(
-                        r, "uuid_relacionado", None
-                    ),  # <--- CORREGIDO ORIGEN
+                    "folio_relacionado": getattr(r, "uuid_relacionado", None),
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
@@ -1792,7 +1791,7 @@ def get_cfdi_vault_records(
                     ),
                     "cliente_proveedor_rfc": (
                         r.client.rfc if r.client else "XAXX010101000"
-                    ),  # <--- CORREGIDO RFC
+                    ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
@@ -1893,8 +1892,36 @@ def get_cfdi_vault_records(
 
             real_cfdi_data = mapa_cfdi_sat.get(comp_uuid) if comp_uuid else None
 
-            # 1. FOLIO LIMPIO (SIN EL "Fra: CP-XXXX") AHORA CORRECTO
+            # 🛠️ ESCÁNER MAESTRO: ABRIR EL XML REAL DE DISCO PARA SACAR EL FOLIO PAC 🛠️
+            xml_folio = None
             if comp_uuid:
+                rutas_disco = [
+                    "storage/xml_timbrados",
+                    "backend/storage/xml_timbrados",
+                    "app/storage/xml_timbrados",
+                    "/home/desarrolloas/base-foundation/backend/storage/xml_timbrados",
+                ]
+                for b_path in rutas_disco:
+                    p_file = os.path.join(b_path, f"{comp_uuid}.xml")
+                    if os.path.exists(p_file):
+                        try:
+                            with open(
+                                p_file, "r", encoding="utf-8", errors="ignore"
+                            ) as fxml:
+                                head = fxml.read(2000)
+                                m = re.search(r'Folio="([^"]+)"', head) or re.search(
+                                    r"Folio='([^']+)'", head
+                                )
+                                if m:
+                                    xml_folio = m.group(1)
+                                    break
+                        except:
+                            pass
+
+            # Si el escáner leyó el XML físico, usamos ese número real (ej: 2574)
+            if xml_folio:
+                folio_mostrar = f"COM-{xml_folio}"
+            elif comp_uuid:
                 if real_cfdi_data and real_cfdi_data.get("folio"):
                     folio_mostrar = f"{real_cfdi_data['folio']}"
                 elif r.referencia and "COM" in r.referencia.upper():
@@ -1913,13 +1940,12 @@ def get_cfdi_vault_records(
                 pdf_final = getattr(r, "comprobante_url", None)
                 xml_final = None
 
-            # 2. MANDAR EL RFC Y EL ORIGEN SEPARADO AL FRONTEND
             records.append(
                 {
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": folio_mostrar,  # <--- FOLIO PURO (Ej. "COM-28")
-                    "folio_relacionado": folio_padre,  # <--- ORIGEN SEPARADO (Ej. "CP-17691")
+                    "folio": folio_mostrar,  # <--- ¡MANDA EL REAL EXTRACTADO DEL XML! (ej: "COM-2574")
+                    "folio_relacionado": folio_padre,  # <--- ORIGEN SEPARADO (ej: "CP-17691")
                     "uuid": comp_uuid,
                     "fecha_emision": getattr(r, "fecha_pago", None),
                     "estatus": status_fiscal,
@@ -1932,13 +1958,13 @@ def get_cfdi_vault_records(
                         r.invoice.client.rfc
                         if r.invoice and r.invoice.client
                         else "XAXX010101000"
-                    ),  # <--- ¡AQUÍ ESTÁ EL RFC QUE FALTABA!
+                    ),  # <--- ¡RFC ENVIADO CORRECTAMENTE!
                     "monto_total": getattr(r, "monto", 0),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
-                    ),
+                    ),  # <--- HISTORIAL VINCULADO AL PAGO
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
                     "pdf_url": pdf_final,
                     "xml_url": xml_final,
