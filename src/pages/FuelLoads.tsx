@@ -196,68 +196,78 @@ const FuelLoads = () => {
 
   const handleCreateTicket = async (data: any) => {
     const ticketsArray = data.tickets || [];
-    const legIds =
+
+    // Tomamos solo la primera fase vinculada para no duplicar peticiones
+    // Si no vinculan nada, se envía como null
+    const legId =
       data.trip_leg_ids && data.trip_leg_ids.length > 0
-        ? data.trip_leg_ids
-        : [null];
-    const divisor = legIds.length;
+        ? data.trip_leg_ids[0]
+        : null;
 
     if (ticketsArray.length === 0) {
       toast.error("No hay tickets para guardar");
       return;
     }
 
-    const totalPeticiones = ticketsArray.length * divisor;
-    const toastId = toast.loading(`Guardando ${totalPeticiones} vale(s)...`);
+    const toastId = toast.loading(
+      `Guardando ${ticketsArray.length} vale(s)...`,
+    );
 
     try {
       for (const ticket of ticketsArray) {
-        const litrosDistribuidos =
-          (Number(ticket.litros_diesel) || 0) / divisor;
+        const formData = new FormData();
 
-        for (const legId of legIds) {
-          const formData = new FormData();
-          formData.append("unit_id", String(data.unit_id));
-          formData.append("operator_id", String(data.operator_id));
-          formData.append("fecha_hora", String(ticket.fecha_hora));
-          formData.append("estacion", ticket.estacion || "No especificada");
+        // Extraemos los litros (incluso si es urea, tu estado guarda el input en litros_diesel)
+        const litros = Number(ticket.litros_diesel) || 0;
+        const precio = Number(ticket.precio_diesel) || 0;
 
-          // Dependiendo del switch, mandamos los litros al campo correcto del backend
-          if (ticket.tipo_combustible === "urea") {
-            formData.append("litros_urea", String(litrosDistribuidos));
-            formData.append("precio_urea", String(ticket.precio_diesel || 0));
-            formData.append("litros_diesel", "0");
-            formData.append("precio_diesel", "0");
-          } else {
-            formData.append("litros_diesel", String(litrosDistribuidos));
-            formData.append("precio_diesel", String(ticket.precio_diesel || 0));
-            formData.append("litros_urea", "0");
-            formData.append("precio_urea", "0");
-          }
+        formData.append("unit_id", String(data.unit_id));
+        formData.append("operator_id", String(data.operator_id));
+        formData.append("fecha_hora", String(ticket.fecha_hora));
+        formData.append("estacion", ticket.estacion || "No especificada");
 
-          formData.append("is_motogenerator", String(data.is_motogenerator));
-
-          if (data.is_motogenerator) {
-            formData.append("odometro", "0");
-            formData.append("horometro", String(data.horometro || 0));
-          } else {
-            formData.append("odometro", String(data.odometro || 0));
-          }
-
-          if (data.trip_id && data.trip_id !== "none")
-            formData.append("trip_id", String(data.trip_id));
-          if (legId && legId !== "undefined")
-            formData.append("trip_leg_id", String(legId));
-          if (ticket.evidencia) formData.append("file", ticket.evidencia);
-
-          await fuelService.create(formData);
+        // Dependiendo del switch, mandamos los litros al campo correcto y GARANTIZAMOS que el otro vaya en 0
+        if (ticket.tipo_combustible === "urea") {
+          formData.append("litros_urea", String(litros));
+          formData.append("precio_urea", String(precio));
+          formData.append("litros_diesel", "0");
+          formData.append("precio_diesel", "0");
+        } else {
+          formData.append("litros_diesel", String(litros));
+          formData.append("precio_diesel", String(precio));
+          formData.append("litros_urea", "0");
+          formData.append("precio_urea", "0");
         }
+
+        formData.append("is_motogenerator", String(data.is_motogenerator));
+
+        if (data.is_motogenerator) {
+          formData.append("odometro", "0");
+          formData.append("horometro", String(data.horometro || 0));
+        } else {
+          formData.append("odometro", String(data.odometro || 0));
+        }
+
+        if (data.trip_id && data.trip_id !== "none") {
+          formData.append("trip_id", String(data.trip_id));
+        }
+
+        if (legId && legId !== "undefined") {
+          formData.append("trip_leg_id", String(legId));
+        }
+
+        if (ticket.evidencia) {
+          formData.append("file", ticket.evidencia);
+        }
+
+        // Se hace solo UNA petición por cada ticket del modal
+        await fuelService.create(formData);
       }
 
       setIsModalOpen(false);
       await loadData();
       toast.success(
-        `Éxito: Vales guardados correctamente en ${divisor} fase(s).`,
+        `Éxito: ${ticketsArray.length} vale(s) guardado(s) correctamente.`,
         { id: toastId },
       );
     } catch (error) {
