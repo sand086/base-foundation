@@ -137,7 +137,7 @@ def register_payment(
             f"💰 [CXP] Registrando pago para factura {invoice_id}. Usuario: {current_user.email}"
         )
 
-        invoice = crud.register_payment(db, invoice_id, payment)
+        invoice = crud.register_payment(db, invoice_id, payment, current_user.id)
 
         if not invoice:
             raise HTTPException(status_code=404, detail="Factura no encontrada")
