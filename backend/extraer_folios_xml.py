@@ -1,5 +1,5 @@
 import os
-import re
+import xml.etree.ElementTree as ET
 from app.db.database import SessionLocal
 from app.models.models import ReceivableInvoicePayment
 
@@ -32,15 +32,15 @@ def procesar_xmls():
         xml_path = next((ruta for ruta in rutas_posibles if os.path.exists(ruta)), None)
 
         if xml_path:
-            with open(xml_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read(2000)  # Leemos solo el inicio del XML
+            try:
+                # Usamos el parser XML real de Python (Es 100% seguro y no se confunde)
+                tree = ET.parse(xml_path)
+                root = tree.getroot()
 
-                # Buscamos el atributo Folio="2571"
-                m = re.search(r'Folio="([^"]+)"', content) or re.search(
-                    r"Folio='([^']+)'", content
-                )
-                if m:
-                    folio_real = m.group(1)
+                # Vamos directo a extraer el atributo Folio del nodo principal (cfdi:Comprobante)
+                folio_real = root.attrib.get("Folio")
+
+                if folio_real:
                     pago.folio_complemento = f"COM-{folio_real}"
                     db.add(pago)
                     print(
@@ -48,7 +48,10 @@ def procesar_xmls():
                     )
                     corregidos += 1
                 else:
-                    print(f"⚠️ XML de {uuid} no tiene atributo Folio.")
+                    print(f"⚠️ XML de {uuid} no tiene atributo Folio en la cabecera.")
+
+            except Exception as e:
+                print(f"❌ Error al leer el XML de {uuid}: {e}")
         else:
             print(f"❌ No se encontró el XML físico para el UUID: {uuid}")
 
