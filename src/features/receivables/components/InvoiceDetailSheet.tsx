@@ -37,7 +37,6 @@ import {
   MapPin,
   AlertTriangle,
   History,
-  Download,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -68,7 +67,7 @@ export function InvoiceDetailSheet({
 }: InvoiceDetailSheetProps) {
   useEffect(() => {
     if (invoice && open) {
-      console.log("FACTURA DE CLIENTE ABIERTA:", invoice);
+      console.log("FACTURA ABIERTA EN DETALLE:", invoice);
     }
   }, [invoice, open]);
 
@@ -79,7 +78,7 @@ export function InvoiceDetailSheet({
 
   // 📝 EXTRACCIÓN DE DATOS FISCALES
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
-  const uuidRelacionado = safeStr(inv.uuid_relacionado); // Carta Porte origen
+  const uuidRelacionado = safeStr(inv.uuid_relacionado);
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
@@ -89,8 +88,6 @@ export function InvoiceDetailSheet({
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
     : [];
-  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
-  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
 
   // AGRUPACIÓN DEL HISTORIAL POR VERSIÓN PARA LA TABLA
   const groupedHistory = Object.values(
@@ -120,9 +117,14 @@ export function InvoiceDetailSheet({
 
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
+    safeStr(inv.supplier?.razon_social) ||
     safeStr(inv.cliente) ||
-    "Público en General";
-  const entidadRfc = safeStr(inv.client?.rfc) || "RFC NO DISPONIBLE";
+    "Público en General / No Identificado";
+
+  const entidadRfc =
+    safeStr(inv.client?.rfc) ||
+    safeStr(inv.supplier?.rfc) ||
+    "RFC NO DISPONIBLE";
 
   const concepto = safeStr(inv.concepto) || "Sin descripción";
   const fechaEmision =
@@ -147,6 +149,7 @@ export function InvoiceDetailSheet({
     safeStr(inv.trip_info?.contenedores) || "Sin contenedores registrados";
   const productoSat = safeStr(inv.trip_info?.producto_sat) || "No especificado";
 
+  // PAGOS (Para el historial de CxC o CxP)
   const payments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
     : Array.isArray(inv.pagos)
@@ -155,42 +158,20 @@ export function InvoiceDetailSheet({
         ? inv.cobros
         : [];
 
-  const handleDownload = async (
-    fileType: "pdf" | "xml",
+  // ========================================================
+  // LÓGICA DE DESCARGA: MANDA A LLAMAR AL BACKEND DIRECTAMENTE
+  // ========================================================
+  const handleDownloadFromBackend = (
+    type: "pdf" | "xml",
     targetUuid: string,
-    suggestedFilename: string,
   ) => {
-    const toastId = toast.loading(`Descargando ${fileType.toUpperCase()}...`);
-    try {
-      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const baseURL = rawBaseURL.replace(/\/$/, "");
-      const fileUrl = `${baseURL}/api/sat/invoice/${targetUuid}/${fileType}`;
-
-      // Usamos fetch para descargar el blob y forzar nuestro nombre personalizado
-      const response = await fetch(fileUrl);
-      if (!response.ok) throw new Error("Error en la descarga");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = url;
-      // Aquí aplicamos tu nomenclatura:
-      link.setAttribute("download", `${suggestedFilename}.${fileType}`);
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url); // Limpiamos memoria
-
-      toast.success(`${fileType.toUpperCase()} descargado correctamente.`, {
-        id: toastId,
-      });
-    } catch (error: any) {
-      toast.error(`Fallo al descargar el ${fileType.toUpperCase()}`, {
-        id: toastId,
-      });
+    if (!targetUuid || targetUuid === "NO TIMBRADO") {
+      toast.error("No hay un UUID válido para descargar del SAT.");
+      return;
     }
+    const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+    const baseURL = rawBaseURL.replace(/\/$/, "");
+    window.open(`${baseURL}/api/sat/invoice/${targetUuid}/${type}`, "_blank");
   };
 
   const handleDownloadUrl = (url: string, filename: string) => {
@@ -229,7 +210,6 @@ export function InvoiceDetailSheet({
         })
       : "—";
 
-  // FORMATEADOR DE FECHA Y HORA PARA LA TABLA
   const fDT = (d: any) => {
     if (!d || d === "—") return "—";
     return new Date(d).toLocaleString("es-MX", {
@@ -243,19 +223,25 @@ export function InvoiceDetailSheet({
 
   const isPaid = saldoPendiente <= 0;
 
+  // Variables booleanas para saber qué botones prender en el Fallback (Última fila de la tabla)
+  const xmlUrl = inv.xml_url || inv.xmlUrl;
+  const pdfUrl = inv.pdf_url || inv.pdfUrl;
+
+  const hasFallbackXml = !!(inv.uuid || xmlUrl);
+  const hasFallbackPdf = !!(inv.uuid || pdfUrl);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         className="w-full sm:max-w-[650px] bg-slate-50 dark:bg-background/95 backdrop-blur-xl border-l-slate-200 dark:border-l-white/10 p-0 flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* ================= HEADER FIJO ================= */}
         <SheetHeader className="px-6 py-5 border-b border-border/50 flex flex-row items-center justify-between sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-40 shadow-sm">
           <SheetTitle className="flex items-center gap-3 text-brand-navy dark:text-white font-black text-xl tracking-tight m-0">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800/50">
               <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Detalle de Factura
+            Detalle de Comprobante
           </SheetTitle>
 
           <div className="flex items-center gap-3 mt-0">
@@ -277,9 +263,7 @@ export function InvoiceDetailSheet({
           </div>
         </SheetHeader>
 
-        {/* ================= CONTENEDOR SCROLL ================= */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          {/* 👇 ALERTA DE CANCELACIÓN */}
           {isCanceled && (
             <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
@@ -355,13 +339,13 @@ export function InvoiceDetailSheet({
                   onClick={() => onPayClick(invoice)}
                   className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-black h-11 px-6 text-[11px] tracking-widest uppercase rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
                 >
-                  <Banknote className="w-4 h-4 mr-2" /> Cobrar
+                  <Banknote className="w-4 h-4 mr-2" /> Cobrar / Pagar
                 </Button>
               )}
             </div>
           </div>
 
-          {/* CLIENTE Y CONCEPTO (GRID) */}
+          {/* CLIENTE/PROVEEDOR Y CONCEPTO */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-2 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
               <div className="flex items-center gap-2 mb-3">
@@ -369,7 +353,7 @@ export function InvoiceDetailSheet({
                   <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </div>
                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Receptor
+                  Entidad
                 </span>
               </div>
               <p className="font-black text-foreground text-base leading-tight mb-3 break-words">
@@ -384,7 +368,7 @@ export function InvoiceDetailSheet({
 
             <div className="md:col-span-3 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Concepto de Facturación
+                <FileText className="w-3.5 h-3.5" /> Concepto
               </p>
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed flex-1 break-words whitespace-pre-wrap">
                 {concepto}
@@ -502,7 +486,7 @@ export function InvoiceDetailSheet({
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-bold text-slate-500">IVA (16%):</span>
+                  <span className="font-bold text-slate-500">IVA:</span>
                   <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
                     {fC(iva)}
                   </span>
@@ -525,75 +509,81 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          <Separator className="bg-slate-200 dark:bg-border/50" />
-
-          {/* DATOS OPERATIVOS */}
-          <div className="space-y-4">
-            <p className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
-              <Truck className="w-5 h-5 text-blue-500" /> Detalles de Operación
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
-                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ruta del
-                  Viaje
-                </span>
-                <div className="flex-1 flex flex-col justify-center space-y-2">
-                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
-                    {origen}
-                  </span>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <ArrowDown className="w-4 h-4" />
+          {/* DATOS OPERATIVOS (Si los hay) */}
+          {(origen !== "No especificado" || destino !== "No especificado") && (
+            <>
+              <Separator className="bg-slate-200 dark:bg-border/50" />
+              <div className="space-y-4">
+                <p className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-blue-500" /> Detalles de
+                  Operación
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ruta del
+                      Viaje
+                    </span>
+                    <div className="flex-1 flex flex-col justify-center space-y-2">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
+                        {origen}
+                      </span>
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <ArrowDown className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
+                        {destino}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
-                    {destino}
-                  </span>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-4">
+                    <div>
+                      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-slate-400" /> Producto
+                        (Clave SAT)
+                      </span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight block">
+                        {productoSat}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+                      <div>
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Weight className="w-3 h-3 text-slate-400" /> Peso
+                        </span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">
+                          {pesoTon > 0
+                            ? `${pesoTon} Toneladas`
+                            : "No registrado"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Box className="w-3 h-3 text-slate-400" />{" "}
+                          Contenedores
+                        </span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal block">
+                          {contenedores}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-4">
-                <div>
-                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5 text-slate-400" /> Producto
-                    (Clave SAT)
-                  </span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight block">
-                    {productoSat}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-3">
-                  <div>
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
-                      <Weight className="w-3 h-3 text-slate-400" /> Peso
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">
-                      {pesoTon > 0 ? `${pesoTon} Toneladas` : "No registrado"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
-                      <Box className="w-3 h-3 text-slate-400" /> Contenedores
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal block">
-                      {contenedores}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* HISTORIAL DE COBROS (REP) */}
+          {/* HISTORIAL DE COBROS/PAGOS (REP) */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
                   <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                 </div>
-                Historial de Cobros y REP
+                Historial de Pagos y REP
                 <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black ml-1">
                   {payments.length}
                 </span>
@@ -604,7 +594,7 @@ export function InvoiceDetailSheet({
               <div className="p-8 text-center bg-white dark:bg-card rounded-2xl border-2 border-dashed border-slate-200 dark:border-border flex flex-col items-center justify-center gap-2">
                 <Receipt className="h-8 w-8 text-slate-300 dark:text-slate-700" />
                 <p className="text-sm font-bold text-slate-500">
-                  No hay cobros registrados
+                  No hay pagos registrados
                 </p>
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[250px] leading-tight mx-auto">
                   Los abonos que registres aparecerán aquí junto con su
@@ -635,11 +625,6 @@ export function InvoiceDetailSheet({
                         p.complemento_uuid ?? p.complementoUuid,
                       );
 
-                      // NUEVO: Construimos tu nomenclatura: COM-folio_RFC_uuid
-                      // Usamos p.folio si existe, o p.id como respaldo
-                      const paymentFolio = p.folio || p.id;
-                      const customFilename = `COM-${paymentFolio}_${entidadRfc}_${complementoUuid}`;
-
                       return (
                         <DataTableRow
                           key={safeStr(p.id)}
@@ -662,13 +647,11 @@ export function InvoiceDetailSheet({
                                   size="icon"
                                   title="Descargar PDF"
                                   className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 dark:hover:bg-rose-900/50 transition-all"
-                                  onClick={
-                                    () =>
-                                      handleDownload(
-                                        "pdf",
-                                        complementoUuid,
-                                        customFilename,
-                                      ) // <-- Pasamos tu nombre de archivo
+                                  onClick={() =>
+                                    handleDownloadFromBackend(
+                                      "pdf",
+                                      complementoUuid,
+                                    )
                                   }
                                 >
                                   <FileText className="h-4 w-4" />
@@ -678,13 +661,11 @@ export function InvoiceDetailSheet({
                                   size="icon"
                                   title="Descargar XML"
                                   className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 dark:hover:bg-blue-900/50 transition-all"
-                                  onClick={
-                                    () =>
-                                      handleDownload(
-                                        "xml",
-                                        complementoUuid,
-                                        customFilename,
-                                      ) // <-- Pasamos tu nombre de archivo
+                                  onClick={() =>
+                                    handleDownloadFromBackend(
+                                      "xml",
+                                      complementoUuid,
+                                    )
                                   }
                                 >
                                   <FileCode2 className="h-4 w-4" />
@@ -707,11 +688,11 @@ export function InvoiceDetailSheet({
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* 👇 TABLA DE EXPEDIENTE Y VERSIONES (CORREGIDA PARA QUE SIEMPRE SEA TABLA) */}
+          {/* 👇 TABLA DE EXPEDIENTE Y VERSIONES (CORREGIDA PARA QUE DESCARGUE VÍA API SIEMPRE QUE SE PUEDA) */}
           <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
               <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
-              Versiones de {inv.is_nominal ? "Carta Porte" : "Factura"}
+              Versiones (Historial)
             </h3>
 
             <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
@@ -759,10 +740,12 @@ export function InvoiceDetailSheet({
                                 title="Descargar PDF"
                                 className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
                                 onClick={() =>
-                                  handleDownloadUrl(
-                                    group.pdf.file_url,
-                                    group.pdf.filename,
-                                  )
+                                  group.is_active && inv.uuid
+                                    ? handleDownloadFromBackend("pdf", inv.uuid)
+                                    : handleDownloadUrl(
+                                        group.pdf.file_url,
+                                        group.pdf.filename,
+                                      )
                                 }
                               >
                                 <FileText className="h-3.5 w-3.5" />
@@ -775,10 +758,12 @@ export function InvoiceDetailSheet({
                                 title="Descargar XML"
                                 className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
                                 onClick={() =>
-                                  handleDownloadUrl(
-                                    group.xml.file_url,
-                                    group.xml.filename,
-                                  )
+                                  group.is_active && inv.uuid
+                                    ? handleDownloadFromBackend("xml", inv.uuid)
+                                    : handleDownloadUrl(
+                                        group.xml.file_url,
+                                        group.xml.filename,
+                                      )
                                 }
                               >
                                 <FileCode2 className="h-3.5 w-3.5" />
@@ -804,13 +789,13 @@ export function InvoiceDetailSheet({
                         </DataTableCell>
                       </DataTableRow>
                     ))
-                  ) : pdfUrl || xmlUrl ? (
-                    // 👈 FALLBACK INTEGRADO DENTRO DE LA TABLA
+                  ) : hasFallbackPdf || hasFallbackXml ? (
+                    // 👈 FALLBACK INTEGRADO DENTRO DE LA TABLA (Usa Endpoint Directo si hay UUID)
                     <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <DataTableCell className="py-2.5">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            {displayFolio || "Factura"}
+                            {displayFolio || "Comprobante"}
                           </span>
                           <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
                             Versión Única (Activa)
@@ -822,36 +807,42 @@ export function InvoiceDetailSheet({
                       </DataTableCell>
                       <DataTableCell className="text-center py-2.5">
                         <div className="flex justify-center items-center gap-1">
-                          {pdfUrl && (
+                          {hasFallbackPdf && (
                             <Button
                               variant="ghost"
                               size="icon"
                               title="Descargar PDF"
                               className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
-                              onClick={() =>
-                                handleDownload(
-                                  "pdf",
-                                  uuid,
-                                  `Factura_${displayFolio}_${entidadRfc}_${uuid}`,
-                                )
-                              }
+                              onClick={() => {
+                                if (inv.uuid) {
+                                  handleDownloadFromBackend("pdf", inv.uuid);
+                                } else {
+                                  handleDownloadUrl(
+                                    pdfUrl,
+                                    `Comprobante_${displayFolio}.pdf`,
+                                  );
+                                }
+                              }}
                             >
                               <FileText className="h-3.5 w-3.5" />
                             </Button>
                           )}
-                          {xmlUrl && (
+                          {hasFallbackXml && (
                             <Button
                               variant="ghost"
                               size="icon"
                               title="Descargar XML"
                               className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
-                              onClick={() =>
-                                handleDownload(
-                                  "xml",
-                                  uuid,
-                                  `Factura_${displayFolio}_${entidadRfc}_${uuid}`,
-                                )
-                              }
+                              onClick={() => {
+                                if (inv.uuid) {
+                                  handleDownloadFromBackend("xml", inv.uuid);
+                                } else {
+                                  handleDownloadUrl(
+                                    xmlUrl,
+                                    `Comprobante_${displayFolio}.xml`,
+                                  );
+                                }
+                              }}
                             >
                               <FileCode2 className="h-3.5 w-3.5" />
                             </Button>
