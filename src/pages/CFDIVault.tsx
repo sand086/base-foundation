@@ -329,14 +329,7 @@ export default function CFDIVault() {
             displayFolio = cleanFolio ? `COM-${cleanFolio}` : "N/A";
           }
 
-          return (
-            <Badge
-              variant="outline"
-              className="bg-indigo-50 text-indigo-700 font-mono font-bold"
-            >
-              {displayFolio}
-            </Badge>
-          );
+          return <span className="font-mono bold">{displayFolio}</span>;
         },
       });
       cols.push({ key: "uuid", header: "UUID" });
