@@ -216,7 +216,10 @@ def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/tolls/{toll_id}")
 def delete_toll(
-    toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
+    toll_id: int,
+    remove_from_routes: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     db_toll = db.query(models.TollBooth).get(toll_id)
     if not db_toll:
@@ -266,6 +269,7 @@ def delete_toll(
                 template.tiempo_total_minutos = total_min
 
         db_toll.record_status = "I"
+        db_toll.updated_by_id = current_user.id
         msg = "Caseta inactivada y sus tramos marcados como eliminados en las rutas (Borrado lógico)."
     else:
         db_toll.record_status = "E"
@@ -1306,7 +1310,7 @@ def unhook_trip_in_yard(
 
 
 @router.post("/rate-templates/sync-distances")
-def sync_distances(db: Session = Depends(get_db)):
+def sync_distances(db: Session = Depends(get_db) , current_user: models.User = Depends(get_current_user)):
     """
     Sincroniza masivamente las distancias en carretera de los RateTemplates
     utilizando la función helper existente (Nominatim + OSRM).
@@ -1337,6 +1341,7 @@ def sync_distances(db: Session = Depends(get_db)):
 
             if distancia_calculada > 0:
                 template.distancia_total_km = distancia_calculada
+                template.updated_by_id = current_user.id
                 db.commit()
                 actualizados += 1
             else:

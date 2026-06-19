@@ -183,6 +183,7 @@ async def upload_units_bulk(
             new_unit = Unit(
                 public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}",
                 numero_economico=clean_eco,
+                created_by_id=current_user.id,
                 placas=str(row.get("placas", "SIN-PLACA")).strip(),
                 vin=str(row.get("vin", "")),
                 marca=str(row.get("marca", "GENERICO")),
@@ -436,6 +437,7 @@ async def upload_unit_document(
     elif doc_type == "caat":
         unit.caat_url = file_url
 
+    unit.updated_by_id = current_user.id
     db.commit()
     db.refresh(unit)
     return {"url": file_url, "filename": unique_name, "message": "Archivo versionado"}
@@ -598,6 +600,7 @@ async def upload_operator_document(
     field_name = f"{doc_type}_url"
     if hasattr(operator, field_name):
         setattr(operator, field_name, storage_data["url"])
+        operator.updated_by_id = current_user.id
 
     db.add(new_doc)
     db.commit()
