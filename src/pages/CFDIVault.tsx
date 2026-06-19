@@ -317,11 +317,25 @@ export default function CFDIVault() {
       baseColumns.push({
         key: "numero_complemento",
         header: "No. Complemento",
-        render: (_, row: any) => (
-          <Badge variant="outline" className="bg-indigo-50 text-indigo-700">
-            {row.numero_complemento || row.folio || "N/A"}
-          </Badge>
-        ),
+        render: (_, row: any) => {
+          // Extraemos el folio real, ignorando el ID interno si es un número,
+          // quitamos "PAGO-" o "COM-" original y forzamos el formato limpio.
+          const rawFolio = String(
+            row.folio_interno || row.folio || row.numero_complemento || "N/A",
+          );
+          const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
+          const displayFolio =
+            cleanFolio !== "N/A" ? `COM-${cleanFolio}` : "N/A";
+
+          return (
+            <Badge
+              variant="outline"
+              className="bg-indigo-50 text-indigo-700 font-mono font-bold"
+            >
+              {displayFolio}
+            </Badge>
+          );
+        },
       });
       baseColumns.push({
         key: "folio_relacionado",
@@ -452,10 +466,19 @@ export default function CFDIVault() {
 
             // SI ES COMPLEMENTO DE PAGO, FORZAR EL NOMBRE COM-folio_rfc_uuid
             if (activeTab === "PAGO_CLIENTE") {
-              const rfc = row.rfc_cliente || "RFC_PENDIENTE";
-              const targetFolio = row.folio || row.numero_complemento || "SF";
+              const rfc =
+                row.rfc_cliente || row.cliente_proveedor_rfc || "RFC_PENDIENTE";
+
+              const rawFolio = String(
+                row.folio_interno ||
+                  row.folio ||
+                  row.numero_complemento ||
+                  "SF",
+              );
+              const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
               const targetUuid = row.uuid || "SIN_UUID";
-              const customName = `COM-${targetFolio}_${rfc}_${targetUuid}.${type}`;
+
+              const customName = `COM-${cleanFolio}_${rfc}_${targetUuid}.${type}`;
 
               forceDownloadCustomName(fileUrl, customName);
             } else {
