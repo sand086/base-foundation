@@ -1650,6 +1650,7 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     cuenta_deposito = Column(String(50))
     complemento_uuid = Column(String(36), nullable=True)
     comprobante_url = Column(String(500), nullable=True)
+    folio_complemento = Column(String(50), nullable=True)
 
     # NUEVO: CAMPOS DE ESTATUS Y CANCELACIÓN
     estatus = Column(String(50), default="ACTIVO", server_default="ACTIVO")
