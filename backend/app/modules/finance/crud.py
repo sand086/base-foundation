@@ -1601,11 +1601,15 @@ def get_cfdi_vault_records(
                     "id": r.id,
                     "tipo_documento": "FACTURA_CLIENTE",
                     "folio": r.folio_interno,
+                    "folio_relacionado": r.uuid_relacionado,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
+                    ),
+                    "cliente_proveedor_rfc": (
+                        r.client.rfc if r.client else "XAXX010101000"
                     ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
@@ -1681,11 +1685,15 @@ def get_cfdi_vault_records(
                     "tipo_documento": "FACTURA_PROVEEDOR",
                     "folio": getattr(r, "folio", None)
                     or getattr(r, "folio_interno", None),
+                    "folio_relacionado": None,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.supplier.razon_social if r.supplier else "Desconocido"
+                    ),
+                    "cliente_proveedor_rfc": (
+                        r.supplier.rfc if r.supplier else "XEXX010101000"
                     ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
@@ -1771,11 +1779,15 @@ def get_cfdi_vault_records(
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
                     "folio": r.folio_interno,
+                    "folio_relacionado": r.uuid_relacionado,
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
                     "cliente_proveedor_nombre": (
                         r.client.razon_social if r.client else "Desconocido"
+                    ),
+                    "cliente_proveedor_rfc": (
+                        r.client.rfc if r.client else "XAXX010101000"
                     ),
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
@@ -1877,17 +1889,16 @@ def get_cfdi_vault_records(
 
             real_cfdi_data = mapa_cfdi_sat.get(comp_uuid) if comp_uuid else None
 
+            # 1. FOLIO LIMPIO (SIN EL "Fra: CP-XXXX")
             if comp_uuid:
                 if real_cfdi_data and real_cfdi_data["folio"]:
-                    folio_mostrar = f"{real_cfdi_data['folio']} (Fra: {folio_padre})"
+                    folio_mostrar = f"{real_cfdi_data['folio']}"
                 elif r.referencia and "COM" in r.referencia.upper():
-                    folio_mostrar = f"{r.referencia} (Fra: {folio_padre})"
+                    folio_mostrar = f"{r.referencia}"
                 else:
-                    folio_mostrar = f"PAGO-{r.id} (Fra: {folio_padre})"
+                    folio_mostrar = f"PAGO-{r.id}"
             else:
-                folio_mostrar = (
-                    f"{r.referencia or f'Recibo-{r.id}'} (Fra: {folio_padre})"
-                )
+                folio_mostrar = f"{r.referencia or f'Recibo-{r.id}'}"
 
             if real_cfdi_data:
                 pdf_final = real_cfdi_data.get("pdf_url") or getattr(
@@ -1898,11 +1909,13 @@ def get_cfdi_vault_records(
                 pdf_final = getattr(r, "comprobante_url", None)
                 xml_final = None
 
+            # 2. MANDAR EL RFC Y EL ORIGEN SEPARADO AL FRONTEND
             records.append(
                 {
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
-                    "folio": folio_mostrar,
+                    "folio": folio_mostrar,  # <--- FOLIO PURO (Ej. "COM-28")
+                    "folio_relacionado": folio_padre,  # <--- ORIGEN SEPARADO (Ej. "CP-17691")
                     "uuid": comp_uuid,
                     "fecha_emision": getattr(r, "fecha_pago", None),
                     "estatus": status_fiscal,
@@ -1911,12 +1924,17 @@ def get_cfdi_vault_records(
                         if r.invoice and r.invoice.client
                         else "Desconocido"
                     ),
+                    "cliente_proveedor_rfc": (
+                        r.invoice.client.rfc
+                        if r.invoice and r.invoice.client
+                        else "XAXX010101000"
+                    ),  # <--- ¡AQUÍ ESTÁ EL RFC QUE FALTABA!
                     "monto_total": getattr(r, "monto", 0),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
-                    ),  # <--- MAPEADO REAL DEL PAGO (AQUÍ ESTÁ EL XML)
+                    ),
                     "viaje_id": r.invoice.viaje_id if r.invoice else None,
                     "pdf_url": pdf_final,
                     "xml_url": xml_final,
