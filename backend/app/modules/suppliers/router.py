@@ -30,13 +30,15 @@ def read_invoices(skip: int = 0, limit: int = 5000, db: Session = Depends(get_db
 
 @router.post("/invoices", response_model=schemas.PayableInvoiceResponse)
 def create_invoice(
-    payload: schemas.PayableInvoiceCreate, db: Session = Depends(get_db)
+    payload: schemas.PayableInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
     """
     Crea una nueva factura de proveedor.
     Heredará automáticamente el CECO del proveedor si existe.
     """
-    return crud.create_invoice(db, payload)
+    return crud.create_invoice(db, payload, current_user.id)
 
 
 # =========================================================
@@ -75,7 +77,7 @@ def create_supplier(
         raise HTTPException(
             status_code=400, detail="El RFC ya está registrado en el catálogo."
         )
-    return crud.create_supplier(db, payload)
+    return crud.create_supplier(db, payload, current_user.id)
 
 
 # =========================================================
@@ -98,9 +100,10 @@ def update_invoice(
     invoice_id: int,
     payload: schemas.PayableInvoiceUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
     try:
-        invoice = crud.update_invoice(db, invoice_id, payload)
+        invoice = crud.update_invoice(db, invoice_id, payload, current_user.id)
         if not invoice:
             raise HTTPException(status_code=404, detail="Factura no encontrada")
         return invoice
@@ -110,9 +113,13 @@ def update_invoice(
 
 
 @router.delete("/invoices/{invoice_id}")
-def delete_invoice(invoice_id: int, db: Session = Depends(get_db)):
+def delete_invoice(
+    invoice_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     try:
-        if not crud.delete_invoice(db, invoice_id):
+        if not crud.delete_invoice(db, invoice_id, current_user.id):
             raise HTTPException(status_code=404, detail="Factura no encontrada")
         return {"message": "Factura eliminada correctamente (Soft Delete)"}
     except ValueError as ve:
@@ -191,19 +198,26 @@ def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{supplier_id}", response_model=schemas.SupplierResponse)
 def update_supplier(
-    supplier_id: int, payload: schemas.SupplierUpdate, db: Session = Depends(get_db)
+    supplier_id: int,
+    payload: schemas.SupplierUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
 ):
-    supplier = crud.update_supplier(db, supplier_id, payload)
+    supplier = crud.update_supplier(db, supplier_id, payload, current_user.id)
     if not supplier:
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     return supplier
 
 
 @router.delete("/{supplier_id}")
-def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
+def delete_supplier(
+    supplier_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
     """
     Aplica borrado lógico al proveedor para no romper historial de facturas.
     """
-    if not crud.delete_supplier(db, supplier_id):
+    if not crud.delete_supplier(db, supplier_id, current_user.id):
         raise HTTPException(status_code=404, detail="Proveedor no encontrado")
     return {"message": "Proveedor eliminado del catálogo"}
