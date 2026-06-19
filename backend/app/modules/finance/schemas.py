@@ -376,10 +376,12 @@ class CFDIHistoryRecord(BaseModel):
     id: int
     tipo_documento: str  # "FACTURAS_CLIENTES", "COMPLEMENTOS_PAGO", "CARTAS_PORTE", "FACTURAS_PROVEEDORES"
     folio: Optional[str] = None
+    folio_relacionado: Optional[str] = None
     uuid: Optional[str] = None
     fecha_emision: Optional[datetime] = None
     estatus: str
     cliente_proveedor_nombre: str
+    cliente_proveedor_rfc: Optional[str] = None
     monto_total: Optional[float] = None
     creado_por_nombre: Optional[str] = None
     modificado_por_nombre: Optional[str] = None

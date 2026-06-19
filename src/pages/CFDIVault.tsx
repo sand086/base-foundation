@@ -315,12 +315,19 @@ export default function CFDIVault() {
         key: "numero_complemento",
         header: "No. Complemento",
         render: (_, row: any) => {
+          let displayFolio = "N/A";
           const rawFolio = String(
-            row.folio_interno || row.folio || row.numero_complemento || "N/A",
+            row.folio_interno || row.folio || row.numero_complemento || "",
           );
-          const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
-          const displayFolio =
-            cleanFolio !== "N/A" ? `COM-${cleanFolio}` : "N/A";
+
+          // TRUCO MAESTRO: Sincronización del histórico (ID 28 + 2546 = COM-2574)
+          if (row.uuid && rawFolio.toUpperCase().startsWith("PAGO-")) {
+            const idReal = parseInt(rawFolio.replace(/[^0-9]/g, "")) || row.id;
+            displayFolio = `COM-${idReal + 2546}`;
+          } else {
+            const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
+            displayFolio = cleanFolio ? `COM-${cleanFolio}` : "N/A";
+          }
 
           return (
             <Badge
@@ -468,21 +475,29 @@ export default function CFDIVault() {
             // SI ES COMPLEMENTO DE PAGO, FORZAR EL NOMBRE COM-folio_rfc_uuid
             if (activeTab === "PAGO_CLIENTE") {
               const rfc =
-                row.rfc_cliente || row.cliente_proveedor_rfc || "RFC_PENDIENTE";
+                row.cliente_proveedor_rfc || row.rfc_cliente || "RFC_PENDIENTE";
+
+              let cleanFolio = "";
               const rawFolio = String(
                 row.folio_interno ||
                   row.folio ||
                   row.numero_complemento ||
                   "SF",
               );
-              const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
-              const targetUuid = row.uuid || "SIN_UUID";
 
+              if (row.uuid && rawFolio.toUpperCase().startsWith("PAGO-")) {
+                const idReal =
+                  parseInt(rawFolio.replace(/[^0-9]/g, "")) || row.id;
+                cleanFolio = `${idReal + 2546}`;
+              } else {
+                cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
+              }
+
+              const targetUuid = row.uuid || "SIN_UUID";
               const customName = `COM-${cleanFolio}_${rfc}_${targetUuid}.${type}`;
 
               forceDownloadCustomName(fileUrl, customName);
             } else {
-              // Comportamiento normal para Facturas regulares
               window.open(fileUrl, "_blank");
             }
           };
