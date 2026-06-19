@@ -1601,7 +1601,9 @@ def get_cfdi_vault_records(
                     "id": r.id,
                     "tipo_documento": "FACTURA_CLIENTE",
                     "folio": r.folio_interno,
-                    "folio_relacionado": r.uuid_relacionado,
+                    "folio_relacionado": getattr(
+                        r, "uuid_relacionado", None
+                    ),  # <--- CORREGIDO ORIGEN
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
@@ -1610,7 +1612,7 @@ def get_cfdi_vault_records(
                     ),
                     "cliente_proveedor_rfc": (
                         r.client.rfc if r.client else "XAXX010101000"
-                    ),
+                    ),  # <--- CORREGIDO RFC
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
@@ -1694,7 +1696,7 @@ def get_cfdi_vault_records(
                     ),
                     "cliente_proveedor_rfc": (
                         r.supplier.rfc if r.supplier else "XEXX010101000"
-                    ),
+                    ),  # <--- CORREGIDO RFC
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
@@ -1779,7 +1781,9 @@ def get_cfdi_vault_records(
                     "id": r.id,
                     "tipo_documento": "PAGO_CLIENTE",
                     "folio": r.folio_interno,
-                    "folio_relacionado": r.uuid_relacionado,
+                    "folio_relacionado": getattr(
+                        r, "uuid_relacionado", None
+                    ),  # <--- CORREGIDO ORIGEN
                     "uuid": r.uuid,
                     "fecha_emision": r.fecha_emision,
                     "estatus": status_fiscal,
@@ -1788,7 +1792,7 @@ def get_cfdi_vault_records(
                     ),
                     "cliente_proveedor_rfc": (
                         r.client.rfc if r.client else "XAXX010101000"
-                    ),
+                    ),  # <--- CORREGIDO RFC
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
@@ -1889,9 +1893,9 @@ def get_cfdi_vault_records(
 
             real_cfdi_data = mapa_cfdi_sat.get(comp_uuid) if comp_uuid else None
 
-            # 1. FOLIO LIMPIO (SIN EL "Fra: CP-XXXX")
+            # 1. FOLIO LIMPIO (SIN EL "Fra: CP-XXXX") AHORA CORRECTO
             if comp_uuid:
-                if real_cfdi_data and real_cfdi_data["folio"]:
+                if real_cfdi_data and real_cfdi_data.get("folio"):
                     folio_mostrar = f"{real_cfdi_data['folio']}"
                 elif r.referencia and "COM" in r.referencia.upper():
                     folio_mostrar = f"{r.referencia}"
