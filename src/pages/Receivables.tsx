@@ -134,6 +134,7 @@ export default function Receivables() {
 
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
+  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -201,10 +202,15 @@ export default function Receivables() {
             : Number(inv.monto_total) || 0;
         const monto = Number(inv.monto_total) || 0;
 
+        // 👇 DETECTAMOS SI TIENE UN COMPLEMENTO DE PAGO EN PROCESO DE CANCELACIÓN EN EL SAT
+        const tienePagoEnProceso = inv.payments?.some(
+          (p: any) => p.estatus === "PROCESO_CANCELACION",
+        );
+
         let finalEstatus = "";
 
-        if (inv.status_sat === "PROCESO_CANCELACION") {
-          finalEstatus = "PROCESO_CANCELACION";
+        if (inv.status_sat === "PROCESO_CANCELACION" || tienePagoEnProceso) {
+          finalEstatus = "PROCESO_CANCELACION"; // <-- Sincroniza el ámbar de inmediato
         } else if (
           String(inv.estatus || inv.status).toLowerCase() === "cancelado"
         ) {

@@ -399,6 +399,10 @@ export default function CFDIVault() {
           if (s === "RECIBO INTERNO")
             badgeClass =
               "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
+
+          if (s === "PROCESO_CANCELACION")
+            badgeClass =
+              "bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-black";
           return (
             <Badge variant="outline" className={badgeClass}>
               {s}
