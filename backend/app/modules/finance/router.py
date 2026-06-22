@@ -1867,3 +1867,61 @@ def cancel_receivable_payments(
             resultados.append({"id": pid, "status": "error", "mensaje": str(e)})
 
     return {"status": "success", "resultados": resultados}
+
+
+@router.get("/receivables/payments/sync-cancellation-status")
+def sync_rep_cancellation_status(db: Session = Depends(get_db)):
+    """
+    MOTOR AUTOMÁTICO DIARIO:
+    Busca todos los REPs que están en sala de espera en el SAT ('PROCESO_CANCELACION')
+    y vuelve a llamar al PAC para verificar si el cliente ya aceptó o expiró el plazo.
+    """
+    from app.integrations.sat.payment_service import PaymentComplementService
+
+    sat_service = PaymentComplementService(db)
+
+    # 1. Buscamos todos los cobros locales en Proceso de Cancelación
+    pagos_pendientes = (
+        db.query(models.ReceivableInvoicePayment)
+        .filter(models.ReceivableInvoicePayment.estatus == "PROCESO_CANCELACION")
+        .all()
+    )
+
+    if not pagos_pendientes:
+        return {
+            "status": "success",
+            "message": "No hay cancelaciones fiscales pendientes de verificar.",
+        }
+
+    actualizados = 0
+
+    for pago in pagos_pendientes:
+        try:
+            # Volvemos a llamar a tu método del PAC
+            # El PAC detectará que ya tiene una solicitud previa y regresará el estatus actualizado del SAT
+            res = sat_service.cancelar_pago_sat(
+                payment_id=pago.id, motivo=pago.motivo_cancelacion or "02"
+            )
+
+            estado_sat = res.get("estado_sat")
+
+            # Si el PAC responde que el estatus ya cambió a CANCELADO de forma definitiva
+            if estado_sat == "CANCELADO":
+                pago.estatus = "CANCELADO"
+                actualizados += 1
+                logger.info(
+                    f"Sincronización Exitosa: El REP con UUID {pago.complemento_uuid} ha sido CANCELADO oficialmente por el SAT."
+                )
+
+        except Exception as e:
+            logger.error(f"Error al verificar estatus del REP ID {pago.id}: {str(e)}")
+            continue
+
+    if actualizados > 0:
+        db.commit()
+
+    return {
+        "status": "success",
+        "total_verificados": len(pagos_pendientes),
+        "total_cambiados_a_cancelado": actualizados,
+    }

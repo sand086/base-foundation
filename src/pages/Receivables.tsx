@@ -106,10 +106,7 @@ export default function Receivables() {
   const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-
-  // ESTADOS NUEVOS AGREGADOS AQUÍ PARA EVITAR EL ERROR TS(2304)
   const [isMassCancel, setIsMassCancel] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
 
@@ -202,7 +199,7 @@ export default function Receivables() {
             : Number(inv.monto_total) || 0;
         const monto = Number(inv.monto_total) || 0;
 
-        // 👇 DETECTAMOS SI TIENE UN COMPLEMENTO DE PAGO EN PROCESO DE CANCELACIÓN EN EL SAT
+        // DETECTAMOS SI TIENE UN COMPLEMENTO DE PAGO EN PROCESO DE CANCELACIÓN EN EL SAT
         const tienePagoEnProceso = inv.payments?.some(
           (p: any) => p.estatus === "PROCESO_CANCELACION",
         );
@@ -210,7 +207,7 @@ export default function Receivables() {
         let finalEstatus = "";
 
         if (inv.status_sat === "PROCESO_CANCELACION" || tienePagoEnProceso) {
-          finalEstatus = "PROCESO_CANCELACION"; // <-- Sincroniza el ámbar de inmediato
+          finalEstatus = "PROCESO_CANCELACION";
         } else if (
           String(inv.estatus || inv.status).toLowerCase() === "cancelado"
         ) {
@@ -498,10 +495,9 @@ export default function Receivables() {
     }
   };
 
-  // 👇 FUNCIÓN MAESTRA: CANCELACIÓN DE PAGOS/REP
   const handleCancelPayments = async (paymentIds: number[]) => {
     try {
-      await axiosClient.post("/api/finance/receivables/payments/cancel", {
+      await axiosClient.post("/finance/receivables/payments/cancel", {
         payment_ids: paymentIds,
         motivo: "02",
       });
@@ -685,10 +681,10 @@ export default function Receivables() {
         key: "estatus",
         header: "Estatus",
         render: (value, row) => {
+          // 👇 MODIFICADO: YA NO TIENE LOADER2 CON ANIMACIÓN GIRATORIA
           if (value === "PROCESO_CANCELACION") {
             return (
-              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[9px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 py-1">
-                <Loader2 className="h-3 w-3 mr-1.5 animate-spin inline-block" />
+              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[9px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 py-1 font-black">
                 En Proceso Cancelación
               </Badge>
             );
@@ -1182,7 +1178,6 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
-      {/* 👇 BARRA FLOTANTE CON ACCIONES MASIVAS */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
@@ -1229,6 +1224,7 @@ export default function Receivables() {
         </div>
       )}
 
+      {/* MODAL DE CREACIÓN / EDICIÓN NORMAL */}
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -1239,6 +1235,7 @@ export default function Receivables() {
         importedServices={importedServices}
       />
 
+      {/* MODAL PARA REFACTURAR FACTURAS TIMBRADAS */}
       <CreateInvoiceModal
         open={isRefactorModalOpen}
         onOpenChange={(isOpen) => {
