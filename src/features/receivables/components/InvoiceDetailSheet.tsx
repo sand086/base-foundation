@@ -15,6 +15,8 @@ import {
   DataTableCell,
 } from "@/components/ui/data-table";
 import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   FileText,
   Calendar,
@@ -38,6 +40,7 @@ import {
   AlertTriangle,
   History,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -51,6 +54,7 @@ interface InvoiceDetailSheetProps {
   invoice: ReceivableInvoice | null;
   onPayClick?: (invoice: ReceivableInvoice) => void;
   onStampPayment?: (paymentId: number) => Promise<void>;
+  onCancelPayments?: (paymentIds: number[]) => Promise<void>;
 }
 
 const toNumber = (v: any): number => {
@@ -67,46 +71,39 @@ export function InvoiceDetailSheet({
   invoice,
   onPayClick,
   onStampPayment,
+  onCancelPayments,
 }: InvoiceDetailSheetProps) {
   const [stampingId, setStampingId] = useState<number | null>(null);
+  const [cancelingId, setCancelingId] = useState<number | null>(null);
+
+  const [isCancelMode, setIsCancelMode] = useState(false);
+  const [selectedPayments, setSelectedPayments] = useState<number[]>([]);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   useEffect(() => {
     if (invoice && open) {
       console.log("FACTURA ABIERTA EN DETALLE:", invoice);
+      setIsCancelMode(false);
+      setSelectedPayments([]);
     }
   }, [invoice, open]);
-
-  const handleStamp = async (paymentId: number) => {
-    if (!onStampPayment) return;
-    setStampingId(paymentId);
-    try {
-      await onStampPayment(paymentId);
-    } catch (error) {
-      console.error("Error al timbrar:", error);
-    } finally {
-      setStampingId(null);
-    }
-  };
 
   if (!invoice) return null;
 
   const inv = invoice as any;
   const statusInfo = getInvoiceStatusInfo(inv);
 
-  // EXTRACCIÓN DE DATOS FISCALES
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
   const uuidRelacionado = safeStr(inv.uuid_relacionado);
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  // EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
   const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
     : [];
 
-  // AGRUPACIÓN DEL HISTORIAL POR VERSIÓN PARA LA TABLA
   const groupedHistory = Object.values(
     docHistory.reduce((acc: any, doc: any) => {
       const v = doc.version || 1;
@@ -126,11 +123,9 @@ export function InvoiceDetailSheet({
       if (doc.document_type === "pdf") acc[v].pdf = doc;
       if (doc.document_type === "xml") acc[v].xml = doc;
       if (doc.document_type === "acuse_cancelacion") acc[v].acuse = doc;
-
       return acc;
     }, {}),
-  ).sort((a: any, b: any) => b.version - a.version); // Orden descendente
-  // -----------------------------------------------------
+  ).sort((a: any, b: any) => b.version - a.version);
 
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
@@ -149,7 +144,6 @@ export function InvoiceDetailSheet({
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
 
-  // EXTRACCIÓN DE DESGLOSE
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const subtotal = toNumber(inv.subtotal);
   const iva = toNumber(inv.iva);
@@ -157,7 +151,6 @@ export function InvoiceDetailSheet({
   const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
   const moneda = safeStr(inv.moneda) || "MXN";
 
-  // EXTRACCIÓN DE DATOS OPERATIVOS (VIAJE)
   const referenciaOperativa = safeStr(inv.referencia);
   const origen = safeStr(inv.trip_info?.origen) || "No especificado";
   const destino = safeStr(inv.trip_info?.destino) || "No especificado";
@@ -166,8 +159,7 @@ export function InvoiceDetailSheet({
     safeStr(inv.trip_info?.contenedores) || "Sin contenedores registrados";
   const productoSat = safeStr(inv.trip_info?.producto_sat) || "No especificado";
 
-  // PAGOS (Para el historial de CxC o CxP)
-  const payments: Array<any> = Array.isArray(inv.payments)
+  const rawPayments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
     : Array.isArray(inv.pagos)
       ? inv.pagos
@@ -175,9 +167,10 @@ export function InvoiceDetailSheet({
         ? inv.cobros
         : [];
 
-  // ========================================================
-  // LÓGICA DE DESCARGA: MANDA A LLAMAR AL BACKEND DIRECTAMENTE
-  // ========================================================
+  const payments = rawPayments.filter(
+    (p) => p.estatus !== "CANCELADO" && p.record_status !== "E",
+  );
+
   const handleDownloadFromBackend = (
     type: "pdf" | "xml",
     targetUuid: string,
@@ -213,6 +206,59 @@ export function InvoiceDetailSheet({
     }
   };
 
+  const handleStamp = async (paymentId: number) => {
+    if (!onStampPayment) return;
+    setStampingId(paymentId);
+    try {
+      await onStampPayment(paymentId);
+    } catch (error) {
+      console.error("Error al timbrar:", error);
+    } finally {
+      setStampingId(null);
+    }
+  };
+
+  const handleCancelIndividual = async (paymentId: number) => {
+    if (!onCancelPayments) return;
+    if (
+      !window.confirm(
+        "¿Seguro que deseas cancelar este pago individualmente? Se enviará la orden al SAT.",
+      )
+    )
+      return;
+
+    setCancelingId(paymentId);
+    try {
+      await onCancelPayments([paymentId]);
+    } catch (error) {
+      console.error("Error al cancelar pago:", error);
+    } finally {
+      setCancelingId(null);
+    }
+  };
+
+  const handleTogglePayment = (paymentId: number) => {
+    setSelectedPayments((prev) =>
+      prev.includes(paymentId)
+        ? prev.filter((id) => id !== paymentId)
+        : [...prev, paymentId],
+    );
+  };
+
+  const handleCancelSelected = async () => {
+    if (!onCancelPayments || selectedPayments.length === 0) return;
+    setIsCanceling(true);
+    try {
+      await onCancelPayments(selectedPayments);
+      setSelectedPayments([]);
+      setIsCancelMode(false);
+    } catch (error) {
+      console.error("Error al cancelar pagos:", error);
+    } finally {
+      setIsCanceling(false);
+    }
+  };
+
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
@@ -240,10 +286,8 @@ export function InvoiceDetailSheet({
 
   const isPaid = saldoPendiente <= 0;
 
-  // Variables booleanas para saber qué botones prender en el Fallback (Última fila de la tabla)
   const xmlUrl = inv.xml_url || inv.xmlUrl;
   const pdfUrl = inv.pdf_url || inv.pdfUrl;
-
   const hasFallbackXml = !!(inv.uuid || xmlUrl);
   const hasFallbackPdf = !!(inv.uuid || pdfUrl);
 
@@ -300,7 +344,6 @@ export function InvoiceDetailSheet({
             </div>
           )}
 
-          {/* IDENTIFICACIÓN */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group gap-4">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-navy group-hover:bg-blue-600 transition-colors"></div>
             <div className="flex-1 pl-2">
@@ -362,7 +405,6 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* CLIENTE/PROVEEDOR Y CONCEPTO */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="md:col-span-2 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
               <div className="flex items-center gap-2 mb-3">
@@ -398,7 +440,6 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* DESGLOSE FINANCIERO Y FECHAS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid grid-cols-2 gap-3">
               <div
@@ -526,7 +567,6 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* DATOS OPERATIVOS (Si los hay) */}
           {(origen !== "No especificado" || destino !== "No especificado") && (
             <>
               <Separator className="bg-slate-200 dark:bg-border/50" />
@@ -593,7 +633,7 @@ export function InvoiceDetailSheet({
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* HISTORIAL DE COBROS/PAGOS (REP) */}
+          {/* HISTORIAL DE COBROS/PAGOS CON CANCELACIÓN INDIVIDUAL/LOTE */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
@@ -605,17 +645,29 @@ export function InvoiceDetailSheet({
                   {payments.length}
                 </span>
               </h3>
+
+              {payments.length > 0 && onCancelPayments && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase text-rose-500 tracking-widest">
+                    Modo Cancelación
+                  </span>
+                  <Switch
+                    checked={isCancelMode}
+                    onCheckedChange={(val) => {
+                      setIsCancelMode(val);
+                      setSelectedPayments([]);
+                    }}
+                    className="data-[state=checked]:bg-rose-500"
+                  />
+                </div>
+              )}
             </div>
 
             {payments.length === 0 ? (
               <div className="p-8 text-center bg-white dark:bg-card rounded-2xl border-2 border-dashed border-slate-200 dark:border-border flex flex-col items-center justify-center gap-2">
                 <Receipt className="h-8 w-8 text-slate-300 dark:text-slate-700" />
                 <p className="text-sm font-bold text-slate-500">
-                  No hay pagos registrados
-                </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[250px] leading-tight mx-auto">
-                  Los abonos que registres aparecerán aquí junto con su
-                  Complemento de Pago (REP).
+                  No hay pagos activos
                 </p>
               </div>
             ) : (
@@ -623,6 +675,9 @@ export function InvoiceDetailSheet({
                 <DataTable>
                   <DataTableHeader>
                     <DataTableRow className="bg-slate-50 dark:bg-slate-900/50 border-b-slate-200 dark:border-b-border/50 hover:bg-transparent">
+                      {isCancelMode && (
+                        <DataTableHead className="w-10 text-center py-3"></DataTableHead>
+                      )}
                       <DataTableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
                         Fecha
                       </DataTableHead>
@@ -630,7 +685,7 @@ export function InvoiceDetailSheet({
                         Monto
                       </DataTableHead>
                       <DataTableHead className="text-center text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
-                        Archivos SAT
+                        {isCancelMode ? "Acción" : "Archivos SAT / Acción"}
                       </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>
@@ -641,12 +696,29 @@ export function InvoiceDetailSheet({
                       const complementoUuid = safeStr(
                         p.complemento_uuid ?? p.complementoUuid,
                       );
+                      const isSelected = selectedPayments.includes(p.id);
 
                       return (
                         <DataTableRow
                           key={safeStr(p.id)}
-                          className="border-b-slate-100 dark:border-b-border/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
+                          className={cn(
+                            "border-b-slate-100 dark:border-b-border/50 transition-colors",
+                            isSelected
+                              ? "bg-rose-50 dark:bg-rose-950/20"
+                              : "hover:bg-slate-50/50 dark:hover:bg-slate-800/50",
+                          )}
                         >
+                          {isCancelMode && (
+                            <DataTableCell className="text-center">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() =>
+                                  handleTogglePayment(p.id)
+                                }
+                                className="data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
+                              />
+                            </DataTableCell>
+                          )}
                           <DataTableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
                             {fD(fecha)}
                           </DataTableCell>
@@ -657,58 +729,84 @@ export function InvoiceDetailSheet({
                           </DataTableCell>
 
                           <DataTableCell className="text-center">
-                            {complementoUuid ? (
-                              <div className="flex justify-center items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  title="Descargar PDF"
-                                  className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 dark:hover:bg-rose-900/50 transition-all"
-                                  onClick={() =>
-                                    handleDownloadFromBackend(
-                                      "pdf",
-                                      complementoUuid,
-                                    )
-                                  }
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  title="Descargar XML"
-                                  className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 dark:hover:bg-blue-900/50 transition-all"
-                                  onClick={() =>
-                                    handleDownloadFromBackend(
-                                      "xml",
-                                      complementoUuid,
-                                    )
-                                  }
-                                >
-                                  <FileCode2 className="h-4 w-4" />
-                                </Button>
-                              </div>
+                            {isCancelMode ? (
+                              <span className="text-[10px] text-muted-foreground italic">
+                                {isSelected ? "Listo para cancelar" : "-"}
+                              </span>
                             ) : (
-                              <div className="flex justify-center items-center">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 text-[10px] font-black uppercase tracking-widest text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/50 transition-all"
-                                  disabled={stampingId === p.id}
-                                  onClick={() => handleStamp(p.id)}
-                                >
-                                  {stampingId === p.id ? (
-                                    <>
-                                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                      Timbrando...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <FileCode2 className="h-3.5 w-3.5 mr-1.5" />
-                                      Timbrar SAT
-                                    </>
-                                  )}
-                                </Button>
+                              <div className="flex justify-center items-center gap-1.5">
+                                {complementoUuid ? (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      title="Descargar PDF"
+                                      className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all"
+                                      onClick={() =>
+                                        handleDownloadFromBackend(
+                                          "pdf",
+                                          complementoUuid,
+                                        )
+                                      }
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      title="Descargar XML"
+                                      className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 transition-all"
+                                      onClick={() =>
+                                        handleDownloadFromBackend(
+                                          "xml",
+                                          complementoUuid,
+                                        )
+                                      }
+                                    >
+                                      <FileCode2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-[10px] font-black uppercase tracking-widest text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/50 transition-all"
+                                    disabled={stampingId === p.id}
+                                    onClick={() => handleStamp(p.id)}
+                                  >
+                                    {stampingId === p.id ? (
+                                      <>
+                                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                        Timbrando...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <FileCode2 className="h-3.5 w-3.5 mr-1.5" />
+                                        Timbrar SAT
+                                      </>
+                                    )}
+                                  </Button>
+                                )}
+
+                                {onCancelPayments && (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    title="Cancelar este pago"
+                                    disabled={
+                                      cancelingId === p.id ||
+                                      stampingId === p.id
+                                    }
+                                    onClick={() => handleCancelIndividual(p.id)}
+                                    className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all ml-1"
+                                  >
+                                    {cancelingId === p.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
                               </div>
                             )}
                           </DataTableCell>
@@ -717,13 +815,40 @@ export function InvoiceDetailSheet({
                     })}
                   </DataTableBody>
                 </DataTable>
+
+                {isCancelMode && selectedPayments.length > 0 && (
+                  <div className="p-4 bg-rose-50 dark:bg-rose-950/20 border-t border-rose-200 dark:border-rose-900 flex justify-between items-center animate-in slide-in-from-bottom-2">
+                    <span className="text-[10px] font-black uppercase text-rose-600 tracking-widest">
+                      {selectedPayments.length} pago(s) seleccionado(s)
+                    </span>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleCancelSelected}
+                      disabled={isCanceling}
+                      className="font-black uppercase tracking-widest text-[10px]"
+                    >
+                      {isCanceling ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />{" "}
+                          Cancelando...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Cancelar{" "}
+                          {selectedPayments.length > 1 ? "Lote" : "Pago"}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* TABLA DE EXPEDIENTE Y VERSIONES */}
+          {/* TABLA DE VERSIONES DE ARCHIVO SAT */}
           <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
               <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
@@ -898,7 +1023,6 @@ export function InvoiceDetailSheet({
               </DataTable>
             </div>
           </div>
-          {/* FIN TABLA */}
         </div>
       </SheetContent>
     </Sheet>

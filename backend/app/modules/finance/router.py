@@ -1777,3 +1777,92 @@ def stamp_existing_payment(
         raise HTTPException(
             status_code=500, detail=f"Fallo al timbrar el pago. Error real: {str(e)}"
         )
+
+
+# Asegúrate de tener BaseModel importado (ya lo tienes arriba en tu archivo)
+class CancelPaymentsPayload(BaseModel):
+    payment_ids: List[int]
+    motivo: str = "02"  # 02 = Comprobante emitido con errores sin relación
+
+
+@router.post("/receivables/payments/cancel")
+def cancel_receivable_payments(
+    payload: CancelPaymentsPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Cancela complementos de pago (individual o en lote).
+    Se comunica con el SAT y realiza el Rollback Financiero atómicamente.
+    """
+    from app.integrations.sat.payment_service import PaymentComplementService
+    from datetime import datetime
+
+    sat_service = PaymentComplementService(db)
+    resultados = []
+
+    for pid in payload.payment_ids:
+        try:
+            pago = db.query(models.ReceivableInvoicePayment).filter_by(id=pid).first()
+            if not pago or pago.estatus == "CANCELADO":
+                continue  # Saltamos si no existe o ya está cancelado
+
+            # 1. Cancelar en el SAT (Solo si tiene UUID)
+            if pago.complemento_uuid:
+                res = sat_service.cancelar_pago_sat(
+                    payment_id=pid, motivo=payload.motivo
+                )
+                mensaje_sat = res.get("mensaje", "Cancelado en SAT")
+            else:
+                # Si no estaba timbrado, solo lo cancelamos localmente
+                pago.estatus = "CANCELADO"
+                pago.motivo_cancelacion = payload.motivo
+                pago.fecha_cancelacion = datetime.now()
+                mensaje_sat = "Cancelado Localmente (No timbrado)"
+
+            # 2. Rollback Financiero (Regresar saldo a factura y sacar del banco)
+            invoice = (
+                db.query(models.ReceivableInvoice)
+                .filter_by(id=pago.invoice_id)
+                .with_for_update()
+                .first()
+            )
+            if invoice:
+                invoice.saldo_pendiente += pago.monto
+                if invoice.saldo_pendiente >= invoice.monto_total:
+                    invoice.estatus = models.InvoiceStatus.PENDIENTE
+                else:
+                    invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+                invoice.updated_by_id = current_user.id
+
+            if pago.cuenta_deposito:
+                cuenta = (
+                    db.query(models.BankAccount)
+                    .filter_by(id=int(pago.cuenta_deposito))
+                    .with_for_update()
+                    .first()
+                )
+                if cuenta:
+                    cuenta.saldo -= pago.monto
+                    cuenta.updated_by_id = current_user.id
+                    # Dejamos rastro en el banco del reverso
+                    reverso = models.BankMovement(
+                        bank_account_id=cuenta.id,
+                        tipo="egreso",
+                        monto=pago.monto,
+                        concepto=f"Reverso Cancelación REP {pago.complemento_uuid or pago.id}",
+                        referencia=f"CANC-{pago.id}",
+                        origen_modulo="CxC",
+                        created_by_id=current_user.id,
+                        fecha=datetime.now(),
+                    )
+                    db.add(reverso)
+
+            db.commit()
+            resultados.append({"id": pid, "status": "success", "mensaje": mensaje_sat})
+
+        except Exception as e:
+            db.rollback()
+            resultados.append({"id": pid, "status": "error", "mensaje": str(e)})
+
+    return {"status": "success", "resultados": resultados}

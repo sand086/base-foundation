@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Eye,
 } from "lucide-react";
+import { toast } from "sonner"; // <-- IMPORTANTE AÑADIR TOAST
+import axiosClient from "@/api/axiosClient"; // <-- IMPORTACIÓN PARA LLAMADAS AL SAT
 
 import {
   useCfdiVault,
@@ -634,7 +636,7 @@ export default function CFDIVault() {
         }}
       />
 
-      {/* DETALLE FACTURAS CLIENTES Y COMPLEMENTOS */}
+      {/* DETALLE FACTURAS CLIENTES Y COMPLEMENTOS 👇 CONECTADO A FASE 2 Y 3 */}
       <InvoiceDetailSheet
         open={detailDrawerOpen}
         onOpenChange={(isOpen) => {
@@ -642,6 +644,35 @@ export default function CFDIVault() {
           if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
         }}
         invoice={selectedInvoice}
+        onStampPayment={async (paymentId) => {
+          try {
+            await axiosClient.post(
+              `/finance/receivables/payments/${paymentId}/stamp`,
+            );
+            toast.success("Complemento timbrado en el SAT con éxito");
+            if (refetch) refetch();
+          } catch (error: any) {
+            const errorMsg =
+              error.response?.data?.detail || "Error al timbrar el pago";
+            toast.error(errorMsg);
+            throw error;
+          }
+        }}
+        onCancelPayments={async (paymentIds) => {
+          try {
+            await axiosClient.post("/api/finance/receivables/payments/cancel", {
+              payment_ids: paymentIds,
+              motivo: "02",
+            });
+            toast.success("Pagos cancelados y saldo restaurado correctamente.");
+            if (refetch) refetch();
+          } catch (error: any) {
+            toast.error(
+              error.response?.data?.detail || "Error al cancelar pagos",
+            );
+            throw error;
+          }
+        }}
       />
 
       {/* DETALLE FACTURAS PROVEEDORES */}

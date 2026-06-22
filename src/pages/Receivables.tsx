@@ -38,6 +38,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -76,6 +77,7 @@ import { cn } from "@/lib/utils";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useReceivables } from "@/features/receivables/hooks/useReceivables";
 import { usePermissions } from "@/hooks/use-permissions";
+import axiosClient from "@/api/axiosClient";
 
 export default function Receivables() {
   const {
@@ -93,35 +95,33 @@ export default function Receivables() {
   const { bankAccounts = [] } = useBankAccounts();
   const { hasPermission } = usePermissions();
 
-  // PERMISOS GRANULARES
   const canCancel = hasPermission("finance:cancel_invoice");
   const canStamp = hasPermission("sat:stamp_cfdi");
   const canCreate = hasPermission("finance:create_invoice");
 
-  // Estados UI
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // Estados para Refacturación
   const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
-  // Modales de Eliminación/Cancelación
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+
+  // ESTADOS NUEVOS AGREGADOS AQUÍ PARA EVITAR EL ERROR TS(2304)
+  const [isMassCancel, setIsMassCancel] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
 
   const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
   const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
 
-  // ESTADOS PARA FILTROS EN LA BARRA SUPERIOR
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
-  // Selección de Facturas
   const [selectedInvoice, setSelectedInvoice] =
     useState<ReceivableInvoice | null>(null);
   const [invoicesToPay, setInvoicesToPay] = useState<ReceivableInvoice[]>([]);
@@ -129,14 +129,11 @@ export default function Receivables() {
     FinalizableService[] | undefined
   >();
 
-  const [invoiceToDelete, setInvoiceToDelete] =
-    useState<ReceivableInvoice | null>(null);
   const [invoiceToCancel, setInvoiceToCancel] =
     useState<ReceivableInvoice | null>(null);
 
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
-  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -151,7 +148,6 @@ export default function Receivables() {
 
     return dataArray
       .filter((inv: any) => {
-        // Dejamos pasar TODAS las facturas reales
         return (
           inv.folio_interno !== "folio interno bueno" &&
           inv.estatus !== "cancelado"
@@ -199,7 +195,6 @@ export default function Receivables() {
           fechaVencimientoCalculada = `${yyyy}-${mm}-${dd}`;
         }
 
-        // SINCRONIZACIÓN DE ESTATUS REAL
         const saldo =
           inv.saldo_pendiente !== undefined
             ? Number(inv.saldo_pendiente)
@@ -215,7 +210,6 @@ export default function Receivables() {
         ) {
           finalEstatus = "CANCELADO";
         } else {
-          // Calculamos la etiqueta oficial EXACTA ("PAGADA", "POR COBRAR", etc.)
           const statusInfoCalculated = getInvoiceStatusInfo({
             ...inv,
             saldo_pendiente: saldo,
@@ -240,7 +234,7 @@ export default function Receivables() {
           fecha_emision: fechaEmision,
           fecha_vencimiento: fechaVencimientoCalculada,
           dias_credito: diasCredito,
-          estatus: finalEstatus, // <-- ESTATUS LIMPIO Y EN MAYÚSCULAS
+          estatus: finalEstatus,
           referencia: inv.referencia || "S/R",
           cobros: inv.payments || [],
         };
@@ -259,7 +253,6 @@ export default function Receivables() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [formattedInvoices]);
 
-  // LÓGICA DE FILTRADO ACTUALIZADA (TEXTO + CLIENTE + ESTATUS + RANGO DE FECHAS)
   const filteredInvoices = useMemo(() => {
     let filtered = formattedInvoices;
 
@@ -443,39 +436,74 @@ export default function Receivables() {
     }
   };
 
-  const handleDeleteInvoice = async () => {
-    if (!invoiceToDelete) return;
-    const success = await deleteReceivable(invoiceToDelete.id);
-    if (success) {
-      setIsDeleteDialogOpen(false);
-      setInvoiceToDelete(null);
-    }
-  };
-
-  const handleCancelInvoiceSAT = async () => {
-    if (!invoiceToCancel) return;
-    const ok = await cancelInvoiceSAT(invoiceToCancel.id, "02");
-    if (ok) {
-      setIsCancelModalOpen(false);
-      setInvoiceToCancel(null);
-    }
-  };
-
   const handleCancelInvoice = async (cascade: boolean) => {
-    if (!invoiceToCancel) return;
+    setIsCanceling(true);
     try {
-      const success = await deleteReceivable(invoiceToCancel.id, { cascade });
-      if (success) {
-        setIsCancelModalOpen(false);
-        setInvoiceToCancel(null);
+      if (isMassCancel && selectedRows.length > 0) {
+        for (const row of selectedRows) {
+          await deleteReceivable(Number(row.id), { cascade });
+        }
+        toast.success(
+          cascade
+            ? "Lote de facturas eliminado completamente"
+            : "Lote de facturas cancelado",
+        );
+        setSelectedRows([]);
+      } else if (invoiceToCancel) {
+        await deleteReceivable(Number(invoiceToCancel.id), { cascade });
         toast.success(
           cascade
             ? "Factura y Operaciones eliminadas"
             : "Factura cancelada lógicamente",
         );
       }
+      setIsCancelModalOpen(false);
+      setInvoiceToCancel(null);
     } catch (error) {
       console.error(error);
+    } finally {
+      setIsCanceling(false);
+    }
+  };
+
+  const handleCancelInvoiceSAT = async () => {
+    setIsCanceling(true);
+    try {
+      if (isMassCancel && selectedRows.length > 0) {
+        for (const row of selectedRows) {
+          if (row.uuid) {
+            await cancelInvoiceSAT(Number(row.id), "02");
+          }
+        }
+        toast.success(
+          "Solicitudes de cancelación enviadas al SAT para el lote",
+        );
+        setSelectedRows([]);
+      } else if (invoiceToCancel) {
+        await cancelInvoiceSAT(Number(invoiceToCancel.id), "02");
+        toast.success("Solicitud enviada al SAT");
+      }
+      setIsCancelModalOpen(false);
+      setInvoiceToCancel(null);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsCanceling(false);
+    }
+  };
+
+  // 👇 FUNCIÓN MAESTRA: CANCELACIÓN DE PAGOS/REP
+  const handleCancelPayments = async (paymentIds: number[]) => {
+    try {
+      await axiosClient.post("/finance/receivables/payments/cancel", {
+        payment_ids: paymentIds,
+        motivo: "02",
+      });
+      toast.success("Pagos anulados y saldos restaurados correctamente.");
+      if (refreshReceivables) await refreshReceivables();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || "Error al cancelar pagos");
+      throw error;
     }
   };
 
@@ -675,7 +703,7 @@ export default function Receivables() {
         key: "id",
         header: "Acciones",
         sortable: false,
-        render: (_, row) => {
+        render: (_, row: any) => {
           const isSelectionActive = selectedRows.length > 0;
           const hasPayments =
             (row.monto_total || 0) > (row.saldo_pendiente || 0);
@@ -686,7 +714,6 @@ export default function Receivables() {
             !row.uuid;
 
           const isStamped = !!row.uuid;
-          // Bloqueamos acciones si está en proceso de cancelación con el SAT
           const isInProcess = row.estatus === "PROCESO_CANCELACION";
 
           return (
@@ -708,39 +735,26 @@ export default function Receivables() {
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                className="glass-panel border-white/20 min-w-[160px] z-50 dark:bg-slate-900/90"
+                className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/95 shadow-2xl p-1"
               >
+                {/* GRUPO 1: CONSULTAS Y DESCARGAS */}
+                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-2 py-1.5">
+                  Consultas
+                </DropdownMenuLabel>
+
                 <DropdownMenuItem
                   onClick={() => {
                     setSelectedInvoice(row);
                     setIsDetailSheetOpen(true);
                   }}
-                  className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer dark:text-slate-300 dark:focus:bg-slate-800"
+                  className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
                 >
-                  <Eye className="h-4 w-4 mr-2 text-blue-500 dark:text-blue-400" />{" "}
-                  Ver Detalle
+                  <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle /
+                  Historial
                 </DropdownMenuItem>
 
                 {isStamped && !isInProcess && (
                   <>
-                    <DropdownMenuSeparator className="dark:bg-white/10" />
-
-                    {/* 👇 FIX: REQUIERE canCreate Y canStamp para Refacturar */}
-                    {canCreate && canStamp && (
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setInvoiceToRefactor({
-                            ...row,
-                            viaje_id: row.viaje_id || (row as any).trip_id,
-                          });
-                          setIsRefactorModalOpen(true);
-                        }}
-                        className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-orange-600 dark:text-orange-400 dark:focus:bg-orange-950/30"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" /> Refacturar CFDI
-                      </DropdownMenuItem>
-                    )}
-
                     <DropdownMenuItem
                       onClick={() =>
                         window.open(
@@ -748,9 +762,10 @@ export default function Receivables() {
                           "_blank",
                         )
                       }
-                      className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-indigo-600 dark:text-indigo-400 dark:focus:bg-indigo-950/30"
+                      className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
                     >
-                      <FileText className="h-4 w-4 mr-2" /> Descargar PDF
+                      <FileText className="h-4 w-4 text-indigo-500" /> Descargar
+                      PDF
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() =>
@@ -759,96 +774,143 @@ export default function Receivables() {
                           "_blank",
                         )
                       }
-                      className="gap-2 font-bold text-[11px] uppercase tracking-tight cursor-pointer text-amber-600 dark:text-amber-400 dark:focus:bg-amber-950/30"
+                      className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
                     >
-                      <FileSignature className="h-4 w-4 mr-2" /> Descargar XML
+                      <FileSignature className="h-4 w-4 text-amber-500" />{" "}
+                      Descargar XML
                     </DropdownMenuItem>
                   </>
                 )}
 
-                {isProvisional && canStamp && (
-                  <>
-                    <DropdownMenuSeparator className="dark:bg-white/10" />
-                    <DropdownMenuItem
-                      onClick={async () => {
-                        if (
-                          window.confirm("¿Timbrar esta factura ante el SAT?")
-                        ) {
-                          const viajeId =
-                            (row as any).viaje_id || (row as any).trip_id;
-
-                          if (viajeId) {
-                            await stampInvoice(Number(viajeId));
-                          } else {
-                            if (!row.id)
-                              return toast.error("Error", {
-                                description: "ID de factura no válido",
-                              });
-                            await stampFreeInvoice(Number(row.id));
-                          }
-                        }
-                      }}
-                      className="gap-2 font-black text-[11px] uppercase tracking-widest cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50"
-                    >
-                      <FileSignature className="h-4 w-4 mr-2" /> Timbrar Factura
-                      SAT
-                    </DropdownMenuItem>
-                  </>
-                )}
-
+                {/* GRUPO 2: COBRANZA */}
                 {(row.saldo_pendiente || 0) > 0 &&
                   !isProvisional &&
                   !isInProcess && (
                     <>
-                      <DropdownMenuSeparator className="dark:bg-white/10" />
+                      <DropdownMenuSeparator className="my-1 opacity-50" />
+                      <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-emerald-500/70 px-2 py-1.5">
+                        Cobranza
+                      </DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={() => {
                           setInvoicesToPay([row]);
                           setIsPaymentModalOpen(true);
                         }}
-                        className="gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer text-emerald-600 dark:text-emerald-500 dark:focus:bg-emerald-900/30"
+                        className="gap-2 font-bold text-xs cursor-pointer text-emerald-700 dark:text-emerald-400 focus:bg-emerald-50 dark:focus:bg-emerald-900/30 rounded-md"
                       >
-                        <CreditCard className="h-4 w-4 mr-2" /> Registrar Cobro
-                        y REP
+                        <CreditCard className="h-4 w-4" /> Registrar Cobro / REP
                       </DropdownMenuItem>
                     </>
                   )}
 
-                {hasPayments && canCancel && !isInProcess && (
+                {/* GRUPO 3: FISCAL Y SAT */}
+                {((isProvisional && canStamp) ||
+                  (isStamped && !isInProcess && canCreate && canStamp)) && (
                   <>
-                    <DropdownMenuSeparator className="dark:bg-white/10" />
-                    <DropdownMenuItem
-                      onClick={async () => {
-                        if (
-                          window.confirm("¿Anular el pago de esta factura?")
-                        ) {
-                          await reopenReceivable(Number(row.id));
-                        }
-                      }}
-                      className="gap-2 font-bold text-[11px] uppercase tracking-tight text-rose-600 dark:text-rose-500 cursor-pointer dark:focus:bg-rose-950/30"
-                    >
-                      <Ban className="h-4 w-4 mr-2" /> Anular Pago y Desbloquear
-                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="my-1 opacity-50" />
+                    <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-indigo-500/70 px-2 py-1.5">
+                      Operaciones SAT
+                    </DropdownMenuLabel>
+
+                    {isProvisional && canStamp && (
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          if (
+                            window.confirm("¿Timbrar esta factura ante el SAT?")
+                          ) {
+                            const viajeId =
+                              (row as any).viaje_id || (row as any).trip_id;
+                            if (viajeId) {
+                              await stampInvoice(Number(viajeId));
+                            } else {
+                              if (!row.id)
+                                return toast.error("Error", {
+                                  description: "ID de factura no válido",
+                                });
+                              await stampFreeInvoice(Number(row.id));
+                            }
+                          }
+                        }}
+                        className="gap-2 font-bold text-xs cursor-pointer text-indigo-600 dark:text-indigo-400 focus:bg-indigo-50 dark:focus:bg-indigo-900/30 rounded-md"
+                      >
+                        <FileSignature className="h-4 w-4" /> Timbrar Factura
+                      </DropdownMenuItem>
+                    )}
+
+                    {isStamped && !isInProcess && canCreate && canStamp && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setInvoiceToRefactor({
+                            ...row,
+                            viaje_id: row.viaje_id || (row as any).trip_id,
+                          });
+                          setIsRefactorModalOpen(true);
+                        }}
+                        className="gap-2 font-bold text-xs cursor-pointer text-orange-600 dark:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-900/30 rounded-md"
+                      >
+                        <RefreshCw className="h-4 w-4" /> Refacturar CFDI
+                      </DropdownMenuItem>
+                    )}
                   </>
                 )}
 
-                {!hasPayments &&
-                  row.estatus !== "cancelado" &&
-                  !isInProcess &&
-                  canCancel && (
-                    <>
-                      <DropdownMenuSeparator className="dark:bg-white/10" />
+                {/* GRUPO 4: ACCIONES PELIGROSAS */}
+                {((hasPayments && canCancel && !isInProcess) ||
+                  (!hasPayments &&
+                    row.estatus !== "cancelado" &&
+                    !isInProcess &&
+                    canCancel)) && (
+                  <>
+                    <DropdownMenuSeparator className="my-1 border-rose-100 dark:border-rose-900/30" />
+                    <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-rose-500/70 px-2 py-1.5">
+                      Zona de Peligro
+                    </DropdownMenuLabel>
+
+                    {hasPayments && canCancel && !isInProcess && (
                       <DropdownMenuItem
-                        onClick={() => {
-                          setInvoiceToCancel(row);
-                          setIsCancelModalOpen(true);
+                        onClick={async () => {
+                          if (
+                            window.confirm(
+                              "¿Anular TODOS los pagos de esta factura? El saldo volverá a estar pendiente y se cancelarán los REP en el SAT.",
+                            )
+                          ) {
+                            const pIds = Array.isArray(row.cobros)
+                              ? row.cobros.map((p: any) => p.id)
+                              : [];
+                            if (pIds.length > 0) {
+                              try {
+                                await handleCancelPayments(pIds);
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            } else {
+                              await reopenReceivable(Number(row.id));
+                            }
+                          }
                         }}
-                        className="gap-2 font-bold text-xs uppercase tracking-tight text-orange-600 dark:text-orange-500 cursor-pointer dark:focus:bg-orange-950/30"
+                        className="gap-2 font-bold text-xs cursor-pointer text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30 rounded-md"
                       >
-                        <Ban className="h-4 w-4 mr-2" /> Cancelar Factura
+                        <Ban className="h-4 w-4" /> Anular Pagos Activos
                       </DropdownMenuItem>
-                    </>
-                  )}
+                    )}
+
+                    {!hasPayments &&
+                      row.estatus !== "cancelado" &&
+                      !isInProcess &&
+                      canCancel && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setInvoiceToCancel(row);
+                            setIsMassCancel(false); // Modal sabrá que es cancelación individual
+                            setIsCancelModalOpen(true);
+                          }}
+                          className="gap-2 font-bold text-xs cursor-pointer text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30 rounded-md"
+                        >
+                          <Trash2 className="h-4 w-4" /> Cancelar Factura
+                        </DropdownMenuItem>
+                      )}
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -874,10 +936,9 @@ export default function Receivables() {
     );
   }
 
-  const selectedClientName =
-    selectedClientId === "all"
-      ? "Todos los Clientes"
-      : uniqueClients.find((c) => c.id === selectedClientId)?.name || "Cliente";
+  const requireSatCancel = isMassCancel
+    ? selectedRows.some((r) => r.uuid)
+    : !!invoiceToCancel?.uuid;
 
   return (
     <div className="space-y-6 pb-20 animate-page-enter relative">
@@ -1021,7 +1082,6 @@ export default function Receivables() {
             Exportar consolidado
           </Button>
 
-          {/* 👇 FIX: BOTÓN DE NUEVA FACTURA PROTEGIDO 👇 */}
           {canCreate && (
             <ActionButton
               size="md"
@@ -1116,6 +1176,7 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
+      {/* 👇 BARRA FLOTANTE CON ACCIONES MASIVAS */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
@@ -1133,18 +1194,35 @@ export default function Receivables() {
               </div>
             </div>
             <div className="h-8 w-px bg-white/20 hidden sm:block"></div>
-            <Button
-              onClick={handlePaySelectedInvoices}
-              className="bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl border-none shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] haptic-press"
-            >
-              <CreditCard className="w-4 h-4 mr-2" />
-              Generar REP
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handlePaySelectedInvoices}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl border-none shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all hover:scale-[1.02] haptic-press"
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                Generar REP
+              </Button>
+
+              {/* BOTÓN DE CANCELACIÓN MASIVA EN TABLA */}
+              {canCancel && (
+                <Button
+                  onClick={() => {
+                    setInvoiceToCancel(null);
+                    setIsMassCancel(true);
+                    setIsCancelModalOpen(true);
+                  }}
+                  className="bg-rose-500 hover:bg-rose-600 text-white font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl border-none shadow-[0_0_15px_rgba(244,63,94,0.4)] transition-all hover:scale-[1.02] haptic-press"
+                >
+                  <Ban className="w-4 h-4 mr-2" />
+                  Cancelar Lote
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL DE CREACIÓN / EDICIÓN NORMAL */}
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -1155,7 +1233,6 @@ export default function Receivables() {
         importedServices={importedServices}
       />
 
-      {/* MODAL PARA REFACTURAR FACTURAS TIMBRADAS */}
       <CreateInvoiceModal
         open={isRefactorModalOpen}
         onOpenChange={(isOpen) => {
@@ -1166,10 +1243,30 @@ export default function Receivables() {
         onSubmit={handleCreateInvoice}
       />
 
+      {/* CONEXIÓN A LAS FUNCIONES SAT Y CANCELACIÓN DE PAGOS */}
       <InvoiceDetailSheet
         open={isDetailSheetOpen}
         onOpenChange={setIsDetailSheetOpen}
         invoice={selectedInvoice}
+        onPayClick={(inv) => {
+          setInvoicesToPay([inv]);
+          setIsPaymentModalOpen(true);
+        }}
+        onStampPayment={async (paymentId) => {
+          try {
+            await axiosClient.post(
+              `/finance/receivables/payments/${paymentId}/stamp`,
+            );
+            toast.success("Complemento timbrado en el SAT con éxito");
+            if (refreshReceivables) await refreshReceivables();
+          } catch (error: any) {
+            const errorMsg =
+              error.response?.data?.detail || "Error al timbrar el pago";
+            toast.error(errorMsg);
+            throw error;
+          }
+        }}
+        onCancelPayments={handleCancelPayments}
       />
 
       <ClientRegisterPaymentModal
@@ -1220,34 +1317,45 @@ export default function Receivables() {
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Estás a punto de intervenir la factura con folio{" "}
-                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
-                  {invoiceToCancel?.folio_interno || invoiceToCancel?.id}
-                </b>
+                Estás a punto de intervenir{" "}
+                {isMassCancel
+                  ? `un lote de ${selectedRows.length} facturas`
+                  : `la factura con folio `}
+                {!isMassCancel && (
+                  <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
+                    {invoiceToCancel?.folio_interno || invoiceToCancel?.id}
+                  </b>
+                )}
                 . ¿Qué deseas hacer exactamente?
               </p>
 
-              {invoiceToCancel?.uuid ? (
+              {requireSatCancel ? (
                 <div className="mt-6 p-5 bg-purple-50 dark:bg-purple-950/20 border-l-4 border-purple-500 rounded-r-2xl shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center gap-2 mb-3">
                     <FileSignature className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                     <h4 className="text-xs sm:text-sm font-black text-purple-900 dark:text-purple-300 uppercase tracking-widest">
-                      Documento Certificado por el SAT
+                      Documentos Certificados por el SAT
                     </h4>
                   </div>
                   <p className="text-xs sm:text-sm leading-relaxed text-purple-800 dark:text-purple-200/80 mb-4 font-medium">
-                    Esta factura posee un UUID oficial (
-                    <b>{invoiceToCancel.uuid.substring(0, 8)}...</b>). No puede
-                    ser eliminada localmente para evitar discrepancias fiscales.
-                    Debes mandar la orden oficial de cancelación a los
-                    servidores del SAT (Motivo 02).
+                    {isMassCancel
+                      ? "Algunas de estas facturas poseen UUIDs oficiales."
+                      : "Esta factura posee un UUID oficial."}{" "}
+                    No pueden ser eliminadas localmente para evitar
+                    discrepancias fiscales. Debes mandar la orden oficial de
+                    cancelación a los servidores del SAT (Motivo 02).
                   </p>
                   <Button
                     onClick={handleCancelInvoiceSAT}
+                    disabled={isCanceling}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-purple-600/20 uppercase tracking-widest text-[10px] haptic-press"
                   >
-                    <Ban className="h-4 w-4 mr-2" /> Solicitar Cancelación al
-                    SAT
+                    {isCanceling ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Ban className="h-4 w-4 mr-2" />
+                    )}
+                    Solicitar Cancelación al SAT
                   </Button>
                 </div>
               ) : (
@@ -1260,9 +1368,11 @@ export default function Receivables() {
                       </h4>
                     </div>
                     <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 mb-4">
-                      La factura se eliminará de tu cartera. Las operaciones
-                      (vales y conciliaciones) se mantienen intactas, pero el
-                      viaje quedará libre.{" "}
+                      {isMassCancel
+                        ? "Las facturas se eliminarán"
+                        : "La factura se eliminará"}{" "}
+                      de tu cartera. Las operaciones (vales y conciliaciones) se
+                      mantienen intactas, pero los viajes quedarán libres.{" "}
                       <b>
                         Para generar de nuevo la factura, el usuario tendrá que
                         volver a liquidar el viaje.
@@ -1270,9 +1380,13 @@ export default function Receivables() {
                     </p>
                     <Button
                       onClick={() => handleCancelInvoice(false)}
+                      disabled={isCanceling}
                       className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 dark:text-orange-300 font-bold shadow-none haptic-press"
                     >
-                      Solo eliminar factura
+                      {isCanceling ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : null}
+                      Solo eliminar {isMassCancel ? "facturas" : "factura"}
                     </Button>
                   </div>
 
@@ -1288,7 +1402,9 @@ export default function Receivables() {
                       <b className="uppercase underline">crítica</b> e
                       irreversible. Destruirá por completo:
                       <ul className="list-disc pl-5 mt-2 space-y-1">
-                        <li>La factura (CxC)</li>
+                        <li>
+                          {isMassCancel ? "Las facturas" : "La factura"} (CxC)
+                        </li>
                         <li>El viaje completo (Operaciones)</li>
                         <li>La liquidación del operador</li>
                         <li>
@@ -1306,10 +1422,15 @@ export default function Receivables() {
                           handleCancelInvoice(true);
                         }
                       }}
+                      disabled={isCanceling}
                       className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-rose-600/20 haptic-press"
                     >
-                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar todo el
-                      registro
+                      {isCanceling ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 mr-2" />
+                      )}
+                      Eliminar todo el registro
                     </Button>
                   </div>
                 </div>
@@ -1320,6 +1441,7 @@ export default function Receivables() {
           <AlertDialogFooter className="p-4 sm:p-6 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10 flex justify-center">
             <AlertDialogCancel
               onClick={() => setIsCancelModalOpen(false)}
+              disabled={isCanceling}
               className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
             >
               Cerrar y no hacer nada
