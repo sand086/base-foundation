@@ -619,7 +619,11 @@ class CartaPorteService:
             "aseguradora": getattr(unidad, "aseguradora_resp_civil", "")
             or "NO REGISTRADA",
             "poliza": getattr(unidad, "poliza_resp_civil", "") or "S/P",
-            "aseguradora_med_ambiente": getattr(unidad, "aseguradora_med_ambiente", ""),
+            "aseguradora_med_ambiente": (
+                unidad.aseguradora_ambiental.nombre
+                if unidad and unidad.aseguradora_ambiental
+                else ""
+            ),
             "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
             # Remolques
             "subtipo_remolque": get_sat_trailer_code(getattr(r1, "tipo", "")),
