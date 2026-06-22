@@ -18,8 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   CreditCard,
+  FileCode2,
   DollarSign,
   AlertCircle,
   Building2,
@@ -72,6 +74,7 @@ export function ClientRegisterPaymentModal({
     cuenta_ordenante: "",
   });
 
+  const [generarComplemento, setGenerarComplemento] = useState(true);
   const [abonos, setAbonos] = useState<Record<number, number>>({});
   const [error, setError] = useState("");
 
@@ -165,6 +168,7 @@ export function ClientRegisterPaymentModal({
       cuenta_deposito: String(formData.cuenta_deposito),
       banco_ordenante: formData.banco_ordenante,
       cuenta_ordenante: formData.cuenta_ordenante,
+      generar_complemento: generarComplemento,
     };
 
     await onSubmit(payloadBackend);
@@ -416,6 +420,25 @@ export function ClientRegisterPaymentModal({
                 })}
               </div>
             </div>
+            <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm flex items-center justify-between">
+              <div>
+                <h4 className="text-[12px] font-black uppercase tracking-widest text-foreground flex items-center gap-1.5">
+                  <FileCode2 className="h-4 w-4 text-emerald-500" />
+                  Generar Complemento de Pago SAT
+                </h4>
+                <p className="text-[10px] text-muted-foreground font-bold mt-1 max-w-[250px] sm:max-w-full leading-tight">
+                  {generarComplemento
+                    ? "El comprobante se timbrará inmediatamente en el SAT tras registrar el abono."
+                    : "Solo registrará el movimiento financiero. Podrás timbrar el documento después."}
+                </p>
+              </div>
+              <Switch
+                checked={generarComplemento}
+                onCheckedChange={setGenerarComplemento}
+                disabled={isSubmitting}
+                className="data-[state=checked]:bg-emerald-500"
+              />
+            </div>
 
             {error && (
               <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-[11px] font-black uppercase tracking-widest p-4 bg-rose-50 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-800/50 animate-in zoom-in-95">
@@ -425,7 +448,6 @@ export function ClientRegisterPaymentModal({
             )}
           </div>
         </div>
-
         <DialogFooter className="p-6 sm:p-8 bg-muted/50 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0 z-10">
           <div className="sm:hidden w-full text-center mb-2">
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
@@ -448,7 +470,7 @@ export function ClientRegisterPaymentModal({
             </Button>
             <Button
               onClick={handleSubmit}
-              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px] h-12 px-8"
+              className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px] h-12 px-8 transition-all"
               disabled={isSubmitting || granTotal <= 0}
             >
               {isSubmitting ? (
@@ -456,9 +478,14 @@ export function ClientRegisterPaymentModal({
               ) : (
                 <CheckCircle2 className="h-4 w-4 mr-2" />
               )}
+              {/* Texto dinámico según el switch y si está cargando */}
               {isSubmitting
-                ? "Timbrando REP..."
-                : "Timbrar Complemento de Pago"}
+                ? generarComplemento
+                  ? "Timbrando REP..."
+                  : "Registrando Cobro..."
+                : generarComplemento
+                  ? "Timbrar Complemento"
+                  : "Solo Registrar Cobro"}
             </Button>
           </div>
         </DialogFooter>

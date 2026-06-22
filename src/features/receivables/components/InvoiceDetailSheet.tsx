@@ -76,13 +76,13 @@ export function InvoiceDetailSheet({
   const inv = invoice as any;
   const statusInfo = getInvoiceStatusInfo(inv);
 
-  // 📝 EXTRACCIÓN DE DATOS FISCALES
+  //  EXTRACCIÓN DE DATOS FISCALES
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
   const uuidRelacionado = safeStr(inv.uuid_relacionado);
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  // 👇 EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
+  //  EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
   const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
   const docHistory = Array.isArray(inv.document_history)
@@ -113,7 +113,7 @@ export function InvoiceDetailSheet({
       return acc;
     }, {}),
   ).sort((a: any, b: any) => b.version - a.version); // Orden descendente
-  // 👆 -----------------------------------------------------
+  //  -----------------------------------------------------
 
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
@@ -132,7 +132,7 @@ export function InvoiceDetailSheet({
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
 
-  // 💰 EXTRACCIÓN DE DESGLOSE
+  //  EXTRACCIÓN DE DESGLOSE
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const subtotal = toNumber(inv.subtotal);
   const iva = toNumber(inv.iva);
@@ -140,7 +140,7 @@ export function InvoiceDetailSheet({
   const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
   const moneda = safeStr(inv.moneda) || "MXN";
 
-  // 🚚 EXTRACCIÓN DE DATOS OPERATIVOS (VIAJE)
+  // EXTRACCIÓN DE DATOS OPERATIVOS (VIAJE)
   const referenciaOperativa = safeStr(inv.referencia);
   const origen = safeStr(inv.trip_info?.origen) || "No especificado";
   const destino = safeStr(inv.trip_info?.destino) || "No especificado";

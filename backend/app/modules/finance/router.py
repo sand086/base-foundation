@@ -61,7 +61,7 @@ def read_cost_centers(db: Session = Depends(get_db)):
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN read_cost_centers 💥\n"
+            + "\n  ERROR CRÍTICO EN read_cost_centers  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -87,7 +87,7 @@ def read_bank_accounts(db: Session = Depends(get_db)):
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN read_bank_accounts 💥\n"
+            + "\n  ERROR CRÍTICO EN read_bank_accounts  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -112,7 +112,7 @@ def create_bank_account(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN create_bank_account 💥\n"
+            + "\n  ERROR CRÍTICO EN create_bank_account  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -145,7 +145,7 @@ def update_bank_account(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN update_bank_account 💥\n"
+            + "\n  ERROR CRÍTICO EN update_bank_account  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -176,7 +176,7 @@ def delete_bank_account(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN delete_bank_account 💥\n"
+            + "\n  ERROR CRÍTICO EN delete_bank_account  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -197,7 +197,7 @@ def read_movements(db: Session = Depends(get_db)):
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN read_movements 💥\n"
+            + "\n  ERROR CRÍTICO EN read_movements  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -234,7 +234,7 @@ def conciliate_movement(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN conciliate_movement 💥\n"
+            + "\n  ERROR CRÍTICO EN conciliate_movement  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -265,7 +265,7 @@ def delete_bank_movement(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN delete_bank_movement 💥\n"
+            + "\n  ERROR CRÍTICO EN delete_bank_movement  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -290,7 +290,7 @@ def create_manual_movement(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN create_manual_movement 💥\n"
+            + "\n  ERROR CRÍTICO EN create_manual_movement  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -337,7 +337,7 @@ async def bulk_upload_invoices(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN bulk_upload_invoices 💥\n"
+            + "\n  ERROR CRÍTICO EN bulk_upload_invoices  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -476,7 +476,7 @@ def get_receivable_invoices(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN get_receivable_invoices 💥\n"
+            + "\n  ERROR CRÍTICO EN get_receivable_invoices  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -574,7 +574,7 @@ def delete_receivable_invoice(
                             operator.status = models.OperatorStatus.ACTIVO
                             operator.updated_by_id = current_user.id  # <--- AUDITORÍA
 
-                    # --- 💥 TRAZABILIDAD (TIMELINE) ---
+                    # ---   TRAZABILIDAD (TIMELINE) ---
                     # Apagamos los eventos de rastreo para que no queden flotando
                     timeline_events = (
                         db.query(models.TripTimelineEvent)
@@ -585,7 +585,7 @@ def delete_receivable_invoice(
                         event.record_status = models.RecordStatus.ELIMINADO
                         event.updated_by_id = current_user.id  # <--- AUDITORÍA
 
-                    # --- 💥 VALES DE DIÉSEL Y CONCILIACIÓN ---
+                    # ---   VALES DE DIÉSEL Y CONCILIACIÓN ---
                     fuel_logs = (
                         db.query(models.FuelLog)
                         .filter(models.FuelLog.trip_leg_id == leg.id)
@@ -604,7 +604,7 @@ def delete_receivable_invoice(
                         fuel.rendimiento_real = None
                         fuel.updated_by_id = current_user.id  # <--- AUDITORÍA
 
-                    # --- 💥 LIQUIDACIÓN DEL OPERADOR Y SUS DESGLOSES ---
+                    # ---   LIQUIDACIÓN DEL OPERADOR Y SUS DESGLOSES ---
                     settlements = (
                         db.query(models.OperatorSettlement)
                         .filter(models.OperatorSettlement.trip_leg_id == leg.id)
@@ -642,7 +642,7 @@ def delete_receivable_invoice(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN delete_receivable_invoice 💥\n"
+            + "\n  ERROR CRÍTICO EN delete_receivable_invoice  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -661,6 +661,63 @@ def register_receivable_payment(
     current_user: models.User = Depends(get_current_active_user),
 ):
     try:
+        from datetime import datetime
+
+        # 1. Extraer la decisión del usuario (Por defecto True para apps viejas)
+        generar_complemento_sat = payment.get("generar_complemento", True)
+
+        # =========================================================
+        # CAMINO 1: FLUJO COMPLETO CON SAT (Tu motor ya hace todo atómicamente)
+        # =========================================================
+        if generar_complemento_sat:
+            from app.integrations.sat.payment_service import PaymentComplementService
+
+            invoice = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.id == invoice_id)
+                .first()
+            )
+            if not invoice:
+                raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+            # Formatear datos para tu PaymentComplementService
+            monto_pago = float(payment.get("monto", 0))
+            pagos_data = [{"invoice_id": invoice.id, "monto_pagado": monto_pago}]
+            fecha_pago_str = payment.get("fecha_pago") or datetime.now().isoformat()
+            cuenta_dep = payment.get("cuenta_deposito") or payment.get(
+                "bank_account_id"
+            )
+
+            sat_service = PaymentComplementService(db)
+
+            # Este método actualiza la BD, crea bancos y si el SAT falla, hace Rollback automático
+            resultado = sat_service.registrar_pago_y_timbrar_complemento(
+                client_id=invoice.client_id,
+                pagos_data=pagos_data,
+                forma_pago=payment.get("metodo_pago", "TRANSFERENCIA"),  # "03", etc.
+                fecha_pago=fecha_pago_str,
+                referencia=payment.get("referencia", ""),
+                cuenta_deposito=cuenta_dep,
+                banco_ordenante=payment.get("banco_ordenante", ""),
+                cuenta_ordenante=payment.get("cuenta_ordenante", ""),
+                user_id=current_user.id,
+            )
+
+            db.refresh(invoice)
+            return {
+                "message": "Pago y movimiento registrados, Complemento timbrado exitosamente en el SAT.",
+                "nuevo_saldo_factura": invoice.saldo_pendiente,
+                "estatus": (
+                    invoice.estatus.value
+                    if hasattr(invoice.estatus, "value")
+                    else str(invoice.estatus)
+                ),
+                "complemento_uuid": resultado.get("data", {}).get("complemento_uuid"),
+            }
+
+        # =========================================================
+        # CAMINO 2: FLUJO MANUAL DIFERIDO (Afecta banco y saldo localmente sin SAT)
+        # =========================================================
         invoice = (
             db.query(models.ReceivableInvoice)
             .filter(models.ReceivableInvoice.id == invoice_id)
@@ -684,13 +741,27 @@ def register_receivable_payment(
                 detail="Debes especificar la cuenta bancaria de destino.",
             )
 
+        # Calculamos parcialidad e importes financieros (vital para cuando se timbre en la Fase 2)
+        pagos_previos = (
+            db.query(models.ReceivableInvoicePayment)
+            .filter_by(invoice_id=invoice.id)
+            .count()
+        )
+        parcialidad = pagos_previos + 1
+        saldo_anterior = invoice.saldo_pendiente
+        saldo_insoluto = max(0.0, saldo_anterior - monto_pago)
+
         nuevo_pago = models.ReceivableInvoicePayment(
             invoice_id=invoice.id,
             monto=monto_pago,
             metodo_pago=payment.get("metodo_pago", "TRANSFERENCIA"),
             referencia=payment.get("referencia", ""),
             cuenta_deposito=str(cuenta_id),
+            parcialidad=parcialidad,
+            saldo_anterior=saldo_anterior,
+            saldo_insoluto=saldo_insoluto,
             created_by_id=current_user.id,
+            # complemento_uuid queda nulo, indicando que es candidato para "Timbrar después"
         )
         db.add(nuevo_pago)
 
@@ -700,15 +771,14 @@ def register_receivable_payment(
         else:
             invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
 
-        invoice.updated_by_id = (
-            current_user.id
-        )  # <--- AUDITORÍA: Refleja cobro en la factura
+        invoice.updated_by_id = current_user.id
 
+        # Se registra en Tesorería
         movimiento_schema = schemas.BankMovementCreate(
             bank_account_id=int(cuenta_id),
             tipo="ingreso",
             monto=monto_pago,
-            concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]}",
+            concepto=f"Cobro Fra. {invoice.folio_interno or invoice.uuid[:8]} (Por Timbrar)",
             referencia=payment.get("referencia", ""),
             origen_modulo="CxC",
         )
@@ -718,7 +788,7 @@ def register_receivable_payment(
         db.refresh(invoice)
 
         return {
-            "message": "Pago y movimiento bancario registrados exitosamente",
+            "message": "Pago financiero registrado exitosamente. Complemento SAT pendiente de generar.",
             "nuevo_saldo_factura": invoice.saldo_pendiente,
             "estatus": (
                 invoice.estatus.value
@@ -734,7 +804,7 @@ def register_receivable_payment(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN register_receivable_payment 💥\n"
+            + "\n  ERROR CRÍTICO EN register_receivable_payment  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -760,7 +830,7 @@ def create_manual_receivable(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN create_manual_receivable 💥\n"
+            + "\n  ERROR CRÍTICO EN create_manual_receivable  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -870,7 +940,7 @@ async def upload_payment_xml(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN upload_payment_xml 💥\n"
+            + "\n  ERROR CRÍTICO EN upload_payment_xml  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -940,7 +1010,7 @@ def fix_orphan_payments(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN fix_orphan_payments 💥\n"
+            + "\n  ERROR CRÍTICO EN fix_orphan_payments  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -974,7 +1044,7 @@ def register_petty_cash(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN register_petty_cash 💥\n"
+            + "\n  ERROR CRÍTICO EN register_petty_cash  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1069,7 +1139,7 @@ def reopen_receivable_invoice(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN reopen_receivable_invoice 💥\n"
+            + "\n  ERROR CRÍTICO EN reopen_receivable_invoice  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1102,7 +1172,7 @@ def process_settlement_for_operator(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN process_settlement_for_operator 💥\n"
+            + "\n  ERROR CRÍTICO EN process_settlement_for_operator  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1130,7 +1200,7 @@ def read_indirect_categories(db: Session = Depends(get_db)):
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN read_indirect_categories 💥\n"
+            + "\n  ERROR CRÍTICO EN read_indirect_categories  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1155,7 +1225,7 @@ def create_indirect_category(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN create_indirect_category 💥\n"
+            + "\n  ERROR CRÍTICO EN create_indirect_category  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1188,7 +1258,7 @@ def update_indirect_category(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN update_indirect_category 💥\n"
+            + "\n  ERROR CRÍTICO EN update_indirect_category  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1218,7 +1288,7 @@ def delete_indirect_category(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN delete_indirect_category 💥\n"
+            + "\n  ERROR CRÍTICO EN delete_indirect_category  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1255,7 +1325,7 @@ def get_cfdi_vault(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN get_cfdi_vault 💥\n"
+            + "\n  ERROR CRÍTICO EN get_cfdi_vault  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1288,7 +1358,7 @@ def get_cfdi_document_timeline(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN get_cfdi_document_timeline 💥\n"
+            + "\n  ERROR CRÍTICO EN get_cfdi_document_timeline  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1522,7 +1592,7 @@ def export_aging_report(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN export_aging_report 💥\n"
+            + "\n  ERROR CRÍTICO EN export_aging_report  \n"
             + error_details
             + "\n"
             + "=" * 50
@@ -1591,7 +1661,7 @@ def sync_cancelled_invoices(
         print(
             "\n"
             + "=" * 50
-            + "\n💥 ERROR CRÍTICO EN sync_cancelled_invoices 💥\n"
+            + "\n  ERROR CRÍTICO EN sync_cancelled_invoices  \n"
             + error_details
             + "\n"
             + "=" * 50
