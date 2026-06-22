@@ -495,7 +495,7 @@ export default function Receivables() {
   // 👇 FUNCIÓN MAESTRA: CANCELACIÓN DE PAGOS/REP
   const handleCancelPayments = async (paymentIds: number[]) => {
     try {
-      await axiosClient.post("/finance/receivables/payments/cancel", {
+      await axiosClient.post("/api/finance/receivables/payments/cancel", {
         payment_ids: paymentIds,
         motivo: "02",
       });
