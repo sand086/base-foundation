@@ -621,10 +621,10 @@ class CartaPorteService:
             "poliza": getattr(unidad, "poliza_resp_civil", "") or "S/P",
             "aseguradora_med_ambiente": (
                 unidad.aseguradora_ambiental.nombre
-                if unidad and unidad.aseguradora_ambiental
+                if unidad and getattr(unidad, "aseguradora_ambiental", None)
                 else ""
             ),
-            "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
+            "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", "") or "",
             # Remolques
             "subtipo_remolque": get_sat_trailer_code(getattr(r1, "tipo", "")),
             "placa_remolque_1": (
@@ -1034,6 +1034,10 @@ class CartaPorteService:
             is_nominal=True,
             ocultar_montos=False,
             folio_forzado=getattr(invoice_data, "folio_forzado", None),
+        )
+
+        logger.error(
+            f"🚑 DEBUG DATOS SEGURO -> Aseguradora: '{raw_data.get('aseguradora_med_ambiente')}' | Póliza: '{raw_data.get('poliza_med_ambiente')}'"
         )
 
         try:
