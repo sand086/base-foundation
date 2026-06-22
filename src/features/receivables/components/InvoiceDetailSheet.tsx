@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import type { ReceivableInvoice } from "@/features/receivables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -210,7 +211,6 @@ export function InvoiceDetailSheet({
     }
   };
 
-  // Función directa y sencilla para el usuario
   const handleCancelIndividual = async (paymentId: number) => {
     if (!onCancelPayments) return;
     if (
@@ -243,6 +243,7 @@ export function InvoiceDetailSheet({
           year: "numeric",
         })
       : "—";
+
   const fDT = (d: any) => {
     if (!d || d === "—") return "—";
     return new Date(d).toLocaleString("es-MX", {
@@ -282,6 +283,7 @@ export function InvoiceDetailSheet({
             >
               {statusInfo.label}
             </StatusBadge>
+
             <Button
               variant="ghost"
               size="icon"
@@ -602,7 +604,7 @@ export function InvoiceDetailSheet({
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* TABLA DE PAGOS DE LA FACTURA (AQUÍ SOLO QUEDA EL BASURERO INDIVIDUAL) */}
+          {/* HISTORIAL DE COBROS/PAGOS (REP) */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
@@ -620,7 +622,7 @@ export function InvoiceDetailSheet({
               <div className="p-8 text-center bg-white dark:bg-card rounded-2xl border-2 border-dashed border-slate-200 dark:border-border flex flex-col items-center justify-center gap-2">
                 <Receipt className="h-8 w-8 text-slate-300 dark:text-slate-700" />
                 <p className="text-sm font-bold text-slate-500">
-                  No hay pagos activos
+                  No hay pagos registrados
                 </p>
               </div>
             ) : (
@@ -646,6 +648,8 @@ export function InvoiceDetailSheet({
                       const complementoUuid = safeStr(
                         p.complemento_uuid ?? p.complementoUuid,
                       );
+                      const isCancelandoSAT =
+                        p.estatus === "PROCESO_CANCELACION";
 
                       return (
                         <DataTableRow
@@ -659,6 +663,12 @@ export function InvoiceDetailSheet({
                             <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded border border-emerald-100 dark:border-emerald-900/50">
                               {fC(monto)}
                             </span>
+                            {isCancelandoSAT && (
+                              <Badge className="block mt-2 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[8px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 text-center">
+                                <Loader2 className="h-2 w-2 mr-1 animate-spin inline-block" />{" "}
+                                En Proceso SAT
+                              </Badge>
+                            )}
                           </DataTableCell>
 
                           <DataTableCell className="text-center">
@@ -669,6 +679,7 @@ export function InvoiceDetailSheet({
                                     variant="outline"
                                     size="icon"
                                     title="Descargar PDF"
+                                    disabled={isCancelandoSAT}
                                     className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all"
                                     onClick={() =>
                                       handleDownloadFromBackend(
@@ -683,6 +694,7 @@ export function InvoiceDetailSheet({
                                     variant="outline"
                                     size="icon"
                                     title="Descargar XML"
+                                    disabled={isCancelandoSAT}
                                     className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 transition-all"
                                     onClick={() =>
                                       handleDownloadFromBackend(
@@ -699,7 +711,9 @@ export function InvoiceDetailSheet({
                                   variant="outline"
                                   size="sm"
                                   className="h-8 text-[10px] font-black uppercase tracking-widest text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/50 transition-all"
-                                  disabled={stampingId === p.id}
+                                  disabled={
+                                    stampingId === p.id || isCancelandoSAT
+                                  }
                                   onClick={() => handleStamp(p.id)}
                                 >
                                   {stampingId === p.id ? (
@@ -716,8 +730,7 @@ export function InvoiceDetailSheet({
                                 </Button>
                               )}
 
-                              {/* BOTÓN INDIVIDUAL DE CANCELACIÓN DE PAGO */}
-                              {onCancelPayments && (
+                              {onCancelPayments && !isCancelandoSAT && (
                                 <Button
                                   variant="outline"
                                   size="icon"
@@ -752,7 +765,7 @@ export function InvoiceDetailSheet({
           <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
               <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
-              Versiones
+              Versiones (Historial)
             </h3>
 
             <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">

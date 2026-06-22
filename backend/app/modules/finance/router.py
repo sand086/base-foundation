@@ -389,6 +389,7 @@ def get_receivable_invoices(
                     "referencia": p.referencia or "S/R",
                     "cuenta_deposito": p.cuenta_deposito,
                     "complemento_uuid": p.complemento_uuid,
+                    "estatus": getattr(p, "estatus", "ACTIVO"),
                 }
                 for p in inv.payments
             ]
