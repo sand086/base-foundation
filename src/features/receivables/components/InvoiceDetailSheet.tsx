@@ -37,8 +37,9 @@ import {
   MapPin,
   AlertTriangle,
   History,
+  Loader2,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ReceivableInvoice } from "@/features/receivables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
@@ -49,6 +50,7 @@ interface InvoiceDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   invoice: ReceivableInvoice | null;
   onPayClick?: (invoice: ReceivableInvoice) => void;
+  onStampPayment?: (paymentId: number) => Promise<void>;
 }
 
 const toNumber = (v: any): number => {
@@ -64,25 +66,40 @@ export function InvoiceDetailSheet({
   onOpenChange,
   invoice,
   onPayClick,
+  onStampPayment,
 }: InvoiceDetailSheetProps) {
+  const [stampingId, setStampingId] = useState<number | null>(null);
+
   useEffect(() => {
     if (invoice && open) {
       console.log("FACTURA ABIERTA EN DETALLE:", invoice);
     }
   }, [invoice, open]);
 
+  const handleStamp = async (paymentId: number) => {
+    if (!onStampPayment) return;
+    setStampingId(paymentId);
+    try {
+      await onStampPayment(paymentId);
+    } catch (error) {
+      console.error("Error al timbrar:", error);
+    } finally {
+      setStampingId(null);
+    }
+  };
+
   if (!invoice) return null;
 
   const inv = invoice as any;
   const statusInfo = getInvoiceStatusInfo(inv);
 
-  //  EXTRACCIÓN DE DATOS FISCALES
+  // EXTRACCIÓN DE DATOS FISCALES
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
   const uuidRelacionado = safeStr(inv.uuid_relacionado);
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  //  EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
+  // EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
   const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
   const docHistory = Array.isArray(inv.document_history)
@@ -113,7 +130,7 @@ export function InvoiceDetailSheet({
       return acc;
     }, {}),
   ).sort((a: any, b: any) => b.version - a.version); // Orden descendente
-  //  -----------------------------------------------------
+  // -----------------------------------------------------
 
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
@@ -132,7 +149,7 @@ export function InvoiceDetailSheet({
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
 
-  //  EXTRACCIÓN DE DESGLOSE
+  // EXTRACCIÓN DE DESGLOSE
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const subtotal = toNumber(inv.subtotal);
   const iva = toNumber(inv.iva);
@@ -672,9 +689,27 @@ export function InvoiceDetailSheet({
                                 </Button>
                               </div>
                             ) : (
-                              <span className="inline-flex items-center px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                No timbrado
-                              </span>
+                              <div className="flex justify-center items-center">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-[10px] font-black uppercase tracking-widest text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/50 transition-all"
+                                  disabled={stampingId === p.id}
+                                  onClick={() => handleStamp(p.id)}
+                                >
+                                  {stampingId === p.id ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                      Timbrando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileCode2 className="h-3.5 w-3.5 mr-1.5" />
+                                      Timbrar SAT
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
                             )}
                           </DataTableCell>
                         </DataTableRow>
@@ -688,7 +723,7 @@ export function InvoiceDetailSheet({
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* 👇 TABLA DE EXPEDIENTE Y VERSIONES (CORREGIDA PARA QUE DESCARGUE VÍA API SIEMPRE QUE SE PUEDA) */}
+          {/* TABLA DE EXPEDIENTE Y VERSIONES */}
           <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
               <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
@@ -790,7 +825,6 @@ export function InvoiceDetailSheet({
                       </DataTableRow>
                     ))
                   ) : hasFallbackPdf || hasFallbackXml ? (
-                    // 👈 FALLBACK INTEGRADO DENTRO DE LA TABLA (Usa Endpoint Directo si hay UUID)
                     <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <DataTableCell className="py-2.5">
                         <div className="flex flex-col">
@@ -864,7 +898,7 @@ export function InvoiceDetailSheet({
               </DataTable>
             </div>
           </div>
-          {/* 👆 FIN TABLA */}
+          {/* FIN TABLA */}
         </div>
       </SheetContent>
     </Sheet>

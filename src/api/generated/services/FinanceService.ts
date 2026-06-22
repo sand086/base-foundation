@@ -566,4 +566,26 @@ export class FinanceService {
             url: '/api/finance/force-cancel-sat-real',
         });
     }
+    /**
+     * Stamp Existing Payment
+     * Toma un pago que se registró financieramente sin generar complemento
+     * y ejecuta el timbrado en el SAT (Generación Diferida).
+     * @param paymentId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static stampExistingPaymentApiFinanceReceivablesPaymentsPaymentIdStampPost(
+        paymentId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables/payments/{payment_id}/stamp',
+            path: {
+                'payment_id': paymentId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
 }

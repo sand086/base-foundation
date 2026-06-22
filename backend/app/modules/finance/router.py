@@ -1736,3 +1736,44 @@ def force_cancel_sat_real(db: Session = Depends(get_db)):
         "total_procesadas": len(facturas_fantasmas),
         "detalle": resultados,
     }
+
+
+@router.post("/receivables/payments/{payment_id}/stamp")
+def stamp_existing_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Toma un pago que se registró financieramente sin generar complemento
+    y ejecuta el timbrado en el SAT (Generación Diferida).
+    """
+    try:
+        from app.integrations.sat.payment_service import PaymentComplementService
+
+        sat_service = PaymentComplementService(db)
+        resultado = sat_service.timbrar_pago_existente(
+            payment_id=payment_id, user_id=current_user.id
+        )
+
+        return resultado
+
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        db.rollback()
+        import traceback
+
+        error_details = traceback.format_exc()
+        print(
+            "\n"
+            + "=" * 50
+            + "\nERROR CRÍTICO EN stamp_existing_payment \n"
+            + error_details
+            + "\n"
+            + "=" * 50
+            + "\n"
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Fallo al timbrar el pago. Error real: {str(e)}"
+        )
