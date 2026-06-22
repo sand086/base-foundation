@@ -10,9 +10,11 @@ import {
   FileCode,
   RefreshCw,
   Eye,
+  MoreHorizontal,
+  FileSignature,
 } from "lucide-react";
-import { toast } from "sonner"; // <-- IMPORTANTE AÑADIR TOAST
-import axiosClient from "@/api/axiosClient"; // <-- IMPORTACIÓN PARA LLAMADAS AL SAT
+import { toast } from "sonner";
+import axiosClient from "@/api/axiosClient";
 
 import {
   useCfdiVault,
@@ -49,6 +51,14 @@ import {
   EnhancedDataTable,
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
@@ -58,17 +68,14 @@ import { InvoicePayablesDetailSheet } from "@/features/payables/components/Invoi
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
 
-  // Filtros
   const [selectedEntity, setSelectedEntity] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [entityComboOpen, setEntityOpen] = useState(false);
 
-  // Estados para Modales (Refacturación)
   const [refactorModalOpen, setRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
-  // ESTADOS PARA PANELES DE DETALLE
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
@@ -102,7 +109,6 @@ export default function CFDIVault() {
         r.cliente_proveedor_nombre !== selectedEntity
       )
         return false;
-
       if (selectedStatus !== "all" && r.estatus !== selectedStatus)
         return false;
 
@@ -305,13 +311,9 @@ export default function CFDIVault() {
     }
   };
 
-  // ==========================================
-  // CONFIGURACIÓN DINÁMICA DE COLUMNAS
-  // ==========================================
   const columns = useMemo(() => {
     const cols: ColumnDef<any>[] = [];
 
-    // SI ESTAMOS EN LA PESTAÑA DE PAGOS, ESTAS SON LAS COLUMNAS BASE
     if (activeTab === "PAGO_CLIENTE") {
       cols.push({
         key: "numero_complemento",
@@ -322,7 +324,6 @@ export default function CFDIVault() {
             row.folio_interno || row.folio || row.numero_complemento || "",
           );
 
-          // TRUCO MAESTRO: Sincronización del histórico (ID 28 + 2546 = COM-2574)
           if (row.uuid && rawFolio.toUpperCase().startsWith("PAGO-")) {
             const idReal = parseInt(rawFolio.replace(/[^0-9]/g, "")) || row.id;
             displayFolio = `COM-${idReal + 2546}`;
@@ -330,7 +331,6 @@ export default function CFDIVault() {
             const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
             displayFolio = cleanFolio ? `COM-${cleanFolio}` : "N/A";
           }
-
           return <span className="font-mono bold">{displayFolio}</span>;
         },
       });
@@ -344,9 +344,7 @@ export default function CFDIVault() {
           </span>
         ),
       });
-    }
-    // PARA FACTURAS NORMALES DE CLIENTES O PROVEEDORES, ESTAS SON LAS COLUMNAS BASE
-    else {
+    } else {
       cols.push({ key: "folio", header: "Folio" });
       cols.push({ key: "uuid", header: "UUID" });
       cols.push({
@@ -366,7 +364,6 @@ export default function CFDIVault() {
       });
     }
 
-    // COLUMNAS COMUNES PARA TODAS LAS PESTAÑAS (Entidad, Emisión, Monto, Estatus, Acciones)
     cols.push(
       {
         key: "cliente_proveedor_nombre",
@@ -402,7 +399,6 @@ export default function CFDIVault() {
           if (s === "RECIBO INTERNO")
             badgeClass =
               "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
-
           return (
             <Badge variant="outline" className={badgeClass}>
               {s}
@@ -418,18 +414,15 @@ export default function CFDIVault() {
           const listaArchivos = Array.isArray(row.versiones_archivos)
             ? row.versiones_archivos
             : [];
-
           const xmlDoc =
             listaArchivos.find(
               (f: any) => f.document_type === "xml" && f.is_active,
             ) || listaArchivos.find((f: any) => f.document_type === "xml");
-
           const pdfDoc =
             listaArchivos.find(
               (f: any) => f.document_type === "pdf" && f.is_active,
             ) || listaArchivos.find((f: any) => f.document_type === "pdf");
 
-          // LÓGICA DE DESCARGA FORZADA PARA RENOMBRAR LOS ARCHIVOS
           const forceDownloadCustomName = async (
             fileUrl: string,
             customName: string,
@@ -453,7 +446,6 @@ export default function CFDIVault() {
 
           const downloadFile = (type: "pdf" | "xml") => {
             let fileUrl = "";
-
             if (row.uuid) {
               const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "";
               const baseURL = rawBaseURL.replace(/\/$/, "");
@@ -464,14 +456,11 @@ export default function CFDIVault() {
                   ? row.pdf_url || pdfDoc?.file_url
                   : row.xml_url || xmlDoc?.file_url;
             }
-
             if (!fileUrl) return;
 
-            // SI ES COMPLEMENTO DE PAGO, FORZAR EL NOMBRE COM-folio_rfc_uuid
             if (activeTab === "PAGO_CLIENTE") {
               const rfc =
                 row.cliente_proveedor_rfc || row.rfc_cliente || "RFC_PENDIENTE";
-
               let cleanFolio = "";
               const rawFolio = String(
                 row.folio_interno ||
@@ -479,7 +468,6 @@ export default function CFDIVault() {
                   row.numero_complemento ||
                   "SF",
               );
-
               if (row.uuid && rawFolio.toUpperCase().startsWith("PAGO-")) {
                 const idReal =
                   parseInt(rawFolio.replace(/[^0-9]/g, "")) || row.id;
@@ -487,10 +475,8 @@ export default function CFDIVault() {
               } else {
                 cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
               }
-
               const targetUuid = row.uuid || "SIN_UUID";
               const customName = `COM-${cleanFolio}_${rfc}_${targetUuid}.${type}`;
-
               forceDownloadCustomName(fileUrl, customName);
             } else {
               window.open(fileUrl, "_blank");
@@ -501,72 +487,78 @@ export default function CFDIVault() {
           const hasXml = !!(row.uuid || row.xml_url || xmlDoc?.file_url);
 
           return (
-            <div className="flex items-center justify-end gap-1 pr-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Ver Detalle"
-                onClick={() => handleOpenDetail(row)}
-                className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 h-8 w-8 rounded-lg transition-colors"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 hover:bg-slate-100 dark:bg-slate-800 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/95 shadow-2xl p-1"
               >
-                <Eye className="h-4 w-4" />
-              </Button>
+                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-2 py-1.5">
+                  Consultas
+                </DropdownMenuLabel>
 
-              {activeTab === "FACTURA_CLIENTE" &&
-                row.estatus !== "PROVISIONAL" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title="Refacturar CFDI"
-                    className="text-orange-600 hover:text-orange-900 hover:bg-orange-50 border border-transparent hover:border-orange-200 h-8 px-2"
-                    onClick={() => {
-                      setInvoiceToRefactor({
-                        uuid: row.uuid,
-                        subtotal: row.monto_total / 1.16,
-                        monto_total: row.monto_total,
-                        client: { razon_social: row.cliente_proveedor_nombre },
-                        concepto: `Refacturación de ${row.folio}`,
-                      });
-                      setRefactorModalOpen(true);
-                    }}
+                <DropdownMenuItem
+                  onClick={() => handleOpenDetail(row)}
+                  className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
+                >
+                  <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle /
+                  Historial
+                </DropdownMenuItem>
+
+                {hasPdf && (
+                  <DropdownMenuItem
+                    onClick={() => downloadFile("pdf")}
+                    className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
                   >
-                    <RefreshCw className="h-4 w-4 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Refacturar</span>
-                  </Button>
+                    <FileText className="h-4 w-4 text-rose-500" /> Descargar PDF
+                  </DropdownMenuItem>
                 )}
 
-              {hasPdf ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Descargar PDF"
-                  className="text-rose-600 hover:text-rose-900 hover:bg-rose-50 h-8 w-8 rounded"
-                  onClick={() => downloadFile("pdf")}
-                >
-                  <FileText className="h-4 w-4" />
-                </Button>
-              ) : (
-                <span className="text-[10px] text-muted-foreground mr-1">
-                  No PDF
-                </span>
-              )}
+                {hasXml && (
+                  <DropdownMenuItem
+                    onClick={() => downloadFile("xml")}
+                    className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
+                  >
+                    <FileCode className="h-4 w-4 text-blue-500" /> Descargar XML
+                  </DropdownMenuItem>
+                )}
 
-              {hasXml ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Descargar XML"
-                  className="text-blue-600 hover:text-blue-900 hover:bg-blue-50 h-8 w-8 rounded"
-                  onClick={() => downloadFile("xml")}
-                >
-                  <FileCode className="h-4 w-4" />
-                </Button>
-              ) : (
-                <span className="text-[10px] text-muted-foreground">
-                  No XML
-                </span>
-              )}
-            </div>
+                {activeTab === "FACTURA_CLIENTE" &&
+                  row.estatus !== "PROVISIONAL" && (
+                    <>
+                      <DropdownMenuSeparator className="my-1 opacity-50" />
+                      <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-orange-500/70 px-2 py-1.5">
+                        Operaciones
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setInvoiceToRefactor({
+                            uuid: row.uuid,
+                            subtotal: row.monto_total / 1.16,
+                            monto_total: row.monto_total,
+                            client: {
+                              razon_social: row.cliente_proveedor_nombre,
+                            },
+                            concepto: `Refacturación de ${row.folio}`,
+                          });
+                          setRefactorModalOpen(true);
+                        }}
+                        className="gap-2 font-bold text-xs cursor-pointer text-orange-600 dark:text-orange-400 focus:bg-orange-50 dark:focus:bg-orange-900/30 rounded-md"
+                      >
+                        <RefreshCw className="h-4 w-4" /> Refacturar CFDI
+                      </DropdownMenuItem>
+                    </>
+                  )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           );
         },
       },
@@ -575,7 +567,6 @@ export default function CFDIVault() {
     return cols;
   }, [activeTab]);
 
-  // Nombre de exportación dinámico para Excel
   const excelExportName =
     activeTab === "PAGO_CLIENTE"
       ? `COM_Reporte_REP_${format(new Date(), "yyyyMMdd")}`
@@ -623,7 +614,6 @@ export default function CFDIVault() {
         </CardContent>
       </Card>
 
-      {/* MODAL DE REFACTURACIÓN */}
       <CreateInvoiceModal
         open={refactorModalOpen}
         onOpenChange={(isOpen) => {
@@ -660,7 +650,7 @@ export default function CFDIVault() {
         }}
         onCancelPayments={async (paymentIds) => {
           try {
-            await axiosClient.post("/api/finance/receivables/payments/cancel", {
+            await axiosClient.post("/finance/receivables/payments/cancel", {
               payment_ids: paymentIds,
               motivo: "02",
             });
@@ -675,7 +665,6 @@ export default function CFDIVault() {
         }}
       />
 
-      {/* DETALLE FACTURAS PROVEEDORES */}
       <InvoicePayablesDetailSheet
         open={payableDetailDrawerOpen}
         onOpenChange={(isOpen) => {
