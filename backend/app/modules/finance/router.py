@@ -1786,16 +1786,15 @@ class CancelPaymentsPayload(BaseModel):
     motivo: str = "02"  # 02 = Comprobante emitido con errores sin relación
 
 
+# =========================================================
+# CANCELACIÓN Y ROLLBACK A PRUEBA DE BALAS
+# =========================================================
 @router.post("/receivables/payments/cancel")
 def cancel_receivable_payments(
     payload: CancelPaymentsPayload,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """
-    Cancela complementos de pago (individual o en lote).
-    Se comunica con el SAT y realiza el Rollback Financiero atómicamente.
-    """
     from app.integrations.sat.payment_service import PaymentComplementService
     from datetime import datetime
 
@@ -1806,22 +1805,20 @@ def cancel_receivable_payments(
         try:
             pago = db.query(models.ReceivableInvoicePayment).filter_by(id=pid).first()
             if not pago or pago.estatus == "CANCELADO":
-                continue  # Saltamos si no existe o ya está cancelado
+                continue
 
-            # 1. Cancelar en el SAT (Solo si tiene UUID)
             if pago.complemento_uuid:
                 res = sat_service.cancelar_pago_sat(
                     payment_id=pid, motivo=payload.motivo
                 )
                 mensaje_sat = res.get("mensaje", "Cancelado en SAT")
             else:
-                # Si no estaba timbrado, solo lo cancelamos localmente
                 pago.estatus = "CANCELADO"
                 pago.motivo_cancelacion = payload.motivo
                 pago.fecha_cancelacion = datetime.now()
                 mensaje_sat = "Cancelado Localmente (No timbrado)"
 
-            # 2. Rollback Financiero (Regresar saldo a factura y sacar del banco)
+            # FIX: Matemáticas seguras para evitar que el Rollback falle
             invoice = (
                 db.query(models.ReceivableInvoice)
                 .filter_by(id=pago.invoice_id)
@@ -1829,14 +1826,17 @@ def cancel_receivable_payments(
                 .first()
             )
             if invoice:
-                invoice.saldo_pendiente += pago.monto
-                if invoice.saldo_pendiente >= invoice.monto_total:
+                invoice.saldo_pendiente = float(invoice.saldo_pendiente or 0) + float(
+                    pago.monto
+                )
+                if invoice.saldo_pendiente >= float(invoice.monto_total or 0):
                     invoice.estatus = models.InvoiceStatus.PENDIENTE
                 else:
                     invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
                 invoice.updated_by_id = current_user.id
 
-            if pago.cuenta_deposito:
+            # Retirar dinero de tesorería solo si tiene cuenta válida
+            if pago.cuenta_deposito and str(pago.cuenta_deposito).strip().isdigit():
                 cuenta = (
                     db.query(models.BankAccount)
                     .filter_by(id=int(pago.cuenta_deposito))
@@ -1844,13 +1844,12 @@ def cancel_receivable_payments(
                     .first()
                 )
                 if cuenta:
-                    cuenta.saldo -= pago.monto
+                    cuenta.saldo = float(cuenta.saldo or 0) - float(pago.monto)
                     cuenta.updated_by_id = current_user.id
-                    # Dejamos rastro en el banco del reverso
                     reverso = models.BankMovement(
                         bank_account_id=cuenta.id,
                         tipo="egreso",
-                        monto=pago.monto,
+                        monto=float(pago.monto),
                         concepto=f"Reverso Cancelación REP {pago.complemento_uuid or pago.id}",
                         referencia=f"CANC-{pago.id}",
                         origen_modulo="CxC",
@@ -1867,6 +1866,47 @@ def cancel_receivable_payments(
             resultados.append({"id": pid, "status": "error", "mensaje": str(e)})
 
     return {"status": "success", "resultados": resultados}
+
+
+# =========================================================
+# SCRIPT SALVAVIDAS: DESTRABAR FACTURAS EN "PAGADA"
+# =========================================================
+@router.get("/fix-stuck-balances")
+def fix_stuck_balances(db: Session = Depends(get_db)):
+    """Ejecuta esto 1 vez en tu navegador para devolverle el saldo a la factura atorada"""
+    facturas = db.query(models.ReceivableInvoice).all()
+    arregladas = 0
+    for inv in facturas:
+        # Sumar solo los pagos que NO están cancelados ni en proceso de cancelación
+        pagos_validos = (
+            db.query(models.ReceivableInvoicePayment)
+            .filter(
+                models.ReceivableInvoicePayment.invoice_id == inv.id,
+                models.ReceivableInvoicePayment.estatus.notin_(
+                    ["CANCELADO", "PROCESO_CANCELACION"]
+                ),
+            )
+            .all()
+        )
+
+        total_pagado = sum(float(p.monto) for p in pagos_validos)
+        saldo_real = float(inv.monto_total or 0) - total_pagado
+
+        if round(float(inv.saldo_pendiente or 0), 2) != round(saldo_real, 2):
+            inv.saldo_pendiente = saldo_real
+            if saldo_real >= float(inv.monto_total or 0):
+                inv.estatus = models.InvoiceStatus.PENDIENTE
+            elif saldo_real <= 0.01:
+                inv.estatus = models.InvoiceStatus.PAGADO
+            else:
+                inv.estatus = models.InvoiceStatus.PAGO_PARCIAL
+            arregladas += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "message": f"¡Listo! Se reparó el saldo de {arregladas} facturas.",
+    }
 
 
 @router.get("/receivables/payments/sync-cancellation-status")
@@ -1924,4 +1964,42 @@ def sync_rep_cancellation_status(db: Session = Depends(get_db)):
         "status": "success",
         "total_verificados": len(pagos_pendientes),
         "total_cambiados_a_cancelado": actualizados,
+    }
+
+
+# =========================================================
+# SCRIPT DE PRUEBAS: SIMULAR DEMORA DEL SAT
+# =========================================================
+@router.get("/receivables/force-test-cancel/{folio}")
+def force_test_cancel(folio: str, db: Session = Depends(get_db)):
+    """Fuerza los pagos de una factura a estado PROCESO_CANCELACION para probar el Cron Job"""
+    # 1. Buscar la factura por su folio
+    factura = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.folio_interno == folio)
+        .first()
+    )
+    if not factura:
+        return {"status": "error", "message": f"Factura {folio} no encontrada."}
+
+    # 2. Buscar los pagos de esa factura
+    pagos = (
+        db.query(models.ReceivableInvoicePayment).filter_by(invoice_id=factura.id).all()
+    )
+    if not pagos:
+        return {
+            "status": "error",
+            "message": f"La factura {folio} no tiene pagos registrados.",
+        }
+
+    # 3. Forzar el estatus simulando que el SAT lo dejó en espera
+    count = 0
+    for p in pagos:
+        p.estatus = "PROCESO_CANCELACION"
+        count += 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "message": f"¡Listo! Se forzaron {count} pagos de la factura {folio} a PROCESO_CANCELACION. Ya puedes probar tu tabla y tu Cron Job.",
     }

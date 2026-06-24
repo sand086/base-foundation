@@ -106,7 +106,9 @@ export default function Receivables() {
   const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+
   const [isMassCancel, setIsMassCancel] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
 
@@ -199,20 +201,17 @@ export default function Receivables() {
             : Number(inv.monto_total) || 0;
         const monto = Number(inv.monto_total) || 0;
 
-        // DETECTAMOS SI TIENE UN COMPLEMENTO DE PAGO EN PROCESO DE CANCELACIÓN EN EL SAT
-        const tienePagoEnProceso = inv.payments?.some(
-          (p: any) => p.estatus === "PROCESO_CANCELACION",
-        );
-
         let finalEstatus = "";
 
-        if (inv.status_sat === "PROCESO_CANCELACION" || tienePagoEnProceso) {
+        // Si la factura completa se mandó a cancelar al SAT, bloqueamos
+        if (inv.status_sat === "PROCESO_CANCELACION") {
           finalEstatus = "PROCESO_CANCELACION";
         } else if (
           String(inv.estatus || inv.status).toLowerCase() === "cancelado"
         ) {
           finalEstatus = "CANCELADO";
         } else {
+          // Dejar que el sistema calcule visualmente el estatus con base en el saldo real
           const statusInfoCalculated = getInvoiceStatusInfo({
             ...inv,
             saldo_pendiente: saldo,
@@ -497,11 +496,13 @@ export default function Receivables() {
 
   const handleCancelPayments = async (paymentIds: number[]) => {
     try {
-      await axiosClient.post("/finance/receivables/payments/cancel", {
+      await axiosClient.post("/api/finance/receivables/payments/cancel", {
         payment_ids: paymentIds,
         motivo: "02",
       });
-      toast.success("Pagos anulados y saldos restaurados correctamente.");
+      toast.success(
+        "Pago enviado a cancelar al SAT. Saldo liberado exitosamente.",
+      );
       if (refreshReceivables) await refreshReceivables();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Error al cancelar pagos");
@@ -681,15 +682,6 @@ export default function Receivables() {
         key: "estatus",
         header: "Estatus",
         render: (value, row) => {
-          // 👇 MODIFICADO: YA NO TIENE LOADER2 CON ANIMACIÓN GIRATORIA
-          if (value === "PROCESO_CANCELACION") {
-            return (
-              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[9px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 py-1 font-black">
-                En Proceso Cancelación
-              </Badge>
-            );
-          }
-
           const statusInfo = getInvoiceStatusInfo(row);
           return (
             <StatusBadge
@@ -784,26 +776,24 @@ export default function Receivables() {
                   </>
                 )}
 
-                {/* GRUPO 2: COBRANZA */}
-                {(row.saldo_pendiente || 0) > 0 &&
-                  !isProvisional &&
-                  !isInProcess && (
-                    <>
-                      <DropdownMenuSeparator className="my-1 opacity-50" />
-                      <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-emerald-500/70 px-2 py-1.5">
-                        Cobranza
-                      </DropdownMenuLabel>
-                      <DropdownMenuItem
-                        onClick={() => {
-                          setInvoicesToPay([row]);
-                          setIsPaymentModalOpen(true);
-                        }}
-                        className="gap-2 font-bold text-xs cursor-pointer text-emerald-700 dark:text-emerald-400 focus:bg-emerald-50 dark:focus:bg-emerald-900/30 rounded-md"
-                      >
-                        <CreditCard className="h-4 w-4" /> Registrar Cobro / REP
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                {/* GRUPO 2: COBRANZA LIBRADA DEL CANDADO DE SAT */}
+                {(row.saldo_pendiente || 0) > 0 && !isProvisional && (
+                  <>
+                    <DropdownMenuSeparator className="my-1 opacity-50" />
+                    <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-emerald-500/70 px-2 py-1.5">
+                      Cobranza
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setInvoicesToPay([row]);
+                        setIsPaymentModalOpen(true);
+                      }}
+                      className="gap-2 font-bold text-xs cursor-pointer text-emerald-700 dark:text-emerald-400 focus:bg-emerald-50 dark:focus:bg-emerald-900/30 rounded-md"
+                    >
+                      <CreditCard className="h-4 w-4" /> Registrar Cobro / REP
+                    </DropdownMenuItem>
+                  </>
+                )}
 
                 {/* GRUPO 3: FISCAL Y SAT */}
                 {((isProvisional && canStamp) ||
@@ -867,34 +857,6 @@ export default function Receivables() {
                     <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-rose-500/70 px-2 py-1.5">
                       Zona de Peligro
                     </DropdownMenuLabel>
-
-                    {hasPayments && canCancel && !isInProcess && (
-                      <DropdownMenuItem
-                        onClick={async () => {
-                          if (
-                            window.confirm(
-                              "¿Anular TODOS los pagos de esta factura? El saldo volverá a estar pendiente y se cancelarán los REP en el SAT.",
-                            )
-                          ) {
-                            const pIds = Array.isArray(row.cobros)
-                              ? row.cobros.map((p: any) => p.id)
-                              : [];
-                            if (pIds.length > 0) {
-                              try {
-                                await handleCancelPayments(pIds);
-                              } catch (e) {
-                                console.error(e);
-                              }
-                            } else {
-                              await reopenReceivable(Number(row.id));
-                            }
-                          }
-                        }}
-                        className="gap-2 font-bold text-xs cursor-pointer text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30 rounded-md"
-                      >
-                        <Ban className="h-4 w-4" /> Anular Pagos Activos
-                      </DropdownMenuItem>
-                    )}
 
                     {!hasPayments &&
                       row.estatus !== "cancelado" &&
@@ -1178,6 +1140,7 @@ export default function Receivables() {
         </CardContent>
       </Card>
 
+      {/* BARRA FLOTANTE CON ACCIONES MASIVAS */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
           <div className="glass-panel bg-brand-navy/95 dark:bg-slate-900/95 text-white px-3 py-3 rounded-2xl shadow-2xl flex items-center gap-4 sm:gap-6 border border-white/20">
@@ -1205,7 +1168,6 @@ export default function Receivables() {
                 Generar REP
               </Button>
 
-              {/* BOTÓN DE CANCELACIÓN MASIVA EN TABLA */}
               {canCancel && (
                 <Button
                   onClick={() => {
@@ -1224,7 +1186,6 @@ export default function Receivables() {
         </div>
       )}
 
-      {/* MODAL DE CREACIÓN / EDICIÓN NORMAL */}
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -1235,7 +1196,6 @@ export default function Receivables() {
         importedServices={importedServices}
       />
 
-      {/* MODAL PARA REFACTURAR FACTURAS TIMBRADAS */}
       <CreateInvoiceModal
         open={isRefactorModalOpen}
         onOpenChange={(isOpen) => {
@@ -1246,7 +1206,6 @@ export default function Receivables() {
         onSubmit={handleCreateInvoice}
       />
 
-      {/* CONEXIÓN A LAS FUNCIONES SAT Y CANCELACIÓN DE PAGOS */}
       <InvoiceDetailSheet
         open={isDetailSheetOpen}
         onOpenChange={setIsDetailSheetOpen}
@@ -1258,7 +1217,7 @@ export default function Receivables() {
         onStampPayment={async (paymentId) => {
           try {
             await axiosClient.post(
-              `/finance/receivables/payments/${paymentId}/stamp`,
+              `/api/finance/receivables/payments/${paymentId}/stamp`,
             );
             toast.success("Complemento timbrado en el SAT con éxito");
             if (refreshReceivables) await refreshReceivables();
