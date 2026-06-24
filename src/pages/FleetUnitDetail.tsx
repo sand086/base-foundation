@@ -153,6 +153,31 @@ const emptyForm: FormState = {
   tarjeta_circulacion_folio: "",
 };
 
+const getTireBadgeByDepth = (depth?: number | null) => {
+  if (depth === undefined || depth === null) {
+    return {
+      label: "N/D",
+      classes: "bg-slate-500/10 text-slate-500 border-slate-500/20",
+    };
+  }
+  if (depth <= 4) {
+    return {
+      label: "Mala",
+      classes: "bg-red-500/10 text-red-500 border-red-500/20",
+    };
+  }
+  if (depth > 4 && depth <= 7) {
+    return {
+      label: "Regular",
+      classes: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    };
+  }
+  return {
+    label: "Buena",
+    classes: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+  };
+};
+
 export default function FlotaUnitDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -1063,24 +1088,22 @@ export default function FlotaUnitDetail() {
                               </span>
                             </div>
                           </td>
-
                           <td className="p-3">
-                            <Badge
-                              variant="outline"
-                              className={
-                                tire.estado_fisico === "buena"
-                                  ? "bg-green-500/10 text-green-500 border-green-500/20"
-                                  : tire.estado_fisico === "regular"
-                                    ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-                                    : "bg-red-500/10 text-red-500 border-red-500/20"
-                              }
-                            >
-                              <span className="capitalize">
-                                {tire.estado_fisico ||
-                                  tire.estado ||
-                                  "Desconocido"}
-                              </span>
-                            </Badge>
+                            {(() => {
+                              const badgeProps = getTireBadgeByDepth(
+                                tire.profundidad_actual,
+                              );
+                              return (
+                                <Badge
+                                  variant="outline"
+                                  className={badgeProps.classes}
+                                >
+                                  <span className="capitalize font-bold">
+                                    {badgeProps.label}
+                                  </span>
+                                </Badge>
+                              );
+                            })()}
                           </td>
 
                           <td className="p-3 text-center">
