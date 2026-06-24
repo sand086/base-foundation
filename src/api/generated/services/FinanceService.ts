@@ -10,6 +10,7 @@ import type { BankMovementResponse } from '../models/BankMovementResponse';
 import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
+import type { CancelPaymentsPayload } from '../models/CancelPaymentsPayload';
 import type { CFDIActivityTimeline } from '../models/CFDIActivityTimeline';
 import type { CFDIHistoryResponse } from '../models/CFDIHistoryResponse';
 import type { IndirectCategoryCreate } from '../models/IndirectCategoryCreate';
@@ -582,6 +583,72 @@ export class FinanceService {
             url: '/api/finance/receivables/payments/{payment_id}/stamp',
             path: {
                 'payment_id': paymentId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Cancel Receivable Payments
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static cancelReceivablePaymentsApiFinanceReceivablesPaymentsCancelPost(
+        requestBody: CancelPaymentsPayload,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables/payments/cancel',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Fix Stuck Balances
+     * Ejecuta esto 1 vez en tu navegador para devolverle el saldo a la factura atorada
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static fixStuckBalancesApiFinanceFixStuckBalancesGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/fix-stuck-balances',
+        });
+    }
+    /**
+     * Sync Rep Cancellation Status
+     * MOTOR AUTOMÁTICO DIARIO:
+     * Busca todos los REPs que están en sala de espera en el SAT ('PROCESO_CANCELACION')
+     * y vuelve a llamar al PAC para verificar si el cliente ya aceptó o expiró el plazo.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncRepCancellationStatusApiFinanceReceivablesPaymentsSyncCancellationStatusGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/receivables/payments/sync-cancellation-status',
+        });
+    }
+    /**
+     * Force Test Cancel
+     * Fuerza los pagos de una factura a estado PROCESO_CANCELACION para probar el Cron Job
+     * @param folio
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static forceTestCancelApiFinanceReceivablesForceTestCancelFolioGet(
+        folio: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/receivables/force-test-cancel/{folio}',
+            path: {
+                'folio': folio,
             },
             errors: {
                 422: `Validation Error`,
