@@ -17,6 +17,7 @@ export interface Tire {
   profundidad_actual?: number;
   estado?: string;
   estado_fisico?: string;
+  estadoFisico?: string;
   codigo_interno?: string;
 }
 
@@ -43,6 +44,7 @@ const getTireStatusByCondition = (condition: string) => {
       labelColor: "text-red-400",
     };
   }
+
   if (cond === "regular") {
     return {
       fill: "fill-amber-950/50",
@@ -53,14 +55,26 @@ const getTireStatusByCondition = (condition: string) => {
       labelColor: "text-amber-400",
     };
   }
-  // "buena" u óptima
+
+  if (cond === "buena") {
+    return {
+      fill: "fill-emerald-950/50",
+      stroke: "stroke-emerald-500",
+      glow: "drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+      pulse: "",
+      label: "BUENA",
+      labelColor: "text-emerald-400",
+    };
+  }
+
+  // 🛡️ FALLBACK SEGURO: Si no viene el dato, lo pinta GRIS (No verde)
   return {
-    fill: "fill-emerald-950/50",
-    stroke: "stroke-emerald-500",
-    glow: "drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]",
+    fill: "fill-slate-800/50",
+    stroke: "stroke-slate-600",
+    glow: "",
     pulse: "",
-    label: "BUENA",
-    labelColor: "text-emerald-400",
+    label: "N/D",
+    labelColor: "text-slate-400",
   };
 };
 
@@ -248,7 +262,8 @@ export function TruckChassisSVG({
               );
             }
 
-            const status = getTireStatusByCondition(tire.estado_fisico || "");
+            const physicalState = tire.estado_fisico || tire.estadoFisico || "";
+            const status = getTireStatusByCondition(physicalState);
             const isHovered = hoveredTire === tire.id;
             const isDual = pos.position > 2;
 
