@@ -1171,11 +1171,15 @@ def delete_bank_movement(db: Session, movement_id: int, user_id: int):
 
                 # ====== DEVOLVER SALDO A LA FACTURA ======
                 invoice = (
-                    db.query(models.ReceivableInvoice)
-                    .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
-                    .with_for_update(of=models.ReceivableInvoice)
-                    .first()
-                )
+    db.query(models.ReceivableInvoice)
+    .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
+    .options(
+        lazyload(models.ReceivableInvoice.created_by),
+        lazyload(models.ReceivableInvoice.updated_by)
+    )
+    .with_for_update(of=models.ReceivableInvoice)
+    .first()
+)
 
                 if invoice:
                     invoice.saldo_pendiente += pago_cxc.monto
@@ -1453,7 +1457,7 @@ from typing import Optional
 from datetime import date
 from app.models import models
 from app.models.models import AuditLog, User, RecordStatus
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, lazyload
 
 
 def get_cfdi_vault_records(
