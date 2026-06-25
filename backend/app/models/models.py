@@ -163,9 +163,9 @@ class WorkOrderStatus(str, PyEnum):
 class InventoryCategory(str, PyEnum):
     MOTOR = "motor"
     FRENOS = "frenos"
-    ELECTRICO = "eléctrico"
-    SUSPENSION = "suspensión"
-    TRANSMISION = "transmisión"
+    ELECTRICO = "electrico" # Sin acento
+    SUSPENSION = "suspension" # Sin acento
+    TRANSMISION = "transmision" # Sin acento
     GENERAL = "general"
 
 

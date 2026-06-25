@@ -51,7 +51,7 @@ class InventoryItemCreate(ORMBase):
     ubicacion: Optional[str] = Field(default=None, max_length=100)
     precio_unitario: float = 0.0
     proveedor_id: Optional[int] = None
-    bank_account_id: Optional[int] = None
+    # bank_account_id: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
 
