@@ -141,12 +141,12 @@ export function AddInventoryModal({
         ...data,
         categoria: data.categoria.toLowerCase(),
       });
-      toast.success(
+      /*       toast.success(
         isEditMode ? "Refacción actualizada" : "Refacción agregada",
         {
           description: `${data.sku} - ${data.descripcion}`,
         },
-      );
+      ); */
       onOpenChange(false);
     } catch (error) {
       console.error(error);
