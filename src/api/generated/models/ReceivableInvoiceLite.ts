@@ -13,6 +13,7 @@ export type ReceivableInvoiceLite = {
     saldo_pendiente?: number;
     status_sat?: (string | null);
     estatus?: (string | null);
+    fecha_emision?: (string | null);
     pdf_url?: (string | null);
     xml_url?: (string | null);
     motivo_cancelacion?: (string | null);
