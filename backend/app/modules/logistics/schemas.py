@@ -498,6 +498,7 @@ class ReceivableInvoiceLite(ORMBase):
     saldo_pendiente: float = 0.0
     status_sat: Optional[str] = None
     estatus: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
     pdf_url: Optional[str] = None
     xml_url: Optional[str] = None
 
@@ -720,6 +721,15 @@ class SatCfdiPayload(BaseModel):
     Aplica reglas de negocio y valores por defecto tolerantes según configuración.
     """
 
+    fecha: str = Field(default="")
+    serie: Optional[str] = None
+    folio: Optional[str] = None
+    folio_interno: Optional[str] = None
+    subtotal: str = Field(default="0.00")
+    iva: str = Field(default="0.00")
+    retenciones: str = Field(default="0.00")
+    total: str = Field(default="0.00")
+    id_ccp: Optional[str] = None
     # 1. Datos del CFDI (Factura)
     forma_pago: str = Field(default="99")
     metodo_pago: str = Field(default="PPD")
