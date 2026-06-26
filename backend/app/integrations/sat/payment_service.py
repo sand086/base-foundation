@@ -722,12 +722,17 @@ class PaymentComplementService:
         cuenta_benef = banco_info.numero_cuenta if banco_info else "NO IDENTIFICADA"
         banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
 
+        fecha_emision_limpia = data.get("fecha", "").replace("T", " ")
+        fecha_cert_limpia = (
+            fecha_certificacion.replace("T", " ") if fecha_certificacion else ""
+        )
+
         context = {
             **data,
             "uuid": uuid,
             "folio_interno": f"com-{data['folio']}",
-            "fecha_emision": data["fecha"],
-            "fecha_certificacion": fecha_certificacion,
+            "fecha_emision": fecha_emision_limpia,
+            "fecha_certificacion": fecha_cert_limpia,
             "cuenta_beneficiario": cuenta_benef,
             "banco_beneficiario": banco_benef,
             "logo_src": logo_src,

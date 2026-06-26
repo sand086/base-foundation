@@ -815,6 +815,8 @@ class BillingService:
                 s_sat = tfd_node.get("SelloSAT", "0000")
                 c_sat = tfd_node.get("NoCertificadoSAT", "0000")
                 s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+                fecha_timbrado_sat = tfd_node.get("FechaTimbrado")
+                data["fecha_sat_con_hora"] = fecha_timbrado_sat
                 cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
                 total_float = _clean_float(data.get("total", 0))
@@ -945,6 +947,9 @@ class BillingService:
             ", "
         )
 
+        raw_fecha = d.get("fecha_sat_con_hora") or d.get("fecha", "")
+        fecha_limpia = raw_fecha.replace("T", " ")
+
         context = {
             **d,
             "subtotal": subtotal_str,
@@ -962,7 +967,7 @@ class BillingService:
             "folio_interno": d.get(
                 "folio_interno", f"{d.get('serie', 'F')}-{d.get('folio', '')}"
             ),
-            "fecha_emision": d.get("fecha", ""),
+            "fecha_emision": fecha_limpia,
             "logo_src": logo_src,
             "qr_src": qr_src,
             "metodo_pago": d.get("metodo_pago", "PPD"),
@@ -1648,6 +1653,8 @@ class BillingService:
                 s_sat = tfd_node.get("SelloSAT", "0000")
                 c_sat = tfd_node.get("NoCertificadoSAT", "0000")
                 s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+                fecha_timbrado_sat = tfd_node.get("FechaTimbrado")
+                d["fecha_sat_con_hora"] = fecha_timbrado_sat
                 cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
                 total_float = _clean_float(d.get("monto_total", 0))
