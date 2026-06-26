@@ -1996,11 +1996,7 @@ class BillingService:
                 else:
                     d["folio"] = str(factura.id)
 
-                d["fecha"] = (
-                    factura.fecha_emision.strftime("%Y-%m-%dT00:00:00")
-                    if factura.fecha_emision
-                    else d["fecha"]
-                )
+                d["fecha"] = fecha_timbrado
                 d["subtotal"] = f"{_clean_float(factura.subtotal):.2f}"
                 d["iva"] = f"{_clean_float(factura.iva):.2f}"
                 d["retenciones"] = f"{_clean_float(factura.retenciones):.2f}"
@@ -2025,11 +2021,7 @@ class BillingService:
                     "client_id": cliente.id if cliente else None,
                     "folio_interno": factura.folio_interno,
                     "folio": folio_str,
-                    "fecha": (
-                        factura.fecha_emision.strftime("%Y-%m-%dT00:00:00")
-                        if factura.fecha_emision
-                        else ""
-                    ),
+                    "fecha": fecha_timbrado,
                     "subtotal": float(factura.subtotal or 0.0),
                     "iva": float(factura.iva or 0.0),
                     "retenciones": float(factura.retenciones or 0.0),
