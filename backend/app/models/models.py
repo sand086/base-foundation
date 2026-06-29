@@ -163,9 +163,9 @@ class WorkOrderStatus(str, PyEnum):
 class InventoryCategory(str, PyEnum):
     MOTOR = "motor"
     FRENOS = "frenos"
-    ELECTRICO = "electrico" # Sin acento
-    SUSPENSION = "suspension" # Sin acento
-    TRANSMISION = "transmision" # Sin acento
+    ELECTRICO = "electrico"  # Sin acento
+    SUSPENSION = "suspension"  # Sin acento
+    TRANSMISION = "transmision"  # Sin acento
     GENERAL = "general"
 
 
@@ -1301,7 +1301,8 @@ class InvoicePayment(AuditMixin, Base):
     saldo_insoluto = Column(Float, nullable=True)
 
     metodo_pago = Column(String(50))
-    referencia = Column(String(100))
+    # referencia = Column(String(100))
+    referencia = Column(Text)
     cuenta_retiro = Column(String(50))
     complemento_uuid = Column(String(36))
     comprobante_url = Column(String(500), nullable=True)
@@ -1646,7 +1647,8 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     saldo_insoluto = Column(Float, nullable=True)
 
     metodo_pago = Column(String(50))
-    referencia = Column(String(100))
+    # referencia = Column(String(100))
+    referencia = Column(Text)
     cuenta_deposito = Column(String(50))
     complemento_uuid = Column(String(36), nullable=True)
     comprobante_url = Column(String(500), nullable=True)
