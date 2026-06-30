@@ -30,7 +30,12 @@ from app.modules.purchases.router import router as purchases_router
 # 2. importacion de Routers de Integraciones Externas
 from app.integrations.sat.router import router as sat_router
 
-app = FastAPI(title="TMS Backend FSD")
+app = FastAPI(
+    title="TMS Backend Rapidos 3T",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
 
 # =========================================================================
 # CONFIGURACIÓN DE ARCHIVOS ESTÁTICOS (Avatares, Evidencias, PDFs)
@@ -81,4 +86,4 @@ app.include_router(api_router)
 
 @app.get("/")
 async def root():
-    return {"message": "TMS API Asicom (FSD) is running ..."}
+    return {"message": "TMS API Rapidos 3T - ASICOM is running ..."}
