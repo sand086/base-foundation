@@ -296,9 +296,7 @@ class CartaPorteService:
             rfc_conf.value if rfc_conf and rfc_conf.value else "EKU9003173C9"
         )
         raw_emisor = (
-            nombre_conf.value
-            if nombre_conf and nombre_conf.value
-            else "TRANSPORTES RAPIDOS 3T"
+            nombre_conf.value if nombre_conf and nombre_conf.value else "RAPIDOS 3T"
         )
         raw_emisor = (
             raw_emisor.upper()
@@ -308,9 +306,7 @@ class CartaPorteService:
         )
 
         self.emisor_nombre = (
-            "TRANSPORTES RAPIDOS 3T"
-            if self.emisor_rfc == "EKU9003173C9"
-            else raw_emisor
+            "RAPIDOS 3T" if self.emisor_rfc == "EKU9003173C9" else raw_emisor
         )
         self.emisor_regimen = (
             regimen_conf.value if regimen_conf and regimen_conf.value else "624"

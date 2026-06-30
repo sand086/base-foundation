@@ -5,7 +5,7 @@ import { SystemConfig } from "../types";
 
 //  Nuestro "Salvavidas": Si la base de datos se borra, el sistema sigue funcionando
 export const DEFAULT_CONFIGS = {
-  empresa_nombre: "Transportes TMS",
+  empresa_nombre: "Rapidos 3T",
   iva_porcentaje: "16",
   retencion_porcentaje: "4",
   dias_credito_default: "15",
