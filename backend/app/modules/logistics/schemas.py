@@ -860,28 +860,38 @@ class SatCfdiPayload(BaseModel):
 
     @model_validator(mode="after")
     def validate_material_peligroso(self) -> "SatCfdiPayload":
+        # 1. Imprimir lo que estamos mandando antes de la validación para verlo en consola
+        print("=" * 50)
+        print("DEBUG - Validando Material Peligroso en SatCfdiPayload")
+        print(f"es_material_peligroso: {self.es_material_peligroso}")
+        print(f"cve_material_peligroso: '{self.cve_material_peligroso}'")
+        print(f"embalaje: '{self.embalaje}'")
+        print(f"aseguradora_med_ambiente: '{self.aseguradora_med_ambiente}'")
+        print(f"poliza_med_ambiente: '{self.poliza_med_ambiente}'")
+        print("=" * 50)
+
         if self.es_material_peligroso:
             if not self.cve_material_peligroso or str(
                 self.cve_material_peligroso
             ).strip() in ["", "None"]:
                 raise ValueError(
-                    "El viaje transporta MATERIAL PELIGROSO. Se requiere Clave ONU (Ej. UN1005)."
+                    f"El viaje transporta MATERIAL PELIGROSO. Se requiere Clave ONU (Ej. UN1005). Valor recibido: '{self.cve_material_peligroso}'"
                 )
             if not self.embalaje or str(self.embalaje).strip() in ["", "None"]:
                 raise ValueError(
-                    "El viaje transporta MATERIAL PELIGROSO. Se requiere Embalaje (Ej. 4G)."
+                    f"El viaje transporta MATERIAL PELIGROSO. Se requiere Embalaje (Ej. 4G). Valor recibido: '{self.embalaje}'"
                 )
             if not self.aseguradora_med_ambiente or str(
                 self.aseguradora_med_ambiente
             ).strip() in ["", "None"]:
                 raise ValueError(
-                    "Material peligroso: El camión DEBE tener registrada una Aseguradora de Medio Ambiente."
+                    f"Material peligroso: El camión DEBE tener registrada una Aseguradora de Medio Ambiente. Valor recibido: '{self.aseguradora_med_ambiente}'"
                 )
             if not self.poliza_med_ambiente or str(
                 self.poliza_med_ambiente
             ).strip() in ["", "None"]:
                 raise ValueError(
-                    "Material peligroso: El camión DEBE tener registrada una Póliza de Medio Ambiente."
+                    f"Material peligroso: El camión DEBE tener registrada una Póliza de Medio Ambiente. Valor recibido: '{self.poliza_med_ambiente}'"
                 )
         return self
 

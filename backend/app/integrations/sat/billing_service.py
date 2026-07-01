@@ -609,8 +609,12 @@ class BillingService:
             "aseguradora": getattr(unidad, "aseguradora_resp_civil", "")
             or "NO REGISTRADA",
             "poliza": getattr(unidad, "poliza_resp_civil", "") or "S/P",
-            "aseguradora_med_ambiente": getattr(unidad, "aseguradora_med_ambiente", ""),
-            "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", ""),
+            "aseguradora_med_ambiente": (
+                unidad.aseguradora_ambiental.nombre
+                if unidad and getattr(unidad, "aseguradora_ambiental", None)
+                else ""
+            ),
+            "poliza_med_ambiente": getattr(unidad, "poliza_med_ambiente", "") or "",
             "subtipo_remolque": get_sat_trailer_code(getattr(r1, "tipo", "")),
             "placa_remolque_1": (
                 getattr(r1, "placas", "1XXXX99").replace("-", "") if r1 else "1XXXX99"
