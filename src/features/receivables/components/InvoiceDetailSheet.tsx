@@ -247,7 +247,7 @@ export function InvoiceDetailSheet({
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
       const baseURL = rawBaseURL.replace(/\/$/, "");
 
-      const res = await fetch(`${baseURL}/sat/rebuild-pdf/${inv.id}`);
+      const res = await fetch(`${baseURL}/api/sat/rebuild-pdf/${inv.id}`);
 
       if (!res.ok) throw new Error("Error en servidor al regenerar");
 
