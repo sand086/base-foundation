@@ -39,6 +39,7 @@ import {
   History,
   Loader2,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -74,6 +75,7 @@ export function InvoiceDetailSheet({
 }: InvoiceDetailSheetProps) {
   const [stampingId, setStampingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
+  const [isRebuilding, setIsRebuilding] = useState<boolean>(false);
 
   useEffect(() => {
     if (invoice && open) {
@@ -227,6 +229,29 @@ export function InvoiceDetailSheet({
       console.error("Error al cancelar pago:", error);
     } finally {
       setCancelingId(null);
+    }
+  };
+
+  const handleRebuildPdf = async () => {
+    if (!inv.id) return;
+    const toastId = toast.loading("Regenerando diseño del PDF...");
+    setIsRebuilding(true);
+
+    try {
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      const res = await fetch(`${baseURL}/sat/rebuild-pdf/${inv.id}`);
+
+      if (!res.ok) throw new Error("Error en servidor al regenerar");
+
+      toast.success("PDF regenerado correctamente. Descárgalo de nuevo.", {
+        id: toastId,
+      });
+    } catch (error) {
+      toast.error("Hubo un error al regenerar el PDF", { id: toastId });
+    } finally {
+      setIsRebuilding(false);
     }
   };
 
@@ -763,10 +788,28 @@ export function InvoiceDetailSheet({
 
           {/* TABLA DE VERSIONES DE ARCHIVO SAT */}
           <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
-              <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
-              Versiones (Historial)
-            </h3>
+            <div className="flex justify-between items-center mb-4 relative z-10">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 flex items-center gap-2 m-0">
+                <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
+                Versiones (Historial)
+              </h3>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-3 text-[10px] font-black tracking-widest uppercase border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 transition-colors"
+                onClick={handleRebuildPdf}
+                disabled={isRebuilding || !inv.uuid}
+                title="Regenera el diseño del PDF leyendo los datos originales del XML"
+              >
+                {isRebuilding ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3 mr-1.5" />
+                )}
+                Regenerar PDF
+              </Button>
+            </div>
 
             <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
               <DataTable>
