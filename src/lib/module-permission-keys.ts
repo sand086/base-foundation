@@ -31,6 +31,7 @@ export const MODULE_PERMISSIONS: Record<string, string[]> = {
   users: ["view", "create", "edit", "delete"],
   roles: ["view", "create", "edit", "delete"],
   settings: ["view", "edit"],
+  sat: ["stamp_cfdi", "cancel_cfdi"],
 };
 
 export function pickPermisosInsensitive(

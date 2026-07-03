@@ -176,7 +176,13 @@ export function InvoiceDetailSheet({
     }
     const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
     const baseURL = rawBaseURL.replace(/\/$/, "");
-    window.open(`${baseURL}/api/sat/invoice/${targetUuid}/${type}`, "_blank");
+
+    // 👇 FIX: Añadimos un timestamp para evitar la caché del navegador
+    const timestamp = new Date().getTime();
+    window.open(
+      `${baseURL}/api/sat/invoice/${targetUuid}/${type}?t=${timestamp}`,
+      "_blank",
+    );
   };
 
   const handleDownloadUrl = (url: string, filename: string) => {

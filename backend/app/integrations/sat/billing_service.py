@@ -2026,6 +2026,7 @@ class BillingService:
                     "folio_interno": factura.folio_interno,
                     "folio": folio_str,
                     "fecha": fecha_timbrado,
+                    "fecha_sat_con_hora": fecha_timbrado,
                     "subtotal": float(factura.subtotal or 0.0),
                     "iva": float(factura.iva or 0.0),
                     "retenciones": float(factura.retenciones or 0.0),
