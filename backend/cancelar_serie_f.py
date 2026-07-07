@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from sqlalchemy import or_
 
 # Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
@@ -16,61 +17,63 @@ from app.integrations.sat.billing_service import BillingService
 # False = MODO REAL. Envía las solicitudes de cancelación reales al SAT.
 MODO_SIMULACION = True
 
-# 📋 LISTA DE FOLIOS "F" QUE EL CLIENTE DICE QUE DEBEN ESTAR CANCELADOS
-# Agrégalos tal como aparecen en el sistema con el prefijo "F-"
-FOLIOS_A_PROCESAR = ["F-17390", "F-17391", "F-17393", "F-17394", "F-17397", "F-17398"]
-
 # Motivo SAT para Facturas Libres (02 = Errores sin relación)
 MOTIVO_SAT = "02"
 # =====================================================================
 
 
-def ejecutar_limpieza_serie_f():
+def ejecutar_limpieza_automatica_serie_f():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 75)
     if MODO_SIMULACION:
-        print("🔍 [SERIE F - SIMULACIÓN] Analizando folios de forma segura...")
+        print("🔍 [SERIE F AUTOMÁTICA - SIMULACIÓN] Buscando folios pendientes...")
     else:
-        print("🚀 [SERIE F - MODO REAL] ENVIANDO CANCELACIONES MASIVAS AL SAT...")
+        print("🚀 [SERIE F AUTOMÁTICA - MODO REAL] ENVIANDO CANCELACIONES AL SAT...")
     print("=" * 75)
 
-    if not FOLIOS_A_PROCESAR:
-        print("❌ La lista FOLIOS_A_PROCESAR está vacía. Por favor añade los folios.")
-        return
-
-    # Buscar las facturas en la base de datos
-    facturas = (
+    # BUSQUEDA DINÁMICA:
+    # 1. Que empiece con 'F-' (Nomenclatura de Factura Libre)
+    # 2. Que tenga un UUID timbrado
+    # 3. Que su estado SAT actual no sea CANCELADO (siga vigente, con error o procesando)
+    # 4. REGLA DE ORO: Que en tu ERP ya esté marcada como 'cancelado' ó esté en cola de espera
+    facturas_atoradas = (
         db.query(ReceivableInvoice)
-        .filter(ReceivableInvoice.folio_interno.in_(FOLIOS_A_PROCESAR))
+        .filter(
+            ReceivableInvoice.folio_interno.like("F-%"),
+            ReceivableInvoice.uuid.isnot(None),
+            ReceivableInvoice.status_sat.in_(
+                ["TIMBRADA", "ERROR_SAT", "PROCESANDO", "PENDIENTE_CANCELAR_SAT"]
+            ),
+            or_(
+                ReceivableInvoice.estatus == "cancelado",
+                ReceivableInvoice.status_sat == "PENDIENTE_CANCELAR_SAT",
+            ),
+        )
         .all()
     )
 
     print(
-        f"-> Se encontraron {len(facturas)} de los {len(FOLIOS_A_PROCESAR)} folios solicitados en la Base de Datos.\n"
+        f"🎯 Se detectaron {len(facturas_atoradas)} facturas Serie F que deben ser canceladas ante el SAT.\n"
     )
+
+    if len(facturas_atoradas) == 0:
+        print(
+            "💡 No se encontraron facturas tipo F atoradas en este momento. Todo limpio."
+        )
+        return
 
     procesadas = 0
     errores = 0
 
-    for fac in facturas:
-        # Candado de seguridad: verificar que tenga prefijo F y tenga UUID timbrado
-        if not fac.folio_interno.startswith("F-"):
-            print(
-                f"⚠️ Saltando {fac.folio_interno}: No corresponde a la nomenclatura F."
-            )
-            continue
-
-        if not fac.uuid:
-            print(
-                f"⚠️ Saltando {fac.folio_interno}: Este registro no tiene UUID timbrado en la BD."
-            )
-            continue
-
+    for fac in facturas_atoradas:
         if MODO_SIMULACION:
             print(
-                f"[SIMULACIÓN] 🟢 SE CANCELARÍA: {fac.folio_interno} | UUID SAT: {fac.uuid} | Estado Actual: {fac.status_sat}"
+                f"[SIMULACIÓN] 🟢 SE CANCELARÍA: {fac.folio_interno} | UUID: {fac.uuid}"
+            )
+            print(
+                f"             ↳ Razón: En el ERP figura como '{fac.estatus}' pero en el SAT sigue como '{fac.status_sat}'\n"
             )
             procesadas += 1
         else:
@@ -80,7 +83,7 @@ def ejecutar_limpieza_serie_f():
                 )
 
                 # LLAMADA AL MOTOR REAL PARA SERIE F (Motivo 02)
-                # El parche de seguridad detendrá el proceso si el SAT responde con timeout 500
+                # Si el SAT responde con timeout (500), el parche de seguridad detendrá el registro local
                 service.cancelar_factura_sat(
                     invoice_id=fac.id, motivo=MOTIVO_SAT, uuid_sustituto=None
                 )
@@ -93,19 +96,19 @@ def ejecutar_limpieza_serie_f():
     print("\n" + "=" * 75)
     if MODO_SIMULACION:
         print(
-            f"🏁 SIMULACIÓN TERMINADA. Se validaron {procesadas} facturas tipo F correctamente."
+            f"🏁 SIMULACIÓN TERMINADA. Se identificaron {procesadas} facturas tipo F listas para procesar."
         )
         print(
-            "👉 Si la lista es correcta, edita el script, cambia 'MODO_SIMULACION = False' y ejecuta de verdad."
+            "👉 Si la lista es correcta, cambia 'MODO_SIMULACION = False' para ejecutar en vivo."
         )
     else:
         print(f"🏁 PROCESO REAL COMPLETADO.")
-        print(f"   - Enviadas con éxito al SAT: {procesadas}")
+        print(f"   - Sincronizadas con éxito en el SAT: {procesadas}")
         print(
-            f"   - Rebozadas por Timeout (Requieren volver a correr el script): {errores}"
+            f"   - Atoradas por Timeout del SAT (Requieren volver a correr el script): {errores}"
         )
     print("=" * 75 + "\n")
 
 
 if __name__ == "__main__":
-    ejecutar_limpieza_serie_f()
+    ejecutar_limpieza_automatica_serie_f()
