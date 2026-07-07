@@ -77,6 +77,17 @@ export function AccountStatementModal({
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
+  const getEntityName = (inv: any) => {
+    return (
+      inv.cliente ||
+      inv.client?.razon_social ||
+      inv.supplier_razon_social ||
+      inv.supplier?.razon_social ||
+      inv.proveedor ||
+      "Entidad Desconocida"
+    );
+  };
+
   const displayBanks = (
     bankAccounts && bankAccounts.length > 0
       ? bankAccounts
@@ -95,14 +106,20 @@ export function AccountStatementModal({
   }, [open, initialClient]);
 
   const clients = useMemo(() => {
-    const uniqueClients = [...new Set(invoices.map((inv) => inv.cliente))];
-    return uniqueClients.sort();
+    // Usamos getEntityName en lugar de inv.cliente
+    const uniqueClients = [
+      ...new Set(invoices.map((inv) => getEntityName(inv))),
+    ];
+    return uniqueClients.filter(Boolean).sort();
   }, [invoices]);
 
   const filteredInvoices = useMemo(() => {
     let filtered = invoices.filter((inv) => inv.saldo_pendiente > 0);
     if (selectedClient !== "all") {
-      filtered = filtered.filter((inv) => inv.cliente === selectedClient);
+      // Filtramos usando getEntityName
+      filtered = filtered.filter(
+        (inv) => getEntityName(inv) === selectedClient,
+      );
     }
     return filtered.sort(
       (a, b) =>
@@ -406,7 +423,9 @@ export function AccountStatementModal({
                 <div className="space-y-2 overflow-x-auto">
                   <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-muted-foreground uppercase tracking-widest py-2 border-b border-border min-w-[600px] break-inside-avoid">
                     <div className="col-span-2">Folio</div>
-                    <div className="col-span-3">Cliente</div>
+                    <div className="col-span-3">
+                      {isSupplierMode ? "Proveedor" : "Cliente"}
+                    </div>
                     <div className="col-span-2 text-right">Monto</div>
                     <div className="col-span-2 text-right">Saldo</div>
                     <div className="col-span-2">Vencimiento</div>
@@ -431,7 +450,7 @@ export function AccountStatementModal({
                           {invoice.folio_interno}
                         </div>
                         <div className="col-span-3 text-[10px] sm:text-[11px] text-foreground font-bold leading-tight flex items-center pr-2 break-words">
-                          {invoice.cliente}
+                          {getEntityName(invoice)}
                         </div>
                         <div className="col-span-2 text-right font-mono font-bold text-foreground flex items-center justify-end">
                           {formatCurrency(invoice.monto_total)}
