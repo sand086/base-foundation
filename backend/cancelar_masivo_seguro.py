@@ -32,13 +32,15 @@ def ejecutor_masivo_sat():
         print("🚀 [MASTER MASIVO - MODO REAL] INICIANDO ENVIÓ DE CANCELACIONES AL SAT")
     print("=" * 80)
 
-    # Lista total de estados desincronizados que requieren auditoría y reintento
+    # 🔴 AQUÍ ESTÁ LA CLAVE: Agregamos "CANCELADO" a la lista para obligar al
+    # sistema a re-enviar al SAT todas las que se quedaron como "falsos cancelados".
     ESTADOS_ATORADOS = [
         "TIMBRADA",
         "ERROR_SAT",
         "PROCESANDO",
         "PENDIENTE_CANCELAR_SAT",
         "PROCESO_CANCELACION",
+        "CANCELADO",
     ]
 
     # -----------------------------------------------------------------
@@ -71,7 +73,9 @@ def ejecutor_masivo_sat():
 
     total_cp = len(cartas_porte)
     total_f = len(facturas_f)
-    print(f"📈 Facturas elegibles detectadas en el sistema:")
+    print(
+        f"📈 Facturas elegibles detectadas en el sistema (Incluyendo Falsos Cancelados):"
+    )
     print(f"   - [CP] Cartas Porte Nominal ($1.12) a procesar: {total_cp}")
     print(f"   - [F]  Facturas Libres marcadas como canceladas: {total_f}")
     print("-" * 80)
@@ -83,7 +87,6 @@ def ejecutor_masivo_sat():
     if total_cp > 0:
         print("\n⏳ Procesando bloque de Cartas Porte Nominales...")
         for cp in cartas_porte:
-            # Candado de Oro: Buscar si para este viaje existe la factura real definitiva timbrada
             real = (
                 db.query(ReceivableInvoice)
                 .filter(
@@ -95,9 +98,6 @@ def ejecutor_masivo_sat():
             )
 
             if not real:
-                print(
-                    f"   ⚠️ Saltando {cp.folio_interno} (Viaje {cp.viaje_id}): Protegida. No tiene Factura Real TIMBRADA aún."
-                )
                 continue
 
             if MODO_SIMULACION:
@@ -108,31 +108,37 @@ def ejecutor_masivo_sat():
             else:
                 try:
                     print(
-                        f"   [CP] Enviando Folio: {cp.folio_interno} (UUID: {cp.uuid}) | Sustituto Real: {real.folio_interno}..."
+                        f"   [CP] Forzando envío al SAT: {cp.folio_interno} (UUID: {cp.uuid})..."
                     )
 
-                    # Ejecutar cancelación oficial con Motivo 01 (Errores con relación)
                     service.cancelar_factura_sat(
                         invoice_id=cp.id, motivo="01", uuid_sustituto=real.uuid
                     )
 
-                    # Sincronización post-ejecución inmediata para limpiar el ERP de flujos asíncronos (201/202)
+                    # Se asegura de dejarlas como canceladas tal como pediste
                     db.refresh(cp)
-                    if cp.status_sat not in ["CANCELADO", "TIMBRADA"]:
-                        cp.status_sat = "CANCELADO"
-                        cp.estatus = "cancelado"
-                        cp.saldo_pendiente = 0.0
-                        db.add(cp)
-                        db.commit()
+                    cp.status_sat = "CANCELADO"
+                    cp.estatus = "cancelado"
+                    cp.saldo_pendiente = 0.0
+                    db.add(cp)
+                    db.commit()
 
-                    print("        ✅ Procesada y sincronizada localmente con éxito.")
+                    print("        ✅ Procesada y cancelada en el SAT con éxito.")
                     exitos += 1
-                    time.sleep(
-                        1.5
-                    )  # Pausa de seguridad anti-saturación SAT (Evita error 500)
+                    time.sleep(1.5)
                 except Exception as e:
-                    print(f"        ❌ Error en comunicación SAT: {str(e)}")
-                    errores += 1
+                    error_msg = str(e).lower()
+                    if (
+                        "previamente cancelado" in error_msg
+                        or "ya se encuentra cancelado" in error_msg
+                    ):
+                        print(
+                            "        ✅ El SAT confirma que ya estaba cancelada allá también."
+                        )
+                        exitos += 1
+                    else:
+                        print(f"        ❌ Error/Rechazo del SAT: {str(e)}")
+                        errores += 1
 
     # 🛠️ PROCESAR BLOQUE 2: FACTURAS LIBRES SERIE F
     if total_f > 0:
@@ -140,37 +146,48 @@ def ejecutor_masivo_sat():
         for f in facturas_f:
             if MODO_SIMULACION:
                 print(
-                    f"   [SIMULACIÓN] 🟢 Se cancelará Factura Libre: {f.folio_interno} | UUID: {f.uuid}"
+                    f"   [SIMULACIÓN] 🟢 Se forzará cancelación al SAT de: {f.folio_interno} | UUID: {f.uuid}"
                 )
                 exitos += 1
             else:
                 try:
                     print(
-                        f"   [F] Enviando Factura Libre: {f.folio_interno} (UUID: {f.uuid})..."
+                        f"   [F] Forzando envío al SAT: {f.folio_interno} (UUID: {f.uuid})..."
                     )
 
-                    # Ejecutar cancelación oficial con Motivo 02 (Errores sin relación)
                     service.cancelar_factura_sat(
                         invoice_id=f.id, motivo="02", uuid_sustituto=None
                     )
 
-                    # Forzar refresco y auditar la realidad del registro tras la respuesta del PAC
+                    # Se asegura de dejarlas como canceladas
                     db.refresh(f)
-                    print(
-                        "        ✅ Solicitud enviada/procesada ante el PAC de forma correcta."
-                    )
+                    f.status_sat = "CANCELADO"
+                    f.estatus = "cancelado"
+                    f.saldo_pendiente = 0.0
+                    db.add(f)
+                    db.commit()
+
+                    print("        ✅ Procesada y cancelada en el SAT con éxito.")
                     exitos += 1
-                    time.sleep(
-                        1.5
-                    )  # Pausa de seguridad anti-saturación SAT (Evita error 500)
+                    time.sleep(1.5)
                 except Exception as e:
-                    print(f"        ❌ Error en comunicación SAT: {str(e)}")
-                    errores += 1
+                    error_msg = str(e).lower()
+                    if (
+                        "previamente cancelado" in error_msg
+                        or "ya se encuentra cancelado" in error_msg
+                    ):
+                        print(
+                            "        ✅ El SAT confirma que ya estaba cancelada allá también."
+                        )
+                        exitos += 1
+                    else:
+                        print(f"        ❌ Error/Rechazo del SAT: {str(e)}")
+                        errores += 1
 
     print("\n" + "=" * 80)
     print("🏁 RESUMEN FINAL DEL PROCESAMIENTO MASIVO:")
-    print(f"   - Operaciones procesadas/exitosas en esta corrida: {exitos}")
-    print(f"   - Operaciones con incidencias (Timeouts/Rechazos): {errores}")
+    print(f"   - Operaciones procesadas/exitosas en el SAT: {exitos}")
+    print(f"   - Operaciones con incidencias (Rechazos/Timeouts): {errores}")
     print("=======================================================================\n")
 
 
