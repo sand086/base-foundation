@@ -15,7 +15,7 @@ from app.integrations.sat.billing_service import BillingService
 # =====================================================================
 # True  = Modo Simulación. Solo busca y te muestra la lista de la cantidad X.
 # False = MODO REAL. Envía las solicitudes de cancelación masivas reales al SAT.
-MODO_SIMULACION = True
+MODO_SIMULACION = False
 
 # Motivo SAT para Facturas Libres (02 = Errores sin relación)
 MOTIVO_SAT = "02"
