@@ -1352,6 +1352,15 @@ class BillingService:
             codigo_sat = int(getattr(res_sat, "status", 0))
             mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
 
+            # =========================================================
+            # 🚨 ## NUEVO CANDADO: DESTRUIR FALSOS POSITIVOS
+            # =========================================================
+            # Si el SAT responde algo distinto a 201 (En proceso) o 202 (Previamente cancelado)
+            if codigo_sat not in [201, 202] and "proceso" not in mensaje_sat:
+                # Forzamos a que Python truene y salte al bloque "except Exception"
+                raise Exception(f"Rechazo del SAT ({codigo_sat}): {res_sat.mensaje}")
+            # =========================================================
+
             # 5. ÉXITO: Actualizar BD localmente evaluando el estado Asíncrono
             if codigo_sat == 201 or "proceso" in mensaje_sat:
                 factura.status_sat = "PROCESO_CANCELACION"
