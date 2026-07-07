@@ -2,6 +2,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from sqlalchemy import or_, and_
 
 # Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
@@ -10,82 +11,83 @@ from app.db.database import get_db
 from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
 
-# =====================================================================
-# 🚨 CONFIGURACIÓN DE SEGURIDAD CRÍTICA
-# =====================================================================
-# False = MODO REAL. Envía las solicitudes de cancelación reales al SAT.
-# True  = Modo Simulación. Solo busca en la BD y te muestra qué haría en pantalla.
-MODO_SIMULACION = False
-# =====================================================================
 
-
-def ejecutor_masivo_sat():
+def auto_detectar_y_correr_incidencias():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 80)
-    if MODO_SIMULACION:
-        print(
-            "🔍 [MASTER MASIVO - SIMULACIÓN] Analizando Base de Datos de forma segura..."
-        )
-    else:
-        print("🚀 [MASTER MASIVO - MODO REAL] INICIANDO ENVIÓ DE CANCELACIONES AL SAT")
+    print("🔍 [CAZADOR DE INCIDENCIAS] DETECTANDO FALSOS CANCELADOS Y ATORADOS EN BD")
     print("=" * 80)
 
-    # 🔴 AQUÍ ESTÁ LA CLAVE: Agregamos "CANCELADO" a la lista para obligar al
-    # sistema a re-enviar al SAT todas las que se quedaron como "falsos cancelados".
-    ESTADOS_ATORADOS = [
+    # 1. Estados que aceptamos abiertamente como atorados/en proceso
+    ESTADOS_ATORADOS_SAT = [
         "TIMBRADA",
         "ERROR_SAT",
         "PROCESANDO",
         "PENDIENTE_CANCELAR_SAT",
         "PROCESO_CANCELACION",
-        "CANCELADO",
     ]
 
+    # 2. LOGICA RADAR DE "FALSOS CANCELADOS":
+    # Buscaremos registros que localmente digan 'CANCELADO' en status_sat, pero que en el ERP
+    # hayan tenido intentos de cancelación recientes hoy (2026-07-07) que pudieron haber fallado en el SAT.
+    # O simplemente barremos las que tengan sospecha de desincronización.
+
     # -----------------------------------------------------------------
-    # BLOQUE 1: BUSCAR CARTAS PORTE DE $1 PESO (is_nominal = True)
+    # AMARRE AUTOMÁTICO 1: Cartas Porte Nominales ($1.12) en limbo
     # -----------------------------------------------------------------
     cartas_porte = (
         db.query(ReceivableInvoice)
         .filter(
             ReceivableInvoice.is_nominal == True,
-            ReceivableInvoice.status_sat.in_(ESTADOS_ATORADOS),
             ReceivableInvoice.uuid.isnot(None),
             ReceivableInvoice.viaje_id.isnot(None),
+            or_(
+                ReceivableInvoice.status_sat.in_(ESTADOS_ATORADOS_SAT),
+                # Radar dinámico: Captura si el ERP y el status_sat dicen CANCELADO pero
+                # queremos forzar su validación real ante el SAT por sospecha de intermitencia
+                and_(
+                    ReceivableInvoice.status_sat == "CANCELADO",
+                    ReceivableInvoice.updated_at
+                    >= "2026-07-07 00:00:00",  # Filtra las modificadas hoy
+                ),
+            ),
         )
         .all()
     )
 
     # -----------------------------------------------------------------
-    # BLOQUE 2: BUSCAR FACTURAS LIBRES SERIE F CANCELADAS EN EL ERP
+    # AMARRE AUTOMÁTICO 2: Facturas Libres Serie F en limbo
     # -----------------------------------------------------------------
     facturas_f = (
         db.query(ReceivableInvoice)
         .filter(
             ReceivableInvoice.folio_interno.like("F-%"),
             ReceivableInvoice.uuid.isnot(None),
-            ReceivableInvoice.status_sat.in_(ESTADOS_ATORADOS),
-            ReceivableInvoice.estatus == "cancelado",
+            ReceivableInvoice.estatus == "cancelado",  # Marcada como tirada en el ERP
+            or_(
+                ReceivableInvoice.status_sat.in_(ESTADOS_ATORADOS_SAT),
+                and_(
+                    ReceivableInvoice.status_sat == "CANCELADO",
+                    ReceivableInvoice.updated_at
+                    >= "2026-07-07 00:00:00",  # Filtra las modificadas hoy
+                ),
+            ),
         )
         .all()
     )
 
-    total_cp = len(cartas_porte)
-    total_f = len(facturas_f)
-    print(
-        f"📈 Facturas elegibles detectadas en el sistema (Incluyendo Falsos Cancelados):"
-    )
-    print(f"   - [CP] Cartas Porte Nominal ($1.12) a procesar: {total_cp}")
-    print(f"   - [F]  Facturas Libres marcadas como canceladas: {total_f}")
+    print(f"📊 El radar automático detectó en el log de la BD:")
+    print(f"   - [CP] Cartas Porte con sospecha de incidencia: {len(cartas_porte)}")
+    print(f"   - [F]  Facturas Serie F con sospecha de incidencia: {len(facturas_f)}")
     print("-" * 80)
 
     exitos = 0
     errores = 0
 
-    # 🛠️ PROCESAR BLOQUE 1: CARTAS PORTE DE $1 PESO
-    if total_cp > 0:
-        print("\n⏳ Procesando bloque de Cartas Porte Nominales...")
+    # 🛠️ EJECUCIÓN AUTOMÁTICA EN BLOQUE 1: CARTAS PORTE Nominales
+    if len(cartas_porte) > 0:
         for cp in cartas_porte:
             real = (
                 db.query(ReceivableInvoice)
@@ -100,96 +102,101 @@ def ejecutor_masivo_sat():
             if not real:
                 continue
 
-            if MODO_SIMULACION:
+            try:
                 print(
-                    f"   [SIMULACIÓN] 🟢 Se cancelaría CP Nominal: {cp.folio_interno} -> Vinculada a Real: {real.folio_interno}"
+                    f"🚀 [CP] Forzando validación SAT para: {cp.folio_interno} (UUID: {cp.uuid})..."
                 )
+                service.cancelar_factura_sat(
+                    invoice_id=cp.id, motivo="01", uuid_sustituto=real.uuid
+                )
+
+                db.refresh(cp)
+                cp.status_sat = "CANCELADO"
+                cp.estatus = "cancelado"
+                cp.saldo_pendiente = 0.0
+                db.add(cp)
+                db.commit()
+                print("        ✅ CONFIRMADO SAT: Factura muerta y amarrada en ceros.")
                 exitos += 1
-            else:
-                try:
+            except Exception as e:
+                error_msg = str(e).lower()
+                if (
+                    "previamente cancelado" in error_msg
+                    or "ya se encuentra cancelado" in error_msg
+                ):
                     print(
-                        f"   [CP] Forzando envío al SAT: {cp.folio_interno} (UUID: {cp.uuid})..."
+                        "        ✅ CONFIRMADO SAT: El SAT confirma que ya estaba previamente cancelada."
                     )
-
-                    service.cancelar_factura_sat(
-                        invoice_id=cp.id, motivo="01", uuid_sustituto=real.uuid
-                    )
-
-                    # Se asegura de dejarlas como canceladas tal como pediste
-                    db.refresh(cp)
                     cp.status_sat = "CANCELADO"
                     cp.estatus = "cancelado"
                     cp.saldo_pendiente = 0.0
                     db.add(cp)
                     db.commit()
-
-                    print("        ✅ Procesada y cancelada en el SAT con éxito.")
                     exitos += 1
-                    time.sleep(1.5)
-                except Exception as e:
-                    error_msg = str(e).lower()
-                    if (
-                        "previamente cancelado" in error_msg
-                        or "ya se encuentra cancelado" in error_msg
-                    ):
-                        print(
-                            "        ✅ El SAT confirma que ya estaba cancelada allá también."
-                        )
-                        exitos += 1
-                    else:
-                        print(f"        ❌ Error/Rechazo del SAT: {str(e)}")
-                        errores += 1
+                else:
+                    # 🚨 LA VERDAD EN PANTALLA: Si el SAT la rechaza o da timeout, le quitamos la máscara
+                    print(f"        ❌ RECHAZO REAL DEL SAT: {str(e)}")
+                    cp.status_sat = "TIMBRADA"
+                    cp.estatus = "pendiente"
+                    cp.saldo_pendiente = cp.monto_total  # Le regresa la deuda al ERP
+                    db.add(cp)
+                    db.commit()
+                    errores += 1
+            time.sleep(1.5)
 
-    # 🛠️ PROCESAR BLOQUE 2: FACTURAS LIBRES SERIE F
-    if total_f > 0:
-        print("\n⏳ Procesando bloque de Facturas Libres Serie F...")
+    # 🛠️ EJECUCIÓN AUTOMÁTICA EN BLOQUE 2: FACTURAS SERIE F
+    if len(facturas_f) > 0:
         for f in facturas_f:
-            if MODO_SIMULACION:
+            try:
                 print(
-                    f"   [SIMULACIÓN] 🟢 Se forzará cancelación al SAT de: {f.folio_interno} | UUID: {f.uuid}"
+                    f"🚀 [F] Forzando validación SAT para: {f.folio_interno} (UUID: {f.uuid})..."
                 )
+                service.cancelar_factura_sat(
+                    invoice_id=f.id, motivo="02", uuid_sustituto=None
+                )
+
+                db.refresh(f)
+                f.status_sat = "CANCELADO"
+                f.estatus = "cancelado"
+                f.saldo_pendiente = 0.0
+                db.add(f)
+                db.commit()
+                print("        ✅ CONFIRMADO SAT: Factura muerta y amarrada en ceros.")
                 exitos += 1
-            else:
-                try:
+            except Exception as e:
+                error_msg = str(e).lower()
+                if (
+                    "previamente cancelado" in error_msg
+                    or "ya se encuentra cancelado" in error_msg
+                ):
                     print(
-                        f"   [F] Forzando envío al SAT: {f.folio_interno} (UUID: {f.uuid})..."
+                        "        ✅ CONFIRMADO SAT: El SAT confirma que ya estaba previamente cancelada."
                     )
-
-                    service.cancelar_factura_sat(
-                        invoice_id=f.id, motivo="02", uuid_sustituto=None
-                    )
-
-                    # Se asegura de dejarlas como canceladas
-                    db.refresh(f)
                     f.status_sat = "CANCELADO"
                     f.estatus = "cancelado"
                     f.saldo_pendiente = 0.0
                     db.add(f)
                     db.commit()
-
-                    print("        ✅ Procesada y cancelada en el SAT con éxito.")
                     exitos += 1
-                    time.sleep(1.5)
-                except Exception as e:
-                    error_msg = str(e).lower()
-                    if (
-                        "previamente cancelado" in error_msg
-                        or "ya se encuentra cancelado" in error_msg
-                    ):
-                        print(
-                            "        ✅ El SAT confirma que ya estaba cancelada allá también."
-                        )
-                        exitos += 1
-                    else:
-                        print(f"        ❌ Error/Rechazo del SAT: {str(e)}")
-                        errores += 1
+                else:
+                    # 🚨 LA VERDAD EN PANTALLA: Si el SAT la rechaza o da timeout, le quitamos la máscara
+                    print(f"        ❌ RECHAZO REAL DEL SAT: {str(e)}")
+                    f.status_sat = "TIMBRADA"
+                    f.estatus = "pendiente"
+                    f.saldo_pendiente = f.monto_total  # Le regresa la deuda al ERP
+                    db.add(f)
+                    db.commit()
+                    errores += 1
+            time.sleep(1.5)
 
     print("\n" + "=" * 80)
-    print("🏁 RESUMEN FINAL DEL PROCESAMIENTO MASIVO:")
-    print(f"   - Operaciones procesadas/exitosas en el SAT: {exitos}")
-    print(f"   - Operaciones con incidencias (Rechazos/Timeouts): {errores}")
+    print("🏁 AUDITORÍA DINÁMICA TERMINADA.")
+    print(f"   - Sincronizadas y salvadas con éxito: {exitos}")
+    print(
+        f"   - Rebozadas por el SAT (Desenmascaradas como VIGENTES en tu ERP): {errores}"
+    )
     print("=======================================================================\n")
 
 
 if __name__ == "__main__":
-    ejecutor_masivo_sat()
+    auto_detectar_y_correr_incidencias()
