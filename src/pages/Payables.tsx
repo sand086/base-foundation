@@ -96,6 +96,7 @@ import { PayableInvoice } from "@/features/payables/types";
 
 import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
 import { AgingExportModal } from "@/components/common/AgingExportModal";
+import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
@@ -146,6 +147,7 @@ export default function Payables() {
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
   const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
+  const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
 
   // ESTADOS PARA CANCELAR Y REABRIR
   const [isCancelInvoiceOpen, setIsCancelInvoiceOpen] = useState(false);
@@ -913,6 +915,15 @@ export default function Payables() {
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             Exportar consolidado
           </Button>
+          <Button
+            variant="outline"
+            className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-200 font-bold shadow-sm"
+            disabled={supplierFilter === "all" || filteredInvoices.length === 0}
+            onClick={() => setIsAccountStatementOpen(true)}
+          >
+            <FileText className="h-4 w-4 mr-2 text-indigo-500" />
+            Estado de Cuenta
+          </Button>
 
           <ActionButton
             size="md"
@@ -1423,7 +1434,6 @@ export default function Payables() {
           onSubmit={handleRegisterPayment}
         />
       )}
-
       <ManageCategoriesModal
         open={isManageCatOpen}
         onOpenChange={setIsManageCatOpen}
@@ -1431,6 +1441,26 @@ export default function Payables() {
         onUpdate={updateIndirectCategory}
         onDelete={deleteIndirectCategory}
       />
+
+      {/* AGREGA ESTE BLOQUE COMPLETO */}
+      {(() => {
+        const supplierName =
+          supplierFilter === "all"
+            ? "all"
+            : suppliers?.find((s: any) => String(s.id) === supplierFilter)
+                ?.razon_social || "all";
+        return (
+          <AccountStatementModal
+            open={isAccountStatementOpen}
+            onClose={() => setIsAccountStatementOpen(false)}
+            invoices={filteredInvoices as any}
+            initialClient={supplierName}
+            bankAccounts={bankAccounts}
+            isSupplierMode={true} // <-- Bandera especial para que el modal sepa que está en CxP
+          />
+        );
+      })()}
+      {/* FIN DEL BLOQUE */}
 
       {/* ================================================== */}
       {/* NUEVO MODAL: CANCELAR FACTURA */}

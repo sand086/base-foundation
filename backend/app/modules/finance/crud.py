@@ -1998,8 +1998,7 @@ def get_client_statement(
     db: Session, client_id: int, start_date: date = None, end_date: date = None
 ):
     """
-    Genera el Estado de Cuenta detallado para un Cliente.
-    Incluye datos corporativos, cálculo de días de crédito y días vencidos.
+    Genera el Estado de Cuenta detallado clonando el formato manual de Mayra.
     """
     query = (
         db.query(models.ReceivableInvoice)
@@ -2017,46 +2016,55 @@ def get_client_statement(
 
     invoices = query.order_by(models.ReceivableInvoice.fecha_emision.asc()).all()
 
+    client_info = db.query(models.Client).get(client_id)
+    nombre_cliente = client_info.razon_social if client_info else "Desconocido"
+
     movimientos = []
     total_deuda = 0.0
     hoy = date.today()
 
     for inv in invoices:
-        # Cálculo de días
+        # Calcular días de crédito reales entre emisión y vencimiento
         dias_credito = (
             (inv.fecha_vencimiento - inv.fecha_emision).days
             if inv.fecha_vencimiento and inv.fecha_emision
             else 0
         )
 
-        dias_vencidos = 0
-        if inv.saldo_pendiente > 0 and inv.fecha_vencimiento:
-            dias_vencidos = (hoy - inv.fecha_vencimiento).days
+        # Matemática exacta de Mayra:
+        # Negativo = Faltan días para vencer (-7) | Positivo = Días de atraso | 0 = Vence hoy
+        dias_vencidos_img = 0
+        if inv.fecha_vencimiento:
+            dias_vencidos_img = (hoy - inv.fecha_vencimiento).days
 
-        # Estatus (Enviado/Pendiente) solicitado en la reunión
-        estatus_envio = "Pendiente" if inv.saldo_pendiente > 0 else "Pagado"
-
-        movimientos.append(
-            {
-                "folio": inv.folio_interno or inv.uuid,
-                "fecha_emision": inv.fecha_emision,
-                "fecha_vencimiento": inv.fecha_vencimiento,
-                "dias_credito": max(0, dias_credito),
-                "dias_vencidos": dias_vencidos if dias_vencidos > 0 else 0,
-                "dias_por_vencer": abs(dias_vencidos) if dias_vencidos < 0 else 0,
-                "monto_total": inv.monto_total,
-                "saldo_pendiente": inv.saldo_pendiente,
-                "estatus": estatus_envio,
-            }
-        )
-        total_deuda += inv.saldo_pendiente
-
-    # Información corporativa requerida en la cabecera
-    client_info = db.query(models.Client).get(client_id)
+        # Solo incluimos las pendientes como en su reporte
+        if inv.saldo_pendiente > 0:
+            movimientos.append(
+                {
+                    "cliente": f"{nombre_cliente[:12]}...",  # Trunca el nombre igual que en su Excel (ej. SEAFRIGO ME...)
+                    "folio": inv.folio_interno or inv.uuid[:8],
+                    "fecha_emision": (
+                        inv.fecha_emision.strftime("%d/%m/%y")
+                        if inv.fecha_emision
+                        else ""
+                    ),
+                    "monto": float(inv.monto_total),
+                    "fecha_vencimiento": (
+                        inv.fecha_vencimiento.strftime("%d/%m/%Y")
+                        if inv.fecha_vencimiento
+                        else ""
+                    ),
+                    "dias_credito": max(0, dias_credito),
+                    "dias_vencidos": dias_vencidos_img,
+                    "estado_envio": "Enviado",  # Estático como pidió Mayra
+                    "estado_pago": "Pendiente",
+                }
+            )
+            total_deuda += float(inv.saldo_pendiente)
 
     return {
         "empresa": {
-            "nombre": client_info.razon_social if client_info else "Desconocido",
+            "nombre": nombre_cliente,
             "rfc": client_info.rfc if client_info else "XAXX010101000",
         },
         "resumen": {"total_adeudo": total_deuda, "moneda": "MXN"},

@@ -46,9 +46,10 @@ import { FinanceExportService } from "@/features/receivables/services/financeExp
 interface AccountStatementModalProps {
   open: boolean;
   onClose: () => void;
-  invoices: ReceivableInvoice[];
+  invoices: any[];
   initialClient?: string;
   bankAccounts?: any[];
+  isSupplierMode?: boolean;
 }
 
 const companyBankData = {
@@ -70,6 +71,7 @@ export function AccountStatementModal({
   invoices,
   initialClient = "all",
   bankAccounts = [],
+  isSupplierMode = false,
 }: AccountStatementModalProps) {
   const [selectedClient, setSelectedClient] = useState<string>(initialClient);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -227,11 +229,12 @@ export function AccountStatementModal({
       description: "Se abrirá la ventana de impresión.",
     });
   };
+
   const handleDownloadExcel = async () => {
     if (selectedClient === "all") {
-      toast.error("Seleccione un cliente específico", {
+      toast.error("Seleccione una entidad específica", {
         description:
-          "El estado de cuenta corporativo en Excel requiere seleccionar a qué cliente se le emitirá.",
+          "El estado de cuenta corporativo en Excel requiere seleccionar a qué entidad se le emitirá.",
       });
       return;
     }
@@ -242,33 +245,42 @@ export function AccountStatementModal({
     });
 
     try {
-      // Obtenemos el ID del cliente basado en la selección
-      const targetInvoice = invoices.find(
-        (inv) => inv.cliente === selectedClient,
-      );
-      const clientId =
-        (targetInvoice as any)?.client?.id || (targetInvoice as any)?.client_id;
+      // Obtenemos la factura para extraer el ID
+      // Aquí agregamos validaciones robustas para encontrar el nombre sin importar si es client o supplier
+      const targetInvoice = invoices.find((inv: any) => {
+        const entityName =
+          inv.cliente ||
+          inv.client?.razon_social ||
+          inv.supplier_razon_social ||
+          inv.supplier?.razon_social;
+        return entityName === selectedClient;
+      });
 
-      if (!clientId) {
+      const entityId =
+        targetInvoice?.client?.id ||
+        targetInvoice?.client_id ||
+        targetInvoice?.supplier?.id ||
+        targetInvoice?.supplier_id;
+      if (!entityId) {
         toast.error("Error", {
-          description: "No se encontró el ID interno del cliente.",
+          description: "No se encontró el ID interno de la entidad.",
         });
         return;
       }
 
-      // Llamada a nuestro nuevo Custom Service
-      const blob =
-        await FinanceExportService.exportClientStatementExcel(clientId);
+      // DECIDIMOS A QUÉ ENDPOINT LLAMAR
+      const blob = isSupplierMode
+        ? await FinanceExportService.exportSupplierStatementExcel(entityId)
+        : await FinanceExportService.exportClientStatementExcel(entityId);
 
-      // Forzar la descarga en el navegador
       const url = window.URL.createObjectURL(new Blob([blob]));
       const link = document.createElement("a");
       link.href = url;
 
-      const fileNameClient = selectedClient.replace(/\s+/g, "_");
+      const fileNameEntity = selectedClient.replace(/\s+/g, "_");
       link.setAttribute(
         "download",
-        `Estado_Cuenta_${fileNameClient}_${format(new Date(), "dd-MM-yyyy")}.xlsx`,
+        `Estado_Cuenta_${fileNameEntity}_${format(new Date(), "dd-MM-yyyy")}.xlsx`,
       );
 
       document.body.appendChild(link);
@@ -287,6 +299,7 @@ export function AccountStatementModal({
       setIsGeneratingPDF(false);
     }
   };
+
   const currentDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",

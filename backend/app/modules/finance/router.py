@@ -29,6 +29,8 @@ from app.models import models
 from app.modules.auth.router import get_current_active_user
 from app.modules.auth.router import RequirePermission
 
+from openpyxl.drawing.image import Image as OpenpyxlImage
+
 # IMPORTACIONES LOCALES (FSD)
 from . import schemas, crud
 
@@ -2018,62 +2020,66 @@ def export_client_statement_excel(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
-    """
-    Exporta el Estado de Cuenta detallado de un Cliente en formato Excel.
-    Incluye los datos corporativos y el desglose de días solicitados en la revisión.
-    """
     try:
         data = crud.get_client_statement(db, client_id, start_date, end_date)
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            # 1. Crear la Cabecera Corporativa
-            df_header = pd.DataFrame(
-                [
-                    {
-                        "ESTADO DE CUENTA CLIENTE": "Razón Social:",
-                        "VALOR": data["empresa"]["nombre"],
-                    },
-                    {
-                        "ESTADO DE CUENTA CLIENTE": "RFC:",
-                        "VALOR": data["empresa"]["rfc"],
-                    },
-                    {
-                        "ESTADO DE CUENTA CLIENTE": "Deuda Total:",
-                        "VALOR": f"${data['resumen']['total_adeudo']:,.2f} {data['resumen']['moneda']}",
-                    },
-                    {
-                        "ESTADO DE CUENTA CLIENTE": "Fecha de Emisión:",
-                        "VALOR": date.today().strftime("%Y-%m-%d"),
-                    },
-                ]
-            )
-            df_header.to_excel(
-                writer, sheet_name="Estado_de_Cuenta", index=False, startrow=0
+
+            # 1. Construcción de la tabla (Empezaremos más abajo para dejar espacio al logo)
+            df_movs = pd.DataFrame(data["movimientos"])
+            start_row = (
+                6  # <--- Dejamos 6 filas libres arriba para el Logo y la cabecera
             )
 
-            # 2. Crear la Tabla de Movimientos
-            df_movs = pd.DataFrame(data["movimientos"])
             if not df_movs.empty:
-                # Renombrar columnas para presentación final
+                df_movs = df_movs[
+                    [
+                        "cliente",
+                        "folio",
+                        "fecha_emision",
+                        "monto",
+                        "fecha_vencimiento",
+                        "dias_credito",
+                        "dias_vencidos",
+                        "estado_envio",
+                        "estado_pago",
+                    ]
+                ]
+
                 df_movs.rename(
                     columns={
-                        "folio": "Folio / Factura",
-                        "fecha_emision": "Fecha de Emisión",
-                        "fecha_vencimiento": "Fecha de Vencimiento",
-                        "dias_credito": "Días de Crédito",
+                        "cliente": "Cliente",
+                        "folio": "Folio",
+                        "fecha_emision": "Fecha Emisión",
+                        "monto": "Monto",
+                        "fecha_vencimiento": "Fecha Vencimiento",
+                        "dias_credito": "Días Crédito",
                         "dias_vencidos": "Días Vencidos",
-                        "dias_por_vencer": "Días por Vencer",
-                        "monto_total": "Monto Original",
-                        "saldo_pendiente": "Saldo Pendiente",
-                        "estatus": "Estatus de Cobro",
+                        "estado_envio": "Envío",
+                        "estado_pago": "Estatus",
                     },
                     inplace=True,
                 )
 
-                # Insertar los movimientos debajo de la cabecera (dejando 2 filas de espacio)
-                start_row = df_header.shape[0] + 2
-                df_movs.to_excel(
+                fila_total = pd.DataFrame(
+                    [
+                        {
+                            "Cliente": data["empresa"]["nombre"],
+                            "Folio": "",
+                            "Fecha Emisión": "",
+                            "Monto": data["resumen"]["total_adeudo"],
+                            "Fecha Vencimiento": "",
+                            "Días Crédito": "",
+                            "Días Vencidos": "",
+                            "Envío": "",
+                            "Estatus": "",
+                        }
+                    ]
+                )
+                df_final = pd.concat([df_movs, fila_total], ignore_index=True)
+
+                df_final.to_excel(
                     writer,
                     sheet_name="Estado_de_Cuenta",
                     index=False,
@@ -2081,16 +2087,38 @@ def export_client_statement_excel(
                 )
             else:
                 pd.DataFrame(
-                    [{"Mensaje": "El cliente no tiene movimientos en este periodo."}]
+                    [{"Mensaje": "El cliente no tiene facturas pendientes."}]
                 ).to_excel(
                     writer,
                     sheet_name="Estado_de_Cuenta",
                     index=False,
-                    startrow=df_header.shape[0] + 2,
+                    startrow=start_row,
                 )
 
-            # 3. Dar formato visual (Ajustar anchos de columna)
+            # 2. Formato visual de celdas y LOGO
             worksheet = writer.sheets["Estado_de_Cuenta"]
+
+            # --- INYECCIÓN DEL LOGO ---
+            # Ruta al logo físico en tu repositorio
+            logo_path = os.path.join(
+                os.getcwd(), "app", "templates", "assets", "logo-black.png"
+            )
+
+            if os.path.exists(logo_path):
+                img = OpenpyxlImage(logo_path)
+                # Opcional: Redimensionar la imagen si es muy grande
+                img.width = 150
+                img.height = 75
+                # Colocar el logo en la celda A1
+                worksheet.add_image(img, "A1")
+            # ---------------------------
+
+            # Escribir la cabecera corporativa junto al logo
+            worksheet["D2"] = "ESTADO DE CUENTA"
+            worksheet["D3"] = f"Empresa: {data['empresa']['nombre']}"
+            worksheet["D4"] = f"RFC: {data['empresa']['rfc']}"
+
+            # Formato de Moneda y Anchos
             for column_cells in worksheet.columns:
                 max_length = max(
                     len(str(cell.value))
@@ -2101,27 +2129,22 @@ def export_client_statement_excel(
                     max_length + 2
                 )
 
-        output.seek(0)
+            for cell in worksheet["D"]:
+                if cell.row > start_row + 1:
+                    cell.number_format = '"$"#,##0.00'
 
-        # Generar nombre del archivo dinámico
+        output.seek(0)
         rfc_clean = data["empresa"]["rfc"].replace(" ", "")
         filename = f"Edo_Cuenta_{rfc_clean}_{date.today()}.xlsx"
 
-        headers = {
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        }
-
         return StreamingResponse(
             output,
-            headers=headers,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500, detail=f"Error generando estado de cuenta: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error generando excel: {str(e)}")
 
 
 @router.get("/export/statement/supplier/{supplier_id}")
