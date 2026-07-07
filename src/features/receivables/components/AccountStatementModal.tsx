@@ -9,6 +9,7 @@ import {
   CreditCard,
   AlertCircle,
   CheckCircle2,
+  FileSpreadsheet,
   Clock,
 } from "lucide-react";
 import {
@@ -35,11 +36,13 @@ import {
   getInvoiceStatusInfo,
   calculateDaysOverdue,
 } from "@/features/receivables/types";
+
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { format } from "date-fns";
 
+import { FinanceExportService } from "@/features/receivables/services/financeExportService";
 interface AccountStatementModalProps {
   open: boolean;
   onClose: () => void;
@@ -224,7 +227,66 @@ export function AccountStatementModal({
       description: "Se abrirá la ventana de impresión.",
     });
   };
+  const handleDownloadExcel = async () => {
+    if (selectedClient === "all") {
+      toast.error("Seleccione un cliente específico", {
+        description:
+          "El estado de cuenta corporativo en Excel requiere seleccionar a qué cliente se le emitirá.",
+      });
+      return;
+    }
 
+    setIsGeneratingPDF(true);
+    toast.info("Generando archivo...", {
+      description: "Obteniendo datos corporativos del servidor...",
+    });
+
+    try {
+      // Obtenemos el ID del cliente basado en la selección
+      const targetInvoice = invoices.find(
+        (inv) => inv.cliente === selectedClient,
+      );
+      const clientId =
+        (targetInvoice as any)?.client?.id || (targetInvoice as any)?.client_id;
+
+      if (!clientId) {
+        toast.error("Error", {
+          description: "No se encontró el ID interno del cliente.",
+        });
+        return;
+      }
+
+      // Llamada a nuestro nuevo Custom Service
+      const blob =
+        await FinanceExportService.exportClientStatementExcel(clientId);
+
+      // Forzar la descarga en el navegador
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement("a");
+      link.href = url;
+
+      const fileNameClient = selectedClient.replace(/\s+/g, "_");
+      link.setAttribute(
+        "download",
+        `Estado_Cuenta_${fileNameClient}_${format(new Date(), "dd-MM-yyyy")}.xlsx`,
+      );
+
+      document.body.appendChild(link);
+      link.click();
+
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("Excel descargado correctamente");
+    } catch (error) {
+      console.error("Error downloading excel:", error);
+      toast.error("Error al descargar el Excel", {
+        description: "Verifique que el backend esté corriendo y sin errores.",
+      });
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
   const currentDate = new Date().toLocaleDateString("es-MX", {
     year: "numeric",
     month: "long",
@@ -499,6 +561,16 @@ export function AccountStatementModal({
             >
               <Printer className="h-4 w-4" />
               Imprimir
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px] gap-2 text-emerald-600 border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+              onClick={handleDownloadExcel}
+              disabled={isGeneratingPDF || selectedClient === "all"}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Descargar Excel
             </Button>
             <Button
               variant="outline"

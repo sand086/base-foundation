@@ -2003,3 +2003,225 @@ def force_test_cancel(folio: str, db: Session = Depends(get_db)):
         "status": "success",
         "message": f"¡Listo! Se forzaron {count} pagos de la factura {folio} a PROCESO_CANCELACION. Ya puedes probar tu tabla y tu Cron Job.",
     }
+
+
+# =====================================================================
+# EXPORTACIÓN DE ESTADOS DE CUENTA INDIVIDUALES (REQUERIMIENTO 3T)
+# =====================================================================
+
+
+@router.get("/export/statement/client/{client_id}")
+def export_client_statement_excel(
+    client_id: int,
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Exporta el Estado de Cuenta detallado de un Cliente en formato Excel.
+    Incluye los datos corporativos y el desglose de días solicitados en la revisión.
+    """
+    try:
+        data = crud.get_client_statement(db, client_id, start_date, end_date)
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            # 1. Crear la Cabecera Corporativa
+            df_header = pd.DataFrame(
+                [
+                    {
+                        "ESTADO DE CUENTA CLIENTE": "Razón Social:",
+                        "VALOR": data["empresa"]["nombre"],
+                    },
+                    {
+                        "ESTADO DE CUENTA CLIENTE": "RFC:",
+                        "VALOR": data["empresa"]["rfc"],
+                    },
+                    {
+                        "ESTADO DE CUENTA CLIENTE": "Deuda Total:",
+                        "VALOR": f"${data['resumen']['total_adeudo']:,.2f} {data['resumen']['moneda']}",
+                    },
+                    {
+                        "ESTADO DE CUENTA CLIENTE": "Fecha de Emisión:",
+                        "VALOR": date.today().strftime("%Y-%m-%d"),
+                    },
+                ]
+            )
+            df_header.to_excel(
+                writer, sheet_name="Estado_de_Cuenta", index=False, startrow=0
+            )
+
+            # 2. Crear la Tabla de Movimientos
+            df_movs = pd.DataFrame(data["movimientos"])
+            if not df_movs.empty:
+                # Renombrar columnas para presentación final
+                df_movs.rename(
+                    columns={
+                        "folio": "Folio / Factura",
+                        "fecha_emision": "Fecha de Emisión",
+                        "fecha_vencimiento": "Fecha de Vencimiento",
+                        "dias_credito": "Días de Crédito",
+                        "dias_vencidos": "Días Vencidos",
+                        "dias_por_vencer": "Días por Vencer",
+                        "monto_total": "Monto Original",
+                        "saldo_pendiente": "Saldo Pendiente",
+                        "estatus": "Estatus de Cobro",
+                    },
+                    inplace=True,
+                )
+
+                # Insertar los movimientos debajo de la cabecera (dejando 2 filas de espacio)
+                start_row = df_header.shape[0] + 2
+                df_movs.to_excel(
+                    writer,
+                    sheet_name="Estado_de_Cuenta",
+                    index=False,
+                    startrow=start_row,
+                )
+            else:
+                pd.DataFrame(
+                    [{"Mensaje": "El cliente no tiene movimientos en este periodo."}]
+                ).to_excel(
+                    writer,
+                    sheet_name="Estado_de_Cuenta",
+                    index=False,
+                    startrow=df_header.shape[0] + 2,
+                )
+
+            # 3. Dar formato visual (Ajustar anchos de columna)
+            worksheet = writer.sheets["Estado_de_Cuenta"]
+            for column_cells in worksheet.columns:
+                max_length = max(
+                    len(str(cell.value))
+                    for cell in column_cells
+                    if cell.value is not None
+                )
+                worksheet.column_dimensions[column_cells[0].column_letter].width = (
+                    max_length + 2
+                )
+
+        output.seek(0)
+
+        # Generar nombre del archivo dinámico
+        rfc_clean = data["empresa"]["rfc"].replace(" ", "")
+        filename = f"Edo_Cuenta_{rfc_clean}_{date.today()}.xlsx"
+
+        headers = {
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        }
+
+        return StreamingResponse(
+            output,
+            headers=headers,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error generando estado de cuenta: {str(e)}"
+        )
+
+
+@router.get("/export/statement/supplier/{supplier_id}")
+def export_supplier_statement_excel(
+    supplier_id: int,
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """
+    Exporta el Estado de Cuenta detallado de un Proveedor (Cuentas por Pagar).
+    """
+    try:
+        data = crud.get_supplier_statement(db, supplier_id, start_date, end_date)
+
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df_header = pd.DataFrame(
+                [
+                    {
+                        "ESTADO DE CUENTA PROVEEDOR": "Razón Social:",
+                        "VALOR": data["empresa"]["nombre"],
+                    },
+                    {
+                        "ESTADO DE CUENTA PROVEEDOR": "RFC:",
+                        "VALOR": data["empresa"]["rfc"],
+                    },
+                    {
+                        "ESTADO DE CUENTA PROVEEDOR": "Deuda Total:",
+                        "VALOR": f"${data['resumen']['total_adeudo']:,.2f} {data['resumen']['moneda']}",
+                    },
+                    {
+                        "ESTADO DE CUENTA PROVEEDOR": "Fecha de Emisión:",
+                        "VALOR": date.today().strftime("%Y-%m-%d"),
+                    },
+                ]
+            )
+            df_header.to_excel(
+                writer, sheet_name="Estado_de_Cuenta", index=False, startrow=0
+            )
+
+            df_movs = pd.DataFrame(data["movimientos"])
+            if not df_movs.empty:
+                df_movs.rename(
+                    columns={
+                        "folio": "Folio / Factura",
+                        "fecha_emision": "Fecha de Emisión",
+                        "fecha_vencimiento": "Fecha de Vencimiento",
+                        "dias_credito": "Días de Crédito",
+                        "dias_vencidos": "Días Vencidos",
+                        "monto_total": "Monto Original",
+                        "saldo_pendiente": "Saldo Pendiente",
+                        "estatus": "Estatus de Pago",
+                    },
+                    inplace=True,
+                )
+
+                df_movs.to_excel(
+                    writer,
+                    sheet_name="Estado_de_Cuenta",
+                    index=False,
+                    startrow=df_header.shape[0] + 2,
+                )
+            else:
+                pd.DataFrame(
+                    [{"Mensaje": "No hay deudas con este proveedor en el periodo."}]
+                ).to_excel(
+                    writer,
+                    sheet_name="Estado_de_Cuenta",
+                    index=False,
+                    startrow=df_header.shape[0] + 2,
+                )
+
+            worksheet = writer.sheets["Estado_de_Cuenta"]
+            for column_cells in worksheet.columns:
+                max_length = max(
+                    len(str(cell.value))
+                    for cell in column_cells
+                    if cell.value is not None
+                )
+                worksheet.column_dimensions[column_cells[0].column_letter].width = (
+                    max_length + 2
+                )
+
+        output.seek(0)
+
+        rfc_clean = data["empresa"]["rfc"].replace(" ", "")
+        filename = f"Edo_Cuenta_Prov_{rfc_clean}_{date.today()}.xlsx"
+
+        return StreamingResponse(
+            output,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Error generando estado de cuenta: {str(e)}"
+        )

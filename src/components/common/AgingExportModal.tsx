@@ -196,33 +196,89 @@ export function AgingExportModal({
   // ========================================================
   const handleExport = async () => {
     setIsExporting(true);
-    const toastId = toast.loading("Generando Excel Consolidado...");
+    const toastId = toast.loading("Generando Excel Corporativo...");
 
     try {
-      let url = `/api/finance/export/aging?module_type=${type}`;
-      if (startDate) url += `&start_date=${startDate}`;
-      if (endDate) url += `&end_date=${endDate}`;
+      // 1. SI EL USUARIO SELECCIONÓ UN CLIENTE/PROVEEDOR ESPECÍFICO
+      if (searchEntity !== "all") {
+        // Buscamos el ID interno de la entidad seleccionada
+        const targetInvoice = invoices.find((inv) => {
+          const entityName =
+            inv.cliente ||
+            inv.proveedor ||
+            inv.client?.razon_social ||
+            inv.supplier?.razon_social ||
+            inv.supplier_razon_social ||
+            inv.client_razon_social;
+          return entityName === searchEntity;
+        });
 
-      const response = await axiosClient.get(url, { responseType: "blob" });
+        const entityId =
+          targetInvoice?.client?.id ||
+          targetInvoice?.client_id ||
+          targetInvoice?.supplier?.id ||
+          targetInvoice?.supplier_id;
 
-      const disposition = response.headers["content-disposition"];
-      let filename = `Antiguedad_Saldos_${type.toUpperCase()}.xlsx`;
-      if (disposition && disposition.indexOf("filename=") !== -1) {
-        const matches = /filename="([^"]*)"/.exec(disposition);
-        if (matches != null && matches[1]) filename = matches[1];
+        if (!entityId) {
+          throw new Error(
+            "No se pudo identificar el ID para generar el Estado de Cuenta.",
+          );
+        }
+
+        // Llamamos al nuevo endpoint de FastAPI que armamos con el membrete
+        const endpoint =
+          type === "cxc"
+            ? `/api/finance/export/statement/client/${entityId}`
+            : `/api/finance/export/statement/supplier/${entityId}`;
+
+        const response = await axiosClient.get(endpoint, {
+          params: { start_date: startDate, end_date: endDate },
+          responseType: "blob", // <-- Magia para descargar el archivo
+        });
+
+        const blob = new Blob([response.data]);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const safeName = searchEntity.replace(/\s+/g, "_");
+        link.download = `Edo_Cuenta_${safeName}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast.success("Estado de Cuenta Corporativo exportado con éxito", {
+          id: toastId,
+        });
+      }
+      // 2. SI EL USUARIO DEJÓ "TODOS" (REPORTE CONSOLIDADO)
+      else {
+        let url = `/api/finance/export/aging?module_type=${type}`;
+        if (startDate) url += `&start_date=${startDate}`;
+        if (endDate) url += `&end_date=${endDate}`;
+
+        const response = await axiosClient.get(url, { responseType: "blob" });
+
+        const disposition = response.headers["content-disposition"];
+        let filename = `Consolidado_Saldos_${type.toUpperCase()}.xlsx`;
+        if (disposition && disposition.indexOf("filename=") !== -1) {
+          const matches = /filename="([^"]*)"/.exec(disposition);
+          if (matches != null && matches[1]) filename = matches[1];
+        }
+
+        const blob = new Blob([response.data], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const link = document.createElement("a");
+        link.href = window.URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success("Reporte Consolidado Exportado", { id: toastId });
       }
 
-      const blob = new Blob([response.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success("Reporte Exportado Exitosamente", { id: toastId });
       onOpenChange(false);
     } catch (error) {
       console.error(error);

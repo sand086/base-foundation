@@ -1175,7 +1175,7 @@ def delete_bank_movement(db: Session, movement_id: int, user_id: int):
                     .filter(models.ReceivableInvoice.id == pago_cxc.invoice_id)
                     .options(
                         lazyload(models.ReceivableInvoice.created_by),
-                        lazyload(models.ReceivableInvoice.updated_by)
+                        lazyload(models.ReceivableInvoice.updated_by),
                     )
                     .with_for_update(of=models.ReceivableInvoice)
                     .first()
@@ -1987,3 +1987,205 @@ def get_cfdi_timeline(db: Session, tipo_documento: str, document_id: int):
         )
 
     return timeline
+
+
+# =====================================================================
+# REPORTES FINANCIEROS Y ESTADOS DE CUENTA (REQUERIMIENTO SISTEMA 3T)
+# =====================================================================
+
+
+def get_client_statement(
+    db: Session, client_id: int, start_date: date = None, end_date: date = None
+):
+    """
+    Genera el Estado de Cuenta detallado para un Cliente.
+    Incluye datos corporativos, cálculo de días de crédito y días vencidos.
+    """
+    query = (
+        db.query(models.ReceivableInvoice)
+        .options(joinedload(models.ReceivableInvoice.client))
+        .filter(
+            models.ReceivableInvoice.client_id == client_id,
+            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+    )
+
+    if start_date:
+        query = query.filter(models.ReceivableInvoice.fecha_emision >= start_date)
+    if end_date:
+        query = query.filter(models.ReceivableInvoice.fecha_emision <= end_date)
+
+    invoices = query.order_by(models.ReceivableInvoice.fecha_emision.asc()).all()
+
+    movimientos = []
+    total_deuda = 0.0
+    hoy = date.today()
+
+    for inv in invoices:
+        # Cálculo de días
+        dias_credito = (
+            (inv.fecha_vencimiento - inv.fecha_emision).days
+            if inv.fecha_vencimiento and inv.fecha_emision
+            else 0
+        )
+
+        dias_vencidos = 0
+        if inv.saldo_pendiente > 0 and inv.fecha_vencimiento:
+            dias_vencidos = (hoy - inv.fecha_vencimiento).days
+
+        # Estatus (Enviado/Pendiente) solicitado en la reunión
+        estatus_envio = "Pendiente" if inv.saldo_pendiente > 0 else "Pagado"
+
+        movimientos.append(
+            {
+                "folio": inv.folio_interno or inv.uuid,
+                "fecha_emision": inv.fecha_emision,
+                "fecha_vencimiento": inv.fecha_vencimiento,
+                "dias_credito": max(0, dias_credito),
+                "dias_vencidos": dias_vencidos if dias_vencidos > 0 else 0,
+                "dias_por_vencer": abs(dias_vencidos) if dias_vencidos < 0 else 0,
+                "monto_total": inv.monto_total,
+                "saldo_pendiente": inv.saldo_pendiente,
+                "estatus": estatus_envio,
+            }
+        )
+        total_deuda += inv.saldo_pendiente
+
+    # Información corporativa requerida en la cabecera
+    client_info = db.query(models.Client).get(client_id)
+
+    return {
+        "empresa": {
+            "nombre": client_info.razon_social if client_info else "Desconocido",
+            "rfc": client_info.rfc if client_info else "XAXX010101000",
+        },
+        "resumen": {"total_adeudo": total_deuda, "moneda": "MXN"},
+        "movimientos": movimientos,
+    }
+
+
+def get_supplier_statement(
+    db: Session, supplier_id: int, start_date: date = None, end_date: date = None
+):
+    """
+    Genera el Estado de Cuenta detallado para un Proveedor (Cuentas por Pagar).
+    """
+    query = (
+        db.query(models.PayableInvoice)
+        .options(joinedload(models.PayableInvoice.supplier))
+        .filter(
+            models.PayableInvoice.supplier_id == supplier_id,
+            models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+    )
+
+    if start_date:
+        query = query.filter(models.PayableInvoice.fecha_emision >= start_date)
+    if end_date:
+        query = query.filter(models.PayableInvoice.fecha_emision <= end_date)
+
+    invoices = query.order_by(models.PayableInvoice.fecha_emision.asc()).all()
+
+    movimientos = []
+    total_deuda = 0.0
+    hoy = date.today()
+
+    for inv in invoices:
+        dias_credito = (
+            (inv.fecha_vencimiento - inv.fecha_emision).days
+            if inv.fecha_vencimiento and inv.fecha_emision
+            else 0
+        )
+
+        dias_vencidos = 0
+        if inv.saldo_pendiente > 0 and inv.fecha_vencimiento:
+            dias_vencidos = (hoy - inv.fecha_vencimiento).days
+
+        movimientos.append(
+            {
+                "folio": inv.folio or inv.uuid,
+                "fecha_emision": inv.fecha_emision,
+                "fecha_vencimiento": inv.fecha_vencimiento,
+                "dias_credito": max(0, dias_credito),
+                "dias_vencidos": dias_vencidos if dias_vencidos > 0 else 0,
+                "monto_total": inv.monto_total,
+                "saldo_pendiente": inv.saldo_pendiente,
+                "estatus": "Pendiente de Pago" if inv.saldo_pendiente > 0 else "Pagado",
+            }
+        )
+        total_deuda += inv.saldo_pendiente
+
+    supplier_info = db.query(models.Supplier).get(supplier_id)
+
+    return {
+        "empresa": {
+            "nombre": supplier_info.razon_social if supplier_info else "Desconocido",
+            "rfc": supplier_info.rfc if supplier_info else "XEXX010101000",
+        },
+        "resumen": {"total_adeudo": total_deuda, "moneda": "MXN"},
+        "movimientos": movimientos,
+    }
+
+
+def get_consolidated_balances(db: Session, tipo: str = "clientes"):
+    """
+    Genera el reporte consolidado de deuda total por empresa (Lo que piden en vez de Excel simple).
+    tipo: 'clientes' (Cuentas por Cobrar) o 'proveedores' (Cuentas por Pagar)
+    """
+    consolidado = []
+
+    if tipo == "clientes":
+        clientes = (
+            db.query(models.Client)
+            .filter(models.Client.record_status != RecordStatus.ELIMINADO)
+            .all()
+        )
+        for cli in clientes:
+            deuda = (
+                db.query(func.sum(models.ReceivableInvoice.saldo_pendiente))
+                .filter(
+                    models.ReceivableInvoice.client_id == cli.id,
+                    models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                )
+                .scalar()
+                or 0.0
+            )
+
+            if deuda > 0:
+                consolidado.append(
+                    {
+                        "id": cli.id,
+                        "empresa": cli.razon_social,
+                        "rfc": cli.rfc,
+                        "deuda_total": deuda,
+                    }
+                )
+    else:
+        proveedores = (
+            db.query(models.Supplier)
+            .filter(models.Supplier.record_status != RecordStatus.ELIMINADO)
+            .all()
+        )
+        for prov in proveedores:
+            deuda = (
+                db.query(func.sum(models.PayableInvoice.saldo_pendiente))
+                .filter(
+                    models.PayableInvoice.supplier_id == prov.id,
+                    models.PayableInvoice.record_status != RecordStatus.ELIMINADO,
+                )
+                .scalar()
+                or 0.0
+            )
+
+            if deuda > 0:
+                consolidado.append(
+                    {
+                        "id": prov.id,
+                        "empresa": prov.razon_social,
+                        "rfc": prov.rfc,
+                        "deuda_total": deuda,
+                    }
+                )
+
+    # Ordenar de mayor a menor deuda
+    return sorted(consolidado, key=lambda x: x["deuda_total"], reverse=True)
