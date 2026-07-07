@@ -2,7 +2,6 @@ import sys
 import time
 from pathlib import Path
 
-# Configurar el path
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from app.db.database import get_db
@@ -10,90 +9,76 @@ from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
 
 
-def remate_final():
+def matar_factura_colgada():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 80)
-    print("🎯 [FRANCOTIRADOR] LIQUIDANDO LAS ÚLTIMAS 6 INCIDENCIAS DEL LOG")
+    print("🧨 [ROMPE-CANDADOS] FORZANDO BAJA CON MOTIVO 02 PARA FACTURAS COLGADAS")
     print("=" * 80)
 
-    # Las de Error 200: Forzaremos Motivo 02
-    folios_motivo_02 = ["CP-17565", "CP-17433"]
+    # 📋 1. METE AQUÍ EL UUID QUE SIGUE "VIGENTE" EN LA PÁGINA DEL SAT A PESAR DE TODO
+    uuid_rebelde = "8B62AAA4-1610-47B6-8417-E96C78A0648A"  # Este es el de tu CP-17765
 
-    # Las de Error 500: Reintentaremos Motivo 01 normal
-    folios_motivo_01 = ["CP-17439", "CP-17823", "CP-17826", "CP-17921"]
-
-    todas_las_incidencias = folios_motivo_02 + folios_motivo_01
-
-    facturas = (
+    # 2. Busca la factura en tu base de datos
+    fac = (
         db.query(ReceivableInvoice)
-        .filter(ReceivableInvoice.folio_interno.in_(todas_las_incidencias))
-        .all()
+        .filter(ReceivableInvoice.uuid == uuid_rebelde)
+        .first()
     )
 
-    for fac in facturas:
-        try:
-            motivo = "02" if fac.folio_interno in folios_motivo_02 else "01"
-            uuid_relacionado = None
+    if not fac:
+        print(f"❌ Error: El UUID {uuid_rebelde} no existe en tu base de datos local.")
+        return
 
-            if motivo == "01":
-                real = (
-                    db.query(ReceivableInvoice)
-                    .filter(
-                        ReceivableInvoice.viaje_id == fac.viaje_id,
-                        ReceivableInvoice.is_nominal == False,
-                        ReceivableInvoice.status_sat == "TIMBRADA",
-                    )
-                    .first()
-                )
-                if real:
-                    uuid_relacionado = real.uuid
+    print(
+        f"🚀 Disparando a {fac.folio_interno} (UUID: {fac.uuid}) con Motivo 02 forzado..."
+    )
 
-            print(f"🚀 Disparando a {fac.folio_interno} (Motivo: {motivo})...")
+    try:
+        # 3. 🚨 EL TRUCO: Le mandamos Motivo 02 para obligar al SAT a ignorar el amonestamiento
+        service.cancelar_factura_sat(
+            invoice_id=fac.id, motivo="02", uuid_sustituto=None
+        )
 
-            service.cancelar_factura_sat(
-                invoice_id=fac.id, motivo=motivo, uuid_sustituto=uuid_relacionado
+        # 4. Aseguramos que la BD esté alineada al éxito
+        db.refresh(fac)
+        fac.status_sat = "CANCELADO"
+        fac.estatus = "cancelado"
+        fac.saldo_pendiente = 0.0
+        db.add(fac)
+        db.commit()
+        print("   ✅ MISIÓN CUMPLIDA: Factura ejecutada con éxito ante el SAT.")
+        print(
+            "   👉 Ve a la página del SAT ahora mismo, dale 'Refrescar' y ya debería decir Cancelada."
+        )
+
+    except Exception as e:
+        error_msg = str(e).lower()
+        if (
+            "previamente cancelado" in error_msg
+            or "ya se encuentra cancelado" in error_msg
+        ):
+            print(
+                "   ✅ EL SAT CONFIRMA: Dice que ya la mató allá (Refresca tu página web del SAT)."
             )
-
-            # Éxito: Guardamos cambios
-            db.refresh(fac)
             fac.status_sat = "CANCELADO"
             fac.estatus = "cancelado"
             fac.saldo_pendiente = 0.0
             db.add(fac)
             db.commit()
-            print("   ✅ LIQUIDADA: Cancelación exitosa en SAT y BD.")
-
-        except Exception as e:
-            error_msg = str(e).lower()
-            if (
-                "previamente cancelado" in error_msg
-                or "ya se encuentra cancelado" in error_msg
-            ):
-                print("   ✅ LIQUIDADA: El SAT dice que ya estaba cancelada.")
-                fac.status_sat = "CANCELADO"
-                fac.estatus = "cancelado"
-                fac.saldo_pendiente = 0.0
-                db.add(fac)
-                db.commit()
-            else:
-                print(f"   ❌ RECHAZO: {str(e)}")
-                # Mantenemos la verdad en la BD
-                fac.status_sat = "TIMBRADA"
-                fac.estatus = "pendiente"
-                fac.saldo_pendiente = fac.monto_total
-                db.add(fac)
-                db.commit()
-
-        time.sleep(1.5)
+        else:
+            print(f"   ❌ RECHAZO DEFINITIVO DEL SAT: {str(e)}")
+            # Si a pesar del Motivo 02 te la rebota, el problema es grave en el SAT.
+            # Regresamos el ERP a la realidad para que el cliente no vea mentiras.
+            fac.status_sat = "TIMBRADA"
+            fac.estatus = "pendiente"
+            fac.saldo_pendiente = fac.monto_total
+            db.add(fac)
+            db.commit()
 
     print("\n" + "=" * 80)
-    print(
-        "🏁 FRANCOTIRADOR TERMINADO. Solo faltaría cancelar a mano CP-1 y CP-2 en la web del SAT."
-    )
-    print("=======================================================================\n")
 
 
 if __name__ == "__main__":
-    remate_final()
+    matar_factura_colgada()
