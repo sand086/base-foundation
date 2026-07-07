@@ -1,7 +1,7 @@
 import os
 import sys
+import time
 from pathlib import Path
-from sqlalchemy import or_
 
 # Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
@@ -10,35 +10,37 @@ from app.db.database import get_db
 from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
 
-# =====================================================================
-# 🚨 CONFIGURACIÓN DE SEGURIDAD CRÍTICA
-# =====================================================================
-# True  = Modo Simulación. Solo busca en la BD y te muestra qué folios encontró.
-# False = MODO REAL. Envía las solicitudes de cancelación reales al SAT.
-MODO_SIMULACION = True
 
-# Motivo SAT para Facturas Libres (02 = Errores sin relación)
-MOTIVO_SAT = "02"
-# =====================================================================
-
-
-def ejecutar_limpieza_automatica_serie_f():
+def ejecutor_masivo_sat():
     db = next(get_db())
     service = BillingService(db)
 
-    print("\n" + "=" * 75)
-    if MODO_SIMULACION:
-        print("🔍 [SERIE F AUTOMÁTICA - SIMULACIÓN] Buscando folios pendientes...")
-    else:
-        print("🚀 [SERIE F AUTOMÁTICA - MODO REAL] ENVIANDO CANCELACIONES AL SAT...")
-    print("=" * 75)
+    print(
+        "\n" + "======================================================================="
+    )
+    print("🚀 INICIANDO PROCESAMIENTO MASIVO REAL DE CANCELACIONES ANTE EL SAT")
+    print("=======================================================================")
 
-    # BUSQUEDA DINÁMICA:
-    # 1. Que empiece con 'F-' (Nomenclatura de Factura Libre)
-    # 2. Que tenga un UUID timbrado
-    # 3. Que su estado SAT actual no sea CANCELADO (siga vigente, con error o procesando)
-    # 4. REGLA DE ORO: Que en tu ERP ya esté marcada como 'cancelado' ó esté en cola de espera
-    facturas_atoradas = (
+    # -----------------------------------------------------------------
+    # BLOQUE 1: BUSCAR CARTAS PORTE DE $1 PESO (is_nominal = True)
+    # -----------------------------------------------------------------
+    cartas_porte = (
+        db.query(ReceivableInvoice)
+        .filter(
+            ReceivableInvoice.is_nominal == True,
+            ReceivableInvoice.status_sat.in_(
+                ["TIMBRADA", "ERROR_SAT", "PROCESANDO", "PENDIENTE_CANCELAR_SAT"]
+            ),
+            ReceivableInvoice.uuid.isnot(None),
+            ReceivableInvoice.viaje_id.isnot(None),
+        )
+        .all()
+    )
+
+    # -----------------------------------------------------------------
+    # BLOQUE 2: BUSCAR FACTURAS LIBRES SERIE F CANCELADAS EN EL ERP
+    # -----------------------------------------------------------------
+    facturas_f = (
         db.query(ReceivableInvoice)
         .filter(
             ReceivableInvoice.folio_interno.like("F-%"),
@@ -46,69 +48,78 @@ def ejecutar_limpieza_automatica_serie_f():
             ReceivableInvoice.status_sat.in_(
                 ["TIMBRADA", "ERROR_SAT", "PROCESANDO", "PENDIENTE_CANCELAR_SAT"]
             ),
-            or_(
-                ReceivableInvoice.estatus == "cancelado",
-                ReceivableInvoice.status_sat == "PENDIENTE_CANCELAR_SAT",
-            ),
+            ReceivableInvoice.estatus == "cancelado",
         )
         .all()
     )
 
+    total_cp = len(cartas_porte)
+    total_f = len(facturas_f)
     print(
-        f"🎯 Se detectaron {len(facturas_atoradas)} facturas Serie F que deben ser canceladas ante el SAT.\n"
+        f"📈 Detectadas en Base de Datos:\n   - {total_cp} Cartas Porte ($1.00) pendientes.\n   - {total_f} Facturas libres Serie F pendientes."
     )
+    print("-----------------------------------------------------------------------")
 
-    if len(facturas_atoradas) == 0:
-        print(
-            "💡 No se encontraron facturas tipo F atoradas en este momento. Todo limpio."
-        )
-        return
-
-    procesadas = 0
+    exitos = 0
     errores = 0
 
-    for fac in facturas_atoradas:
-        if MODO_SIMULACION:
-            print(
-                f"[SIMULACIÓN] 🟢 SE CANCELARÍA: {fac.folio_interno} | UUID: {fac.uuid}"
+    # PROCESAR CARTAS PORTE DE $1 PESO (Motivo 01 con Relación)
+    if total_cp > 0:
+        print("\n⏳ Procesando bloque de Cartas Porte de $1 peso...")
+        for cp in cartas_porte:
+            # Buscar su contraparte real timbrada para amarrar la relación 01
+            real = (
+                db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.viaje_id == cp.viaje_id,
+                    ReceivableInvoice.is_nominal == False,
+                    ReceivableInvoice.status_sat == "TIMBRADA",
+                )
+                .first()
             )
-            print(
-                f"             ↳ Razón: En el ERP figura como '{fac.estatus}' pero en el SAT sigue como '{fac.status_sat}'\n"
-            )
-            procesadas += 1
-        else:
+
+            if not real:
+                # Si no tiene factura real ejecutada, no la tocamos por seguridad
+                continue
+
             try:
                 print(
-                    f"[EJECUTANDO] ⏳ Enviando cancelación al SAT para Factura {fac.folio_interno} (UUID: {fac.uuid})..."
+                    f"[CP] Enviando Folio: {cp.folio_interno} -> UUID Sustituto: {real.folio_interno}"
                 )
-
-                # LLAMADA AL MOTOR REAL PARA SERIE F (Motivo 02)
-                # Si el SAT responde con timeout (500), el parche de seguridad detendrá el registro local
                 service.cancelar_factura_sat(
-                    invoice_id=fac.id, motivo=MOTIVO_SAT, uuid_sustituto=None
+                    invoice_id=cp.id, motivo="01", uuid_sustituto=real.uuid
                 )
-                print(f"             ✅ Solicitud enviada/procesada con éxito.")
-                procesadas += 1
+                print("     ✅ Procesada/Enviada con éxito.")
+                exitos += 1
+                time.sleep(1.5)  # 💡 PAUSA ANTISATURACIÓN (Evita error 500)
             except Exception as e:
-                print(f"             ❌ Error o Timeout del SAT/PAC: {str(e)}")
+                print(f"     ❌ Error o Timeout: {str(e)}")
                 errores += 1
 
-    print("\n" + "=" * 75)
-    if MODO_SIMULACION:
-        print(
-            f"🏁 SIMULACIÓN TERMINADA. Se identificaron {procesadas} facturas tipo F listas para procesar."
-        )
-        print(
-            "👉 Si la lista es correcta, cambia 'MODO_SIMULACION = False' para ejecutar en vivo."
-        )
-    else:
-        print(f"🏁 PROCESO REAL COMPLETADO.")
-        print(f"   - Sincronizadas con éxito en el SAT: {procesadas}")
-        print(
-            f"   - Atoradas por Timeout del SAT (Requieren volver a correr el script): {errores}"
-        )
-    print("=" * 75 + "\n")
+    # PROCESAR FACTURAS SERIE F (Motivo 02 sin Relación)
+    if total_f > 0:
+        print("\n⏳ Procesando bloque de Facturas libres Serie F...")
+        for f in facturas_f:
+            try:
+                print(f"[F] Enviando Factura Libre: {f.folio_interno} | UUID: {f.uuid}")
+                service.cancelar_factura_sat(
+                    invoice_id=f.id, motivo="02", uuid_sustituto=None
+                )
+                print("     ✅ Procesada/Enviada con éxito.")
+                exitos += 1
+                time.sleep(1.5)  # 💡 PAUSA ANTISATURACIÓN (Evita error 500)
+            except Exception as e:
+                print(f"     ❌ Error o Timeout: {str(e)}")
+                errores += 1
+
+    print(
+        "\n" + "======================================================================="
+    )
+    print("🏁 RESUMEN FINAL DEL PROCESO MASIVO:")
+    print(f"   - Solicitudes exitosas aceptadas por el PAC/SAT: {exitos}")
+    print(f"   - Solicitudes rebotadas (Timeouts del SAT a reintentar): {errores}")
+    print("=======================================================================\n")
 
 
 if __name__ == "__main__":
-    ejecutar_limpieza_automatica_serie_f()
+    ejecutor_masivo_sat()
