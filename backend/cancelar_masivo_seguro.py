@@ -14,7 +14,7 @@ from app.integrations.sat.billing_service import BillingService
 # =====================================================================
 # True  = Modo Simulación. Solo busca y te muestra en pantalla qué haría.
 # False = MODO REAL. Envía las cancelaciones masivas al SAT.
-MODO_SIMULACION = True
+MODO_SIMULACION = False
 # =====================================================================
 
 
