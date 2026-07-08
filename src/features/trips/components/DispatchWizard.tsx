@@ -17,6 +17,8 @@ import {
   MapPin,
   ClipboardList,
   Award,
+  Snowflake,
+  ShieldAlert,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,13 +84,24 @@ export type WizardData = {
   fecha_programada: Date | undefined;
 
   descripcion_mercancia: string;
+  detalle_mercancia: string;
   peso_toneladas: number;
+  cantidad: number;
+  sat_clave_producto: string;
+  sat_clave_servicio: string;
   es_material_peligroso: boolean;
+  cve_material_peligroso: string;
+  embalaje: string;
   clase_imo: string;
 
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
+
+  is_refrigerated_1: boolean;
+  motogenerator_1_id: string;
+  is_refrigerated_2: boolean;
+  motogenerator_2_id: string;
 
   unitId: string;
   remolque1Id: string;
@@ -98,7 +111,6 @@ export type WizardData = {
 
   leg_type: string;
 
-  // 🚀 CAMPOS PARA EL MOTOR DUAL (1 TIMBRE)
   conoceRutaCompleta: boolean;
   unit2Id: string;
   driver2Id: string;
@@ -253,6 +265,129 @@ function SearchableSelect({
   );
 }
 
+function CreatableSearchableSelect({
+  items,
+  value,
+  onSelect,
+  onCreate,
+  placeholder,
+  className,
+}: {
+  items: SearchableItem[];
+  value: string;
+  onSelect: (val: string) => void;
+  onCreate: (val: string) => void;
+  placeholder: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selectedItem = items.find((item) => item.value === value);
+
+  const hasExactMatch = items.some(
+    (i) =>
+      i.value.toLowerCase() === search.toLowerCase() ||
+      i.label.toLowerCase() === search.toLowerCase(),
+  );
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "h-10 w-full justify-between rounded-xl border-border bg-card/90 px-4 font-semibold text-foreground shadow-sm backdrop-blur-xl hover:bg-card",
+            className,
+          )}
+        >
+          {selectedItem ? (
+            <span className="truncate text-left">{selectedItem.label}</span>
+          ) : (
+            <span className="truncate text-left text-slate-400 dark:text-slate-500">
+              {value || placeholder}
+            </span>
+          )}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-[min(380px,calc(100vw-2rem))] p-0"
+        align="start"
+        sideOffset={8}
+      >
+        <Command
+          filter={(val, search) =>
+            val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0
+          }
+        >
+          <CommandInput
+            placeholder="Buscar o escribir nuevo..."
+            value={search}
+            onValueChange={setSearch}
+          />
+          <CommandList className="max-h-[280px]">
+            <CommandEmpty>
+              {search.length > 0 ? (
+                <div
+                  className="px-4 py-3 text-sm cursor-pointer hover:bg-accent text-brand-navy font-bold flex items-center gap-2"
+                  onClick={() => {
+                    onCreate(search);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <Box className="h-4 w-4" /> Agregar "{search}" al catálogo
+                </div>
+              ) : (
+                "Escribe para buscar..."
+              )}
+            </CommandEmpty>
+            <CommandGroup>
+              {items.map((item) => (
+                <CommandItem
+                  key={item.value}
+                  value={item.label}
+                  onSelect={() => {
+                    onSelect(item.value);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="rounded-xl"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === item.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {item.label}
+                </CommandItem>
+              ))}
+              {!hasExactMatch && search.length > 0 && (
+                <CommandItem
+                  value={`create-${search}`}
+                  onSelect={() => {
+                    onCreate(search);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="font-bold text-brand-navy border-t mt-1"
+                >
+                  + Agregar nuevo: "{search}"
+                </CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export const DispatchWizard = ({
   initialData: propsInitialData,
   onSuccess,
@@ -280,6 +415,11 @@ export const DispatchWizard = ({
           : new Date(),
         descripcion_mercancia: tripFromState.descripcion_mercancia || "",
         peso_toneladas: tripFromState.peso_toneladas || 0,
+        cantidad: tripFromState.cantidad_bultos || tripFromState.cantidad || 1,
+        sat_clave_producto: tripFromState.sat_clave_producto || "01010101",
+        sat_clave_servicio: tripFromState.sat_clave_servicio || "78101802",
+        cve_material_peligroso: tripFromState.cve_material_peligroso || "",
+        embalaje: tripFromState.embalaje || "",
         es_material_peligroso: tripFromState.es_material_peligroso || false,
         clase_imo: tripFromState.clase_imo || "",
         contenedor_1: tripFromState.contenedor_1 || "",
@@ -291,9 +431,17 @@ export const DispatchWizard = ({
         remolque1Id: tripFromState.remolque_1_id
           ? String(tripFromState.remolque_1_id)
           : "",
+        is_refrigerated_1: tripFromState.is_refrigerated_1 || false,
+        motogenerator_1_id: tripFromState.motogenerator_1_id
+          ? String(tripFromState.motogenerator_1_id)
+          : "",
         dollyId: tripFromState.dolly_id ? String(tripFromState.dolly_id) : "",
         remolque2Id: tripFromState.remolque_2_id
           ? String(tripFromState.remolque_2_id)
+          : "",
+        is_refrigerated_2: tripFromState.is_refrigerated_2 || false,
+        motogenerator_2_id: tripFromState.motogenerator_2_id
+          ? String(tripFromState.motogenerator_2_id)
           : "",
         driverId: tripFromState.legs?.[0]?.operator_id
           ? String(tripFromState.legs[0].operator_id)
@@ -332,11 +480,51 @@ export const DispatchWizard = ({
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { unidades } = useUnits();
+  const { unidades, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { createTrip, trips } = useTrips();
   const { clients } = useClients();
-  const { products: satProducts } = useSatCatalogs();
+
+  // === EXTRACCIÓN DINÁMICA DE CATÁLOGOS SAT ===
+  const { products: satProducts, fetchCatalog, saveItem } = useSatCatalogs();
+
+  // Estados locales para los catálogos nuevos
+  const [catMateriales, setCatMateriales] = useState<any[]>([]);
+  const [catEmbalajes, setCatEmbalajes] = useState<any[]>([]);
+
+  // Efecto para cargar los catálogos al montar el componente
+  useEffect(() => {
+    fetchCatalog("sat-hazardous-materials").then(setCatMateriales);
+    fetchCatalog("sat-packaging-types").then(setCatEmbalajes);
+  }, [fetchCatalog]);
+
+  const [odoTramo1, setOdoTramo1] = useState(0);
+  const [odoTramo2, setOdoTramo2] = useState(0);
+
+  const arrUnidades = useMemo(
+    () => (Array.isArray(unidades) ? unidades : []),
+    [unidades],
+  );
+
+  // --- FASE 2: LISTA DE MOTOGENERADORES DESDE LA BD ---
+  const availableMotogenerators = useMemo(() => {
+    const mgs = arrUnidades
+      .filter((u: any) => {
+        const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+        return (
+          searchIn.includes("motogenerador") &&
+          ["disponible", "bloqueado"].includes(u.status?.toLowerCase())
+        );
+      })
+      .map((u: any) => ({
+        label: `${u.numero_economico} - ${u.marca || "Thermo King"}`,
+        value: String(u.id),
+      }));
+    return mgs.length === 0
+      ? [{ label: "No hay motogeneradores disponibles", value: "" }]
+      : mgs;
+  }, [arrUnidades]);
+  // ----------------------------------------------------
 
   const availableSatProducts = useMemo(
     () =>
@@ -346,6 +534,25 @@ export const DispatchWizard = ({
         ...p,
       })),
     [satProducts],
+  );
+
+  // Mapear la info para los CreatableSelects
+  const availableMateriales = useMemo(
+    () =>
+      catMateriales.map((m) => ({
+        label: `${m.clave} - ${m.descripcion}`,
+        value: m.clave,
+      })),
+    [catMateriales],
+  );
+
+  const availableEmbalajes = useMemo(
+    () =>
+      catEmbalajes.map((e) => ({
+        label: `${e.clave} - ${e.descripcion}`,
+        value: e.clave,
+      })),
+    [catEmbalajes],
   );
 
   const [data, setData] = useState<WizardData>({
@@ -359,14 +566,26 @@ export const DispatchWizard = ({
       ? new Date(initialData.fecha_programada)
       : new Date(),
     descripcion_mercancia: initialData?.descripcion_mercancia || "",
+    detalle_mercancia: "",
     peso_toneladas: initialData?.peso_toneladas || 0,
+    cantidad: initialData?.cantidad || 1,
+    sat_clave_producto: initialData?.sat_clave_producto || "01010101",
+    sat_clave_servicio: initialData?.sat_clave_servicio || "78101802",
     es_material_peligroso: initialData?.es_material_peligroso || false,
+    cve_material_peligroso: initialData?.cve_material_peligroso || "",
+    embalaje: initialData?.embalaje || "",
     clase_imo: initialData?.clase_imo || "",
     contenedor_1: initialData?.contenedor_1 || "",
     contenedor_2: initialData?.contenedor_2 || "",
     referencia_cliente: initialData?.referencia_cliente || "",
     unitId: initialData?.unitId || "",
     remolque1Id: initialData?.remolque1Id || "",
+
+    is_refrigerated_1: initialData?.is_refrigerated_1 || false,
+    motogenerator_1_id: initialData?.motogenerator_1_id || "",
+    is_refrigerated_2: initialData?.is_refrigerated_2 || false,
+    motogenerator_2_id: initialData?.motogenerator_2_id || "",
+
     dollyId: initialData?.dollyId || "",
     remolque2Id: initialData?.remolque2Id || "",
     driverId: initialData?.driverId || "",
@@ -382,6 +601,73 @@ export const DispatchWizard = ({
     anticipo_combustible: initialData?.anticipo_combustible || 0,
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
   });
+
+  // Funciones de creación al vuelo para Material Peligroso y Embalaje
+  const handleCreateMaterial = async (inputValue: string) => {
+    const partes = inputValue.split("-");
+    const clave = partes[0].trim().toUpperCase();
+    const descripcion = partes.slice(1).join("-").trim().toUpperCase() || clave;
+    try {
+      const nuevoItem = await saveItem("sat-hazardous-materials", {
+        clave,
+        descripcion,
+        clase_div: "",
+      });
+      setCatMateriales((prev) => [...prev, nuevoItem]);
+      setData((p) => ({ ...p, cve_material_peligroso: nuevoItem.clave }));
+      toast({
+        title: "Catálogo actualizado",
+        description: `Material ${clave} guardado correctamente.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description:
+          "No se pudo agregar el material. Puede que la clave ya exista.",
+      });
+    }
+  };
+
+  const handleCreateEmbalaje = async (inputValue: string) => {
+    const partes = inputValue.split("-");
+    const clave = partes[0].trim().toUpperCase();
+    const descripcion = partes.slice(1).join("-").trim().toUpperCase() || clave;
+    try {
+      const nuevoItem = await saveItem("sat-packaging-types", {
+        clave,
+        descripcion,
+      });
+      setCatEmbalajes((prev) => [...prev, nuevoItem]);
+      setData((p) => ({ ...p, embalaje: nuevoItem.clave }));
+      toast({
+        title: "Catálogo actualizado",
+        description: `Embalaje ${clave} guardado correctamente.`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo agregar el embalaje.",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (data.unitId) {
+      fetchLastOdometer(data.unitId).then(setOdoTramo1);
+    } else {
+      setOdoTramo1(0);
+    }
+  }, [data.unitId, fetchLastOdometer]);
+
+  useEffect(() => {
+    if (data.unit2Id) {
+      fetchLastOdometer(data.unit2Id).then(setOdoTramo2);
+    } else {
+      setOdoTramo2(0);
+    }
+  }, [data.unit2Id, fetchLastOdometer]);
 
   useEffect(() => {
     if (!data.clienteId && tripIdParam && trips.length > 0 && !tripFromState) {
@@ -412,9 +698,17 @@ export const DispatchWizard = ({
           remolque1Id: foundTrip.remolque_1_id
             ? String(foundTrip.remolque_1_id)
             : "",
+          is_refrigerated_1: foundTrip.is_refrigerated_1 || false,
+          motogenerator_1_id: foundTrip.motogenerator_1_id
+            ? String(foundTrip.motogenerator_1_id)
+            : "",
           dollyId: foundTrip.dolly_id ? String(foundTrip.dolly_id) : "",
           remolque2Id: foundTrip.remolque_2_id
             ? String(foundTrip.remolque_2_id)
+            : "",
+          is_refrigerated_2: foundTrip.is_refrigerated_2 || false,
+          motogenerator_2_id: foundTrip.motogenerator_2_id
+            ? String(foundTrip.motogenerator_2_id)
             : "",
           driverId: foundTrip.legs?.[0]?.operator_id
             ? String(foundTrip.legs[0].operator_id)
@@ -423,7 +717,6 @@ export const DispatchWizard = ({
           anticipo_casetas: foundTrip.legs?.[0]?.anticipo_casetas || 0,
           anticipo_viaticos: foundTrip.legs?.[0]?.anticipo_viaticos || 0,
           anticipo_combustible: foundTrip.legs?.[0]?.anticipo_combustible || 0,
-          // Carga dinámica de tramo 2
           conoceRutaCompleta: (foundTrip.legs?.length || 0) > 1,
           unit2Id: foundTrip.legs?.[1]?.unit_id
             ? String(foundTrip.legs[1].unit_id)
@@ -443,10 +736,6 @@ export const DispatchWizard = ({
     }
   }, [tripIdParam, trips, data.clienteId, tripFromState]);
 
-  const arrUnidades = useMemo(
-    () => (Array.isArray(unidades) ? unidades : []),
-    [unidades],
-  );
   const arrOperadores = useMemo(
     () => (Array.isArray(operadores) ? operadores : []),
     [operadores],
@@ -464,7 +753,6 @@ export const DispatchWizard = ({
             `${u.tipo_1} ${u.tipo} ${u.tipo_unidad}`.toLowerCase();
           return (
             (searchIn.includes("tracto") || searchIn.includes("camion")) &&
-            // 👇 AQUÍ SE AGREGÓ EL ESTATUS DE RUTA
             ["disponible", "bloqueado", "en_ruta", "en ruta"].includes(
               u.status?.toLowerCase(),
             )
@@ -519,7 +807,6 @@ export const DispatchWizard = ({
     () =>
       arrOperadores
         .filter((o: any) =>
-          // 👇 AQUÍ TAMBIÉN SE AGREGÓ EL ESTATUS DE RUTA
           ["activo", "disponible", "inactivo", "en_ruta", "en ruta"].includes(
             o.status?.toLowerCase(),
           ),
@@ -580,11 +867,9 @@ export const DispatchWizard = ({
         responseType: "blob",
       });
 
-      // Especificamos que es un PDF para que el navegador lo renderice
       const file = new Blob([response.data], { type: "application/pdf" });
       const fileURL = URL.createObjectURL(file);
 
-      // Abrimos el PDF en una nueva pestaña
       window.open(fileURL, "_blank");
 
       toast({
@@ -592,7 +877,6 @@ export const DispatchWizard = ({
         description: "El documento se ha abierto en una nueva pestaña.",
       });
 
-      // Limpiamos la memoria del navegador después de unos segundos
       setTimeout(() => {
         URL.revokeObjectURL(fileURL);
       }, 10000);
@@ -620,6 +904,11 @@ export const DispatchWizard = ({
       const finalStatus: TripStatus = status;
 
       const mercancia = data.descripcion_mercancia || "CARGA GENERAL";
+      const mercancia_sat = data.descripcion_mercancia || "CARGA GENERAL";
+      const mercancia_final = data.detalle_mercancia
+        ? `${mercancia_sat} | ${data.detalle_mercancia.trim()}`
+        : mercancia_sat;
+
       const contenedor_default = data.contenedor_1 || null;
 
       const payload: any = {
@@ -632,8 +921,15 @@ export const DispatchWizard = ({
         fecha_programada: data.fecha_programada
           ? data.fecha_programada.toISOString().split("T")[0]
           : null,
-        descripcion_mercancia: mercancia,
+        descripcion_mercancia: mercancia_final,
         peso_toneladas: Number(data.peso_toneladas) || 0,
+        cantidad: Number(data.cantidad) || 1,
+        sat_clave_producto: data.sat_clave_producto,
+        sat_clave_servicio: data.sat_clave_servicio,
+        cve_material_peligroso: data.es_material_peligroso
+          ? data.cve_material_peligroso
+          : null,
+        embalaje: data.es_material_peligroso ? data.embalaje : null,
         es_material_peligroso: data.es_material_peligroso,
         clase_imo: data.es_material_peligroso ? data.clase_imo : null,
         contenedor_1: contenedor_default,
@@ -643,22 +939,32 @@ export const DispatchWizard = ({
         costo_casetas: Number(infoTarifa.casetas || 0),
         status: finalStatus,
         start_date: new Date().toISOString(),
-        is_dummy_stamping: false, // Ya no usamos el bypass desde UI directa
+        is_dummy_stamping: false,
         conoce_ruta_completa: data.conoceRutaCompleta,
-        ocultar_montos_pdf: true, // Siempre ocultamos el monto en el PDF operativo
+        ocultar_montos_pdf: true,
 
-        // ✅ FIX: REMOLQUES EN LA RAÍZ DEL PAYLOAD PARA EL VIAJE PADRE
+        // --- Mapeo correcto de IDs Motogenerador ---
+        is_refrigerated_1: data.is_refrigerated_1,
+        motogenerator_1_id: data.is_refrigerated_1
+          ? cleanId(data.motogenerator_1_id) || null
+          : null,
+        is_refrigerated_2: isFullTrip ? data.is_refrigerated_2 : false,
+        motogenerator_2_id:
+          isFullTrip && data.is_refrigerated_2
+            ? cleanId(data.motogenerator_2_id) || null
+            : null,
+        // -------------------------------------------
+
         remolque_1_id: cleanId(data.remolque1Id) || null,
         dolly_id: isFullTrip ? cleanId(data.dollyId) || null : null,
         remolque_2_id: isFullTrip ? cleanId(data.remolque2Id) || null : null,
       };
-
       if (finalStatus !== "creado") {
         payload.initial_leg = {
           unit_id: cleanId(data.unitId) || null,
           leg_type: data.leg_type || "carga_muelle",
           operator_id: cleanId(data.driverId) || null,
-          odometro_inicial: 0,
+          odometro_inicial: odoTramo1,
           nivel_tanque_inicial: 0,
         };
 
@@ -667,7 +973,7 @@ export const DispatchWizard = ({
             unit_id: cleanId(data.unit2Id) || null,
             operator_id: cleanId(data.driver2Id) || null,
             leg_type: "ruta_carretera",
-            odometro_inicial: 0,
+            odometro_inicial: odoTramo2,
             nivel_tanque_inicial: 0,
           };
         }
@@ -697,7 +1003,6 @@ export const DispatchWizard = ({
                 "Vinculando viaje y timbrando documento con SAT. Por favor espera.",
             });
 
-            // 🚀 DECISIÓN DEL MOTOR DUAL
             const isOneShot = data.conoceRutaCompleta;
             const endpoint = isOneShot
               ? "/api/sat/stamp/one-shot"
@@ -705,9 +1010,9 @@ export const DispatchWizard = ({
 
             const stampRes = await axiosClient.post(endpoint, {
               viaje_id: resultTripId,
-              is_nominal: !isOneShot, // Si es One-Shot, es factura real
+              is_nominal: !isOneShot,
               use_dummy: false,
-              ocultar_montos: true, // Siempre PDF Ciego en Dispatch
+              ocultar_montos: true,
             });
 
             const uuid = stampRes.data?.data?.uuid || stampRes.data?.uuid;
@@ -748,10 +1053,8 @@ export const DispatchWizard = ({
           onSuccess();
         } else {
           if (finalStatus === "creado") {
-            // Le dio al botón "Planeador" -> Lo mandamos al Calendario
             navigate("/dispatch?tab=planner&view=calendar", { replace: true });
           } else {
-            // Le dio al botón "Despachar" -> Lo mandamos a la Tabla
             navigate("/dispatch?tab=planner&view=table", { replace: true });
           }
         }
@@ -800,7 +1103,6 @@ export const DispatchWizard = ({
         Boolean(data.dollyId && data.remolque2Id && data.contenedor_2);
     }
 
-    // Validar Tramo 2 si activan el Motor Dual (1 Timbre)
     if (data.generarCartaPorte && data.conoceRutaCompleta) {
       isValid =
         isValid &&
@@ -809,6 +1111,11 @@ export const DispatchWizard = ({
         isValid = isValid && Boolean(data.dollyId_2 && data.remolque2Id_2);
       }
     }
+    if (data.es_material_peligroso) {
+      isValid =
+        isValid && Boolean(data.cve_material_peligroso && data.embalaje);
+    }
+
     return isValid;
   }, [isFullTrip, data]);
 
@@ -823,8 +1130,8 @@ export const DispatchWizard = ({
             <div>
               <CardTitle className="text-xl text-foreground">
                 {tripId || initialData?.id
-                  ? "PLANEAR / EDITAR Dispatch"
-                  : "Dispatch WIZARD"}
+                  ? "PLANEAR / EDITAR SERVICIO"
+                  : "CENTRO DE ASIGNACIÓN Y SALIDAS"}
               </CardTitle>
             </div>
           </div>
@@ -833,19 +1140,19 @@ export const DispatchWizard = ({
               variant={currentStep >= 1 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              1. Ruta
+              1. Ruta y Cliente
             </Badge>
             <Badge
               variant={currentStep >= 2 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              2. Operación
+              2. Operación y asignación
             </Badge>
             <Badge
               variant={currentStep === 3 ? "info" : "neutral"}
               className="justify-center rounded-2xl px-4 py-1.5"
             >
-              3. Resumen
+              3. Resumen de servicio
             </Badge>
           </div>
         </div>
@@ -859,7 +1166,7 @@ export const DispatchWizard = ({
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
             <div className={cn(sunkPanelClass, "space-y-5")}>
               {/* Bloque Superior: Fecha */}
-              <div className="flex flex-col gap-4 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-4 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-4 rounded-2xl border border-blue-200/70 bg-blue-50/80 p-4 shadow-inner shadow-blue-100/60 md:flex-row md:items-center md:justify-between dark:border-blue-800/70 dark:bg-blue-900/20 dark:shadow-blue-900/40  ">
                 <div className="flex items-center gap-3">
                   <TahoeIconPlate tone="blue" className="h-12 w-12">
                     <CalendarDays className="h-6 w-6" />
@@ -880,11 +1187,10 @@ export const DispatchWizard = ({
                 </div>
               </div>
 
-              {/* FIX: Separamos en 2 columnas Cliente y Destino */}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
-                    CLIENTE *
+                    CLIENTE
                   </Label>
                   <Select
                     value={data.clienteId}
@@ -914,7 +1220,7 @@ export const DispatchWizard = ({
 
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
-                    DESTINO (SUBCLIENTE) *
+                    DESTINO (SUBCLIENTE)
                   </Label>
                   <Select
                     disabled={!data.clienteId}
@@ -952,7 +1258,7 @@ export const DispatchWizard = ({
               <div className="grid grid-cols-1 gap-5 mt-5">
                 <div className="space-y-1.5">
                   <Label variant="brand" required>
-                    TARIFA / RUTA *
+                    TARIFA / RUTA
                   </Label>
                   <Select
                     disabled={!data.subClienteId}
@@ -998,7 +1304,7 @@ export const DispatchWizard = ({
                             >
                               <div className="flex flex-col gap-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-black text-slate-900">
+                                  <span className="font-black text-slate-900 dark:text-slate-200">
                                     {t.nombre_ruta}
                                   </span>
                                   <Badge
@@ -1075,7 +1381,7 @@ export const DispatchWizard = ({
                     variant={isFullTrip ? "destructive" : "success"}
                     className="w-fit rounded-xl px-3 py-1.5 text-xs uppercase font-black"
                   >
-                    {isFullTrip ? "🚛 FULL / DOBLE" : "🚚 SENCILLO"}
+                    {isFullTrip ? "FULL" : "SENCILLO"}
                   </Badge>
                   <div className="flex items-center gap-2 border-l border-slate-300 pl-3">
                     <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
@@ -1115,31 +1421,47 @@ export const DispatchWizard = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-3 pt-2">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-4 pt-2">
                 <div className="space-y-1.5 md:col-span-2">
                   <Label variant="brand" required>
                     MERCANCÍA (CATÁLOGO SAT)
                   </Label>
                   <SearchableSelect
                     items={availableSatProducts}
-                    value={data.descripcion_mercancia.split(" ")[0]}
+                    value={data.sat_clave_producto}
                     placeholder="Buscar producto SAT..."
                     onSelect={(val) => {
                       const prod = availableSatProducts.find(
                         (p) => p.value === val,
                       );
-                      if (prod)
+                      if (prod) {
+                        const isHazardous = prod.es_material_peligroso === "1";
                         setData((p) => ({
                           ...p,
+                          sat_clave_producto: prod.clave,
                           descripcion_mercancia: prod.label,
-                          es_material_peligroso:
-                            prod.es_material_peligroso === "1",
-                          clase_imo:
-                            prod.es_material_peligroso === "1"
-                              ? p.clase_imo
-                              : "",
+                          es_material_peligroso: isHazardous,
+                          clase_imo: isHazardous ? p.clase_imo : "",
                         }));
+                      }
                     }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label variant="brand" required>
+                    CANTIDAD
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Ej: 15"
+                    className="h-10"
+                    value={data.cantidad || ""}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        cantidad: parseFloat(e.target.value) || 1,
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1158,6 +1480,91 @@ export const DispatchWizard = ({
                       }))
                     }
                   />
+                </div>
+              </div>
+
+              {/* 🛡️ NUEVO SWITCH MANUAL DE MATERIAL PELIGROSO 🛡️ */}
+              <div className="flex items-center gap-3 mt-4 bg-amber-50 dark:bg-amber-950/20 p-3 rounded-xl border border-amber-200 dark:border-amber-900/50">
+                <Switch
+                  checked={data.es_material_peligroso}
+                  onCheckedChange={(c) =>
+                    setData((p) => ({ ...p, es_material_peligroso: c }))
+                  }
+                />
+                <Label
+                  className="text-[11px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-500 cursor-pointer flex items-center gap-2"
+                  onClick={() =>
+                    setData((p) => ({
+                      ...p,
+                      es_material_peligroso: !p.es_material_peligroso,
+                    }))
+                  }
+                >
+                  <ShieldAlert className="h-4 w-4" /> ¿Esta carga contiene
+                  Materiales Peligrosos (IMO)?
+                </Label>
+              </div>
+
+              {/* CAMPOS CONDICIONALES DE MATERIAL PELIGROSO */}
+              {data.es_material_peligroso && (
+                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 pt-2 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-1.5 border-l-2 border-brand-red pl-3">
+                    <Label variant="brand" className="text-brand-red" required>
+                      CLAVE ONU (MAT. PELIGROSO)
+                    </Label>
+                    <CreatableSearchableSelect
+                      items={availableMateriales}
+                      value={data.cve_material_peligroso}
+                      onSelect={(v) =>
+                        setData((p) => ({ ...p, cve_material_peligroso: v }))
+                      }
+                      onCreate={handleCreateMaterial}
+                      placeholder="Ej: UN1005 - AMONIACO"
+                      className="border-red-200 uppercase"
+                    />
+                    <p className="text-[10px] text-muted-foreground ml-1">
+                      Busca o escribe formato: CLAVE - DESCRIPCIÓN
+                    </p>
+                  </div>
+                  <div className="space-y-1.5 border-l-2 border-brand-red pl-3">
+                    <Label variant="brand" className="text-brand-red" required>
+                      EMBALAJE SAT
+                    </Label>
+                    <CreatableSearchableSelect
+                      items={availableEmbalajes}
+                      value={data.embalaje}
+                      onSelect={(v) => setData((p) => ({ ...p, embalaje: v }))}
+                      onCreate={handleCreateEmbalaje}
+                      placeholder="Ej: 4G - CAJAS DE CARTON"
+                      className="border-red-200 uppercase"
+                    />
+                    <p className="text-[10px] text-muted-foreground ml-1">
+                      Busca o escribe formato: CLAVE - DESCRIPCIÓN
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 pt-4 pb-2 border-b border-slate-200/50 dark:border-white/10 mb-2">
+                <div className="space-y-1.5">
+                  <Label variant="brand">
+                    DESCRIPCIÓN ESPECÍFICA DE LA CARGA (OPCIONAL)
+                  </Label>
+                  <Input
+                    placeholder="Ej: Cajas de cartón con zapatos, Tarimas de aguacate..."
+                    value={data.detalle_mercancia}
+                    onChange={(e) =>
+                      setData((p) => ({
+                        ...p,
+                        detalle_mercancia: e.target.value,
+                      }))
+                    }
+                    className="border-slate-200 shadow-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground ml-1">
+                    Esta descripción aparecerá en el PDF de tu Factura y Carta
+                    Porte junto con la clave SAT.
+                  </p>
                 </div>
               </div>
 
@@ -1304,7 +1711,6 @@ export const DispatchWizard = ({
                         setData((p) => ({
                           ...p,
                           remolque1Id: v,
-                          // Sincronización automática con el Tramo 2 (Magia UX)
                           remolque1Id_2:
                             p.remolque1Id_2 === p.remolque1Id
                               ? v
@@ -1313,6 +1719,46 @@ export const DispatchWizard = ({
                       }
                       placeholder="Buscar..."
                     />
+                    {/* SWITCH Y SELECT MOTOGENERADOR 1   */}
+                    <div className="flex items-center gap-2 pt-2">
+                      <Switch
+                        checked={data.is_refrigerated_1}
+                        onCheckedChange={(c) =>
+                          setData((p) => ({ ...p, is_refrigerated_1: c }))
+                        }
+                      />
+                      <Label
+                        className="text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer"
+                        onClick={() =>
+                          setData((p) => ({
+                            ...p,
+                            is_refrigerated_1: !p.is_refrigerated_1,
+                          }))
+                        }
+                      >
+                        ¿Es Refrigerado?
+                      </Label>
+                    </div>
+                    {data.is_refrigerated_1 && (
+                      <div className="animate-in fade-in slide-in-from-left-2 mt-2 border-l-2 border-brand-red pl-3 space-y-1.5">
+                        <Label
+                          variant="brand"
+                          className="text-brand-red text-[10px]"
+                          required
+                        >
+                          MOTOGENERADOR 1
+                        </Label>
+                        <SearchableSelect
+                          items={availableMotogenerators}
+                          value={data.motogenerator_1_id}
+                          onSelect={(v) =>
+                            setData((p) => ({ ...p, motogenerator_1_id: v }))
+                          }
+                          placeholder="Seleccionar equipo..."
+                        />
+                      </div>
+                    )}
+                    {/* 👆 FIN MOTOGENERADOR 1 👆 */}
                   </div>
                   {isFullTrip && (
                     <>
@@ -1353,6 +1799,49 @@ export const DispatchWizard = ({
                           }
                           placeholder="Buscar..."
                         />
+                        {/* SWITCH Y SELECT MOTOGENERADOR 2   */}
+                        <div className="flex items-center gap-2 pt-2">
+                          <Switch
+                            checked={data.is_refrigerated_2}
+                            onCheckedChange={(c) =>
+                              setData((p) => ({ ...p, is_refrigerated_2: c }))
+                            }
+                          />
+                          <Label
+                            className="text-[10px] font-bold uppercase tracking-widest text-slate-500 cursor-pointer"
+                            onClick={() =>
+                              setData((p) => ({
+                                ...p,
+                                is_refrigerated_2: !p.is_refrigerated_2,
+                              }))
+                            }
+                          >
+                            ¿Es Refrigerado?
+                          </Label>
+                        </div>
+                        {data.is_refrigerated_2 && (
+                          <div className="animate-in fade-in slide-in-from-left-2 mt-2 border-l-2 border-brand-red pl-3 space-y-1.5">
+                            <Label
+                              variant="brand"
+                              className="text-brand-red text-[10px]"
+                              required
+                            >
+                              MOTOGENERADOR 2
+                            </Label>
+                            <SearchableSelect
+                              items={availableMotogenerators}
+                              value={data.motogenerator_2_id}
+                              onSelect={(v) =>
+                                setData((p) => ({
+                                  ...p,
+                                  motogenerator_2_id: v,
+                                }))
+                              }
+                              placeholder="Seleccionar equipo..."
+                            />
+                          </div>
+                        )}
+                        {/* 👆 FIN MOTOGENERADOR 2 👆 */}
                       </div>
                     </>
                   )}
@@ -1389,7 +1878,6 @@ export const DispatchWizard = ({
                           setData((p) => ({
                             ...p,
                             generarCartaPorte: c,
-                            // Si lo apagan, se apaga el motor dual también
                             conoceRutaCompleta: c
                               ? p.conoceRutaCompleta
                               : false,
@@ -1421,7 +1909,6 @@ export const DispatchWizard = ({
                               setData((p) => ({
                                 ...p,
                                 conoceRutaCompleta: c,
-                                // Sincronizamos chasis por si acaso al prender
                                 unit2Id: c ? p.unit2Id || p.unitId : p.unit2Id,
                                 driver2Id: c
                                   ? p.driver2Id || p.driverId
@@ -1632,7 +2119,6 @@ export const DispatchWizard = ({
         {currentStep === 3 && (
           <div className="animate-in fade-in slide-in-from-bottom-2 space-y-5">
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-              {/* Tarjeta de Ruta */}
               <Card
                 className={cn(
                   shellClass,
@@ -1642,7 +2128,7 @@ export const DispatchWizard = ({
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
                   <div className="flex items-center gap-3">
                     <TahoeIconPlate tone="blue" className="h-10 w-10">
-                      <MapPin className="h-5 w-5" />
+                      <MapPin className="h-5 w-5 text-slate-500 dark:text-white/70" />
                     </TahoeIconPlate>
                     <CardTitle className="text-sm text-blue-900 dark:text-blue-300 font-black uppercase tracking-widest">
                       Datos de la Ruta
@@ -1670,12 +2156,12 @@ export const DispatchWizard = ({
                     <span className="font-bold text-muted-foreground">
                       Ruta Asignada:
                     </span>
-                    <span className="font-black text-blue-700 dark:text-blue-400 text-right">
+                    <span className="font-black text-blue-700 dark:text-blue-600 text-right">
                       {data.routeNombre || "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between pb-1">
-                    <span className="font-bold text-muted-foreground">
+                    <span className="font-bold text-muted-foreground dark:text-slate-800">
                       Fecha Salida:
                     </span>
                     <span className="font-black text-foreground text-right">
@@ -1698,7 +2184,7 @@ export const DispatchWizard = ({
                 <CardHeader className={cn(headerClass, "pb-3 pt-4")}>
                   <div className="flex items-center gap-3">
                     <TahoeIconPlate tone="green" className="h-10 w-10">
-                      <ClipboardList className="h-5 w-5" />
+                      <ClipboardList className="h-5 w-5 text-slate-500 dark:text-white/70" />
                     </TahoeIconPlate>
                     <CardTitle className="text-sm text-emerald-900 dark:text-emerald-300 font-black uppercase tracking-widest">
                       Asignación y Mercancía
@@ -1738,10 +2224,23 @@ export const DispatchWizard = ({
                         <span className="text-muted-foreground font-bold">
                           Remolque 1:
                         </span>
-                        <span className="font-black text-right">
+                        <span className="font-black text-right flex items-center justify-end gap-1.5">
                           {availableRemolques
                             .find((r) => r.value === data.remolque1Id)
                             ?.label?.split(" ")[0] || "N/A"}
+                          {data.is_refrigerated_1 && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                            >
+                              <Snowflake className="h-2.5 w-2.5" />
+                              {availableMotogenerators
+                                .find(
+                                  (m) => m.value === data.motogenerator_1_id,
+                                )
+                                ?.label?.split(" ")[0] || "REF"}
+                            </Badge>
+                          )}
                         </span>
                       </div>
                       <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
@@ -1769,10 +2268,24 @@ export const DispatchWizard = ({
                             <span className="text-muted-foreground font-bold">
                               Remolque 2:
                             </span>
-                            <span className="font-black text-right">
+                            <span className="font-black text-right flex items-center justify-end gap-1.5">
                               {availableRemolques
                                 .find((r) => r.value === data.remolque2Id)
                                 ?.label?.split(" ")[0] || "N/A"}
+                              {data.is_refrigerated_2 && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                                >
+                                  <Snowflake className="h-2.5 w-2.5" />
+                                  {availableMotogenerators
+                                    .find(
+                                      (m) =>
+                                        m.value === data.motogenerator_2_id,
+                                    )
+                                    ?.label?.split(" ")[0] || "REF"}
+                                </Badge>
+                              )}
                             </span>
                           </div>
                           <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
@@ -1819,10 +2332,23 @@ export const DispatchWizard = ({
                           <span className="text-muted-foreground font-bold">
                             Remolque 1:
                           </span>
-                          <span className="font-black text-right">
+                          <span className="font-black text-right flex items-center justify-end gap-1.5">
                             {availableRemolques
                               .find((r) => r.value === data.remolque1Id_2)
                               ?.label?.split(" ")[0] || "N/A"}
+                            {data.is_refrigerated_1 && (
+                              <Badge
+                                variant="secondary"
+                                className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                              >
+                                <Snowflake className="h-2.5 w-2.5" />
+                                {availableMotogenerators
+                                  .find(
+                                    (m) => m.value === data.motogenerator_1_id,
+                                  )
+                                  ?.label?.split(" ")[0] || "REF"}
+                              </Badge>
+                            )}
                           </span>
                         </div>
 
@@ -1842,10 +2368,24 @@ export const DispatchWizard = ({
                               <span className="text-muted-foreground font-bold">
                                 Remolque 2:
                               </span>
-                              <span className="font-black text-right">
+                              <span className="font-black text-right flex items-center justify-end gap-1.5">
                                 {availableRemolques
                                   .find((r) => r.value === data.remolque2Id_2)
                                   ?.label?.split(" ")[0] || "N/A"}
+                                {data.is_refrigerated_2 && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-mono text-[9px] px-1 py-0 shadow-sm flex items-center gap-0.5"
+                                  >
+                                    <Snowflake className="h-2.5 w-2.5" />
+                                    {availableMotogenerators
+                                      .find(
+                                        (m) =>
+                                          m.value === data.motogenerator_2_id,
+                                      )
+                                      ?.label?.split(" ")[0] || "REF"}
+                                  </Badge>
+                                )}
                               </span>
                             </div>
                           </>
@@ -1857,11 +2397,21 @@ export const DispatchWizard = ({
                   {/* MERCANCÍA */}
                   <div className="pt-3 border-t border-slate-200 dark:border-white/10 space-y-1">
                     <span className="font-bold text-muted-foreground text-xs block">
-                      Mercancía SAT (Peso: {data.peso_toneladas} Ton):
+                      Mercancía SAT (Cant: {data.cantidad} | Peso:{" "}
+                      {data.peso_toneladas} Ton):
                     </span>
                     <span className="font-semibold text-foreground/80 text-xs line-clamp-2 leading-tight">
-                      {data.descripcion_mercancia || "N/A"}
+                      {data.detalle_mercancia
+                        ? `${data.descripcion_mercancia} - ${data.detalle_mercancia}`
+                        : data.descripcion_mercancia || "N/A"}
                     </span>
+                    {data.es_material_peligroso && (
+                      <span className="font-bold text-brand-red text-[11px] block mt-1.5 bg-red-50 p-1.5 rounded-md">
+                        ⚠️ MAT. PELIGROSO: ONU{" "}
+                        {data.cve_material_peligroso || "S/D"} | EMBALAJE:{" "}
+                        {data.embalaje || "S/D"}
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>

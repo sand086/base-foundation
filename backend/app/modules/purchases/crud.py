@@ -24,7 +24,7 @@ def create_purchase_order(db: Session, order_data: dict, user_id: int):
         total=order_data["total"],
         moneda=order_data.get("moneda", "MXN"),
         status=models.PurchaseOrderStatus.PENDIENTE,
-        created_by_id=user_id,
+        created_by_id=user_id,  # <--- AUDITORÍA (Ya lo tenías)
     )
     db.add(db_order)
     db.flush()
@@ -42,6 +42,7 @@ def create_purchase_order(db: Session, order_data: dict, user_id: int):
                 unidad=item.get("unidad"),
                 precio_unitario=item.get("precioUnitario"),
                 subtotal=item.get("subtotal"),
+                created_by_id=user_id,  # <--- AUDITORÍA: Quién agregó el item a la orden
             )
             db.add(db_item)
 
@@ -51,7 +52,10 @@ def create_purchase_order(db: Session, order_data: dict, user_id: int):
 
 
 def receive_purchase_order(
-    db: Session, order_id: int, invoice_folio_externo: str = None
+    db: Session,
+    order_id: int,
+    user_id: int,
+    invoice_folio_externo: str = None,  # <--- AUDITORÍA PARAM
 ):
     """
     EL NÚCLEO DE LA AUTOMATIZACIÓN:
@@ -88,6 +92,7 @@ def receive_purchase_order(
                 if inv_item:
                     # Sumamos el stock automáticamente
                     inv_item.stock_actual += int(item.cantidad)
+                    inv_item.updated_by_id = user_id  # <--- AUDITORÍA: El usuario alteró el stock al recibir la mercancía
                     # Aquí podrías recalcular el precio promedio ponderado (Costo Promedio)
                     db.add(inv_item)
 
@@ -118,16 +123,18 @@ def receive_purchase_order(
         moneda=order.moneda,
         fecha_emision=date.today(),
         fecha_vencimiento=date.today() + timedelta(days=dias_credito),
-        # 🚀 CAMPOS CLAVE PARA EL EXCEL DEL SAT 🚀
+        #   CAMPOS CLAVE PARA EL EXCEL DEL SAT
         estatus=models.InvoiceStatus.PENDIENTE,
         metodo_pago="PPD",  # Nace como PPD para que sea CxP Real
         tipo_comprobante="I",  # Ingreso
         clasificacion=order.tipo,  # compra, servicio, gasto_indirecto
+        created_by_id=user_id,  # <--- AUDITORÍA: Quién generó la cuenta por pagar
     )
     db.add(new_invoice)
 
     # 3. CERRAMOS LA ORDEN
     order.status = models.PurchaseOrderStatus.RECIBIDA
+    order.updated_by_id = user_id  # <--- AUDITORÍA: Quién cerró la orden
 
     db.commit()
     db.refresh(order)

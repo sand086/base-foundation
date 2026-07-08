@@ -16,6 +16,12 @@ export interface FuelLoad {
   odometro: number;
   evidencia_url?: string;
   is_verified: boolean;
+
+  // --- MODIFICACIÓN FASE 2: Motogeneradores ---
+  is_motogenerator?: boolean;
+  horometro?: number | null;
+  horas_sm?: number | null;
+  // --------------------------------------------
 }
 
 export interface FuelLog {
@@ -33,6 +39,12 @@ export interface FuelLog {
   evidencia_url?: string;
   excede_tanque: boolean;
   capacidad_tanque_snapshot?: number;
+
+  // --- MODIFICACIÓN FASE 2: Motogeneradores ---
+  is_motogenerator?: boolean;
+  horometro?: number | null;
+  horas_sm?: number | null;
+  // --------------------------------------------
 }
 
 export interface SettlementReceipt {
@@ -73,6 +85,7 @@ export interface TripSettlement {
   total_deducciones: number;
   neto_a_pagar: number;
 }
+
 /**
  * Representa un concepto ya aplicado a una liquidación específica
  */

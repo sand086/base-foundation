@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { DateRange } from "react-day-picker";
 import {
   Select,
   SelectContent,
@@ -64,7 +67,10 @@ import {
   ShieldCheck,
   Truck,
   Calendar,
+  Snowflake,
   User,
+  FilterX,
+  Zap,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -100,7 +106,9 @@ export default function FuelConciliation() {
   const PRECIO_DIESEL_ESTANDAR = 24.0; // Precio para cuantificar el descuento
 
   const [selectedTripId, setSelectedTripId] = useState<string>("");
-  const [selectedLegId, setSelectedLegId] = useState<string>("");
+
+  // ⚡ SELECCIÓN COMBINADA (legId | tipo) Ej: "57|tracto" o "57|mg"
+  const [selectedLegOption, setSelectedLegOption] = useState<string>("");
 
   const [formData, setFormData] = useState<AuditFormData>({
     litrosVales: "0",
@@ -120,40 +128,169 @@ export default function FuelConciliation() {
   const [isEditing, setIsEditing] = useState(false);
   const [cobrarOperador, setCobrarOperador] = useState(true);
 
-  // 1. FILTRADO DE HISTÓRICOS
+  // NUEVOS ESTADOS PARA FILTROS (HOY VS HISTÓRICO)
+  const [dateFilter, setDateFilter] = useState<"hoy" | "historico">("hoy");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  // Derivación de la opción seleccionada
+  const selectedLegId = selectedLegOption
+    ? selectedLegOption.split("|")[0]
+    : "";
+  const isMotogenerator = selectedLegOption
+    ? selectedLegOption.split("|")[1] === "mg"
+    : false;
+
+  // 1. FILTRADO INTELIGENTE DE HISTÓRICOS (SEPARA TRACTO DE MG)
   const auditedLegs = useMemo(() => {
-    return trips
-      .flatMap((t) => t.legs?.map((l) => ({ ...l, trip: t })) || [])
-      .filter((l) => l.odometro_final != null && l.odometro_final > 0)
-      .sort(
-        (a, b) =>
-          new Date(b.last_update || 0).getTime() -
-          new Date(a.last_update || 0).getTime(),
-      );
+    const audits: any[] = [];
+
+    trips.forEach((t) => {
+      t.legs?.forEach((l) => {
+        // Buscamos los eventos de línea de tiempo que sean de conciliación
+        const conciliations =
+          l.timeline_events?.filter(
+            (e: any) =>
+              e.location === "Conciliación de Combustible" ||
+              (e.comments && e.comments.includes("Detalles Fase")),
+          ) || [];
+
+        if (conciliations.length > 0) {
+          // Separamos los eventos de Tracto y los de Motogenerador (MG)
+          const tractoEvents = conciliations.filter(
+            (e: any) => !e.comments?.includes("(MG)"),
+          );
+          const mgEvents = conciliations.filter((e: any) =>
+            e.comments?.includes("(MG)"),
+          );
+
+          if (tractoEvents.length > 0) {
+            const latestTracto = tractoEvents[tractoEvents.length - 1]; // Tomamos el más reciente
+            audits.push({
+              ...l,
+              trip: t,
+              audit_event: latestTracto,
+              is_mg_audit: false,
+              audit_date: latestTracto.time || l.last_update,
+            });
+          }
+          if (mgEvents.length > 0) {
+            const latestMg = mgEvents[mgEvents.length - 1]; // Tomamos el más reciente
+            audits.push({
+              ...l,
+              trip: t,
+              audit_event: latestMg,
+              is_mg_audit: true,
+              audit_date: latestMg.time || l.last_update,
+            });
+          }
+        } else if (l.odometro_final != null && l.odometro_final > 0) {
+          // Soporte para registros legacy (antiguos)
+          audits.push({
+            ...l,
+            trip: t,
+            audit_event: null,
+            is_mg_audit: false,
+            audit_date: l.last_update,
+          });
+        }
+      });
+    });
+
+    return audits.sort(
+      (a, b) =>
+        new Date(b.audit_date).getTime() - new Date(a.audit_date).getTime(),
+    );
   }, [trips]);
+
+  // 2. FILTRADO DINÁMICO POR FECHAS
+  const filteredAuditedLegs = useMemo(() => {
+    let filtered = auditedLegs;
+    const hoyStr = new Date().toLocaleDateString("es-MX");
+
+    if (dateFilter === "hoy") {
+      filtered = filtered.filter(
+        (l) => new Date(l.audit_date).toLocaleDateString("es-MX") === hoyStr,
+      );
+    } else {
+      filtered = filtered.filter(
+        (l) => new Date(l.audit_date).toLocaleDateString("es-MX") !== hoyStr,
+      );
+
+      if (dateRange?.from) {
+        const fromDate = new Date(dateRange.from);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter((l) => new Date(l.audit_date) >= fromDate);
+      }
+      if (dateRange?.to) {
+        const toDate = new Date(dateRange.to);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter((l) => new Date(l.audit_date) <= toDate);
+      }
+    }
+    return filtered;
+  }, [auditedLegs, dateFilter, dateRange]);
 
   // Selección Activa
   const activeTrip = useMemo(() => {
     return trips.find((t) => String(t.id) === selectedTripId) || null;
   }, [trips, selectedTripId]);
 
-  // 2. FILTRADO ESTRICTO DE TRAMOS CON EXCEPCIÓN PARA EDICIÓN
-  const tripLegs = useMemo(() => {
+  // EXTRACCIÓN INTELIGENTE DE MOTOGENERADOR PARA EL VIAJE ACTIVO
+  const activeTripMgName = useMemo(() => {
+    if (!activeTrip) return null;
+    if ((activeTrip as any).is_refrigerated_1) {
+      return (
+        (activeTrip as any).motogenerator_1_unit?.numero_economico ||
+        (activeTrip as any).motogenerator_1 ||
+        "S/N"
+      );
+    }
+    if ((activeTrip as any).is_refrigerated_2) {
+      return (
+        (activeTrip as any).motogenerator_2_unit?.numero_economico ||
+        (activeTrip as any).motogenerator_2 ||
+        "S/N"
+      );
+    }
+    return null;
+  }, [activeTrip]);
+
+  // 3. SEPARACIÓN EXACTA TRACTO VS MG EN EL DROPDOWN
+  const legOptions = useMemo(() => {
     if (!activeTrip || !activeTrip.legs) return [];
-    return activeTrip.legs.filter((leg) => {
+
+    const filteredLegs = activeTrip.legs.filter((leg) => {
       const legStatus = String(leg.status ?? "").toLowerCase();
-      // 🚀 EXCEPCIÓN: Si estamos editando, forzamos que aparezca el tramo seleccionado
       return (
         ["entregado", "cerrado", "finalizado", "liquidado"].includes(
           legStatus,
         ) || String(leg.id) === selectedLegId
       );
     });
-  }, [activeTrip, selectedLegId]);
+
+    return filteredLegs.flatMap((leg) => {
+      const options = [];
+
+      // Opción Tractocamión
+      options.push({
+        value: `${leg.id}|tracto`,
+        label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Tracto: ECO-${leg.unit?.numero_economico}`,
+      });
+
+      // Opción Termo (solo si aplica)
+      if (leg.leg_type === "ruta_carretera" && activeTripMgName) {
+        options.push({
+          value: `${leg.id}|mg`,
+          label: `${leg.leg_type.replace("_", " ").toUpperCase()} | Termo: ⚡ ECO-${activeTripMgName}`,
+        });
+      }
+      return options;
+    });
+  }, [activeTrip, activeTripMgName, selectedLegId]);
 
   const activeLeg = useMemo(
-    () => tripLegs.find((l) => String(l.id) === selectedLegId) || null,
-    [tripLegs, selectedLegId],
+    () => activeTrip?.legs?.find((l) => String(l.id) === selectedLegId) || null,
+    [activeTrip, selectedLegId],
   );
 
   const tripData = useMemo(() => {
@@ -172,27 +309,45 @@ export default function FuelConciliation() {
           })
         : "N/A",
       fase: activeLeg.leg_type.replace("_", " ").toUpperCase(),
+      motogenerador: activeTripMgName,
     };
-  }, [activeTrip, activeLeg]);
+  }, [activeTrip, activeLeg, activeTripMgName]);
+
+  // Inteligencia de Odómetros / Orómetros base
+  const odometroInicial = useMemo(() => {
+    if (isMotogenerator) {
+      return formData.maxOdoVales;
+    }
+    return Number(activeLeg?.odometro_inicial || 0);
+  }, [isMotogenerator, formData.maxOdoVales, activeLeg]);
 
   // =========================================================================
-  // EXTRACCIÓN DE DATOS Y PUNTO DE REFERENCIA (INTELIGENCIA DE ODÓMETROS)
+  // EXTRACCIÓN DE DATOS Y PUNTO DE REFERENCIA
   // =========================================================================
-  const fetchValesCombustible = async (legIdToFetch: string) => {
+  const fetchValesCombustible = async (legIdToFetch: string, isMg: boolean) => {
     setIsFetchingVales(true);
     try {
-      const response = await axiosClient.get("/api/fleet/fuel-logs");
+      const response = await axiosClient.get("/api/fleet/fuel-logs?limit=5000");
 
       let mayorOdometroEnVales = 0;
 
       const valesDiesel = response.data.filter((log: any) => {
+        const isLogMg =
+          log.is_motogenerator === true ||
+          String(log.is_motogenerator).toLowerCase() === "true" ||
+          log.is_motogenerator === 1;
+
         const esValido =
           log.tipo_combustible === "diesel" &&
           String(log.trip_leg_id) === String(legIdToFetch) &&
-          log.record_status === "A";
+          log.record_status === "A" &&
+          isLogMg === isMg; // ⚡ FILTRO ESPECÍFICO POR TRACTO O TERMO
 
         if (esValido) {
-          const odoLog = Number(log.odometro) || 0;
+          const odoLog = isMg
+            ? Number(log.horometro) || Number(log.odometro) || 0
+            : Number(log.odometro) || 0;
+
           if (odoLog > mayorOdometroEnVales) {
             mayorOdometroEnVales = odoLog;
           }
@@ -214,12 +369,12 @@ export default function FuelConciliation() {
       }));
 
       if (totalVales > 0) {
-        toast.success("Suministro Sincronizado", {
-          description: `Se detectaron ${totalVales.toFixed(2)} L en vales. Odo Ref: ${mayorOdometroEnVales || "N/A"}`,
+        toast.success(`Suministro Sincronizado (${isMg ? "MG" : "Tracto"})`, {
+          description: `Se detectaron ${totalVales.toFixed(2)} L en vales. ${isMg ? "Orómetro" : "Odómetro"} Ref: ${mayorOdometroEnVales || "N/A"}`,
         });
       } else {
-        toast.info("Sin vales detectados", {
-          description: `El tramo no tiene vales físicos registrados.`,
+        toast.info(`Sin vales de ${isMg ? "MG" : "Tracto"} detectados`, {
+          description: `El equipo seleccionado no tiene vales físicos registrados.`,
         });
       }
     } catch (error) {
@@ -232,19 +387,23 @@ export default function FuelConciliation() {
 
   const handleTripSelect = (id: string) => {
     setSelectedTripId(id);
-    setSelectedLegId("");
+    setSelectedLegOption("");
     setIsEditing(false);
     handleResetState();
   };
 
-  const handleLegSelect = async (legId: string) => {
-    setSelectedLegId(legId);
+  const handleLegSelect = async (val: string) => {
+    setSelectedLegOption(val);
     setIsEditing(false);
     handleResetState();
-    await fetchValesCombustible(legId);
+
+    const legId = val.split("|")[0];
+    const isMg = val.split("|")[1] === "mg";
+
+    await fetchValesCombustible(legId, isMg);
   };
 
-  // 🚀 LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
+  // LÓGICA DE AUTO-CÁLCULO DEL ODÓMETRO FINAL (OnBlur)
   const handleAutoCalculateOdometer = () => {
     const kms = Number(formData.kilometrosECM);
     if (kms > 0 && activeLeg) {
@@ -257,44 +416,50 @@ export default function FuelConciliation() {
 
       setFormData((prev) => ({ ...prev, odometroFinal: String(odoFinal) }));
 
-      toast.info("Odómetro auto-calculado", {
-        description: `Base: ${baseOdo.toLocaleString()} km + Recorrido ECM: ${kms.toLocaleString()} km`,
-      });
+      toast.info(
+        `${isMotogenerator ? "Orómetro" : "Odómetro"} auto-calculado`,
+        {
+          description: `Base: ${baseOdo.toLocaleString()} + Recorrido ECM: ${kms.toLocaleString()}`,
+        },
+      );
     }
   };
 
-  // 🚀 REPARACIÓN DEL EDITAR
-  const handleEditAudit = async (leg: any) => {
-    // Al setear estos IDs, los Selects los agarran gracias a la lista blanca modificada
-    setSelectedTripId(String(leg.trip_id));
-    setSelectedLegId(String(leg.id));
-    setIsEditing(true);
+  // REPARACIÓN DEL EDITAR INTELIGENTE (Detecta qué fila se clickeó)
+  const handleEditAudit = async (row: any) => {
+    setSelectedTripId(String(row.trip?.id || row.trip_id));
 
-    const auditEvent = leg.timeline_events?.find(
-      (e: any) =>
-        e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Detalles Fase"),
-    );
+    // Sabemos si el registro es de MG o Tracto gracias a la fila
+    const isMgEdit = row.is_mg_audit;
+    const defaultOption = `${row.id}|${isMgEdit ? "mg" : "tracto"}`;
+    setSelectedLegOption(defaultOption);
+    setIsEditing(true);
 
     let kmEcmVal = "";
     let ltEcmVal = "";
+    let odoFinalEdit = "";
+
+    const auditEvent = row.audit_event;
 
     if (auditEvent && auditEvent.comments) {
-      const kmMatch = auditEvent.comments.match(/Km ECM:\s*([\d.]+)/);
+      const kmMatch = auditEvent.comments.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
       const ltMatch = auditEvent.comments.match(/Litros ECM:\s*([\d.]+)/);
+      const odoMatch = auditEvent.comments.match(/Lectura Final:\s*([\d.]+)/);
+
       if (kmMatch) kmEcmVal = kmMatch[1];
       if (ltMatch) ltEcmVal = ltMatch[1];
+      if (odoMatch) odoFinalEdit = odoMatch[1];
     }
 
     setFormData({
       litrosVales: "0",
       kilometrosECM: kmEcmVal,
       litrosECM: ltEcmVal,
-      odometroFinal: String(leg.odometro_final || ""),
+      odometroFinal: odoFinalEdit || String(row.odometro_final || ""),
       maxOdoVales: 0,
     });
 
-    await fetchValesCombustible(String(leg.id));
+    await fetchValesCombustible(String(row.id), !!isMgEdit);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -328,7 +493,7 @@ export default function FuelConciliation() {
   };
 
   // =========================================================================
-  // LA MATEMÁTICA FINANCIERA Y EL RECIBO DE SANCIÓN (REGLA DEL 3%)
+  // LA MATEMÁTICA FINANCIERA Y EL RECIBO DE SANCIÓN
   // =========================================================================
   const auditResult = useMemo(() => {
     const litrosVales = Number(formData.litrosVales) || 0;
@@ -338,7 +503,6 @@ export default function FuelConciliation() {
     const rendimientoECM = litrosECM > 0 ? kmECM / litrosECM : 0;
     const rendimientoReal = litrosVales > 0 ? kmECM / litrosVales : 0;
 
-    // 👇 SOLUCIÓN GUSTAVO: Vales (Físico) - ECM (Computadora)
     const diferenciaLitros = litrosVales - litrosECM;
     const toleranciaPermitida = litrosECM * TOLERANCIA_FIJA;
 
@@ -347,7 +511,6 @@ export default function FuelConciliation() {
     let descuentoPesos = 0;
     let mensajeDeduccion = "";
 
-    // Si la diferencia es positiva y excede la tolerancia del 3%
     if (diferenciaLitros > 0 && diferenciaLitros > toleranciaPermitida) {
       estatus = "COBRO_OPERADOR";
       esRoboSospechado = true;
@@ -387,20 +550,28 @@ export default function FuelConciliation() {
 
   const handleResetAll = () => {
     setSelectedTripId("");
-    setSelectedLegId("");
+    setSelectedLegOption("");
     setIsEditing(false);
     handleResetState();
   };
 
   // =========================================================================
-  // 🚀 GUARDAR Y APLICAR SANCIÓN AL BACKEND (CORREGIDO STATUS "EN CURSO")
+  // GUARDAR Y APLICAR SANCIÓN AL BACKEND
   // =========================================================================
   const handleAuthorizeAndClose = async () => {
     if (!activeTrip || !selectedLegId) return;
 
     if (!formData.odometroFinal) {
-      toast.error("Falta Odómetro Final", {
-        description: "Debe calcular/ingresar el Odómetro Final de la unidad.",
+      toast.error(`Falta ${isMotogenerator ? "Orómetro" : "Odómetro"} Final`, {
+        description: `Debe calcular/ingresar el ${isMotogenerator ? "Orómetro" : "Odómetro"} Final del equipo.`,
+      });
+      return;
+    }
+
+    const odoFinalVal = Number(formData.odometroFinal);
+    if (odoFinalVal > 0 && odoFinalVal <= odometroInicial) {
+      toast.error("Validación fallida", {
+        description: `El ${isMotogenerator ? "Orómetro" : "Odómetro"} Final debe ser mayor al inicial (${odometroInicial}).`,
       });
       return;
     }
@@ -415,13 +586,15 @@ export default function FuelConciliation() {
       const est = auditResult?.estatus || "CONCILIADO";
       const isRobo = auditResult?.esRoboSospechado || false;
 
-      const comentarioBitacora = `Detalles Fase. Km ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} km/L. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
+      const sufijo = isMotogenerator ? "Hrs" : "Km";
 
-      const payload = {
-        status: "entregado", // 🚀 ESTO ARREGLA EL BUG QUE LO REGRESABA A "EN CURSO"
+      // Añadimos "Lectura Final:" al comentario para blindar el orómetro del MG
+      const comentarioBitacora = `Detalles Fase (${isMotogenerator ? "MG" : "Tracto"}). Lectura Final: ${odoFinalVal}. ${sufijo} ECM: ${kmECM}. Litros ECM: ${ltECM}. Vales: ${vales}. Rend Real: ${rReal.toFixed(2)} ${isMotogenerator ? "hr/L" : "km/L"}. Ver: ${est}. ${isRobo ? auditResult.mensajeDeduccion : ""}`;
+
+      const payload: any = {
+        status: "entregado",
         location: "Conciliación de Combustible",
         comments: comentarioBitacora.trim(),
-        odometro: Number(formData.odometroFinal),
         combustible_litros: Number(vales),
         trip_leg_id: Number(selectedLegId),
         penalizacion_monto: cobrarOperador ? auditResult.descuentoPesos : 0,
@@ -429,6 +602,12 @@ export default function FuelConciliation() {
           ? auditResult.mensajeDeduccion
           : "Excedente perdonado por el auditor.",
       };
+
+      // BLINDAJE QUIRÚRGICO: NO sobreescribimos el odómetro del camión si estamos auditando el Termo.
+      if (!isMotogenerator) {
+        payload.odometro = Number(formData.odometroFinal);
+        payload.odometro_final = Number(formData.odometroFinal);
+      }
 
       await axiosClient.post(
         `/api/logistics/trips/${selectedTripId}/timeline`,
@@ -459,20 +638,18 @@ export default function FuelConciliation() {
 
   const parsedAuditDetails = useMemo(() => {
     if (!legToView) return null;
-    const auditEvent = legToView.timeline_events?.find(
-      (e: any) =>
-        e.location === "Conciliación de Combustible" ||
-        e.comments?.includes("Detalles Fase"),
-    );
+    const auditEvent = legToView.audit_event;
     const text = auditEvent?.comments || "";
 
-    const kmMatch = text.match(/Km ECM:\s*([\d.]+)/);
+    const lecMatch = text.match(/Lectura Final:\s*([\d.]+)/);
+    const kmMatch = text.match(/(?:Km|Hrs) ECM:\s*([\d.]+)/);
     const ltEcmMatch = text.match(/Litros ECM:\s*([\d.]+)/);
     const valesMatch = text.match(/Vales:\s*([\d.]+)/);
     const rendMatch = text.match(/Rend Real:\s*([\d.]+)/);
     const verMatch = text.match(/Ver:\s*([A-Z_]+)/);
 
     return {
+      lecturaFinal: lecMatch ? lecMatch[1] : legToView.odometro_final || "0",
       km: kmMatch ? kmMatch[1] : "0",
       ltEcm: ltEcmMatch ? ltEcmMatch[1] : "0",
       vales: valesMatch ? valesMatch[1] : "0",
@@ -488,7 +665,7 @@ export default function FuelConciliation() {
   const auditedColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
-        key: "last_update",
+        key: "audit_date",
         header: "Fecha",
         render: (v) => (
           <span className="text-xs font-mono text-slate-500">
@@ -507,14 +684,25 @@ export default function FuelConciliation() {
       },
       {
         key: "leg_type",
-        header: "Fase",
-        render: (v: string) => (
-          <Badge
-            variant="outline"
-            className="bg-slate-50 dark:bg-white/5 uppercase text-[9px] tracking-widest text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
-          >
-            {v?.replace("_", " ")}
-          </Badge>
+        header: "Fase / Equipo",
+        render: (v: string, row: any) => (
+          <div className="flex flex-col items-start gap-1">
+            <Badge
+              variant="outline"
+              className="bg-slate-50 dark:bg-white/5 uppercase text-[9px] tracking-widest text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10"
+            >
+              {v?.replace("_", " ")}
+            </Badge>
+            {row.is_mg_audit ? (
+              <Badge className="bg-amber-100/50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 text-[8px] uppercase tracking-widest border-none">
+                <Snowflake className="h-4 w-4 mr-2" /> TERMO
+              </Badge>
+            ) : (
+              <Badge className="bg-blue-100/50 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 text-[8px] uppercase tracking-widest border-none">
+                <Truck className="h-4 w-4 mr-2" /> TRACTO
+              </Badge>
+            )}
+          </div>
         ),
       },
       {
@@ -526,33 +714,94 @@ export default function FuelConciliation() {
           </span>
         ),
       },
+
+      // =========================================================
+      // 🔥 NUEVAS COLUMNAS PARA MACHAR LOS DATOS EN LA TABLA 🔥
+      // =========================================================
       {
-        key: "odometro_final",
-        header: "Odo Final",
-        render: (v: number) => (
-          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs">
-            {v?.toLocaleString() || 0} km
-          </span>
-        ),
-      },
-      {
-        key: "status",
-        header: "Estatus",
-        render: (v: string) => {
-          const cerrado = ["entregado", "cerrado", "liquidado"].includes(
-            String(v).toLowerCase(),
+        key: "km_ecm",
+        header: "KM/Hrs ECM",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /(?:Km|Hrs) ECM:\s*([0-9]+(?:\.[0-9]+)?)/,
           );
           return (
-            <Badge
+            <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-300">
+              {match ? Number(match[1]).toLocaleString() : "0"}
+            </span>
+          );
+        },
+      },
+      {
+        key: "litros_ecm",
+        header: "Lts ECM",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /Litros ECM:\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          return (
+            <span className="font-mono text-xs font-semibold text-slate-600 dark:text-slate-300">
+              {match ? Number(match[1]).toFixed(1) : "0.0"} L
+            </span>
+          );
+        },
+      },
+      {
+        key: "litros_vales",
+        header: "Lts Vales",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /Vales:\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          return (
+            <span className="font-mono font-black text-amber-600 dark:text-amber-500 text-xs">
+              {match ? Number(match[1]).toFixed(1) : "0.0"} L
+            </span>
+          );
+        },
+      },
+      // =========================================================
+
+      {
+        key: "rendimiento",
+        header: "Rend. Real",
+        render: (_, row: any) => {
+          // Aplicamos la corrección de decimales también aquí para que nunca salga NaN
+          const match = row.audit_event?.comments?.match(
+            /Rend Real:\s*([0-9]+(?:\.[0-9]+)?)/,
+          );
+          const rend = match ? Number(match[1]).toFixed(2) : "0.00";
+          return (
+            <span className="font-mono font-black text-blue-600 dark:text-blue-400 text-xs flex items-baseline gap-1">
+              {rend}
+              <span className="text-[9px] font-bold opacity-60 uppercase tracking-widest text-slate-500">
+                {row.is_mg_audit ? "hr/L" : "km/L"}
+              </span>
+            </span>
+          );
+        },
+      },
+      {
+        key: "descuento",
+        header: "Descuento",
+        render: (_, row: any) => {
+          const match = row.audit_event?.comments?.match(
+            /descuento de \$([\d.,]+)/i,
+          );
+          const descuento = match ? Number(match[1].replace(/,/g, "")) : 0;
+          return (
+            <span
               className={cn(
-                "border-none tracking-widest text-[9px] uppercase",
-                cerrado
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300",
+                "font-mono font-black text-xs",
+                descuento > 0
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-emerald-600 dark:text-emerald-400",
               )}
             >
-              {cerrado ? "CERRADO" : "EN CURSO"}
-            </Badge>
+              {descuento > 0
+                ? `-$${descuento.toLocaleString("es-MX", { minimumFractionDigits: 2 })}`
+                : "$0.00"}
+            </span>
           );
         },
       },
@@ -589,24 +838,41 @@ export default function FuelConciliation() {
                   Detalles
                 </DropdownMenuItem>
 
-                {!isLiquidado && (
-                  <>
-                    <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
-                    <DropdownMenuItem
-                      onClick={() => handleEditAudit(row)}
-                      className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
-                    >
-                      <Pencil className="h-3.5 w-3.5 mr-2" /> Editar /
-                      Recalcular
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
-                      onClick={() => setLegToReset(String(row.id))}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Registro
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <DropdownMenuSeparator className="bg-slate-100 dark:bg-white/10 my-1" />
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (isLiquidado) {
+                      toast.error("Bloqueo de Seguridad", {
+                        description:
+                          "No se puede editar la conciliación de un viaje liquidado. Primero cancela la liquidación en Tesorería.",
+                        duration: 6000,
+                      });
+                      return;
+                    }
+                    handleEditAudit(row);
+                  }}
+                  className="cursor-pointer font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                >
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> Editar / Recalcular
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  className="text-rose-600 dark:text-rose-400 focus:bg-rose-50 dark:focus:bg-rose-500/10 font-bold uppercase text-[10px] py-2.5 px-3 rounded-lg cursor-pointer"
+                  onClick={() => {
+                    if (isLiquidado) {
+                      toast.error("Bloqueo de Seguridad", {
+                        description:
+                          "No se puede revertir la conciliación de un viaje liquidado. Primero cancela la liquidación en Tesorería.",
+                        duration: 6000,
+                      });
+                      return;
+                    }
+                    setLegToReset(String(row.id));
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar Registro
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -615,6 +881,9 @@ export default function FuelConciliation() {
     ],
     [trips],
   );
+
+  const odoFinalNum = Number(formData.odometroFinal);
+  const hasOdoError = odoFinalNum > 0 && odoFinalNum <= odometroInicial;
 
   return (
     <div className="p-4 md:p-8 space-y-6 bg-[#F8FAFC] dark:bg-brand-navy min-h-screen animate-in fade-in duration-700">
@@ -686,7 +955,6 @@ export default function FuelConciliation() {
 
                       if (estatusValidos.includes(tripStatus)) return true;
 
-                      // 🚀 EL FIX MÁGICO: Si el viaje sigue en tránsito, pero tiene tramos listos, ¡muéstralo!
                       const tieneTramosListos = t.legs?.some((leg) =>
                         estatusValidos.includes(
                           String(leg.status ?? "").toLowerCase(),
@@ -699,6 +967,18 @@ export default function FuelConciliation() {
                       const clientName =
                         t.client?.razon_social || "Sin Cliente";
                       const config = t.dolly_id ? "FULL" : "SENC";
+
+                      let tMgName = null;
+                      if ((t as any).is_refrigerated_1) {
+                        tMgName =
+                          (t as any).motogenerator_1_unit?.numero_economico ||
+                          (t as any).motogenerator_1;
+                      } else if ((t as any).is_refrigerated_2) {
+                        tMgName =
+                          (t as any).motogenerator_2_unit?.numero_economico ||
+                          (t as any).motogenerator_2;
+                      }
+
                       return (
                         <SelectItem
                           key={t.id}
@@ -707,6 +987,7 @@ export default function FuelConciliation() {
                         >
                           {t.public_id || t.id} • {clientName} • {config} •{" "}
                           {t.origin}
+                          {tMgName ? ` • ⚡ ECO-${tMgName}` : ""}
                         </SelectItem>
                       );
                     })}
@@ -716,111 +997,114 @@ export default function FuelConciliation() {
 
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">
-                2. Seleccionar Fase / Tramo:
+                2. Seleccionar Equipo a Auditar:
               </Label>
               <Select
-                value={selectedLegId}
+                value={selectedLegOption}
                 onValueChange={handleLegSelect}
                 disabled={!selectedTripId || isEditing}
               >
                 <SelectTrigger className="bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 font-bold text-xs h-10 shadow-sm">
-                  <SelectValue placeholder="Seleccione tramo..." />
+                  <SelectValue placeholder="Seleccione equipo..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {tripLegs.map((leg) => (
+                  {legOptions.map((opt) => (
                     <SelectItem
-                      key={leg.id}
-                      value={String(leg.id)}
-                      className="text-xs"
+                      key={opt.value}
+                      value={opt.value}
+                      className="text-xs font-medium"
                     >
-                      {leg.leg_type.replace("_", " ").toUpperCase()} | Op:{" "}
-                      {leg.operator?.name || "N/A"}
+                      {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            {isFetchingVales && (
+              <div className="col-span-1 md:col-span-2 flex items-center justify-center p-2 text-blue-500 animate-pulse text-xs font-bold gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Analizando
+                suministros del equipo...
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {tripData && (
-          <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl animate-in slide-in-from-top-2">
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
-                <Truck className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-0.5">
-                  Viaje en Captura • Fase {tripData.fase}
-                </p>
-                <p className="text-sm font-bold tracking-tight">
-                  {tripData.cartaPorteId} • {tripData.ruta}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-6 text-xs font-medium bg-white/5 py-2.5 px-5 rounded-xl border border-white/10 w-full md:w-auto">
-              <div className="flex flex-col">
-                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
-                  <User className="h-3 w-3" /> Operador
-                </span>
-                <span className="truncate max-w-[120px]">
-                  {tripData.operador}
-                </span>
-              </div>
-              <div className="hidden md:block w-px bg-white/20"></div>
-              <div className="flex flex-col">
-                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
-                  <Gauge className="h-3 w-3" /> Unidad
-                </span>
-                <span>
-                  ECO-{tripData.unidadId} ({tripData.configuracion})
-                </span>
-              </div>
-              <div className="hidden md:block w-px bg-white/20"></div>
-              <div className="flex flex-col">
-                <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Salida
-                </span>
-                <span>{tripData.fechaViaje}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!tripData ? (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
-            <div className="flex items-center gap-2 px-1">
-              <History className="h-4 w-4 text-slate-400" />
-              <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
-                Historial de Auditorías
-              </h3>
-            </div>
-            <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
-              <CardContent className="p-0">
-                <EnhancedDataTable
-                  data={auditedLegs}
-                  columns={auditedColumns as any}
-                  className="border-none"
-                  searchPlaceholder="Buscar por folio o operador..."
-                />
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+            <div className="bg-slate-900 dark:bg-black rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 text-white shadow-xl">
+              <div className="flex items-center gap-4 w-full md:w-auto">
+                <div className="bg-white/10 p-2.5 rounded-xl border border-white/10">
+                  <Truck className="h-5 w-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black tracking-widest text-slate-400 uppercase mb-0.5">
+                    Viaje en Captura • Fase {tripData.fase}
+                  </p>
+                  <p className="text-sm font-bold tracking-tight">
+                    {tripData.cartaPorteId} • {tripData.ruta}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap md:flex-nowrap gap-3 md:gap-6 text-xs font-medium bg-white/5 py-2.5 px-5 rounded-xl border border-white/10 w-full md:w-auto">
+                <div className="flex flex-col">
+                  <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                    <User className="h-3 w-3" /> Operador
+                  </span>
+                  <span className="truncate max-w-[120px]">
+                    {tripData.operador}
+                  </span>
+                </div>
+                <div className="hidden md:block w-px bg-white/20"></div>
+                <div className="flex flex-col">
+                  <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                    <Gauge className="h-3 w-3" /> Unidad
+                  </span>
+                  <span>
+                    ECO-{tripData.unidadId} ({tripData.configuracion})
+                  </span>
+                </div>
+
+                {tripData.motogenerador && (
+                  <>
+                    <div className="hidden md:block w-px bg-white/20"></div>
+                    <div className="flex flex-col">
+                      <span className="text-[8px] text-amber-500 uppercase font-black tracking-widest flex items-center gap-1">
+                        <Zap className="h-3 w-3" /> Motogenerador
+                      </span>
+                      <span className="text-amber-400">
+                        ECO-{tripData.motogenerador}
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                <div className="hidden md:block w-px bg-white/20"></div>
+                <div className="flex flex-col">
+                  <span className="text-[8px] text-slate-400 uppercase font-black tracking-widest flex items-center gap-1">
+                    <Calendar className="h-3 w-3" /> Salida
+                  </span>
+                  <span>{tripData.fechaViaje}</span>
+                </div>
+              </div>
+            </div>
+
             <div className="grid md:grid-cols-2 gap-4">
               {/* LADO FÍSICO */}
               <Card className="border-t-4 border-t-amber-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
                 <CardHeader className="bg-amber-50/50 dark:bg-amber-900/10 p-4 border-b border-amber-100 dark:border-amber-900/30">
                   <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center justify-between text-amber-700 dark:text-amber-500">
                     <span className="flex items-center gap-2">
-                      <Fuel className="h-4 w-4" /> 1. Suministro Físico
+                      <Fuel className="h-4 w-4" /> 1. Suministro Físico (
+                      {isMotogenerator ? "MG" : "Tracto"})
                     </span>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-6 text-[9px] hover:bg-amber-100 dark:hover:bg-amber-900/50"
-                      onClick={() => fetchValesCombustible(selectedLegId)}
+                      onClick={() =>
+                        fetchValesCombustible(selectedLegId, isMotogenerator)
+                      }
                       disabled={isFetchingVales}
                     >
                       <RefreshCw
@@ -857,18 +1141,19 @@ export default function FuelConciliation() {
               <Card className="border-t-4 border-t-blue-500 shadow-sm dark:bg-slate-900 dark:border-white/10">
                 <CardHeader className="bg-blue-50/50 dark:bg-blue-900/10 p-4 border-b border-blue-100 dark:border-blue-900/30">
                   <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-blue-700 dark:text-blue-500">
-                    <Gauge className="h-4 w-4" /> 2. Computadora (ECM)
+                    <Gauge className="h-4 w-4" /> 2. Computadora (
+                    {isMotogenerator ? "MG" : "ECM"})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-5 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                        KMs ECM *
+                        {isMotogenerator ? "Horas ECM *" : "KMs ECM *"}
                       </Label>
                       <Input
                         type="number"
-                        placeholder="Ej. 900"
+                        placeholder={isMotogenerator ? "Ej. 45" : "Ej. 900"}
                         value={formData.kilometrosECM}
                         onChange={(e) =>
                           handleInputChange("kilometrosECM", e.target.value)
@@ -896,7 +1181,11 @@ export default function FuelConciliation() {
                   </div>
                   <div className="space-y-2 border-t border-slate-100 dark:border-white/5 pt-3">
                     <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex justify-between">
-                      <span>Odómetro Final Calculado *</span>
+                      <span>
+                        {isMotogenerator
+                          ? "Orómetro Final Calculado *"
+                          : "Odómetro Final Calculado *"}
+                      </span>
                       {formData.maxOdoVales > 0 && (
                         <span className="text-amber-500 lowercase opacity-80">
                           (Base vale físico)
@@ -914,9 +1203,17 @@ export default function FuelConciliation() {
                         formData.odometroFinal
                           ? "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20"
                           : "bg-slate-50 dark:bg-slate-800 text-slate-700",
+                        hasOdoError ? "border-rose-300 text-rose-600" : "",
                       )}
                       placeholder="Autocalculado..."
                     />
+                    {hasOdoError && (
+                      <p className="text-[9px] text-rose-600 font-bold uppercase tracking-tighter flex items-center gap-1 mt-1">
+                        <AlertTriangle className="h-3 w-3" /> Error: El{" "}
+                        {isMotogenerator ? "orómetro" : "odómetro"} debe ser
+                        mayor al inicial ({odometroInicial}).
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -938,16 +1235,22 @@ export default function FuelConciliation() {
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                       Rend. ECM
                     </span>
-                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white">
+                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white flex items-baseline gap-1">
                       {auditResult?.rendimientoECM.toFixed(2) || "0.00"}
+                      <span className="text-[10px] opacity-50 uppercase tracking-widest">
+                        {isMotogenerator ? "hr/L" : "km/L"}
+                      </span>
                     </span>
                   </div>
                   <div className="flex flex-col pl-4 md:pl-8 pr-2">
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                       Rend. Real
                     </span>
-                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white">
+                    <span className="text-2xl font-mono font-black text-slate-700 dark:text-white flex items-baseline gap-1">
                       {auditResult?.rendimientoReal.toFixed(2) || "0.00"}
+                      <span className="text-[10px] opacity-50 uppercase tracking-widest">
+                        {isMotogenerator ? "hr/L" : "km/L"}
+                      </span>
                     </span>
                   </div>
                   <div className="flex flex-col pl-4 md:pl-8">
@@ -1013,7 +1316,9 @@ export default function FuelConciliation() {
 
                   <Button
                     onClick={handleAuthorizeAndClose}
-                    disabled={isProcessing || !formData.odometroFinal}
+                    disabled={
+                      isProcessing || !formData.odometroFinal || hasOdoError
+                    }
                     className={cn(
                       "w-full sm:w-auto font-black text-white uppercase tracking-widest text-[11px] h-11 px-8 shadow-lg",
                       auditResult?.esRoboSospechado
@@ -1026,16 +1331,83 @@ export default function FuelConciliation() {
                     ) : (
                       <Save className="h-4 w-4 mr-2" />
                     )}
-                    Confirmar y Cerrar
+                    Confirmar y Guardar
                   </Button>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
+
+        {!tripData && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-3 pt-2">
+            <div className="flex items-center gap-2 px-1">
+              <History className="h-4 w-4 text-slate-400" />
+              <h3 className="font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 text-xs">
+                Historial de Auditorías
+              </h3>
+            </div>
+
+            <div className="flex items-center pb-2">
+              <Tabs
+                value={dateFilter}
+                onValueChange={(v) => setDateFilter(v as "hoy" | "historico")}
+                className="w-[300px]"
+              >
+                <TabsList className="grid w-full grid-cols-2 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
+                  <TabsTrigger
+                    value="hoy"
+                    className="rounded-lg font-bold text-xs"
+                  >
+                    Hoy
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="historico"
+                    className="rounded-lg font-bold text-xs"
+                  >
+                    Histórico
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <Card className="border-slate-200 dark:border-white/10 shadow-sm bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
+              <CardContent className="p-0">
+                <EnhancedDataTable
+                  data={filteredAuditedLegs}
+                  columns={auditedColumns as any}
+                  className="border-none"
+                  searchPlaceholder="Buscar por folio o operador..."
+                  customFilters={
+                    dateFilter === "historico" && (
+                      <div className="flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-500">
+                        <DateRangePicker
+                          dateRange={dateRange}
+                          onDateRangeChange={setDateRange}
+                          placeholder="Rango de fechas"
+                          className="w-[280px]"
+                        />
+                        {dateRange?.from && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDateRange(undefined)}
+                            className="h-11 w-11 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl"
+                            title="Limpiar fechas"
+                          >
+                            <FilterX size={18} />
+                          </Button>
+                        )}
+                      </div>
+                    )
+                  }
+                />
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
-      {/* DIALOG DE VISTA DE DETALLES */}
       <Dialog
         open={!!legToView}
         onOpenChange={(open) => !open && setLegToView(null)}
@@ -1098,7 +1470,7 @@ export default function FuelConciliation() {
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-50 dark:bg-white/5 p-3 rounded-xl border border-slate-100 dark:border-white/5 text-center shadow-sm">
                 <p className="text-[9px] uppercase font-bold text-slate-400 mb-1 tracking-tighter">
-                  KMs ECM
+                  Km / Hrs ECM
                 </p>
                 <p className="font-mono font-black text-slate-800 dark:text-white text-lg">
                   {Number(parsedAuditDetails?.km || 0).toLocaleString()}
@@ -1131,8 +1503,8 @@ export default function FuelConciliation() {
                 </p>
                 <p className="font-mono font-black text-blue-700 dark:text-blue-300 text-3xl flex items-baseline gap-1">
                   {parsedAuditDetails?.rend || "0.00"}
-                  <span className="text-xs font-bold uppercase opacity-60">
-                    km/L
+                  <span className="text-[10px] font-bold uppercase opacity-60 ml-1">
+                    {legToView?.is_mg_audit ? "hr/L" : "km/L"}
                   </span>
                 </p>
               </div>
@@ -1177,13 +1549,12 @@ export default function FuelConciliation() {
             <div className="pt-2 text-center border-t border-slate-100 dark:border-white/5">
               <div className="inline-flex flex-col items-center py-2 px-6 rounded-full bg-slate-50 dark:bg-white/5">
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-1">
-                  <Gauge className="h-3.5 w-3.5" /> Odómetro Cerrado
+                  <Gauge className="h-3.5 w-3.5" /> Lectura Final Cierre
                 </p>
                 <p className="font-mono text-xl font-black text-slate-800 dark:text-blue-400">
-                  {Number(legToView?.odometro_final || 0).toLocaleString()}
-                  <span className="text-[10px] ml-1 text-slate-400 uppercase font-bold">
-                    km
-                  </span>
+                  {Number(
+                    parsedAuditDetails?.lecturaFinal || 0,
+                  ).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -1201,7 +1572,6 @@ export default function FuelConciliation() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Confirmación de Reversión */}
       <AlertDialog
         open={!!legToReset}
         onOpenChange={(open) => !open && setLegToReset(null)}
@@ -1257,7 +1627,10 @@ export default function FuelConciliation() {
               <AlertDialogAction
                 variant="destructive"
                 size="lg"
-                onClick={handleResetAudit}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleResetAudit();
+                }}
                 className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
               >
                 <RotateCcw className="h-4 w-4 mr-2" /> Revertir Fase

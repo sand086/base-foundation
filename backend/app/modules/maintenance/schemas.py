@@ -1,6 +1,5 @@
 # --- Fuente: schemas_maintenance.py ---
 
-
 from datetime import date, datetime
 from typing import List, Optional
 
@@ -47,14 +46,12 @@ class InventoryItemCreate(ORMBase):
             return value.lower()
         return value
 
-    # ------------------------------------------
-
     stock_actual: int = 0
     stock_minimo: int = 5
     ubicacion: Optional[str] = Field(default=None, max_length=100)
     precio_unitario: float = 0.0
     proveedor_id: Optional[int] = None
-    bank_account_id: Optional[int] = None
+    # bank_account_id: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -64,7 +61,6 @@ class InventoryItemUpdate(ORMBase):
     descripcion: Optional[str] = Field(default=None, max_length=200)
     categoria: Optional[InventoryCategory] = None
 
-    # --- ESCUDO: Fuerza minúsculas al actualizar ---
     @field_validator("categoria", mode="before")
     @classmethod
     def force_lowercase(cls, value):
@@ -72,13 +68,13 @@ class InventoryItemUpdate(ORMBase):
             return value.lower()
         return value
 
-    # -----------------------------------------------
-
     stock_actual: Optional[int] = None
     stock_minimo: Optional[int] = None
 
     ubicacion: Optional[str] = Field(default=None, max_length=100)
     precio_unitario: Optional[float] = None
+
+    proveedor_id: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -104,19 +100,13 @@ class MechanicDocumentBase(ORMBase):
     tipo_documento: str = Field(..., max_length=50)
     nombre_archivo: str = Field(..., max_length=255)
     url_archivo: str = Field(..., max_length=500)
-
     fecha_vencimiento: Optional[date] = None
-
-    # En tu ORM MechanicDocument:
-    #   file_size = Column(Integer, nullable=True)
-    #   subido_en = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     file_size: Optional[int] = None
     subido_en: Optional[datetime] = None
 
 
 class MechanicDocumentCreate(MechanicDocumentBase):
     mechanic_id: int
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -127,15 +117,12 @@ class MechanicDocumentUpdate(ORMBase):
     fecha_vencimiento: Optional[date] = None
     file_size: Optional[int] = None
     subido_en: Optional[datetime] = None
-
     model_config = ConfigDict(extra="ignore")
 
 
 class MechanicDocumentResponse(MechanicDocumentBase):
     id: int
     mechanic_id: int
-
-    # AuditMixin
     record_status: RecordStatus
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -147,21 +134,16 @@ class MechanicBase(ORMBase):
     nombre: str = Field(..., max_length=100)
     apellido: Optional[str] = Field(default=None, max_length=100)
     especialidad: Optional[str] = Field(default=None, max_length=100)
-
     telefono: Optional[str] = Field(default=None, max_length=20)
     email: Optional[str] = Field(default=None, max_length=100)
     direccion: Optional[str] = None
-
     fecha_nacimiento: Optional[date] = None
     fecha_contratacion: Optional[date] = None
-
     nss: Optional[str] = Field(default=None, max_length=20)
     rfc: Optional[str] = Field(default=None, max_length=13)
     salario_base: float = 0.0
-
     contacto_emergencia_nombre: Optional[str] = Field(default=None, max_length=100)
     contacto_emergencia_telefono: Optional[str] = Field(default=None, max_length=20)
-
     activo: bool = True
     foto_url: Optional[str] = Field(default=None, max_length=500)
 
@@ -174,32 +156,24 @@ class MechanicUpdate(ORMBase):
     nombre: Optional[str] = Field(default=None, max_length=100)
     apellido: Optional[str] = Field(default=None, max_length=100)
     especialidad: Optional[str] = Field(default=None, max_length=100)
-
     telefono: Optional[str] = Field(default=None, max_length=20)
     email: Optional[str] = Field(default=None, max_length=100)
     direccion: Optional[str] = None
-
     fecha_nacimiento: Optional[date] = None
     fecha_contratacion: Optional[date] = None
-
     nss: Optional[str] = Field(default=None, max_length=20)
     rfc: Optional[str] = Field(default=None, max_length=13)
     salario_base: Optional[float] = None
-
     contacto_emergencia_nombre: Optional[str] = Field(default=None, max_length=100)
     contacto_emergencia_telefono: Optional[str] = Field(default=None, max_length=20)
-
     activo: Optional[bool] = None
     foto_url: Optional[str] = Field(default=None, max_length=500)
-
     model_config = ConfigDict(extra="ignore")
 
 
 class MechanicResponse(MechanicBase):
     id: int
     documents: List[MechanicDocumentResponse] = Field(default_factory=list)
-
-    # AuditMixin
     record_status: RecordStatus
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -225,7 +199,6 @@ class WorkOrderPartUpdate(ORMBase):
     inventory_item_id: Optional[int] = None
     cantidad: Optional[int] = None
     costo_unitario_snapshot: Optional[float] = None
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -234,15 +207,9 @@ class WorkOrderPartResponse(ORMBase):
     work_order_id: int
     inventory_item_id: int
     cantidad: int
-
-    # En ORM: existe y es NOT NULL
     costo_unitario_snapshot: float
-
-    # UI helpers (NO existen como columnas)
     item_sku: Optional[str] = None
     item_descripcion: Optional[str] = None
-
-    # AuditMixin
     record_status: RecordStatus
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -255,13 +222,19 @@ class WorkOrderBase(ORMBase):
     mechanic_id: Optional[int] = None
     descripcion_problema: str
 
+    # NUEVO FINANCIERO: Permitimos leer de la BD
+    porcentaje_iva: float = 16.0
+    subtotal: float = 0.0
+    total: float = 0.0
+
 
 class WorkOrderCreate(WorkOrderBase):
-
     parts: List[WorkOrderPartCreate] = []
-    #  Agregamos esto
     tipo_mantenimiento: str = "patio"
     trip_id: Optional[int] = None
+
+    # NUEVO FINANCIERO: Solo agregamos mano de obra (no guardamos subtotal ni total aquí porque se calculan solos)
+    costo_mano_obra: float = 0.0
 
 
 class WorkOrderUpdate(ORMBase):
@@ -270,8 +243,11 @@ class WorkOrderUpdate(ORMBase):
     descripcion_problema: Optional[str] = None
     status: Optional[WorkOrderStatus] = None
     fecha_cierre: Optional[datetime] = None
-
     parts: Optional[List[WorkOrderPartUpdate]] = None
+
+    # NUEVO FINANCIERO
+    porcentaje_iva: Optional[float] = None
+    costo_mano_obra: Optional[float] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -279,25 +255,28 @@ class WorkOrderUpdate(ORMBase):
 class WorkOrderResponse(ORMBase):
     id: int
     folio: str
-
     unit_id: int
     mechanic_id: Optional[int] = None
-
     descripcion_problema: str
     status: WorkOrderStatus
 
-    # 1. Hacemos que sea Optional por si hay registros viejos en la BD con valor nulo
+    tipo_mantenimiento: Optional[str] = None
+    trip_id: Optional[int] = None
+
+    # NUEVO FINANCIERO
+    porcentaje_iva: float = 16.0
+    subtotal: float = 0.0
+    total: float = 0.0
+    costo_mano_obra: Optional[float] = 0.0
+
     fecha_apertura: Optional[datetime] = None
     fecha_cierre: Optional[datetime] = None
 
-    # UI helpers (NO existen como columnas)
     unit_numero: Optional[str] = None
     mechanic_nombre: Optional[str] = None
     parts: List[WorkOrderPartResponse] = Field(default_factory=list)
 
-    # AuditMixin
     record_status: RecordStatus
-    # 2. ELIMINAMOS AQUI LAS LINEAS DUPLICADAS DE fecha_apertura y fecha_cierre
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
@@ -306,5 +285,4 @@ class WorkOrderResponse(ORMBase):
 
 class WorkOrderStatusUpdate(ORMBase):
     status: WorkOrderStatus
-
     model_config = ConfigDict(extra="ignore")

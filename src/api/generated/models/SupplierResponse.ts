@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__suppliers__schemas__CostCenterResponse } from './app__modules__suppliers__schemas__CostCenterResponse';
 import type { PayableInvoiceResponse } from './PayableInvoiceResponse';
 import type { RecordStatus } from './RecordStatus';
 import type { SupplierStatus } from './SupplierStatus';
@@ -16,14 +17,15 @@ export type SupplierResponse = {
     dias_credito?: number;
     limite_credito?: number;
     contacto_principal?: (string | null);
-    categoria?: (string | null);
     tipo_proveedor?: (string | null);
     zonas_cobertura?: (string | null);
     banco?: (string | null);
     cuenta_bancaria?: (string | null);
     clabe?: (string | null);
     estatus?: SupplierStatus;
+    cost_center_id?: (number | null);
     id: number;
+    cost_center?: (app__modules__suppliers__schemas__CostCenterResponse | null);
     invoices?: Array<PayableInvoiceResponse>;
     tariffs?: Array<SupplierTariffResponse>;
     record_status: RecordStatus;

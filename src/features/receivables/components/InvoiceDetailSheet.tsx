@@ -25,7 +25,6 @@ import {
   Banknote,
   FileCode2,
   Hash,
-  Coins,
   X,
   Truck,
   Barcode,
@@ -36,10 +35,16 @@ import {
   Tag,
   Link as LinkIcon,
   MapPin,
-  User,
+  AlertTriangle,
+  History,
+  Loader2,
+  Trash2,
+  RefreshCw,
+  Network,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import type { ReceivableInvoice } from "@/features/receivables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -49,6 +54,10 @@ interface InvoiceDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   invoice: ReceivableInvoice | null;
   onPayClick?: (invoice: ReceivableInvoice) => void;
+  onStampPayment?: (paymentId: number) => Promise<void>;
+  onCancelPayments?: (paymentIds: number[]) => Promise<void>;
+  onVerifySat?: (id: number) => Promise<void>;
+  onRetryCancel?: (id: number, motivo: string) => Promise<void>;
 }
 
 const toNumber = (v: any): number => {
@@ -64,10 +73,19 @@ export function InvoiceDetailSheet({
   onOpenChange,
   invoice,
   onPayClick,
+  onStampPayment,
+  onCancelPayments,
+  onVerifySat,
+  onRetryCancel,
 }: InvoiceDetailSheetProps) {
+  const [stampingId, setStampingId] = useState<number | null>(null);
+  const [cancelingId, setCancelingId] = useState<number | null>(null);
+  const [isRebuilding, setIsRebuilding] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
+
   useEffect(() => {
     if (invoice && open) {
-      console.log("FACTURA DE CLIENTE ABIERTA:", invoice);
+      console.log("FACTURA ABIERTA EN DETALLE:", invoice);
     }
   }, [invoice, open]);
 
@@ -76,17 +94,53 @@ export function InvoiceDetailSheet({
   const inv = invoice as any;
   const statusInfo = getInvoiceStatusInfo(inv);
 
-  // 📝 EXTRACCIÓN DE DATOS FISCALES
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
-  const uuidRelacionado = safeStr(inv.uuid_relacionado); // Carta Porte origen
+  const uuidRelacionado = safeStr(inv.uuid_relacionado);
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
+  const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
+  const isCanceled = estatusStr === "CANCELADO";
+  const inProcess = inv.status_sat === "PROCESO_CANCELACION";
+  const hasSatError = inv.intentos_cancelacion > 0 && !isCanceled && !inProcess;
+
+  const docHistory = Array.isArray(inv.document_history)
+    ? inv.document_history
+    : [];
+
+  const groupedHistory = Object.values(
+    docHistory.reduce((acc: any, doc: any) => {
+      const v = doc.version || 1;
+      if (!acc[v]) {
+        acc[v] = {
+          version: v,
+          created_at: doc.created_at,
+          is_active: doc.is_active,
+          pdf: null,
+          xml: null,
+          acuse: null,
+          filename: doc.filename
+            ? doc.filename.replace(/\.(xml|pdf)$/i, "")
+            : displayFolio,
+        };
+      }
+      if (doc.document_type === "pdf") acc[v].pdf = doc;
+      if (doc.document_type === "xml") acc[v].xml = doc;
+      if (doc.document_type === "acuse_cancelacion") acc[v].acuse = doc;
+      return acc;
+    }, {}),
+  ).sort((a: any, b: any) => b.version - a.version);
+
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
+    safeStr(inv.supplier?.razon_social) ||
     safeStr(inv.cliente) ||
-    "Público en General";
-  const entidadRfc = safeStr(inv.client?.rfc) || "RFC NO DISPONIBLE";
+    "Público en General / No Identificado";
+
+  const entidadRfc =
+    safeStr(inv.client?.rfc) ||
+    safeStr(inv.supplier?.rfc) ||
+    "RFC NO DISPONIBLE";
 
   const concepto = safeStr(inv.concepto) || "Sin descripción";
   const fechaEmision =
@@ -94,7 +148,6 @@ export function InvoiceDetailSheet({
   const fechaVencimiento =
     safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
 
-  // 🚀 EXTRACCIÓN DE DESGLOSE
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const subtotal = toNumber(inv.subtotal);
   const iva = toNumber(inv.iva);
@@ -102,7 +155,6 @@ export function InvoiceDetailSheet({
   const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
   const moneda = safeStr(inv.moneda) || "MXN";
 
-  // 🚚 EXTRACCIÓN DE DATOS OPERATIVOS (VIAJE)
   const referenciaOperativa = safeStr(inv.referencia);
   const origen = safeStr(inv.trip_info?.origen) || "No especificado";
   const destino = safeStr(inv.trip_info?.destino) || "No especificado";
@@ -110,11 +162,8 @@ export function InvoiceDetailSheet({
   const contenedores =
     safeStr(inv.trip_info?.contenedores) || "Sin contenedores registrados";
   const productoSat = safeStr(inv.trip_info?.producto_sat) || "No especificado";
-  const numUnidad = safeStr(inv.trip_info?.unidad) || "N/A";
-  const numRemolque = safeStr(inv.trip_info?.remolque) || "N/A";
-  const nomOperador = safeStr(inv.trip_info?.operador) || "N/A";
 
-  const payments: Array<any> = Array.isArray(inv.payments)
+  const rawPayments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
     : Array.isArray(inv.pagos)
       ? inv.pagos
@@ -122,33 +171,109 @@ export function InvoiceDetailSheet({
         ? inv.cobros
         : [];
 
-  const handleDownload = (fileType: "pdf" | "xml", targetUuid: string) => {
-    const toastId = toast.loading(`Descargando ${fileType.toUpperCase()}...`);
+  const payments = rawPayments.filter(
+    (p) => p.estatus !== "CANCELADO" && p.record_status !== "E",
+  );
 
+  const handleDownloadFromBackend = (
+    type: "pdf" | "xml",
+    targetUuid: string,
+  ) => {
+    if (!targetUuid || targetUuid === "NO TIMBRADO") {
+      toast.error("No hay un UUID válido para descargar del SAT.");
+      return;
+    }
+    const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+    const baseURL = rawBaseURL.replace(/\/$/, "");
+
+    const timestamp = new Date().getTime();
+    window.open(
+      `${baseURL}/api/sat/invoice/${targetUuid}/${type}?t=${timestamp}`,
+      "_blank",
+    );
+  };
+
+  const handleDownloadUrl = (url: string, filename: string) => {
+    const toastId = toast.loading(`Descargando ${filename}...`);
     try {
       const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
       const baseURL = rawBaseURL.replace(/\/$/, "");
-      const fileUrl = `${baseURL}/api/sat/invoice/${targetUuid}/${fileType}`;
+      const fileUrl = url.startsWith("http")
+        ? url
+        : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;
 
       const link = document.createElement("a");
       link.href = fileUrl;
       link.target = "_blank";
-      link.setAttribute("download", `CFDI_${targetUuid}.${fileType}`);
-
+      link.setAttribute("download", filename);
       document.body.appendChild(link);
       link.click();
       link.remove();
+      toast.success(`${filename} descargado.`, { id: toastId });
+    } catch {
+      toast.error(`Fallo al descargar ${filename}`, { id: toastId });
+    }
+  };
 
-      toast.success(`${fileType.toUpperCase()} descargado correctamente.`, {
+  const handleStamp = async (paymentId: number) => {
+    if (!onStampPayment) return;
+    setStampingId(paymentId);
+    try {
+      await onStampPayment(paymentId);
+    } catch (error) {
+      console.error("Error al timbrar:", error);
+    } finally {
+      setStampingId(null);
+    }
+  };
+
+  const handleCancelIndividual = async (paymentId: number) => {
+    if (!onCancelPayments) return;
+    if (
+      !window.confirm(
+        "¿Seguro que deseas anular este pago? Se devolverá la deuda a la factura y se enviará la cancelación al SAT.",
+      )
+    )
+      return;
+
+    setCancelingId(paymentId);
+    try {
+      await onCancelPayments([paymentId]);
+    } catch (error) {
+      console.error("Error al cancelar pago:", error);
+    } finally {
+      setCancelingId(null);
+    }
+  };
+
+  const handleRebuildPdf = async () => {
+    if (!inv.id) return;
+    const toastId = toast.loading("Regenerando diseño del PDF...");
+    setIsRebuilding(true);
+
+    try {
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+
+      const res = await fetch(`${baseURL}/api/sat/rebuild-pdf/${inv.id}`);
+
+      if (!res.ok) throw new Error("Error en servidor al regenerar");
+
+      toast.success("PDF regenerado correctamente. Descárgalo de nuevo.", {
         id: toastId,
       });
-    } catch (error: any) {
-      console.error("Error al descargar:", error);
-      toast.error(
-        `Fallo al iniciar la descarga del ${fileType.toUpperCase()}`,
-        { id: toastId },
-      );
+    } catch (error) {
+      toast.error("Hubo un error al regenerar el PDF", { id: toastId });
+    } finally {
+      setIsRebuilding(false);
     }
+  };
+
+  const handleVerify = async () => {
+    if (!onVerifySat) return;
+    setIsVerifying(true);
+    await onVerifySat(inv.id);
+    setIsVerifying(false);
   };
 
   const fC = (n: any) =>
@@ -165,7 +290,23 @@ export function InvoiceDetailSheet({
         })
       : "—";
 
+  const fDT = (d: any) => {
+    if (!d || d === "—") return "—";
+    return new Date(d).toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   const isPaid = saldoPendiente <= 0;
+
+  const xmlUrl = inv.xml_url || inv.xmlUrl;
+  const pdfUrl = inv.pdf_url || inv.pdfUrl;
+  const hasFallbackXml = !!(inv.uuid || xmlUrl);
+  const hasFallbackPdf = !!(inv.uuid || pdfUrl);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -173,13 +314,12 @@ export function InvoiceDetailSheet({
         className="w-full sm:max-w-[650px] bg-slate-50 dark:bg-background/95 backdrop-blur-xl border-l-slate-200 dark:border-l-white/10 p-0 flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* ================= HEADER FIJO ================= */}
         <SheetHeader className="px-6 py-5 border-b border-border/50 flex flex-row items-center justify-between sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-40 shadow-sm">
           <SheetTitle className="flex items-center gap-3 text-brand-navy dark:text-white font-black text-xl tracking-tight m-0">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800/50">
               <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Detalle de Factura
+            Detalle de Comprobante
           </SheetTitle>
 
           <div className="flex items-center gap-3 mt-0">
@@ -201,9 +341,130 @@ export function InvoiceDetailSheet({
           </div>
         </SheetHeader>
 
-        {/* ================= CONTENEDOR SCROLL ================= */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          {/* IDENTIFICACIÓN */}
+          {/* 🚨 ZONA DE ALERTAS INTELIGENTES (FASE 4) 🚨 */}
+          {isCanceled && (
+            <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">
+                  Factura Cancelada
+                </h4>
+                <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
+                  Cancelada el <strong>{fDT(inv.fecha_cancelacion)}</strong>.
+                  Detalle SAT:{" "}
+                  {inv.detalle_sat ||
+                    (inv.motivo_cancelacion
+                      ? `por el motivo "${inv.motivo_cancelacion}"`
+                      : "Sin detalle.")}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {inProcess && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
+                  En Proceso de Cancelación
+                </h4>
+                <p className="text-sm font-medium text-amber-700/80 dark:text-amber-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "Esperando aprobación del Receptor en el Buzón Tributario."}
+                </p>
+                {onVerifySat && (
+                  <Button
+                    onClick={handleVerify}
+                    disabled={isVerifying}
+                    size="sm"
+                    className="mt-3 bg-amber-600 hover:bg-amber-700 text-white text-xs h-8"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "w-3 h-3 mr-2",
+                        isVerifying && "animate-spin",
+                      )}
+                    />
+                    Consultar SAT ahora
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {hasSatError && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-red-800 dark:text-red-400 uppercase tracking-widest">
+                  Rechazo de Cancelación (Intento {inv.intentos_cancelacion})
+                </h4>
+                <p className="text-sm font-medium text-red-700/80 dark:text-red-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "El SAT o el Receptor rechazaron la solicitud de cancelación."}
+                </p>
+                <div className="flex gap-2 mt-3">
+                  {onRetryCancel && (
+                    <Button
+                      onClick={() => onRetryCancel(inv.id, "02")}
+                      size="sm"
+                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar Forzado
+                      (02)
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🌳 JERARQUÍA DEL VIAJE (PADRE / HIJOS) 🌳 */}
+          {(inv.factura_padre ||
+            (inv.cartas_porte_hijas && inv.cartas_porte_hijas.length > 0)) && (
+            <div className="bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-2xl">
+              <h4 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+                <Network className="w-4 h-4" /> Árbol de Documentos del Viaje
+              </h4>
+
+              {inv.factura_padre && (
+                <div className="flex items-center gap-2 mb-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <Badge className="bg-indigo-100 text-indigo-700">
+                    PADRE (Ingreso)
+                  </Badge>
+                  <span className="font-mono text-sm font-bold">
+                    {inv.factura_padre.folio_interno}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-auto">
+                    {fC(inv.factura_padre.monto_total)}
+                  </span>
+                </div>
+              )}
+
+              {inv.cartas_porte_hijas?.map((hija: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 mt-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4"
+                >
+                  <div className="w-3 h-3 border-l-2 border-b-2 border-slate-300 rounded-bl-sm -ml-6 mr-2"></div>
+                  <Badge variant="outline" className="text-slate-600">
+                    HIJA (C. Porte)
+                  </Badge>
+                  <span className="font-mono text-sm font-bold">
+                    {hija.folio_interno}
+                  </span>
+                  <StatusBadge
+                    status={getInvoiceStatusInfo(hija).status}
+                    className="ml-auto text-[10px]"
+                  >
+                    {hija.status_sat}
+                  </StatusBadge>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group gap-4">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-navy group-hover:bg-blue-600 transition-colors"></div>
             <div className="flex-1 pl-2">
@@ -225,12 +486,13 @@ export function InvoiceDetailSheet({
                   </span>
                 </div>
 
-                {/* UUID DE CARTA PORTE RELACIONADA */}
                 {uuidRelacionado && (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
                     <LinkIcon className="w-3.5 h-3.5 text-indigo-500" />
                     <span className="text-[10px] font-bold text-indigo-600/70 dark:text-indigo-400/70 uppercase">
-                      CP Relacionada:
+                      {inv.is_nominal
+                        ? "CP Relacionada:"
+                        : "Sustituye al CFDI:"}
                     </span>
                     <span className="font-mono text-[10px] font-black text-indigo-700 dark:text-indigo-300 break-all">
                       {uuidRelacionado}
@@ -238,7 +500,6 @@ export function InvoiceDetailSheet({
                   </div>
                 )}
 
-                {/* REFERENCIA OPERATIVA */}
                 {referenciaOperativa && (
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800/50">
                     <FileText className="w-3.5 h-3.5 text-blue-500" />
@@ -254,27 +515,25 @@ export function InvoiceDetailSheet({
             </div>
 
             <div className="flex flex-col sm:items-end w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
-              {!isPaid && onPayClick && (
+              {!isPaid && !isCanceled && onPayClick && (
                 <Button
                   onClick={() => onPayClick(invoice)}
                   className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-black h-11 px-6 text-[11px] tracking-widest uppercase rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
                 >
-                  <Banknote className="w-4 h-4 mr-2" /> Cobrar
+                  <Banknote className="w-4 h-4 mr-2" /> Cobrar / Pagar
                 </Button>
               )}
             </div>
           </div>
 
-          {/* CLIENTE Y CONCEPTO (GRID) */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            {/* Cliente */}
             <div className="md:col-span-2 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
                   <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </div>
                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Receptor
+                  Entidad
                 </span>
               </div>
               <p className="font-black text-foreground text-base leading-tight mb-3 break-words">
@@ -287,12 +546,10 @@ export function InvoiceDetailSheet({
               </div>
             </div>
 
-            {/* Concepto */}
             <div className="md:col-span-3 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Concepto de Facturación
+                <FileText className="w-3.5 h-3.5" /> Concepto
               </p>
-              {/* Se eliminó el truncate, ahora hace salto de línea automático */}
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed flex-1 break-words whitespace-pre-wrap">
                 {concepto}
               </p>
@@ -304,9 +561,7 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {/* DESGLOSE FINANCIERO Y FECHAS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Fechas y Saldo */}
             <div className="grid grid-cols-2 gap-3">
               <div
                 className={cn(
@@ -397,7 +652,6 @@ export function InvoiceDetailSheet({
               </div>
             </div>
 
-            {/* Desglose */}
             <div className="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner flex flex-col justify-center">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-1.5">
                 <DollarSign className="w-4 h-4 text-slate-400" /> Resumen
@@ -411,7 +665,7 @@ export function InvoiceDetailSheet({
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="font-bold text-slate-500">IVA (16%):</span>
+                  <span className="font-bold text-slate-500">IVA:</span>
                   <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
                     {fC(iva)}
                   </span>
@@ -434,77 +688,80 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          <Separator className="bg-slate-200 dark:bg-border/50" />
-
-          {/* DATOS OPERATIVOS ENRIQUECIDOS (CON ESPACIOS Y WRAP) */}
-          <div className="space-y-4">
-            <p className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
-              <Truck className="w-5 h-5 text-blue-500" /> Detalles de Operación
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Tarjeta Ruta */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
-                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ruta del
-                  Viaje
-                </span>
-                <div className="flex-1 flex flex-col justify-center space-y-2">
-                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
-                    {origen}
-                  </span>
-                  <div className="flex items-center gap-2 text-slate-400">
-                    <ArrowDown className="w-4 h-4" />
+          {(origen !== "No especificado" || destino !== "No especificado") && (
+            <>
+              <Separator className="bg-slate-200 dark:bg-border/50" />
+              <div className="space-y-4">
+                <p className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-blue-500" /> Detalles de
+                  Operación
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ruta del
+                      Viaje
+                    </span>
+                    <div className="flex-1 flex flex-col justify-center space-y-2">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
+                        {origen}
+                      </span>
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <ArrowDown className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
+                        {destino}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
-                    {destino}
-                  </span>
+
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-4">
+                    <div>
+                      <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-slate-400" /> Producto
+                        (Clave SAT)
+                      </span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight block">
+                        {productoSat}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+                      <div>
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Weight className="w-3 h-3 text-slate-400" /> Peso
+                        </span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">
+                          {pesoTon > 0
+                            ? `${pesoTon} Toneladas`
+                            : "No registrado"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <Box className="w-3 h-3 text-slate-400" />{" "}
+                          Contenedores
+                        </span>
+                        <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal block">
+                          {contenedores}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              {/* Tarjeta Carga y Producto */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-4">
-                <div>
-                  <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5 text-slate-400" /> Producto
-                    (Clave SAT)
-                  </span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight block">
-                    {productoSat}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800 pt-3">
-                  <div>
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
-                      <Weight className="w-3 h-3 text-slate-400" /> Peso
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">
-                      {pesoTon > 0 ? `${pesoTon} Toneladas` : "No registrado"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
-                      <Box className="w-3 h-3 text-slate-400" /> Contenedores
-                    </span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal block">
-                      {contenedores}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
 
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* ================= HISTORIAL DE COBROS (REP) ================= */}
+          {/* HISTORIAL DE COBROS/PAGOS (REP) */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
                   <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                 </div>
-                Historial de Cobros y REP
+                Historial de Pagos y REP
                 <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black ml-1">
                   {payments.length}
                 </span>
@@ -515,11 +772,7 @@ export function InvoiceDetailSheet({
               <div className="p-8 text-center bg-white dark:bg-card rounded-2xl border-2 border-dashed border-slate-200 dark:border-border flex flex-col items-center justify-center gap-2">
                 <Receipt className="h-8 w-8 text-slate-300 dark:text-slate-700" />
                 <p className="text-sm font-bold text-slate-500">
-                  No hay cobros registrados
-                </p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[250px] leading-tight mx-auto">
-                  Los abonos que registres aparecerán aquí junto con su
-                  Complemento de Pago (REP).
+                  No hay pagos registrados
                 </p>
               </div>
             ) : (
@@ -534,7 +787,7 @@ export function InvoiceDetailSheet({
                         Monto
                       </DataTableHead>
                       <DataTableHead className="text-center text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
-                        Archivos SAT
+                        Archivos SAT / Acción
                       </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>
@@ -545,11 +798,13 @@ export function InvoiceDetailSheet({
                       const complementoUuid = safeStr(
                         p.complemento_uuid ?? p.complementoUuid,
                       );
+                      const isCancelandoSAT =
+                        p.estatus === "PROCESO_CANCELACION";
 
                       return (
                         <DataTableRow
                           key={safeStr(p.id)}
-                          className="border-b-slate-100 dark:border-b-border/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
+                          className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/50"
                         >
                           <DataTableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
                             {fD(fecha)}
@@ -558,39 +813,92 @@ export function InvoiceDetailSheet({
                             <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded border border-emerald-100 dark:border-emerald-900/50">
                               {fC(monto)}
                             </span>
+                            {isCancelandoSAT && (
+                              <Badge className="block mt-2 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[8px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 text-center">
+                                <Loader2 className="h-2 w-2 mr-1 animate-spin inline-block" />{" "}
+                                En Proceso SAT
+                              </Badge>
+                            )}
                           </DataTableCell>
 
                           <DataTableCell className="text-center">
-                            {complementoUuid ? (
-                              <div className="flex justify-center items-center gap-2">
+                            <div className="flex justify-center items-center gap-1.5">
+                              {complementoUuid ? (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    title="Descargar PDF"
+                                    disabled={isCancelandoSAT}
+                                    className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all"
+                                    onClick={() =>
+                                      handleDownloadFromBackend(
+                                        "pdf",
+                                        complementoUuid,
+                                      )
+                                    }
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    title="Descargar XML"
+                                    disabled={isCancelandoSAT}
+                                    className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 transition-all"
+                                    onClick={() =>
+                                      handleDownloadFromBackend(
+                                        "xml",
+                                        complementoUuid,
+                                      )
+                                    }
+                                  >
+                                    <FileCode2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 text-[10px] font-black uppercase tracking-widest text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/50 transition-all"
+                                  disabled={
+                                    stampingId === p.id || isCancelandoSAT
+                                  }
+                                  onClick={() => handleStamp(p.id)}
+                                >
+                                  {stampingId === p.id ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                      Timbrando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <FileCode2 className="h-3.5 w-3.5 mr-1.5" />
+                                      Timbrar SAT
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+
+                              {onCancelPayments && !isCancelandoSAT && (
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  title="Descargar PDF"
-                                  className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 dark:hover:bg-rose-900/50 transition-all"
-                                  onClick={() =>
-                                    handleDownload("pdf", complementoUuid)
+                                  title="Anular este pago"
+                                  disabled={
+                                    cancelingId === p.id || stampingId === p.id
                                   }
+                                  onClick={() => handleCancelIndividual(p.id)}
+                                  className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all ml-1"
                                 >
-                                  <FileText className="h-4 w-4" />
+                                  {cancelingId === p.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
                                 </Button>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  title="Descargar XML"
-                                  className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 dark:hover:bg-blue-900/50 transition-all"
-                                  onClick={() =>
-                                    handleDownload("xml", complementoUuid)
-                                  }
-                                >
-                                  <FileCode2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                No timbrado
-                              </span>
-                            )}
+                              )}
+                            </div>
                           </DataTableCell>
                         </DataTableRow>
                       );
@@ -599,6 +907,202 @@ export function InvoiceDetailSheet({
                 </DataTable>
               </div>
             )}
+          </div>
+
+          <Separator className="bg-slate-200 dark:bg-border/50" />
+
+          {/* TABLA DE VERSIONES DE ARCHIVO SAT */}
+          <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
+            <div className="flex justify-between items-center mb-4 relative z-10">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 flex items-center gap-2 m-0">
+                <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
+                Versiones (Historial)
+              </h3>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-3 text-[10px] font-black tracking-widest uppercase border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 transition-colors"
+                onClick={handleRebuildPdf}
+                disabled={isRebuilding || !inv.uuid}
+                title="Regenera el diseño del PDF leyendo los datos originales del XML"
+              >
+                {isRebuilding ? (
+                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3 mr-1.5" />
+                )}
+                Regenerar PDF
+              </Button>
+            </div>
+
+            <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
+              <DataTable>
+                <DataTableHeader>
+                  <DataTableRow className="bg-slate-100/50 dark:bg-slate-800/50 border-b-slate-200 dark:border-b-border/50 hover:bg-transparent">
+                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Documento
+                    </DataTableHead>
+                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Fecha / Hora
+                    </DataTableHead>
+                    <DataTableHead className="text-center text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Descargas
+                    </DataTableHead>
+                  </DataTableRow>
+                </DataTableHeader>
+                <DataTableBody>
+                  {groupedHistory.length > 0 ? (
+                    groupedHistory.map((group: any) => (
+                      <DataTableRow
+                        key={`v-${group.version}`}
+                        className={`border-b-slate-100 dark:border-b-border/50 transition-colors ${group.is_active ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "opacity-60 grayscale hover:grayscale-0"}`}
+                      >
+                        <DataTableCell className="py-2.5">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {group.filename}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
+                              Versión {group.version}{" "}
+                              {group.is_active ? "(Activa)" : "(Obsoleta)"}
+                            </span>
+                          </div>
+                        </DataTableCell>
+                        <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
+                          {fDT(group.created_at)}
+                        </DataTableCell>
+                        <DataTableCell className="text-center py-2.5">
+                          <div className="flex justify-center items-center gap-1">
+                            {group.pdf && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar PDF"
+                                className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                                onClick={() =>
+                                  group.is_active && inv.uuid
+                                    ? handleDownloadFromBackend("pdf", inv.uuid)
+                                    : handleDownloadUrl(
+                                        group.pdf.file_url,
+                                        group.pdf.filename,
+                                      )
+                                }
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {group.xml && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar XML"
+                                className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
+                                onClick={() =>
+                                  group.is_active && inv.uuid
+                                    ? handleDownloadFromBackend("xml", inv.uuid)
+                                    : handleDownloadUrl(
+                                        group.xml.file_url,
+                                        group.xml.filename,
+                                      )
+                                }
+                              >
+                                <FileCode2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {group.acuse && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar Acuse de Cancelación"
+                                className="h-7 w-7 rounded text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.acuse.file_url,
+                                    group.acuse.filename,
+                                  )
+                                }
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </DataTableCell>
+                      </DataTableRow>
+                    ))
+                  ) : hasFallbackPdf || hasFallbackXml ? (
+                    <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <DataTableCell className="py-2.5">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {displayFolio || "Comprobante"}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
+                            Versión Única (Activa)
+                          </span>
+                        </div>
+                      </DataTableCell>
+                      <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
+                        {fDT(inv.fecha_emision) || "—"}
+                      </DataTableCell>
+                      <DataTableCell className="text-center py-2.5">
+                        <div className="flex justify-center items-center gap-1">
+                          {hasFallbackPdf && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Descargar PDF"
+                              className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                              onClick={() => {
+                                if (inv.uuid) {
+                                  handleDownloadFromBackend("pdf", inv.uuid);
+                                } else {
+                                  handleDownloadUrl(
+                                    pdfUrl,
+                                    `Comprobante_${displayFolio}.pdf`,
+                                  );
+                                }
+                              }}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {hasFallbackXml && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Descargar XML"
+                              className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
+                              onClick={() => {
+                                if (inv.uuid) {
+                                  handleDownloadFromBackend("xml", inv.uuid);
+                                } else {
+                                  handleDownloadUrl(
+                                    xmlUrl,
+                                    `Comprobante_${displayFolio}.xml`,
+                                  );
+                                }
+                              }}
+                            >
+                              <FileCode2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </DataTableCell>
+                    </DataTableRow>
+                  ) : (
+                    <DataTableRow>
+                      <DataTableCell
+                        colSpan={3}
+                        className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs font-medium"
+                      >
+                        No hay documentos ni versiones registradas.
+                      </DataTableCell>
+                    </DataTableRow>
+                  )}
+                </DataTableBody>
+              </DataTable>
+            </div>
           </div>
         </div>
       </SheetContent>

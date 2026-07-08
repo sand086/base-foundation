@@ -5,6 +5,7 @@ from typing import List
 from app.db.database import get_db
 from app.models.models import Brand, RecordStatus
 from .schemas import BrandResponse, BrandCreate
+from app.modules.auth.router import get_current_active_user  # <--- AUDITORÍA IMPORT
 
 router = APIRouter()
 
@@ -20,7 +21,11 @@ def get_brands(db: Session = Depends(get_db)):
 
 
 @router.post("/brand", response_model=BrandResponse)
-def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
+def create_brand(
+    obj_in: BrandCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_user),  # <--- AUDITORÍA PARAM
+):
     # Evitar duplicados por nombre
     nombre_limpio = obj_in.nombre.strip().upper()
 
@@ -34,6 +39,9 @@ def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
             existing.tipo_activo = (
                 obj_in.tipo_activo.upper() if obj_in.tipo_activo else None
             )
+            existing.updated_by_id = (
+                current_user.id
+            )  # <--- AUDITORÍA: Registrar quién la revivió
             db.commit()
             db.refresh(existing)
             return existing
@@ -43,6 +51,7 @@ def create_brand(obj_in: BrandCreate, db: Session = Depends(get_db)):
     new_brand = Brand(
         nombre=nombre_limpio,
         tipo_activo=obj_in.tipo_activo.upper() if obj_in.tipo_activo else None,
+        created_by_id=current_user.id,  # <--- AUDITORÍA
     )
     db.add(new_brand)
     db.commit()
@@ -69,18 +78,23 @@ from app.modules.auth.router import get_current_active_user
 
 DEFAULT_MODULES = [
     {"id": "dashboard", "nombre": "Dashboard", "icono": "LayoutDashboard"},
-    {"id": "monitoreo", "nombre": "Historico", "icono": "Radio"},
     {"id": "clients", "nombre": "Clientes", "icono": "Users"},
-    {"id": "flota", "nombre": "Flota", "icono": "Truck"},
-    {"id": "combustible", "nombre": "Combustible", "icono": "Fuel"},
-    {"id": "tarifas", "nombre": "Tarifas", "icono": "DollarSign"},
-    {"id": "Dispatch", "nombre": "Dispatch", "icono": "FileText"},
-    {"id": "cxc", "nombre": "Cuentas por Cobrar", "icono": "Receipt"},
-    {"id": "cxp", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
-    {"id": "reportes", "nombre": "Reportes", "icono": "BarChart3"},
-    {"id": "usuarios", "nombre": "Usuarios", "icono": "Shield"},
-    {"id": "configuracion", "nombre": "Configuración", "icono": "Settings"},
-    {"id": "trackingop", "nombre": "Rastreo operativo", "icono": "Truck"},
+    {"id": "rates", "nombre": "Tarifas", "icono": "Calculator"},
+    {"id": "fleet", "nombre": "Flota", "icono": "Truck"},
+    {"id": "monitoring", "nombre": "Histórico", "icono": "Radar"},
+    {"id": "traffic", "nombre": "Tracking Op", "icono": "Navigation"},
+    {"id": "dispatch", "nombre": "Despacho", "icono": "CalendarPlus"},
+    {"id": "fuel", "nombre": "Combustible", "icono": "Fuel"},
+    {"id": "settlements", "nombre": "Liquidación", "icono": "FileCheck"},
+    {"id": "suppliers", "nombre": "Proveedores", "icono": "Briefcase"},
+    {"id": "payables", "nombre": "Cuentas por Pagar", "icono": "CreditCard"},
+    {"id": "receivables", "nombre": "Cuentas por Cobrar", "icono": "DollarSign"},
+    {"id": "historico", "nombre": "Histórico CFDI", "icono": "FileArchive"},
+    {"id": "treasury", "nombre": "Tesorería", "icono": "Landmark"},
+    {"id": "reports", "nombre": "Reportes", "icono": "BarChart3"},
+    {"id": "users", "nombre": "Usuarios", "icono": "Users"},
+    {"id": "roles", "nombre": "Roles y Permisos", "icono": "Shield"},
+    {"id": "settings", "nombre": "Configuración", "icono": "Settings"},
 ]
 
 # =========================================================
@@ -296,6 +310,7 @@ def delete_route_catalog(
 
     # <-- SOFT DELETE EN LUGAR DE db.delete(route)
     route.record_status = RecordStatus.ELIMINADO
+    route.updated_by_id = current_user.id  # <--- AUDITORÍA: Registro de borrado de ruta
     db.commit()
     return {"message": "Ruta eliminada"}
 
@@ -609,6 +624,9 @@ def create_terminal(
         # Si existe pero fue eliminada, la "revivimos"
         if exist.record_status == RecordStatus.ELIMINADO:
             exist.record_status = RecordStatus.ACTIVO
+            exist.updated_by_id = (
+                user.id
+            )  # <--- AUDITORÍA: El usuario revivió la terminal
             db.commit()
             db.refresh(exist)
             return exist

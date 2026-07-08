@@ -15,6 +15,9 @@ export type SubClientResponse = {
     contacto?: (string | null);
     telefono?: (string | null);
     horario_recepcion?: (string | null);
+    forma_pago?: (string | null);
+    metodo_pago?: (string | null);
+    moneda?: (string | null);
     estatus?: string;
     dias_credito?: (number | null);
     requiere_contrato?: boolean;

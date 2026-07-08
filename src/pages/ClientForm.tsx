@@ -114,6 +114,9 @@ interface FiscalDataForm {
   constancia_fiscal_url?: string;
   acta_constitutiva_url?: string;
   comprobante_domicilio_url?: string;
+  forma_pago: string;
+  metodo_pago: string;
+  moneda: string;
 }
 
 interface SubClienteForm {
@@ -355,6 +358,9 @@ export default function ClientForm() {
     acta_constitutiva_url: "",
     comprobante_domicilio_url: "",
     dias_credito: 0,
+    forma_pago: "99",
+    metodo_pago: "PPD",
+    moneda: "MXN",
   });
 
   const [documentos, setDocumentos] = useState<DocumentosObligatorios>({
@@ -499,6 +505,9 @@ export default function ClientForm() {
           acta_constitutiva_url: (data as any).acta_constitutiva_url || "",
           comprobante_domicilio_url:
             (data as any).comprobante_domicilio_url || "",
+          forma_pago: (data as any).forma_pago || "99",
+          metodo_pago: (data as any).metodo_pago || "PPD",
+          moneda: (data as any).moneda || "MXN",
         });
 
         const mappedSubClients: SubClienteForm[] = (data.sub_clients || []).map(
@@ -707,6 +716,9 @@ export default function ClientForm() {
         constancia_fiscal_url: fiscalData.constancia_fiscal_url || null,
         acta_constitutiva_url: fiscalData.acta_constitutiva_url || null,
         comprobante_domicilio_url: fiscalData.comprobante_domicilio_url || null,
+        forma_pago: fiscalData.forma_pago,
+        metodo_pago: fiscalData.metodo_pago,
+        moneda: fiscalData.moneda,
         sub_clients: subClientes.map((sub) => ({
           id: sub.id.startsWith("SUB-") ? 0 : safeToInt(sub.id),
           client_id: 0,
@@ -846,7 +858,7 @@ export default function ClientForm() {
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Button>
         <div>
-          <h1 className="text-3xl font-black uppercase tracking-tighter text-brand-navy drop-shadow-sm heading-crisp flex items-center gap-3">
+          <h1 className="uppercase text-3xl font-black uppercase tracking-tighter text-brand-navy drop-shadow-sm heading-crisp flex items-center gap-3">
             <Users className="h-7 w-7 text-brand-red" />
             {isEditMode ? "Editar Cliente" : "Alta de Cliente"}
           </h1>
@@ -1044,6 +1056,76 @@ export default function ClientForm() {
                 className="h-11 glass-card font-medium"
               />
             </div>
+
+            {/* INICIO NUEVO BLOQUE: CONFIGURACIÓN SAT POR CLIENTE */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="space-y-1.5">
+                <Label variant="brand">Forma de Pago Base</Label>
+                <Select
+                  value={fiscalData.forma_pago}
+                  onValueChange={(v) =>
+                    setFiscalData({ ...fiscalData, forma_pago: v })
+                  }
+                >
+                  <SelectTrigger className="h-11 glass-card font-bold">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent className="glass-panel">
+                    <SelectItem value="01">01 - Efectivo</SelectItem>
+                    <SelectItem value="02">02 - Cheque nominativo</SelectItem>
+                    <SelectItem value="03">
+                      03 - Transferencia electrónica
+                    </SelectItem>
+                    <SelectItem value="04">04 - Tarjeta de crédito</SelectItem>
+                    <SelectItem value="28">28 - Tarjeta de débito</SelectItem>
+                    <SelectItem value="99">99 - Por definir</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label variant="brand">Método de Pago Base</Label>
+                <Select
+                  value={fiscalData.metodo_pago}
+                  onValueChange={(v) =>
+                    setFiscalData({ ...fiscalData, metodo_pago: v })
+                  }
+                >
+                  <SelectTrigger className="h-11 glass-card font-bold">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent className="glass-panel">
+                    <SelectItem value="PUE">
+                      PUE - Pago en una sola exhibición
+                    </SelectItem>
+                    <SelectItem value="PPD">
+                      PPD - Pago en parcialidades (Diferido)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label variant="brand">Moneda</Label>
+                <Select
+                  value={fiscalData.moneda}
+                  onValueChange={(v) =>
+                    setFiscalData({ ...fiscalData, moneda: v })
+                  }
+                >
+                  <SelectTrigger className="h-11 glass-card font-bold">
+                    <SelectValue placeholder="Seleccionar..." />
+                  </SelectTrigger>
+                  <SelectContent className="glass-panel">
+                    <SelectItem value="MXN">MXN - Peso Mexicano</SelectItem>
+                    <SelectItem value="USD">
+                      USD - Dólar Estadounidense
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {/* FIN NUEVO BLOQUE */}
 
             <div className="grid grid-cols-3 gap-6">
               <div className="space-y-1.5">

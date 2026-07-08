@@ -48,7 +48,9 @@ def get_user_by_email(db: Session, email: str):
     )
 
 
-def create_user(db: Session, payload: schemas.UserCreate):
+def create_user(
+    db: Session, payload: schemas.UserCreate, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     """
     - Hashea password -> password_hash
     - Si preferencias viene None, NO la mandamos para que aplique default del modelo.
@@ -62,6 +64,7 @@ def create_user(db: Session, payload: schemas.UserCreate):
     db_user = models.User(
         **data,
         password_hash=get_password_hash(payload.password),
+        created_by_id=current_user_id,  # <--- AUDITORÍA
     )
 
     db.add(db_user)
@@ -70,7 +73,9 @@ def create_user(db: Session, payload: schemas.UserCreate):
     return get_user(db, db_user.id)
 
 
-def update_user(db: Session, user_id: int, payload: schemas.UserUpdate):
+def update_user(
+    db: Session, user_id: int, payload: schemas.UserUpdate, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     user = (
         db.query(models.User)
         .filter(
@@ -105,13 +110,17 @@ def update_user(db: Session, user_id: int, payload: schemas.UserUpdate):
     for k, v in data.items():
         setattr(user, k, v)
 
+    user.updated_by_id = current_user_id  # <--- AUDITORÍA
+
     db.add(user)
     db.commit()
     db.refresh(user)
     return get_user(db, user_id)
 
 
-def toggle_user_status(db: Session, user_id: int):
+def toggle_user_status(
+    db: Session, user_id: int, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     user = (
         db.query(models.User)
         .filter(
@@ -124,13 +133,16 @@ def toggle_user_status(db: Session, user_id: int):
         return None
 
     user.activo = not bool(user.activo)
+    user.updated_by_id = current_user_id  # <--- AUDITORÍA
     db.add(user)
     db.commit()
     db.refresh(user)
     return user.activo
 
 
-def reset_password(db: Session, user_id: int, new_password: str):
+def reset_password(
+    db: Session, user_id: int, new_password: str, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     user = (
         db.query(models.User)
         .filter(
@@ -143,12 +155,15 @@ def reset_password(db: Session, user_id: int, new_password: str):
         return False
 
     user.password_hash = get_password_hash(new_password)
+    user.updated_by_id = current_user_id  # <--- AUDITORÍA
     db.add(user)
     db.commit()
     return True
 
 
-def delete_user(db: Session, user_id: int):
+def delete_user(
+    db: Session, user_id: int, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     """
     Soft delete:
     - record_status = ELIMINADO
@@ -168,6 +183,7 @@ def delete_user(db: Session, user_id: int):
 
     user.record_status = RecordStatus.ELIMINADO
     user.activo = False
+    user.updated_by_id = current_user_id  # <--- AUDITORÍA
 
     # NUEVO: Libera el email agregándole un timestamp para evitar conflictos de constraint Unique
     timestamp = int(time.time())
@@ -215,16 +231,20 @@ def get_role_by_key(db: Session, name_key: str):
     )
 
 
-def create_role(db: Session, payload: schemas.RoleCreate):
+def create_role(
+    db: Session, payload: schemas.RoleCreate, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     data = payload.model_dump(exclude_unset=True)
-    db_role = models.Role(**data)
+    db_role = models.Role(**data, created_by_id=current_user_id)  # <--- AUDITORÍA
     db.add(db_role)
     db.commit()
     db.refresh(db_role)
     return db_role
 
 
-def update_role(db: Session, role_id: int, payload: schemas.RoleUpdate):
+def update_role(
+    db: Session, role_id: int, payload: schemas.RoleUpdate, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     role = (
         db.query(models.Role)
         .filter(
@@ -250,13 +270,17 @@ def update_role(db: Session, role_id: int, payload: schemas.RoleUpdate):
     for k, v in data.items():
         setattr(role, k, v)
 
+    role.updated_by_id = current_user_id  # <--- AUDITORÍA
+
     db.add(role)
     db.commit()
     db.refresh(role)
     return role
 
 
-def delete_role(db: Session, role_id: int):
+def delete_role(
+    db: Session, role_id: int, current_user_id: int
+):  # <--- AUDITORÍA PARAM
     role = (
         db.query(models.Role)
         .filter(
@@ -280,6 +304,7 @@ def delete_role(db: Session, role_id: int):
         return None  # “no se puede borrar, está en uso”
 
     role.record_status = RecordStatus.ELIMINADO
+    role.updated_by_id = current_user_id  # <--- AUDITORÍA
 
     # NUEVO: Libera el name_key para evitar conflictos de constraint Unique
     timestamp = int(time.time())

@@ -6,7 +6,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,7 +22,6 @@ import {
 } from "lucide-react";
 
 import { PurchaseOrder } from "@/features/purchases/types";
-import { cn } from "@/lib/utils";
 
 // ==========================================
 // 1. MODAL: RECIBIR ORDEN (Logística/Almacén)
@@ -34,7 +32,7 @@ interface ReceiveOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReceive: (
-    orderId: number,
+    orderId: number | string,
     completo: boolean,
     notas: string,
   ) => Promise<void> | void;
@@ -54,7 +52,7 @@ export function ReceiveOrderModal({
   if (!order) return null;
 
   const handleReceive = async () => {
-    await onReceive(Number(order.id), recepcionCompleta, notas);
+    await onReceive(order.id, recepcionCompleta, notas);
     setRecepcionCompleta(true);
     setNotas("");
     onOpenChange(false);
@@ -223,7 +221,7 @@ interface ConvertToCxPModalProps {
   order: PurchaseOrder | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConvert: (orderId: number) => void;
+  onConvert: (orderId: string | number) => void;
 }
 
 export function ConvertToCxPModal({
@@ -244,7 +242,7 @@ export function ConvertToCxPModal({
   };
 
   const handleConvert = () => {
-    onConvert(Number(order.id));
+    onConvert(order.id);
     onOpenChange(false);
 
     const params = new URLSearchParams({

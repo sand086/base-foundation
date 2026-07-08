@@ -18,6 +18,9 @@ export type ClientUpdate = {
     estatus?: (ClientStatus | null);
     dias_credito?: (number | null);
     contrato_url?: (string | null);
+    forma_pago?: (string | null);
+    metodo_pago?: (string | null);
+    moneda?: (string | null);
     sub_clients?: (Array<SubClientUpdate> | null);
 };
 

@@ -9,7 +9,7 @@ export type BankMovementCreate = {
      */
     tipo: string;
     /**
-     * El monto debe ser estrictamente mayor a 0
+     * El monto debe ser mayor o igual a 0
      */
     monto: number;
     concepto: string;

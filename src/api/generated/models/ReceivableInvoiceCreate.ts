@@ -11,6 +11,7 @@ export type ReceivableInvoiceCreate = {
      * Si es True, genera factura por $1 Peso para Bypass Aduanal
      */
     is_nominal?: boolean;
+    folio_forzado?: (number | null);
     use_dummy?: (boolean | null);
     ocultar_montos?: (boolean | null);
     /**

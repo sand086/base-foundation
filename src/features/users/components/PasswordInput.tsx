@@ -17,10 +17,13 @@ interface PasswordInputProps {
 }
 
 // Password strength calculation
-const calculateStrength = (password: string): { score: number; label: string; color: string } => {
+const calculateStrength = (
+  password: string,
+): { score: number; label: string; color: string } => {
   let score = 0;
 
-  if (!password) return { score: 0, label: "Sin contraseña", color: "bg-muted" };
+  if (!password)
+    return { score: 0, label: "Sin contraseña", color: "bg-muted" };
 
   // Length checks
   if (password.length >= 8) score += 20;
@@ -118,6 +121,7 @@ export function PasswordInput({
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             className="pr-20 h-9 text-sm font-mono"
+            preserveCase
           />
           <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
             {value && (
@@ -175,8 +179,11 @@ export function PasswordInput({
             <span
               className={cn(
                 "text-xs font-medium",
-                strength.score < 50 ? "text-destructive" : 
-                strength.score < 70 ? "text-yellow-600" : "text-green-600"
+                strength.score < 50
+                  ? "text-destructive"
+                  : strength.score < 70
+                    ? "text-yellow-600"
+                    : "text-green-600",
               )}
             >
               {strength.label}

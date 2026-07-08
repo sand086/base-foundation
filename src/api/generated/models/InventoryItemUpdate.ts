@@ -11,5 +11,6 @@ export type InventoryItemUpdate = {
     stock_minimo?: (number | null);
     ubicacion?: (string | null);
     precio_unitario?: (number | null);
+    proveedor_id?: (number | null);
 };
 

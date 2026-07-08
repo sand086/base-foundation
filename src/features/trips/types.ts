@@ -65,6 +65,15 @@ export interface Trip extends TripResponse {
   sub_client?: SubClient;
   descripcion_mercancia: string;
   peso_toneladas: number;
+
+  // --- INICIO NUEVOS CAMPOS (Material Peligroso y SAT) ---
+  cantidad?: number;
+  sat_clave_producto?: string;
+  sat_clave_servicio?: string;
+  cve_material_peligroso?: string | null;
+  embalaje?: string | null;
+  // --- FIN NUEVOS CAMPOS ---
+
   es_material_peligroso: boolean;
   clase_imo?: string | null;
   costo_casetas: number;
@@ -76,6 +85,17 @@ export interface Trip extends TripResponse {
     diferencia: number;
     km_recorridos: number;
   };
+
+  is_refrigerated_1?: boolean | null;
+  motogenerator_1_id?: number | null;
+  motogenerator_1?: string | null;
+  motogenerator_1_unit?: any | null; // <--- AÑADIDO: Objeto completo de la unidad
+
+  is_refrigerated_2?: boolean | null;
+  motogenerator_2_id?: number | null;
+  motogenerator_2?: string | null;
+  motogenerator_2_unit?: any | null;
+  // --------------------------------------
 }
 
 // ==========================================
@@ -100,15 +120,43 @@ export interface TripCreatePayload {
   origin: string;
   destination: string;
   route_name?: string | null;
+
+  // --- INICIO CAMPOS EXTRAÍDOS DEL WIZARD ---
+  fecha_programada?: string | null;
+  descripcion_mercancia?: string;
+  peso_toneladas?: number;
+  cantidad?: number;
+  sat_clave_producto?: string;
+  sat_clave_servicio?: string;
+  es_material_peligroso?: boolean;
+  cve_material_peligroso?: string | null;
+  embalaje?: string | null;
+  clase_imo?: string | null;
+  contenedor_1?: string | null;
+  contenedor_2?: string | null;
+  // --- FIN CAMPOS EXTRAÍDOS DEL WIZARD ---
+
   remolque_1_id?: number | null;
   dolly_id?: number | null;
   remolque_2_id?: number | null;
+
+  is_refrigerated_1?: boolean;
+  motogenerator_1_id?: number | null;
+  is_refrigerated_2?: boolean;
+  motogenerator_2_id?: number | null;
+
   tarifa_base: number;
   costo_casetas?: number;
   status: TripStatus;
   start_date: string;
-  referencia?: string;
-  initial_leg: TripLegCreatePayload;
+  referencia?: string | null;
+
+  is_dummy_stamping?: boolean;
+  conoce_ruta_completa?: boolean;
+  ocultar_montos_pdf?: boolean;
+
+  initial_leg?: TripLegCreatePayload;
+  final_leg?: TripLegCreatePayload;
 }
 
 // ==========================================

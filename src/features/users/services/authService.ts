@@ -1,9 +1,16 @@
 import axiosClient from "@/api/axiosClient";
 import { LoginRequest, LoginResponse, User } from "@/features/users/types";
 
+//   NUEVO: Extendemos tu interfaz original para decirle a TypeScript que ahora enviamos el token
+export interface LoginWithCaptchaRequest extends LoginRequest {
+  recaptcha_token: string;
+}
+
 export const authService = {
-  // 1. Inicio de sesión primario
-  login: async (credentials: LoginRequest): Promise<LoginResponse> => {
+  // 1. Inicio de sesión primario (Actualizado para recibir el token de reCAPTCHA)
+  login: async (
+    credentials: LoginWithCaptchaRequest,
+  ): Promise<LoginResponse> => {
     const { data } = await axiosClient.post<LoginResponse>(
       "/api/auth/login",
       credentials,
@@ -26,7 +33,7 @@ export const authService = {
   },
 
   /**
-   *  3. Renovación de Token (NUEVO)
+   * 3. Renovación de Token (NUEVO)
    * Este método es llamado por el interceptor de Axios cuando el access_token expira.
    */
   refreshToken: async (refreshToken: string): Promise<LoginResponse> => {

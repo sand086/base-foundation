@@ -5,8 +5,8 @@
 export enum InventoryCategory {
     MOTOR = 'motor',
     FRENOS = 'frenos',
-    EL_CTRICO = 'eléctrico',
-    SUSPENSI_N = 'suspensión',
-    TRANSMISI_N = 'transmisión',
+    ELECTRICO = 'electrico',
+    SUSPENSION = 'suspension',
+    TRANSMISION = 'transmision',
     GENERAL = 'general',
 }

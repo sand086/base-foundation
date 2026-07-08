@@ -8,7 +8,7 @@ from typing import List, Optional
 from weasyprint import HTML
 from jinja2 import Environment, FileSystemLoader
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, logger
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from cryptography import x509
@@ -27,6 +27,8 @@ from app.models import models
 from app.modules.auth.router import get_current_active_user
 from app.core.security import verify_password
 import base64
+import traceback  # Importante para los errores
+from app.modules.auth.router import RequirePermission
 
 router = APIRouter()
 
@@ -46,15 +48,89 @@ class RegistroPagoPayload(BaseModel):
 
 
 def parse_sat_error(e: Exception) -> str:
-    error_msg = str(e).lower()
-    if (
-        "not found" in error_msg
-        or "no such file" in error_msg
-        or "cer" in error_msg
-        or "key" in error_msg
-    ):
-        return "Fallo el timbrado: Actualiza tus sellos (CSD) en configuración. Al parecer no se encuentran, la contraseña es incorrecta o ya no son vigentes."
-    return str(e)
+    import logging
+
+    logger = logging.getLogger("billing.audit")
+    logger.error(f"🚨 [CRÍTICO] ERROR REAL EN SELLOS SAT: {str(e)}")
+    return f"Fallo técnico en sellos SAT: {str(e)}"
+
+
+@router.post("/stamp/free-invoice", response_model=dict)
+def generar_factura_libre(invoice_data: dict, db: Session = Depends(get_db)):
+    """
+    Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE) generadas desde cero.
+    Crea un CFDI 4.0 de Ingreso puro usando solo los datos del frontend.
+    """
+    service = BillingService(db)
+    try:
+        # 1. Timbrar la NUEVA factura con el monto corregido
+        factura = service.generar_factura_libre(invoice_data)
+
+        # --- INICIO DE NUEVA LÓGICA: CANCELACIÓN AUTOMÁTICA ---
+        uuid_relacionado = invoice_data.get("uuid_relacionado")
+        tipo_relacion = invoice_data.get("tipo_relacion")
+
+        # Si la pantalla indica que es una sustitución 04
+        if uuid_relacionado and tipo_relacion == "04":
+            from app.models import models
+
+            # Buscar la factura "Mala" en la base de datos usando el UUID que mandó la pantalla
+            factura_vieja = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                .first()
+            )
+
+            # Si la encuentra, mandar la orden al SAT de cancelarla con motivo 01
+            if factura_vieja:
+                service.cancelar_factura_sat(
+                    invoice_id=factura_vieja.id,
+                    motivo="01",
+                    uuid_sustituto=factura.uuid,
+                )
+        # --- FIN DE NUEVA LÓGICA ---
+
+        return {
+            "status": "success",
+            "message": "Factura Libre generada exitosamente",
+            "data": {
+                "factura_id": factura.id,
+                "uuid": factura.uuid,
+                "xml_url": getattr(factura, "xml_url", None),
+            },
+        }
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
+# ==============================================================
+# NUEVO: ENDPOINT EXCLUSIVO PARA FACTURAS CXC PROVISIONALES
+# ==============================================================
+@router.post("/stamp/invoice/{invoice_id}", response_model=dict)
+def stamp_existing_free_invoice(invoice_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint Exclusivo para timbrar Facturas Libres (CxC) que ya existen en la BD como provisionales.
+    No requiere datos del frontend, los lee de la base de datos.
+    """
+    service = BillingService(db)
+    try:
+        factura = service.timbrar_factura_existente(invoice_id)
+        return {
+            "status": "success",
+            "message": "Factura independiente timbrada exitosamente",
+            "data": {
+                "factura_id": factura.id,
+                "uuid": factura.uuid,
+                "xml_url": getattr(factura, "xml_url", None),
+            },
+        }
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
+# ==============================================================
 
 
 @router.get("/test-invoice-pro")
@@ -189,7 +265,9 @@ def generar_carta_porte_nominal(
 # ================================================
 @router.post("/stamp/one-shot", response_model=dict)
 def generar_carta_porte_one_shot(
-    invoice_data: ReceivableInvoiceCreate, db: Session = Depends(get_db)
+    invoice_data: ReceivableInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RequirePermission("sat:stamp_cfdi")),
 ):
     """
     Endpoint Motor 1 (1 Solo Timbre):
@@ -198,7 +276,35 @@ def generar_carta_porte_one_shot(
     """
     service = CartaPorteService(db)  # CORRECTO: Servicio Operativo
     try:
+        # 1. Timbrar la NUEVA factura (Carta Porte)
         factura = service.generar_carta_porte_one_shot(invoice_data)
+
+        # --- INICIO DE NUEVA LÓGICA: CANCELACIÓN AUTOMÁTICA DE CP VIEJA ---
+        uuid_relacionado = getattr(invoice_data, "uuid_relacionado", None)
+        tipo_relacion = getattr(invoice_data, "tipo_relacion", None)
+
+        # Si la pantalla indica que es una sustitución 04
+        if uuid_relacionado and tipo_relacion == "04":
+            from app.models import models
+            from app.integrations.sat.billing_service import BillingService
+
+            # Buscar la factura "Mala" en la base de datos usando el UUID de la pantalla
+            factura_vieja = (
+                db.query(models.ReceivableInvoice)
+                .filter(models.ReceivableInvoice.uuid == uuid_relacionado)
+                .first()
+            )
+
+            # Si la encuentra, mandar la orden al SAT de cancelarla con motivo 01
+            if factura_vieja:
+                cancel_service = BillingService(db)
+                cancel_service.cancelar_factura_sat(
+                    invoice_id=factura_vieja.id,
+                    motivo="01",
+                    uuid_sustituto=factura.uuid,
+                )
+        # --- FIN DE NUEVA LÓGICA ---
+
         return {
             "status": "success",
             "message": "Factura Total (Motor 1) generada exitosamente",
@@ -223,6 +329,11 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     cuando el viaje inicia su tramo de carretera. Automáticamente
     relaciona y cancela la carta porte nominal previa si existe.
     """
+    # 🟢 1. IMPRIMIR EL INICIO DEL PROCESO
+    print("\n" + "=" * 50)
+    print(f"📥 [STAMP REAL TRIGGER] PROCESANDO VIAJE ID: {trip_id}")
+    print("=" * 50 + "\n")
+
     service = BillingService(db)  # CORRECTO: Servicio Financiero
 
     from app.models.models import ReceivableInvoice
@@ -237,8 +348,22 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     uuid_relacionado = factura_vieja.uuid if factura_vieja else None
 
+    #   NUEVO: Extractor Inteligente de Folio para Reciclaje
+    folio_a_reciclar = None
+    if factura_vieja and factura_vieja.folio_interno:
+        try:
+            # Convierte "CP-13" a 13 entero
+            folio_a_reciclar = int(factura_vieja.folio_interno.split("-")[1])
+        except Exception as e:
+            logger.warning(
+                f"No se pudo extraer folio numérico de {factura_vieja.folio_interno}: {e}"
+            )
+
     invoice_data = ReceivableInvoiceCreate(
-        viaje_id=trip_id, is_nominal=False, uuid_relacionado=uuid_relacionado
+        viaje_id=trip_id,
+        is_nominal=False,
+        uuid_relacionado=uuid_relacionado,
+        folio_forzado=folio_a_reciclar,  # <-- Inyectamos el folio rescatado
     )
 
     try:
@@ -256,12 +381,19 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
                 uuid_sustituto=factura_final.uuid,
             )
 
+        print("✅ [STAMP REAL TRIGGER] ¡Timbrado Exitoso! UUID:", factura_final.uuid)
         return {
             "status": "success",
             "message": "Factura Real generada exitosamente y previa cancelada.",
             "data": {"factura_id": factura_final.id, "uuid": factura_final.uuid},
         }
     except Exception as e:
+        # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
+        print("\n" + "🚨" * 20)
+        print("💥 [STAMP REAL TRIGGER] ERROR INTERNO DETECTADO:")
+        traceback.print_exc()
+        print("🚨" * 20 + "\n")
+
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
 
@@ -276,6 +408,12 @@ def generar_factura_final(
     2. Aplica la Relación 04 al UUID de la Carta Porte nominal.
     3. Cancela localmente la Carta Porte nominal de $1.
     """
+    # 🟢 1. IMPRIMIR EL REQUEST CRUZO
+    print("\n" + "=" * 50)
+    print("📥 [FACTURA CHIDA - FINAL] NUEVO REQUEST RECIBIDO:")
+    print(invoice_data.dict())
+    print("=" * 50 + "\n")
+
     service = BillingService(db)  # CORRECTO: Servicio Financiero
     try:
         factura_final = service.generar_factura_final_relacionada(invoice_data)
@@ -295,6 +433,7 @@ def generar_factura_final(
                     uuid_sustituto=factura_final.uuid,
                 )
 
+        print("✅ [FACTURA CHIDA - FINAL] ¡Timbrado Exitoso! UUID:", factura_final.uuid)
         return {
             "status": "success",
             "message": "Factura Real generada y Carta Porte previa cancelada",
@@ -305,27 +444,30 @@ def generar_factura_final(
             },
         }
     except Exception as e:
+        # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
+        print("\n" + "🚨" * 20)
+        print("💥 [FACTURA CHIDA - FINAL] ERROR INTERNO DETECTADO:")
+        traceback.print_exc()
+        print("🚨" * 20 + "\n")
+
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
 
 
 @router.get("/invoice/{uuid}/pdf", response_class=FileResponse)
 def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
-    """
-    Busca el archivo PDF generado en el disco y lo descarga,
-    soportando prefijos del frontend (ej. CFDI_Final_UUID).
-    """
     import re
+    from app.models import models
 
+    # Limpiamos el UUID
     match = re.search(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         str(uuid),
     )
     clean_uuid = match.group(0) if match else str(uuid)
 
-    service = CartaPorteService(
-        db
-    )  # Aquí cualquiera de los dos funciona (solo leemos disco)
+    # FIX: Usamos el servicio base para que lea la carpeta EXACTA de tu servidor de Producción
+    service = CartaPorteService(db)
 
     pdf_path_upper = service.storage_dir / f"{clean_uuid.upper()}.pdf"
     pdf_path_lower = service.storage_dir / f"{clean_uuid.lower()}.pdf"
@@ -337,12 +479,33 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
     else:
         raise HTTPException(
             status_code=404,
-            detail=f"El PDF del documento {clean_uuid} no se encontró en el servidor.",
+            detail=f"Error 404: El PDF no se encuentra físicamente en la ruta {service.storage_dir}",
         )
+
+    # =========================================================
+    # NUEVA LÓGICA: CONSTRUIR EL NOMBRE DEL ARCHIVO DE DESCARGA
+    # =========================================================
+    factura = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.uuid == clean_uuid)
+        .first()
+    )
+
+    if factura:
+        # folio_interno ya trae "CP-15", "F-22", "COM-1", etc.
+        folio = factura.folio_interno or "SINFOLIO"
+        rfc = factura.client.rfc if factura.client else "XAXX010101000"
+
+        # Formato: CP-15_XAXX010101000_UUID.pdf
+        nombre_descarga = f"{folio}_{rfc}_{clean_uuid.upper()}.pdf"
+    else:
+        # Fallback por si la factura no está en la base de datos por alguna razón
+        nombre_descarga = f"CFDI_{clean_uuid.upper()}.pdf"
+    # =========================================================
 
     return FileResponse(
         path=str(pdf_path),
-        filename=f"{uuid}.pdf",
+        filename=nombre_descarga,  # <--- Se asigna el nuevo nombre aquí
         media_type="application/pdf",
         content_disposition_type="attachment",
     )
@@ -350,11 +513,8 @@ def download_invoice_pdf(uuid: str, db: Session = Depends(get_db)):
 
 @router.get("/invoice/{uuid}/xml", response_class=FileResponse)
 def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
-    """
-    Busca el archivo XML timbrado en el disco y lo descarga,
-    soportando prefijos del frontend.
-    """
     import re
+    from app.models import models
 
     match = re.search(
         r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
@@ -362,6 +522,7 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
     )
     clean_uuid = match.group(0) if match else str(uuid)
 
+    # FIX: Usamos el servicio base para encontrar la carpeta
     service = CartaPorteService(db)
 
     xml_path_upper = service.storage_dir / f"{clean_uuid.upper()}.xml"
@@ -374,12 +535,33 @@ def download_invoice_xml(uuid: str, db: Session = Depends(get_db)):
     else:
         raise HTTPException(
             status_code=404,
-            detail=f"El XML del documento {clean_uuid} no se encontró en el servidor.",
+            detail=f"Error 404: El XML no se encuentra físicamente en la ruta {service.storage_dir}",
         )
+
+    # =========================================================
+    # NUEVA LÓGICA: CONSTRUIR EL NOMBRE DEL ARCHIVO DE DESCARGA
+    # =========================================================
+    factura = (
+        db.query(models.ReceivableInvoice)
+        .filter(models.ReceivableInvoice.uuid == clean_uuid)
+        .first()
+    )
+
+    if factura:
+        # folio_interno ya trae "CP-15", "F-22", "COM-1", etc.
+        folio = factura.folio_interno or "SINFOLIO"
+        rfc = factura.client.rfc if factura.client else "XAXX010101000"
+
+        # Formato: CP-15_XAXX010101000_UUID.xml
+        nombre_descarga = f"{folio}_{rfc}_{clean_uuid.upper()}.xml"
+    else:
+        # Fallback por si no existe
+        nombre_descarga = f"CFDI_{clean_uuid.upper()}.xml"
+    # =========================================================
 
     return FileResponse(
         path=str(xml_path),
-        filename=f"{uuid}.xml",
+        filename=nombre_descarga,  # <--- Se asigna el nuevo nombre aquí
         media_type="application/xml",
         content_disposition_type="attachment",
     )
@@ -570,16 +752,53 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
     return resultado
 
 
+# Importa Optional si no lo tienes arriba
+from typing import Optional
+
+
+class SatCancelPayload(BaseModel):
+    motivo: str = "02"  # Por defecto: Emitido con errores sin relación
+    uuid_sustituto: Optional[str] = None
+
+
+@router.post("/stamp/cancel/{invoice_id}", response_model=dict)
+def cancel_invoice_in_sat(
+    invoice_id: int,
+    payload: SatCancelPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RequirePermission("sat:cancel_cfdi")),
+):
+    """
+    Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.
+    Aplica para Cuentas por Cobrar (Facturas Libres o Cartas Porte).
+    """
+    service = BillingService(db)
+    try:
+        resultado = service.cancelar_factura_sat(
+            invoice_id=invoice_id,
+            motivo=payload.motivo,
+            uuid_sustituto=payload.uuid_sustituto,
+        )
+        return resultado
+    except Exception as e:
+        custom_error = parse_sat_error(e)
+        raise HTTPException(status_code=400, detail=custom_error)
+
+
 @router.post("/stamp/payment", summary="Generar Complemento de Pago")
 def registrar_pago_multiple(
     payload: RegistroPagoPayload, db: Session = Depends(get_db)
 ):
     """
-    Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-    el Complemento de Pago (REP) ante el SAT. (CON BYPASS DE EMERGENCIA)
+    Endpoint Fase 3.2: Registra el pago y genera el Complemento (REP).
+    (Bypass desactivado para ver el error real del SAT)
     """
     import uuid
+    from datetime import datetime
+    from fastapi import HTTPException
     from app.models import models
+    from app.modules.finance.crud import create_bank_movement
+    from app.modules.finance import schemas as finance_schemas
 
     for pago in payload.pagos:
         factura = (
@@ -590,10 +809,10 @@ def registrar_pago_multiple(
         if factura and factura.uuid:
             clean_uuid = factura.uuid.strip()
             if len(clean_uuid) != 36:
-                # Ya no lanzamos error, solo lo limpiamos o lo dejamos pasar para el bypass
                 pass
 
     service = PaymentComplementService(db)
+
     try:
         # 1. Intentamos el timbrado real con el SAT
         resultado = service.registrar_pago_y_timbrar_complemento(
@@ -603,37 +822,43 @@ def registrar_pago_multiple(
             fecha_pago=payload.fecha_pago,
             referencia=payload.referencia,
             cuenta_deposito=payload.cuenta_deposito,
+            user_id=1,
         )
         return resultado
 
     except Exception as e:
-        # 🚀 2. BYPASS DE EMERGENCIA: Si el SAT lo rebota (ej. factura sin timbrar),
-        # actualizamos los saldos localmente y simulamos éxito.
+        #  TRUCO DE DEBUG: Lanzamos el error directo a la pantalla
+        raise HTTPException(
+            status_code=400, detail=f"EL SAT RECHAZÓ EL PAGO. Motivo exacto: {str(e)}"
+        )
 
-        print(f"Bypass activado por error de SAT: {str(e)}")
 
-        for pago in payload.pagos:
-            factura = (
-                db.query(models.ReceivableInvoice)
-                .filter(models.ReceivableInvoice.id == pago.invoice_id)
-                .first()
-            )
-            if factura:
-                # Restamos el pago del saldo pendiente
-                factura.saldo_pendiente -= pago.monto_pagado
+@router.get("/rebuild-pdf/{invoice_id}")
+def reconstruir_pdf_factura(invoice_id: int, db: Session = Depends(get_db)):
+    """
+    Lee el XML timbrado del disco y re-crea el PDF de la factura.
+    [VERSIÓN GET - PARA PROBAR DESDE EL NAVEGADOR]
+    """
+    from app.integrations.sat.billing_service import BillingService
 
-                # Si ya se pagó todo, la marcamos como pagada
-                if factura.saldo_pendiente <= 0:
-                    factura.saldo_pendiente = 0
-                    factura.estatus = "pagado"
+    service = BillingService(db)
 
-        db.commit()
+    try:
+        resultado = service.regenerar_pdf_factura(invoice_id)
+        return resultado
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error al reconstruir PDF: {str(e)}"
+        )
 
-        # Retornamos una respuesta falsa pero exitosa al frontend
-        return {
-            "status": "success",
-            "message": "Pago registrado localmente (Simulación de REP activada).",
-            "data": {
-                "rep_uuid": str(uuid.uuid4()).upper()  # UUID Falso para el frontend
-            },
-        }
+
+@router.get("/rebuild-all-pdfs")
+def rebuild_all_pdfs(db: Session = Depends(get_db)):
+    try:
+        service = BillingService(db)
+        resultado = service.regenerar_todos_los_pdfs()
+        return resultado
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

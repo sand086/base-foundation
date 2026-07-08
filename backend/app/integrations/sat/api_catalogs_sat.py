@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import (
+    IntegrityError,
+)  #   IMPORTANTE: Agregado para atrapar duplicados
 from typing import List, Type, Any, Optional
 from pydantic import BaseModel
 
@@ -137,10 +140,24 @@ class SatUnitWeightResponse(SatUnitWeightCreate):
         from_attributes = True
 
 
+#   NUEVOS ESQUEMAS PARA CÓDIGOS POSTALES
+class SatPostalCodeCreate(BaseModel):
+    codigo_postal: str
+    estado_clave: str
+    municipio_clave: Optional[str] = None
+    localidad_clave: Optional[str] = None
+
+
+class SatPostalCodeResponse(SatPostalCodeCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
 # ==========================================
 # 2. GENERADOR DINÁMICO DE CRUDS (FACTORY)
 # ==========================================
-# Se actualizó 'id_field' por 'unique_fields' para soportar llaves compuestas (Ej. Colonias)
 
 
 def create_crud_endpoints(
@@ -150,7 +167,7 @@ def create_crud_endpoints(
     schema_create: Type[BaseModel],
     schema_response: Type[BaseModel],
     tag: str,
-    unique_fields: List[str] = ["clave"],  # Lista de campos para validar unicidad
+    unique_fields: List[str] = ["clave"],
 ):
     @router.get(f"{path}", response_model=List[schema_response], tags=[tag])
     def get_all(db: Session = Depends(get_db)):
@@ -163,20 +180,17 @@ def create_crud_endpoints(
         tags=[tag],
     )
     def create_item(payload: schema_create, db: Session = Depends(get_db)):
-        # Validar unicidad basado en los campos principales (Ej: clave, o clave + codigo_postal)
         filtro = {field: getattr(payload, field) for field in unique_fields}
         existente = db.query(model).filter_by(**filtro).first()
 
         if existente:
             if existente.activo:
-                # Generamos un mensaje de error amigable con los campos que fallaron
                 campos_str = " y ".join([f"{k} '{v}'" for k, v in filtro.items()])
                 raise HTTPException(
                     status_code=400,
                     detail=f"El registro con {campos_str} ya existe.",
                 )
             else:
-                # Si existía pero estaba borrado (Soft Delete), lo revive y actualiza
                 existente.activo = True
                 for key, value in payload.model_dump().items():
                     setattr(existente, key, value)
@@ -201,9 +215,17 @@ def create_crud_endpoints(
         for key, value in payload.model_dump().items():
             setattr(item, key, value)
 
-        db.commit()
-        db.refresh(item)
-        return item
+        #   BLINDAJE CONTRA DUPLICADOS AL EDITAR
+        try:
+            db.commit()
+            db.refresh(item)
+            return item
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail="Ya existe otro registro con esta misma clave en el catálogo.",
+            )
 
     @router.delete(
         f"{path}/{{item_id}}", status_code=status.HTTP_204_NO_CONTENT, tags=[tag]
@@ -219,10 +241,9 @@ def create_crud_endpoints(
 
 
 # ==========================================
-# 3. REGISTRO DE ENDPOINTS
+# 3. REGISTRO DE ENDPOINTS DINÁMICOS
 # ==========================================
 
-# 1. Productos/Servicios
 create_crud_endpoints(
     router,
     "/sat-products",
@@ -231,8 +252,6 @@ create_crud_endpoints(
     SatProductResponse,
     "SAT - Productos CP",
 )
-
-# 2. Servicios
 create_crud_endpoints(
     router,
     "/sat-services",
@@ -241,8 +260,6 @@ create_crud_endpoints(
     SatGenericResponse,
     "SAT - Carta Porte",
 )
-
-# 3. Tipos de Carga
 create_crud_endpoints(
     router,
     "/sat-cargo-types",
@@ -251,8 +268,6 @@ create_crud_endpoints(
     SatGenericResponse,
     "SAT - Carta Porte",
 )
-
-# 4. Subtipos Remolque
 create_crud_endpoints(
     router,
     "/sat-trailer-subtypes",
@@ -261,8 +276,6 @@ create_crud_endpoints(
     SatGenericResponse,
     "SAT - Carta Porte",
 )
-
-# 5. Configuración Autotransporte
 create_crud_endpoints(
     router,
     "/sat-truck-configs",
@@ -271,8 +284,6 @@ create_crud_endpoints(
     SatTruckConfigResponse,
     "SAT - Carta Porte",
 )
-
-# 6. Municipios
 create_crud_endpoints(
     router,
     "/sat-municipalities",
@@ -281,8 +292,6 @@ create_crud_endpoints(
     SatLocationResponse,
     "SAT - Ubicaciones",
 )
-
-# 7. Localidades
 create_crud_endpoints(
     router,
     "/sat-localities",
@@ -291,8 +300,6 @@ create_crud_endpoints(
     SatLocationResponse,
     "SAT - Ubicaciones",
 )
-
-# 8. Colonias (USA LLAVE COMPUESTA: clave + codigo_postal)
 create_crud_endpoints(
     router,
     "/sat-neighborhoods",
@@ -302,8 +309,6 @@ create_crud_endpoints(
     "SAT - Ubicaciones",
     unique_fields=["clave", "codigo_postal"],
 )
-
-# 9. Tipos Permiso
 create_crud_endpoints(
     router,
     "/sat-permit-types",
@@ -312,8 +317,6 @@ create_crud_endpoints(
     SatPermitTypeResponse,
     "SAT - Carta Porte",
 )
-
-# 10. Tipos Embalaje
 create_crud_endpoints(
     router,
     "/sat-packaging-types",
@@ -322,8 +325,6 @@ create_crud_endpoints(
     SatGenericResponse,
     "SAT - Carta Porte",
 )
-
-# 11. Materiales Peligrosos
 create_crud_endpoints(
     router,
     "/sat-hazardous-materials",
@@ -332,8 +333,6 @@ create_crud_endpoints(
     SatHazardousMaterialResponse,
     "SAT - Carta Porte",
 )
-
-# 12. Estaciones y Puertos (Usa 'clave_identificacion')
 create_crud_endpoints(
     router,
     "/sat-stations",
@@ -343,8 +342,6 @@ create_crud_endpoints(
     "SAT - Carta Porte",
     unique_fields=["clave_identificacion"],
 )
-
-# 13. Unidades de Medida
 create_crud_endpoints(
     router,
     "/sat-unit-weights",
@@ -353,3 +350,88 @@ create_crud_endpoints(
     SatUnitWeightResponse,
     "SAT - Carta Porte",
 )
+
+# ==========================================
+# 4. CÓDIGOS POSTALES (Ruta Especial sin activo)
+# ==========================================
+
+
+@router.get(
+    "/sat-location-codes",
+    response_model=List[SatPostalCodeResponse],
+    tags=["SAT - Ubicaciones"],
+)
+def get_location_codes(db: Session = Depends(get_db)):
+    return (
+        db.query(models.SatLocationCode)
+        .order_by(models.SatLocationCode.codigo_postal.asc())
+        .all()
+    )
+
+
+@router.post(
+    "/sat-location-codes",
+    response_model=SatPostalCodeResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["SAT - Ubicaciones"],
+)
+def create_location_code(payload: SatPostalCodeCreate, db: Session = Depends(get_db)):
+    existente = (
+        db.query(models.SatLocationCode)
+        .filter_by(codigo_postal=payload.codigo_postal)
+        .first()
+    )
+    if existente:
+        raise HTTPException(status_code=400, detail="Este Código Postal ya existe.")
+    nuevo_item = models.SatLocationCode(**payload.model_dump())
+    db.add(nuevo_item)
+    db.commit()
+    db.refresh(nuevo_item)
+    return nuevo_item
+
+
+@router.put(
+    "/sat-location-codes/{item_id}",
+    response_model=SatPostalCodeResponse,
+    tags=["SAT - Ubicaciones"],
+)
+def update_location_code(
+    item_id: int, payload: SatPostalCodeCreate, db: Session = Depends(get_db)
+):
+    item = (
+        db.query(models.SatLocationCode)
+        .filter(models.SatLocationCode.id == item_id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Código Postal no encontrado")
+
+    for key, value in payload.model_dump().items():
+        setattr(item, key, value)
+
+    try:
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Este Código Postal ya existe.")
+
+
+@router.delete(
+    "/sat-location-codes/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["SAT - Ubicaciones"],
+)
+def delete_location_code(item_id: int, db: Session = Depends(get_db)):
+    item = (
+        db.query(models.SatLocationCode)
+        .filter(models.SatLocationCode.id == item_id)
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    db.delete(item)
+    db.commit()
+    return None

@@ -34,7 +34,12 @@ import {
   ChevronRight,
   Plus,
   ShieldAlert,
+  Snowflake,
   Route as RouteIcon,
+  Filter,
+  Check,
+  ChevronsUpDown,
+  FilterX,
   Container,
   RefreshCw,
 } from "lucide-react";
@@ -61,13 +66,32 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import {
-  DataTable,
-  DataTableBody,
-  DataTableCell,
-  DataTableHead,
-  DataTableHeader,
-  DataTableRow,
-} from "@/components/ui/data-table";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+
+// IMPORTAMOS EL NUEVO COMPONENTE ENHANCED DATATABLE
+import {
+  EnhancedDataTable,
+  ColumnDef,
+} from "@/components/ui/enhanced-data-table";
+
 import {
   Dialog,
   DialogContent,
@@ -198,7 +222,7 @@ export const TripPlanner = () => {
   } = useTrips();
 
   const [tripToView, setTripToView] = useState<Trip | null>(null);
-  const { updateLoadStatus } = useUnits();
+  const { unidades, updateLoadStatus } = useUnits();
   const [selectedTripPadre, setSelectedTripPadre] = useState<Trip | null>(null);
   const [selectedDayTrips, setSelectedDayTrips] = useState<Trip[] | null>(null);
   const [selectedLegToUpdate, setSelectedLegToUpdate] =
@@ -215,7 +239,20 @@ export const TripPlanner = () => {
   } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // 🚀 ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
+  // ESTADOS PARA FILTROS AVANZADOS
+  const [filterStartDate, setFilterStartDate] = useState<string>("");
+  const [filterEndDate, setFilterEndDate] = useState<string>("");
+  const [filterClientId, setFilterClientId] = useState<string>("all");
+  const [filterSubclientId, setFilterSubclientId] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterUnit, setFilterUnit] = useState<string>("all");
+  const [filterOperator, setFilterOperator] = useState<string>("all");
+
+  const [openClientCombo, setOpenClientCombo] = useState(false);
+  const [openSubclientCombo, setOpenSubclientCombo] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // ESTADO CLAVE: Al cambiar este número, React destruye y vuelve a crear la tabla
   const [tableKey, setTableKey] = useState(Date.now());
 
   useEffect(() => {
@@ -248,29 +285,191 @@ export const TripPlanner = () => {
 
   const standbyTrips = useMemo(
     () =>
-      trips.filter(
-        (t) => t.status === "creado" && (!t.legs || t.legs.length === 0),
-      ),
+      trips
+        .filter((t) => {
+          if (t.status !== "creado") return false;
+
+          // Contamos cuántas piernas REALMENTE están activas
+          const activeLegsCount =
+            t.legs?.filter(
+              (l: any) =>
+                l.record_status !== "E" && l.record_status !== "ELIMINADO",
+            ).length || 0;
+
+          return activeLegsCount === 0;
+        })
+        .map((rawTrip) => {
+          // CORRECCIÓN: Autocompletar el sub-cliente si la API solo mandó el ID
+          const sub_client =
+            rawTrip.sub_client ||
+            rawTrip.client?.sub_clients?.find(
+              (sc: any) => sc.id === rawTrip.sub_client_id,
+            ) ||
+            null;
+
+          // Agregamos "as Trip" para forzar el tipado correcto y quitar el error
+          return { ...rawTrip, sub_client } as Trip;
+        }),
     [trips],
   );
 
+  // Extracción segura de unidades y motogeneradores + campo de búsqueda
   const allActiveLegs = useMemo(() => {
     const safeTrips = Array.isArray(trips) ? trips : [];
-    const items: { leg: TripLeg; tripPadre: Trip }[] = [];
-    for (const trip of safeTrips) {
-      if (trip.status === "cerrado") continue;
+    const items: any[] = [];
+    for (const rawTrip of safeTrips) {
+      // EXCLUSIÓN ESTRICTA: Ya no aparecerán "entregados" ni "finalizados" (ni "cerrados")
+      if (
+        ["cerrado", "entregado", "finalizado"].includes(
+          normalizeStatus(rawTrip.status),
+        )
+      )
+        continue;
+
+      // CORRECCIÓN: Autocompletar el sub-cliente si la API solo mandó el ID
+      const sub_client =
+        rawTrip.sub_client ||
+        rawTrip.client?.sub_clients?.find(
+          (sc: any) => sc.id === rawTrip.sub_client_id,
+        ) ||
+        null;
+
+      // Agregamos "as Trip" para forzar el tipado correcto
+      const trip = { ...rawTrip, sub_client } as Trip;
+
       if (trip.legs && trip.legs.length > 0) {
         const activeLeg =
           trip.legs.find(
             (leg) =>
-              !["entregado", "cerrado"].includes(leg.status.toLowerCase()),
+              !["entregado", "cerrado", "finalizado"].includes(
+                normalizeStatus(leg.status),
+              ),
           ) || trip.legs[trip.legs.length - 1];
 
-        if (activeLeg) items.push({ leg: activeLeg, tripPadre: trip });
+        // Validamos de nuevo la fase activa por si era la última y estaba terminada
+        if (
+          activeLeg &&
+          !["entregado", "cerrado", "finalizado"].includes(
+            normalizeStatus(activeLeg.status),
+          )
+        ) {
+          const getUnitName = (objOrString: any, id: any) => {
+            if (typeof objOrString === "string") return objOrString;
+            if (objOrString?.numero_economico)
+              return objOrString.numero_economico;
+            return (
+              (unidades as any[])?.find((u) => Number(u.id) === Number(id))
+                ?.numero_economico || null
+            );
+          };
+
+          const mg1Str = getUnitName(
+            (trip as any).motogenerator_1,
+            (trip as any).motogenerator_1_id,
+          );
+          const mg2Str = getUnitName(
+            (trip as any).motogenerator_2,
+            (trip as any).motogenerator_2_id,
+          );
+
+          const asignacionSearch =
+            `${activeLeg.unit?.numero_economico || ""} ${activeLeg.operator?.name || ""} ${mg1Str || ""} ${mg2Str || ""}`.trim();
+
+          items.push({
+            leg: activeLeg,
+            tripPadre: trip,
+            mg1: mg1Str,
+            mg2: mg2Str,
+            _asignacionSearch: asignacionSearch,
+          });
+        }
       }
     }
     return items.sort((a, b) => b.leg.id - a.leg.id);
-  }, [trips]);
+  }, [trips, unidades]);
+
+  // Extraemos opciones dinámicas según los viajes activos reales
+  const uniqueOptions = useMemo(() => {
+    const clientsMap = new Map();
+    const subclientsMap = new Map();
+    const unitsMap = new Map();
+    const operatorsMap = new Map();
+
+    allActiveLegs.forEach((item) => {
+      const t = item.tripPadre;
+      const l = item.leg;
+
+      if (t.client?.id)
+        clientsMap.set(String(t.client.id), t.client.razon_social);
+      // Solo mostramos sub-clientes si pertenecen al cliente seleccionado (o si no hay cliente filtrado)
+      if (
+        t.sub_client?.id &&
+        (filterClientId === "all" || String(t.client?.id) === filterClientId)
+      ) {
+        subclientsMap.set(
+          String(t.sub_client.id),
+          t.sub_client.nombre || t.sub_client.alias,
+        );
+      }
+      if (l.unit?.numero_economico)
+        unitsMap.set(l.unit.numero_economico, l.unit.numero_economico);
+      if (l.operator?.name) operatorsMap.set(l.operator.name, l.operator.name);
+    });
+
+    return {
+      clients: Array.from(clientsMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      })),
+      subclients: Array.from(subclientsMap.entries()).map(([id, name]) => ({
+        id,
+        name,
+      })),
+      units: Array.from(unitsMap.keys()).sort(),
+      operators: Array.from(operatorsMap.keys()).sort(),
+    };
+  }, [allActiveLegs, filterClientId]);
+
+  // Motor principal que evalúa los filtros en cascada
+  const filteredActiveLegs = useMemo(() => {
+    return allActiveLegs.filter((item) => {
+      const t = item.tripPadre;
+      const l = item.leg;
+
+      if (filterStartDate) {
+        const tripDate = t.start_date ? t.start_date.split("T")[0] : "";
+        if (!tripDate || tripDate < filterStartDate) return false;
+      }
+      if (filterEndDate) {
+        const tripDate = t.start_date ? t.start_date.split("T")[0] : "";
+        if (!tripDate || tripDate > filterEndDate) return false;
+      }
+      if (filterClientId !== "all" && String(t.client?.id) !== filterClientId)
+        return false;
+      if (
+        filterSubclientId !== "all" &&
+        String(t.sub_client?.id) !== filterSubclientId
+      )
+        return false;
+      if (filterStatus !== "all" && normalizeStatus(l.status) !== filterStatus)
+        return false;
+      if (filterUnit !== "all" && l.unit?.numero_economico !== filterUnit)
+        return false;
+      if (filterOperator !== "all" && l.operator?.name !== filterOperator)
+        return false;
+
+      return true;
+    });
+  }, [
+    allActiveLegs,
+    filterStartDate,
+    filterEndDate,
+    filterClientId,
+    filterSubclientId,
+    filterStatus,
+    filterUnit,
+    filterOperator,
+  ]);
 
   const handleSaveStatusEvent = async (data: StatusUpdateData) => {
     if (!selectedTripPadre) return;
@@ -301,9 +500,9 @@ export const TripPlanner = () => {
     if (ok) {
       setUpdateModalOpen(false);
       await fetchTrips();
-      setTableKey(Date.now()); // 🚀 Destruye y recrea la tabla internamente
+      setTableKey(Date.now()); // Destruye y recrea la tabla internamente
 
-      // 🚀 CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
+      // CONDICIÓN SOLICITADA: Solo aplicar reload duro si es la última fase (Desenganchar/Liberar)
       if (data.status === "entregado") {
         toast.success("Servicio reportado como Entregado. Ya puedes liquidar.");
 
@@ -361,6 +560,196 @@ export const TripPlanner = () => {
     navigate(`/dispatch/new?tripId=${trip.id}`, { state: { trip } });
   };
 
+  const tableColumns: ColumnDef<any>[] = useMemo(
+    () => [
+      {
+        key: "tripPadre.created_at",
+        header: "Fecha creación",
+        type: "date",
+        sortable: true,
+        render: (value, row) => {
+          const dateVal = row.tripPadre.start_date || row.tripPadre.created_at;
+          if (!dateVal) return <span className="text-slate-400">N/A</span>;
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="font-black text-brand-navy dark:text-white uppercase">
+                {format(new Date(dateVal), "dd MMM yyyy", { locale: es })}
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                {format(new Date(dateVal), "HH:mm")} HRS
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        key: "tripPadre.client.razon_social",
+        header: "Cliente / Folio",
+        sortable: true,
+        render: (value, row) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight flex items-center gap-2">
+              {row.tripPadre.client?.razon_social || "CLIENTE GENERAL"}
+              {row.tripPadre.es_material_peligroso && (
+                <ShieldAlert className="h-3.5 w-3.5 text-amber-500 drop-shadow-sm" />
+              )}
+            </span>
+            <span className="text-[12px] font-black text-muted-foreground uppercase tracking-widest">
+              TRP-{row.tripPadre.public_id || row.tripPadre.id}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "tripPadre.sub_client.nombre",
+        header: "Sub-Cliente / Sucursal",
+        sortable: true,
+        render: (value, row) => {
+          const subClient = row.tripPadre.sub_client;
+          const name = subClient?.nombre || subClient?.alias || "N/A";
+          return (
+            <span className="font-bold text-slate-600 dark:text-slate-300 uppercase text-[11px] tracking-widest">
+              {name}
+            </span>
+          );
+        },
+      },
+      {
+        key: "tripPadre.route_name",
+        header: "Ruta",
+        sortable: true,
+        render: (value, row) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-bold text-brand-navy dark:text-slate-200 uppercase text-[11px] tracking-widest">
+              {row.tripPadre.route_name || "RUTA NO ESPECIFICADA"}
+            </span>
+          </div>
+        ),
+      },
+      {
+        key: "leg.leg_type",
+        header: "Fase del Servicio",
+        type: "status",
+        statusOptions: ["carga_muelle", "ruta_carretera", "entrega_vacio"],
+        statusNormalizer: (val) => val,
+        render: (value) => (
+          <Badge
+            variant="info"
+            className="text-[11px] bg-blue-50 text-blue-700 border-blue-200 shadow-sm"
+          >
+            {legTypeShort[value as string] || value}
+          </Badge>
+        ),
+      },
+      {
+        key: "_asignacionSearch",
+        header: "Asignación Física",
+        render: (value, row) => (
+          <div className="flex flex-col gap-1.5">
+            {/* TRACTO */}
+            <div className="flex items-center gap-2 text-[12px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
+              <Truck className="h-4 w-4 shrink-0 text-red-500" /> ECO-
+              {row.leg.unit?.numero_economico || "N/A"}
+            </div>
+            {/* OPERADOR */}
+            <div className="flex items-center gap-2 text-[12px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
+              <User className="h-4 w-4 shrink-0 text-blue-500" />{" "}
+              {(() => {
+                const parts = row.leg.operator?.name?.trim().split(" ") || [];
+                if (parts.length === 0) return "S/A";
+                if (parts.length === 1) return parts[0];
+                if (parts.length === 2) return `${parts[0]} ${parts[1]}`;
+                if (parts.length === 3) return `${parts[0]} ${parts[1]}`;
+                return `${parts[0]} ${parts[2]}`;
+              })()}
+            </div>
+            {/* MOTOGENERADORES */}
+            {(row.mg1 || row.mg2) && (
+              <div className="flex items-center gap-2 mt-0.5">
+                {row.mg1 && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
+                  >
+                    <Snowflake className="h-3 w-3 mr-1 shrink-0" /> MG1:{" "}
+                    {row.mg1}
+                  </Badge>
+                )}
+                {row.mg2 && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] font-black text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-500/30 tracking-widest px-1.5 py-0 shadow-sm uppercase"
+                  >
+                    <Snowflake className="h-3 w-3 mr-1 shrink-0" /> MG2:{" "}
+                    {row.mg2}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: "leg.status",
+        header: "Estatus Operativo",
+        type: "status",
+        statusOptions: [
+          "creado",
+          "en_transito",
+          "detenido",
+          "retraso",
+          "accidente",
+        ],
+        statusNormalizer: (val) => normalizeStatus(val),
+        render: (value, row) => (
+          <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[160px] mx-auto">
+            {getOperationalStatusBadge(row.leg)}
+          </div>
+        ),
+      },
+      {
+        key: "actions",
+        header: "Acciones",
+        sortable: false,
+        render: (value, { tripPadre }) => (
+          <div className="flex justify-end pr-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
+                >
+                  <MoreVertical className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/90 shadow-2xl rounded-xl p-1"
+              >
+                <DropdownMenuItem
+                  onClick={() => setTripToView(tripPadre)}
+                  className="rounded-lg cursor-pointer py-2.5 font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300 hover:text-blue-500"
+                >
+                  <Eye className="h-4 w-4 mr-3 text-blue-500" /> Abrir Centro de
+                  Mando
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => setTripToDelete(tripPadre)}
+                  className="rounded-lg cursor-pointer py-2.5 font-bold uppercase tracking-widest text-rose-600 dark:text-rose-500"
+                >
+                  <Trash2 className="h-4 w-4 mr-3" /> Eliminar Viaje
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
   if (loading && trips.length === 0)
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
@@ -378,7 +767,7 @@ export const TripPlanner = () => {
           <div className="p-2 bg-blue-600 rounded-xl shadow-inner border border-blue-500">
             <LayoutGrid className="h-5 w-5 text-white" />
           </div>
-          Centro de Operaciones
+          Asistente de Despacho
         </h2>
 
         <div className="flex items-center w-full md:w-auto overflow-x-auto hide-scrollbar bg-card p-1.5 rounded-xl border border-border shadow-sm">
@@ -388,7 +777,7 @@ export const TripPlanner = () => {
             onClick={async () => {
               toast.info("Sincronizando datos...");
               await fetchTrips();
-              setTableKey(Date.now()); // 🚀 Forzar destrucción y recreación de tabla sin recargar página
+              setTableKey(Date.now());
             }}
             disabled={loading}
             className="h-10 w-10 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
@@ -401,6 +790,36 @@ export const TripPlanner = () => {
               )}
             />
           </Button>
+
+          {/* NUEVO BOTÓN PARA MOSTRAR/OCULTAR FILTROS */}
+          {viewMode === "table" && (
+            <Button
+              variant={showAdvancedFilters ? "secondary" : "ghost"}
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={cn(
+                "h-10 px-3 mr-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shrink-0",
+                showAdvancedFilters
+                  ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+                  : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500",
+              )}
+              title="Mostrar/Ocultar Filtros"
+            >
+              <Filter className="h-4 w-4" />
+              <span className="hidden sm:inline">Filtros</span>
+              {(filterStartDate ||
+                filterEndDate ||
+                filterClientId !== "all" ||
+                filterSubclientId !== "all" ||
+                filterStatus !== "all" ||
+                filterUnit !== "all" ||
+                filterOperator !== "all") && (
+                <span
+                  className="flex h-2 w-2 rounded-full bg-brand-red ml-1 shadow-[0_0_5px_rgba(239,68,68,0.8)]"
+                  title="Filtros Activos"
+                ></span>
+              )}
+            </Button>
+          )}
 
           <Tabs
             value={viewMode}
@@ -416,7 +835,7 @@ export const TripPlanner = () => {
               </TabsTrigger>
               <TabsTrigger
                 value="standby"
-                className="text-[10px] font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
+                className=" font-black uppercase tracking-widest rounded-md data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground transition-all h-full"
               >
                 <CalendarDays className="h-3.5 w-3.5 mr-2" /> Planeador{" "}
                 {standbyTrips.length > 0 && (
@@ -434,162 +853,347 @@ export const TripPlanner = () => {
       </div>
 
       {viewMode === "table" && (
-        <Card className="border-border shadow-2xl rounded-2xl overflow-hidden bg-card/50 backdrop-blur-xl liquid-glass-table">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              {/* 🚀 EL KEY MÁGICO: Al cambiar tableKey, esta tabla muere y renace */}
-              <DataTable key={tableKey} className="min-w-[800px]">
-                <DataTableHeader className="bg-muted/50 border-b border-border backdrop-blur-md">
-                  <DataTableRow className="hover:bg-transparent border-none">
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
-                      Folio / Cliente
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12">
-                      Fase del Servicio
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden lg:table-cell">
-                      Ruta Registrada
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground uppercase tracking-[0.2em] text-[10px] h-12 hidden md:table-cell">
-                      Asignación Física
-                    </DataTableHead>
-                    <DataTableHead className="font-black text-muted-foreground text-center uppercase tracking-[0.2em] text-[10px] h-12">
-                      Estatus Operativo
-                    </DataTableHead>
-                    <DataTableHead className="text-right font-black text-muted-foreground pr-6 uppercase tracking-[0.2em] text-[10px] h-12">
-                      Acciones
-                    </DataTableHead>
-                  </DataTableRow>
-                </DataTableHeader>
-                <DataTableBody className="table-staggered bg-card">
-                  {allActiveLegs.length === 0 ? (
-                    <DataTableRow>
-                      <DataTableCell
-                        colSpan={6}
-                        className="text-center py-20 text-slate-600 dark:text-slate-400"
+        <div className="space-y-4 animate-in fade-in duration-300">
+          {/* BARRA DE FILTROS CONDICIONADA */}
+          {showAdvancedFilters && (
+            <div className="bg-card p-4 rounded-2xl border border-border shadow-sm flex flex-col gap-4 animate-in slide-in-from-top-2 fade-in duration-300">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-blue-500" /> Filtros Avanzados
+                </h3>
+                {(filterStartDate ||
+                  filterEndDate ||
+                  filterClientId !== "all" ||
+                  filterSubclientId !== "all" ||
+                  filterStatus !== "all" ||
+                  filterUnit !== "all" ||
+                  filterOperator !== "all") && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilterStartDate("");
+                      setFilterEndDate("");
+                      setFilterClientId("all");
+                      setFilterSubclientId("all");
+                      setFilterStatus("all");
+                      setFilterUnit("all");
+                      setFilterOperator("all");
+                    }}
+                    className="h-7 text-[10px] font-black text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 uppercase tracking-widest px-2"
+                  >
+                    <FilterX className="h-3.5 w-3.5 mr-1" /> Limpiar Filtros
+                  </Button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
+                {/* Fechas */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Desde
+                  </label>
+                  <Input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="h-9 text-xs font-mono font-bold shadow-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Hasta
+                  </label>
+                  <Input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="h-9 text-xs font-mono font-bold shadow-sm"
+                  />
+                </div>
+
+                {/* Cliente (Combobox Search) */}
+                <div className="space-y-1 lg:col-span-2">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Cliente
+                  </label>
+                  <Popover
+                    open={openClientCombo}
+                    onOpenChange={setOpenClientCombo}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full h-9 justify-between text-xs font-bold uppercase shadow-sm"
                       >
-                        <div className="flex flex-col items-center justify-center">
-                          <Truck className="h-12 w-12 mb-4 opacity-20" />
-                          <span className="font-black text-sm uppercase tracking-widest">
-                            No hay servicios en ruta activos
-                          </span>
-                        </div>
-                      </DataTableCell>
-                    </DataTableRow>
-                  ) : (
-                    allActiveLegs.map(({ leg, tripPadre }) => {
-                      const isIncident = isIncidentStatus(leg.status);
+                        <span className="truncate">
+                          {filterClientId === "all"
+                            ? "Todos los clientes"
+                            : uniqueOptions.clients.find(
+                                (c) => c.id === filterClientId,
+                              )?.name || "Todos"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 z-[100]">
+                      <Command>
+                        <CommandInput
+                          placeholder="Buscar cliente..."
+                          className="text-xs"
+                        />
+                        <CommandEmpty>Sin resultados.</CommandEmpty>
+                        <CommandGroup className="max-h-[200px] overflow-auto">
+                          <CommandItem
+                            onSelect={() => {
+                              setFilterClientId("all");
+                              setFilterSubclientId("all");
+                              setOpenClientCombo(false);
+                            }}
+                            className="text-xs font-bold uppercase"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                filterClientId === "all"
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />{" "}
+                            Todos
+                          </CommandItem>
+                          {uniqueOptions.clients.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              onSelect={() => {
+                                setFilterClientId(c.id);
+                                setFilterSubclientId("all");
+                                setOpenClientCombo(false);
+                              }}
+                              className="text-xs font-bold uppercase"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  filterClientId === c.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />{" "}
+                              {c.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-                      const configText =
-                        tripPadre.dolly_id || tripPadre.remolque_2_id
-                          ? "FULL"
-                          : "SENCILLO";
-                      const formattedRouteName = tripPadre.route_name
-                        ? `${tripPadre.route_name} - ${configText}`
-                        : `${tripPadre.origin} - ${tripPadre.destination} - ${configText}`;
+                {/* Subcliente (Combobox Search) */}
+                <div className="space-y-1 lg:col-span-2">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Sucursal / Sub-cliente
+                  </label>
+                  <Popover
+                    open={openSubclientCombo}
+                    onOpenChange={setOpenSubclientCombo}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        disabled={uniqueOptions.subclients.length === 0}
+                        className="w-full h-9 justify-between text-xs font-bold uppercase shadow-sm"
+                      >
+                        <span className="truncate">
+                          {filterSubclientId === "all"
+                            ? "Todas las sucursales"
+                            : uniqueOptions.subclients.find(
+                                (c) => c.id === filterSubclientId,
+                              )?.name || "Todas"}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 z-[100]">
+                      <Command>
+                        <CommandInput
+                          placeholder="Buscar sucursal..."
+                          className="text-xs"
+                        />
+                        <CommandEmpty>Sin resultados.</CommandEmpty>
+                        <CommandGroup className="max-h-[200px] overflow-auto">
+                          <CommandItem
+                            onSelect={() => {
+                              setFilterSubclientId("all");
+                              setOpenSubclientCombo(false);
+                            }}
+                            className="text-xs font-bold uppercase"
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                filterSubclientId === "all"
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />{" "}
+                            Todas
+                          </CommandItem>
+                          {uniqueOptions.subclients.map((c) => (
+                            <CommandItem
+                              key={c.id}
+                              onSelect={() => {
+                                setFilterSubclientId(c.id);
+                                setOpenSubclientCombo(false);
+                              }}
+                              className="text-xs font-bold uppercase"
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  filterSubclientId === c.id
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />{" "}
+                              {c.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
 
-                      return (
-                        <DataTableRow
-                          key={leg.id}
-                          className={cn(
-                            "border-b border-slate-100 dark:border-white/5 interactive-row transition-all hover:bg-slate-50/50 dark:hover:bg-white/5",
-                            isIncident && "bg-rose-50/40 dark:bg-rose-950/20",
-                          )}
+                {/* Unidad (Select Nativo) */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Estatus
+                  </label>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="h-9 text-xs font-bold uppercase shadow-sm">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="all"
+                        className="text-xs font-bold uppercase"
+                      >
+                        Todos
+                      </SelectItem>
+                      <SelectItem
+                        value="creado"
+                        className="text-xs font-bold uppercase"
+                      >
+                        En Ruta / Creado
+                      </SelectItem>
+                      <SelectItem
+                        value="en_transito"
+                        className="text-xs font-bold uppercase"
+                      >
+                        En Tránsito
+                      </SelectItem>
+                      <SelectItem
+                        value="retraso"
+                        className="text-xs font-bold uppercase"
+                      >
+                        Retraso
+                      </SelectItem>
+                      <SelectItem
+                        value="detenido"
+                        className="text-xs font-bold uppercase"
+                      >
+                        Detenido
+                      </SelectItem>
+                      <SelectItem
+                        value="accidente"
+                        className="text-xs font-bold uppercase"
+                      >
+                        Accidente
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+                {/* Eco y Operador */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Unidad / Eco
+                  </label>
+                  <Select value={filterUnit} onValueChange={setFilterUnit}>
+                    <SelectTrigger className="h-9 text-xs font-bold uppercase shadow-sm">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="all"
+                        className="text-xs font-bold uppercase"
+                      >
+                        Todas
+                      </SelectItem>
+                      {uniqueOptions.units.map((u) => (
+                        <SelectItem
+                          key={u}
+                          value={u}
+                          className="text-xs font-bold uppercase font-mono"
                         >
-                          <DataTableCell className="py-4 pl-4">
-                            <div className="flex flex-col gap-1">
-                              <span className="font-black text-brand-navy dark:text-slate-200 uppercase tracking-tight text-sm">
-                                {tripPadre.client?.razon_social ||
-                                  "CLIENTE GENERAL"}
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className="w-fit font-mono font-bold text-[9px] bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400"
-                              >
-                                #{tripPadre.public_id || tripPadre.id}
-                              </Badge>
-                            </div>
-                          </DataTableCell>
-
-                          <DataTableCell className="py-4">
-                            <Badge
-                              variant="outline"
-                              className="bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-black uppercase tracking-widest text-[9px] shadow-sm border-slate-200 dark:border-white/10 px-2 py-0.5"
-                            >
-                              {legTypeShort[leg.leg_type] || leg.leg_type}
-                            </Badge>
-                          </DataTableCell>
-
-                          <DataTableCell className="py-4 hidden lg:table-cell">
-                            <span
-                              className="text-[10px] font-black text-foreground uppercase tracking-tighter"
-                              title={formattedRouteName}
-                            >
-                              <RouteIcon className="inline h-3.5 w-3.5 mr-1.5 text-blue-500" />
-                              {formattedRouteName}
-                            </span>
-                          </DataTableCell>
-
-                          <DataTableCell className="py-4 hidden md:table-cell">
-                            <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-brand-navy dark:text-blue-400 bg-slate-50 dark:bg-slate-900 w-fit px-2 py-1 rounded border border-slate-200 dark:border-white/10 shadow-sm">
-                                <Truck className="h-3 w-3 text-slate-400 shrink-0" />{" "}
-                                ECO-{leg.unit?.numero_economico || "N/A"}
-                              </div>
-                              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-tight w-fit px-2 py-1">
-                                <User className="h-3 w-3 shrink-0" />{" "}
-                                {leg.operator?.name?.split(" ")[0] || "S/A"}
-                              </div>
-                            </div>
-                          </DataTableCell>
-                          <DataTableCell className="text-center py-4">
-                            <div className="flex flex-col items-center justify-center gap-1 w-full max-w-[160px] mx-auto">
-                              {getOperationalStatusBadge(leg)}
-                            </div>
-                          </DataTableCell>
-                          <DataTableCell className="text-right py-4 pr-6">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
-                                >
-                                  <MoreVertical className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="glass-panel border-white/20 min-w-[200px] z-50 dark:bg-slate-900/90 shadow-2xl rounded-xl p-1"
-                              >
-                                <DropdownMenuItem
-                                  onClick={() => setTripToView(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-slate-100 dark:focus:bg-slate-800 hover:text-blue-500"
-                                >
-                                  <Eye className="h-4 w-4 mr-3 text-blue-500" />{" "}
-                                  Abrir Centro de Mando
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSeparator className="my-1 dark:bg-white/10" />
-                                <DropdownMenuItem
-                                  onClick={() => setTripToDelete(tripPadre)}
-                                  className="rounded-lg cursor-pointer py-2.5 font-bold text-[10px] uppercase tracking-widest text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-3" /> Eliminar
-                                  Viaje
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </DataTableCell>
-                        </DataTableRow>
-                      );
-                    })
-                  )}
-                </DataTableBody>
-              </DataTable>
+                          {u}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-slate-500 uppercase">
+                    Operador
+                  </label>
+                  <Select
+                    value={filterOperator}
+                    onValueChange={setFilterOperator}
+                  >
+                    <SelectTrigger className="h-9 text-xs font-bold uppercase shadow-sm">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="all"
+                        className="text-xs font-bold uppercase"
+                      >
+                        Todos
+                      </SelectItem>
+                      {uniqueOptions.operators.map((o) => (
+                        <SelectItem
+                          key={o}
+                          value={o}
+                          className="text-xs font-bold uppercase"
+                        >
+                          {o}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}{" "}
+          {/* <-- AQUÍ SE CIERRA LA CONDICIÓN DE showAdvancedFilters */}
+          <Card className="border-none shadow-2xl rounded-2xl overflow-hidden bg-transparent">
+            <CardContent className="p-0">
+              <EnhancedDataTable
+                key={tableKey}
+                data={filteredActiveLegs}
+                columns={tableColumns}
+                hideGlobalSearch={true}
+                exportFileName="Viajes_Operativos"
+                initialSort={{ key: "tripPadre.created_at", direction: "desc" }}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {viewMode === "standby" && (
@@ -609,19 +1213,39 @@ export const TripPlanner = () => {
                         key={v.id}
                         className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-rose-100 dark:border-rose-900/50 text-xs shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px]">
+                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px] flex items-center gap-1.5">
                           {v.client?.razon_social}
+                          {/* INDICADOR MATERIAL PELIGROSO */}
+                          {v.es_material_peligroso && (
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
                         </p>
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
-                        <Button
-                          size="sm"
-                          className="w-full h-8 mt-3 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-md shadow-rose-500/20 haptic-press"
-                          onClick={() => handleAssignInWizard(v)}
-                        >
-                          Asignar Rápido
-                        </Button>
+                        <div className="flex items-center gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            className="flex-1 h-8 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase tracking-widest shadow-md shadow-rose-500/20 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssignInWizard(v);
+                            }}
+                          >
+                            Asignar Rápido
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 shrink-0 text-rose-500 border-rose-200 hover:bg-rose-100 hover:text-rose-700 dark:border-rose-900/50 dark:hover:bg-rose-900/50 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTripToDelete(v);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
@@ -641,20 +1265,40 @@ export const TripPlanner = () => {
                         key={v.id}
                         className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-white/5 text-xs shadow-sm hover:shadow-md transition-shadow"
                       >
-                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px]">
+                        <p className="font-black text-brand-navy dark:text-white uppercase truncate mb-1 text-[11px] flex items-center gap-1.5">
                           {v.client?.razon_social}
+                          {/* INDICADOR MATERIAL PELIGROSO */}
+                          {v.es_material_peligroso && (
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
                         </p>
                         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate tracking-widest uppercase">
                           {v.route_name || `${v.origin} - ${v.destination}`}
                         </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full h-8 mt-3 text-[10px] font-black uppercase tracking-widest border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 haptic-press"
-                          onClick={() => handleAssignInWizard(v)}
-                        >
-                          Despachar Viaje
-                        </Button>
+                        <div className="flex items-center gap-2 mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 h-8 text-[10px] font-black uppercase tracking-widest border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssignInWizard(v);
+                            }}
+                          >
+                            Despachar Viaje
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 shrink-0 text-rose-500 border-rose-200 hover:bg-rose-100 hover:text-rose-700 dark:border-white/10 dark:hover:bg-rose-900/30 haptic-press"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTripToDelete(v);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </CardContent>
@@ -753,13 +1397,34 @@ export const TripPlanner = () => {
                             onClick={() => handleAssignInWizard(v)}
                             className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 p-2 rounded-lg cursor-pointer hover:bg-emerald-100 dark:hover:bg-emerald-900/50 hover:shadow-sm transition-all relative group haptic-press"
                           >
-                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-4">
+                            {/* Aumentamos el padding right (pr-14) para que el texto no se superponga con los botones */}
+                            <div className="font-black text-[9px] uppercase tracking-widest text-emerald-800 dark:text-emerald-400 truncate pr-14 flex items-center gap-1">
                               {v.client?.razon_social}
+                              {/* INDICADOR MATERIAL PELIGROSO EN CALENDARIO */}
+                              {v.es_material_peligroso && (
+                                <ShieldAlert className="h-3 w-3 text-amber-500 shrink-0" />
+                              )}
                             </div>
-                            <div className="text-[10px] text-emerald-600 dark:text-emerald-500/80 truncate font-bold uppercase tracking-tight mt-0.5">
+                            <div className="text-[10px] text-emerald-600 dark:text-emerald-500/80 truncate font-bold uppercase tracking-tight mt-0.5 pr-14">
                               {v.route_name || `${v.origin}-${v.destination}`}
                             </div>
-                            <PlayCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-sm" />
+
+                            {/* Contenedor de acciones al hacer Hover */}
+                            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-rose-500 hover:text-rose-700 hover:bg-rose-200 dark:hover:bg-rose-900/80 rounded-md"
+                                title="Eliminar viaje"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTripToDelete(v);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <PlayCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400 drop-shadow-sm" />
+                            </div>
                           </div>
                         ))}
 
@@ -888,7 +1553,18 @@ export const TripPlanner = () => {
       />
       <TripDetailsModal
         open={!!tripToView}
-        onOpenChange={(open) => !open && setTripToView(null)}
+        onOpenChange={async (open) => {
+          if (!open) {
+            // 🔥 1. Destruimos por completo la referencia al viaje actual para matar fantasmas
+            setTripToView(null);
+
+            // 🔥 2. Recargamos la info limpia del servidor
+            await fetchTrips();
+
+            // 🔥 3. Forzamos a que TODA la pantalla se refresque visualmente
+            setTableKey(Date.now());
+          }
+        }}
         trip={tripToView}
         onIncidentClick={(t) => openUpdateStatusModal(t)}
         onRelayClick={(l, t) => setLegToRelay({ leg: l, tripPadre: t })}
@@ -936,23 +1612,42 @@ export const TripPlanner = () => {
                   className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-white dark:bg-slate-900/50 hover:border-emerald-300 dark:hover:border-emerald-500/50 hover:shadow-md transition-all group"
                 >
                   <div className="flex-1 min-w-0 pr-4 mb-4 sm:mb-0">
-                    <p className="font-black text-sm text-brand-navy dark:text-white uppercase truncate">
+                    <p className="font-black text-sm text-brand-navy dark:text-white uppercase truncate flex items-center gap-1.5">
                       {v.client?.razon_social}
+                      {/* INDICADOR MATERIAL PELIGROSO EN CALENDARIO (MODAL) */}
+                      {v.es_material_peligroso && (
+                        <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0" />
+                      )}
                     </p>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest truncate mt-1">
                       {v.route_name || `${v.origin}-${v.destination}`}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border-none haptic-press"
-                    onClick={() => {
-                      setSelectedDayTrips(null);
-                      handleAssignInWizard(v);
-                    }}
-                  >
-                    Despachar Rápido
-                  </Button>
+                  <div className="flex items-center gap-2 w-full sm:w-auto mt-4 sm:mt-0">
+                    <Button
+                      size="sm"
+                      className="flex-1 sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px] h-10 px-4 rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95 border-none haptic-press"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDayTrips(null);
+                        handleAssignInWizard(v);
+                      }}
+                    >
+                      Despachar Rápido
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-10 w-10 shrink-0 text-rose-500 border-rose-200 hover:bg-rose-100 hover:text-rose-700 dark:border-white/10 dark:hover:bg-rose-900/30 rounded-xl haptic-press"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedDayTrips(null);
+                        setTripToDelete(v);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

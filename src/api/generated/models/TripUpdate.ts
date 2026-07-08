@@ -20,10 +20,13 @@ export type TripUpdate = {
     contenedor_2?: (string | null);
     terminal_entrega_vacio?: (string | null);
     peso_toneladas?: (number | null);
-    es_material_peligroso?: (boolean | null);
-    clase_imo?: (string | null);
+    sat_clave_servicio?: (string | null);
     sat_clave_producto?: (string | null);
     sat_clave_unidad?: (string | null);
+    es_material_peligroso?: (boolean | null);
+    cve_material_peligroso?: (string | null);
+    embalaje?: (string | null);
+    clase_imo?: (string | null);
     mercancia_clave_stcc?: (string | null);
     status?: (TripStatus | null);
     uuid_fiscal?: (string | null);
@@ -31,6 +34,16 @@ export type TripUpdate = {
     costo_casetas?: (number | null);
     start_date?: (string | null);
     closed_at?: (string | null);
+    is_refrigerated_1?: (boolean | null);
+    /**
+     * ID del motogenerador 1
+     */
+    motogenerator_1_id?: (number | null);
+    is_refrigerated_2?: (boolean | null);
+    /**
+     * ID del motogenerador 2
+     */
+    motogenerator_2?: (number | null);
     unit_id?: (number | null);
     operator_id?: (number | null);
     anticipo_casetas?: (number | null);

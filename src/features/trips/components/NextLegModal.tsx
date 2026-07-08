@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,6 @@ import {
   ArrowRight,
   ShieldCheck,
   TrendingDown,
-  Ticket,
   Container,
   Package,
   Minus,
@@ -41,7 +40,6 @@ import {
   ChevronDown,
   Check,
   ChevronsUpDown,
-  Lock,
 } from "lucide-react";
 import {
   Command,
@@ -59,6 +57,7 @@ import {
 import { useUnits } from "@/features/units/hooks/useUnits";
 import { useOperators } from "@/features/operators/hooks/useOperators";
 import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
+import { useBilling } from "@/features/receivables/hooks/useBilling";
 import { Trip, TripLegCreatePayload } from "../types";
 import { cn, checkIsFullTrip } from "@/lib/utils";
 import axiosClient from "@/api/axiosClient";
@@ -85,6 +84,8 @@ interface ExtendedLegPayload extends TripLegCreatePayload {
   remolque_1_id?: number | null;
   dolly_id?: number | null;
   remolque_2_id?: number | null;
+  motogenerator_1_id?: number | null; // ⚡ NUEVO
+  motogenerator_2_id?: number | null; // ⚡ NUEVO
   otros_anticipos: number;
   destino_vacio?: string;
 }
@@ -212,12 +213,15 @@ export function NextLegModal({
   onSubmit,
   onSuccessRefresh,
 }: NextLegModalProps) {
-  const { unidades, updateLoadStatus } = useUnits();
+  //  INYECCIÓN QUIRÚRGICA: OBTENEMOS EL MÉTODO DE PERSISTENCIA DEL HOOK
+  const { unidades, updateLoadStatus, fetchLastOdometer } = useUnits();
   const { operadores } = useOperators();
   const { products: satProducts } = useSatCatalogs();
+  const { handleStampNominal } = useBilling(); //  INYECTADO PARA EL TIMBRADO AUTOMÁTICO
 
   const [loading, setLoading] = useState(false);
   const [showFiscalData, setShowFiscalData] = useState(false);
+  const [odoInicial, setOdoInicial] = useState(0); // ESTADO DEL ODÓMETRO
 
   const [formData, setFormData] = useState<Partial<ExtendedLegPayload>>({
     leg_type: "ruta_carretera",
@@ -226,12 +230,23 @@ export function NextLegModal({
     remolque_1_id: null,
     dolly_id: null,
     remolque_2_id: null,
+    motogenerator_1_id: null, // ⚡ NUEVO
+    motogenerator_2_id: null, // ⚡ NUEVO
     anticipo_casetas: 0,
     anticipo_viaticos: 0,
     anticipo_combustible: 0,
     otros_anticipos: 0,
     destino_vacio: "",
   });
+
+  //  EFECTO QUIRÚRGICO: CUANDO CAMBIA EL CAMIÓN, BUSCAMOS SU ÚLTIMO KILOMETRAJE
+  useEffect(() => {
+    if (formData.unit_id) {
+      fetchLastOdometer(formData.unit_id).then(setOdoInicial);
+    } else {
+      setOdoInicial(0);
+    }
+  }, [formData.unit_id, fetchLastOdometer]);
 
   const [tripFiscalData, setTripFiscalData] = useState({
     contenedor_1: "",
@@ -256,51 +271,53 @@ export function NextLegModal({
       if (lastLeg?.leg_type === "carga_muelle") nextLegType = "ruta_carretera";
       if (lastLeg?.leg_type === "ruta_carretera") nextLegType = "entrega_vacio";
 
-      //  FIX LEAD: Casteo estricto a Number para asegurar que los comparadores === funcionen en los filtros.
-      const inheritedR1 = tripPadre.remolque_1_id
-        ? Number(tripPadre.remolque_1_id)
+      const inheritedR1 = (tripPadre as any).remolque_1_id
+        ? Number((tripPadre as any).remolque_1_id)
         : (lastLeg as any)?.remolque_1_id
           ? Number((lastLeg as any).remolque_1_id)
           : null;
-      const inheritedDolly = tripPadre.dolly_id
-        ? Number(tripPadre.dolly_id)
+      const inheritedDolly = (tripPadre as any).dolly_id
+        ? Number((tripPadre as any).dolly_id)
         : (lastLeg as any)?.dolly_id
           ? Number((lastLeg as any).dolly_id)
           : null;
-      const inheritedR2 = tripPadre.remolque_2_id
-        ? Number(tripPadre.remolque_2_id)
+      const inheritedR2 = (tripPadre as any).remolque_2_id
+        ? Number((tripPadre as any).remolque_2_id)
         : (lastLeg as any)?.remolque_2_id
           ? Number((lastLeg as any).remolque_2_id)
           : null;
 
       setFormData({
         leg_type: nextLegType,
-        // El tracto y operador los dejamos null (o heredados) para que despachen al nuevo relevo.
         unit_id: lastLeg?.unit_id ? Number(lastLeg.unit_id) : null,
         operator_id: lastLeg?.operator_id ? Number(lastLeg.operator_id) : null,
 
         remolque_1_id: inheritedR1,
         dolly_id: inheritedDolly,
         remolque_2_id: inheritedR2,
+        motogenerator_1_id: (tripPadre as any).motogenerator_1_id
+          ? Number((tripPadre as any).motogenerator_1_id)
+          : null,
+        motogenerator_2_id: (tripPadre as any).motogenerator_2_id
+          ? Number((tripPadre as any).motogenerator_2_id)
+          : null,
 
-        anticipo_casetas: tripPadre.costo_casetas ?? 0,
+        anticipo_casetas: (tripPadre as any).costo_casetas ?? 0,
         anticipo_viaticos: 0,
         anticipo_combustible: 0,
         otros_anticipos: 0,
         destino_vacio: "",
       });
 
-      // --- 🛡️ INICIO PARCHE DEFENSIVO SAT ---
-      const rawDescription = tripPadre.descripcion_mercancia || "Carga General";
-      // Buscamos si la descripción empieza exactamente con 8 dígitos (ej. "12161800 - ...")
+      // --- 🛡️ INICIO PARCHE DEFENSIVO SAT (SEGURO CONTRA TYPESCRIPT) ---
+      const rawDescription =
+        (tripPadre as any).descripcion_mercancia || "Carga General";
       const matchSatCode = rawDescription.match(/^(\d{8})\b/);
 
-      // Si encontramos la clave en la descripción, la usamos. Si no, fallback a lo que manda el backend o genérico.
       const realSatCode = matchSatCode
         ? matchSatCode[1]
-        : tripPadre.sat_clave_producto || "01010101";
+        : (tripPadre as any).sat_clave_producto || "01010101";
 
-      // Limpiamos la descripción para que no se duplique visualmente (quita la clave y el guion)
       const cleanDescription = matchSatCode
         ? rawDescription
             .substring(matchSatCode[0].length)
@@ -312,26 +329,18 @@ export function NextLegModal({
         contenedor_1: (tripPadre as any).contenedor_1 || "",
         contenedor_2: (tripPadre as any).contenedor_2 || "",
         referencia: (tripPadre as any).referencia || "",
-        peso_toneladas: tripPadre.peso_toneladas || 0,
-        descripcion_mercancia: cleanDescription, // Descripción limpia
-        sat_clave_producto: realSatCode, // Clave real extraída (ej. "12161800")
-        sat_clave_unidad: tripPadre.sat_clave_unidad || "E48",
-        es_material_peligroso: tripPadre.es_material_peligroso || false,
-        clase_imo: tripPadre.clase_imo || "",
+        peso_toneladas: (tripPadre as any).peso_toneladas || 0,
+        descripcion_mercancia: cleanDescription,
+        sat_clave_producto: realSatCode,
+        sat_clave_unidad: (tripPadre as any).sat_clave_unidad || "E48",
+        es_material_peligroso:
+          (tripPadre as any).es_material_peligroso || false,
+        clase_imo: (tripPadre as any).clase_imo || "",
       });
 
       setShowFiscalData(false);
     }
   }, [open, tripPadre]);
-
-  useEffect(() => {
-    console.log("=== 🚦 DEBUG FISCAL PARSEADO ===");
-    console.log(
-      "Clave SAT a inyectar en el Select:",
-      tripFiscalData.sat_clave_producto,
-    );
-    console.log("Descripción limpia:", tripFiscalData.descripcion_mercancia);
-  }, [tripFiscalData]);
 
   const isFullTrip = useMemo(() => {
     return checkIsFullTrip(tripPadre);
@@ -356,6 +365,8 @@ export function NextLegModal({
     );
   }, [tripFiscalData]);
 
+  // ⚡ CORRECCIÓN FINANCIERA: Casetas son solo informativas.
+  // IVA y Retención van sobre Flete Base únicamente.
   const finanzas = useMemo(() => {
     if (!tripPadre)
       return {
@@ -366,14 +377,18 @@ export function NextLegModal({
         retencion: 0,
         total: 0,
       };
-    const base = tripPadre.tarifa_base ?? 0;
-    const casetas = tripPadre.costo_casetas ?? 0;
-    const subtotal = base + casetas;
+
+    // Casteo seguro de TypeScript para evitar bloqueos
+    const base = (tripPadre as any).tarifa_base ?? 0;
+    const casetas = (tripPadre as any).costo_casetas ?? 0;
+
+    // ⚡ El subtotal es solo el Flete Base. Las casetas NO se suman al subtotal.
+    const subtotal = base;
     const iva = subtotal * 0.16;
     const retencion = subtotal * 0.04;
     return {
       base,
-      casetasPactadas: casetas,
+      casetasPactadas: casetas, // Informativo
       subtotal,
       iva,
       retencion,
@@ -469,83 +484,30 @@ export function NextLegModal({
       (o) =>
         o.status === "activo" ||
         o.status === "disponible" ||
-        // 👇 AQUÍ AGREGAMOS LOS ESTATUS "en_ruta" y "en ruta"
         o.status === "en_ruta" ||
         o.status === "en ruta" ||
         Number(o.id) === Number(formData.operator_id),
     );
   }, [operadores, formData.operator_id]);
 
-  useEffect(() => {
-    if (!open || !tripPadre) return;
+  // Lógica de refrigerados
+  const isRefrigerated1 = (tripPadre as any)?.is_refrigerated_1;
+  const isRefrigerated2 = (tripPadre as any)?.is_refrigerated_2;
 
-    const lastLeg =
-      tripPadre.legs && tripPadre.legs.length > 0
-        ? tripPadre.legs[tripPadre.legs.length - 1]
-        : null;
-
-    console.log("=== 🛑 INICIO DEBUGGER: REMOLQUES Y DOLLY ===");
-    console.log("1. TripPadre:", tripPadre);
-    console.log("2. Último Tramo (lastLeg):", lastLeg);
-
-    console.log("--- VALORES OBTENIDOS DEL JSON ---");
-    console.log("lastLeg.remolque_1_id:", (lastLeg as any)?.remolque_1_id);
-    console.log("lastLeg.dolly_id:", (lastLeg as any)?.dolly_id);
-    console.log("lastLeg.remolque_2_id:", (lastLeg as any)?.remolque_2_id);
-
-    console.log("tripPadre.remolque_1_id:", tripPadre.remolque_1_id);
-    console.log("tripPadre.dolly_id:", tripPadre.dolly_id);
-    console.log("tripPadre.remolque_2_id:", tripPadre.remolque_2_id);
-
-    console.log(
-      "tripPadre.remolque_1 (Objeto):",
-      (tripPadre as any).remolque_1,
-    );
-    console.log("tripPadre.dolly (Objeto):", (tripPadre as any).dolly);
-    console.log(
-      "tripPadre.remolque_2 (Objeto):",
-      (tripPadre as any).remolque_2,
-    );
-
-    console.log("--- RESULTADO EN FORMDATA ---");
-    console.log("formData.remolque_1_id:", formData.remolque_1_id);
-    console.log("formData.dolly_id:", formData.dolly_id);
-    console.log("formData.remolque_2_id:", formData.remolque_2_id);
-
-    console.log("--- VERIFICACIÓN DE SELECTS (AVAILABLES) ---");
-    console.log("¿Están los IDs en las listas de opciones?");
-
-    const r1Exists = availableRemolques.some(
-      (r) => r.id === formData.remolque_1_id,
-    );
-    const dollyExists = availableDollies.some(
-      (d) => d.id === formData.dolly_id,
-    );
-    const r2Exists = availableRemolques.some(
-      (r) => r.id === formData.remolque_2_id,
-    );
-
-    console.log(
-      `Remolque 1 (ID ${formData.remolque_1_id}) existe en options:`,
-      r1Exists,
-    );
-    console.log(
-      `Dolly (ID ${formData.dolly_id}) existe en options:`,
-      dollyExists,
-    );
-    console.log(
-      `Remolque 2 (ID ${formData.remolque_2_id}) existe en options:`,
-      r2Exists,
-    );
-
-    if (!r1Exists && formData.remolque_1_id) {
-      console.warn(
-        `⚠️ ALERTA: El Remolque 1 (ID ${formData.remolque_1_id}) NO ESTÁ en availableRemolques. Motivo probable: status diferente a 'disponible' o no lo manda el backend general.`,
+  const availableMotogenerators = useMemo(() => {
+    return (unidades as Unit[]).filter((u) => {
+      const searchIn = `${u.tipo_1} ${u.tipo}`.toLowerCase();
+      const isMoto =
+        searchIn.includes("motogen") || searchIn.includes("generador");
+      const isAvailable = UNIT_STATUSES_AVAILABLE.includes(
+        u.status?.toLowerCase() as any,
       );
-    }
-
-    console.log("=== 🛑 FIN DEBUGGER ===");
-  }, [open, tripPadre, formData, availableRemolques, availableDollies]);
+      const isSelected =
+        Number(u.id) === Number(formData.motogenerator_1_id) ||
+        Number(u.id) === Number(formData.motogenerator_2_id);
+      return isMoto && (isAvailable || isSelected);
+    });
+  }, [unidades, formData.motogenerator_1_id, formData.motogenerator_2_id]);
 
   const validateForm = useCallback((): boolean => {
     if (!formData.unit_id || !formData.operator_id || !formData.remolque_1_id) {
@@ -593,20 +555,36 @@ export function NextLegModal({
 
     setLoading(true);
     try {
+      // 1. Actualizamos datos fiscales del viaje y asignaciones
       await axiosClient.put(`/api/logistics/trips/${tripPadre.id}`, {
         ...tripFiscalData,
-        numero_contenedor: tripFiscalData.contenedor_1,
-        booking: tripFiscalData.referencia,
+        // ⚡ ASEGURAR QUE SE GUARDEN BIEN LOS CONTENEDORES Y REFERENCIA
+        contenedor_1: tripFiscalData.contenedor_1,
+        numero_contenedor: tripFiscalData.contenedor_1, // Alias de seguridad
+        contenedor_2: tripFiscalData.contenedor_2,
+        referencia: tripFiscalData.referencia,
+        booking: tripFiscalData.referencia, // Alias de seguridad
+
+        // Asignaciones
         remolque_1_id: formData.remolque_1_id,
         dolly_id: formData.dolly_id,
         remolque_2_id: formData.remolque_2_id,
+        motogenerator_1_id: formData.motogenerator_1_id, // ⚡ NUEVO
+        motogenerator_2_id: formData.motogenerator_2_id, // ⚡ NUEVO
       });
+
+      // 2. Preparamos y enviamos la nueva fase operativa
+      const payloadConOdometro = {
+        ...formData,
+        odometro_inicial: odoInicial,
+      };
 
       const success = await onSubmit(
         String(tripPadre.id),
-        formData as TripLegCreatePayload,
+        payloadConOdometro as TripLegCreatePayload,
       );
 
+      // 3. Acciones posteriores si la fase se guardó correctamente
       if (success) {
         if (formData.leg_type === "carga_muelle") {
           await updateLoadStatus(Number(formData.remolque_1_id), true);
@@ -620,6 +598,18 @@ export function NextLegModal({
           toast.success(
             `Equipo liberado en ${formData.destino_vacio}. Viaje listo para liquidación.`,
           );
+        } else if (formData.leg_type === "ruta_carretera") {
+          //  MAGIA AQUÍ: TIMBRADO AUTOMÁTICO DE CARTA PORTE $1 AL PASAR A RUTA CARRETERA
+          toast.loading("Actualizando Carta Porte para Ruta Carretera...", {
+            id: `cp-${tripPadre.id}`,
+          });
+          handleStampNominal(Number(tripPadre.id), () => {
+            toast.success(
+              "Carta Porte de Carretera generada y reemplazada exitosamente.",
+              { id: `cp-${tripPadre.id}` },
+            );
+            if (onSuccessRefresh) onSuccessRefresh();
+          });
         }
 
         onOpenChange(false);
@@ -633,6 +623,7 @@ export function NextLegModal({
   }, [
     tripPadre,
     formData,
+    odoInicial,
     validateForm,
     onSubmit,
     updateLoadStatus,
@@ -640,10 +631,23 @@ export function NextLegModal({
     tripFiscalData,
     legUiConfig,
     onSuccessRefresh,
+    handleStampNominal, //  DEPENDENCIA INYECTADA
   ]);
 
-  const referencia = (tripPadre as (Trip & { referencia?: string }) | null)
-    ?.referencia;
+  // Extracción dinámica (prioriza lo que el usuario esté tecleando/seleccionando)
+  const refActual = tripFiscalData.referencia || (tripPadre as any)?.referencia;
+  const cont1Actual =
+    tripFiscalData.contenedor_1 || (tripPadre as any)?.contenedor_1;
+  const cont2Actual =
+    tripFiscalData.contenedor_2 || (tripPadre as any)?.contenedor_2;
+
+  // Buscamos los nombres (números económicos) de los motogeneradores seleccionados
+  const mg1Unit = availableMotogenerators.find(
+    (u) => u.id === formData.motogenerator_1_id,
+  );
+  const mg2Unit = availableMotogenerators.find(
+    (u) => u.id === formData.motogenerator_2_id,
+  );
 
   if (!tripPadre) return null;
 
@@ -683,10 +687,43 @@ export function NextLegModal({
                   {isFullTrip ? "FULL / 9 EJES" : "SENCILLO / 5 EJES"}
                 </Badge>
 
-                {referencia && (
-                  <Badge className="ml-2 bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-200 border-blue-200 dark:border-blue-500/30 tracking-widest flex items-center gap-1.5">
+                {/* Contenedor 1 */}
+                {cont1Actual && (
+                  <Badge className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50 tracking-widest flex items-center gap-1.5">
                     <Container className="h-3.5 w-3.5" />
-                    CONTENEDOR: {referencia}
+                    CONT 1: {cont1Actual}
+                  </Badge>
+                )}
+
+                {/* Contenedor 2 (Solo si existe) */}
+                {cont2Actual && (
+                  <Badge className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/50 tracking-widest flex items-center gap-1.5">
+                    <Container className="h-3.5 w-3.5" />
+                    CONT 2: {cont2Actual}
+                  </Badge>
+                )}
+
+                {/* Motogenerador 1 */}
+                {mg1Unit && (
+                  <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800/50 tracking-widest flex items-center gap-1.5">
+                    <Box className="h-3.5 w-3.5" />
+                    MG 1: {mg1Unit.numero_economico}
+                  </Badge>
+                )}
+
+                {/* Motogenerador 2 */}
+                {mg2Unit && (
+                  <Badge className="bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-800/50 tracking-widest flex items-center gap-1.5">
+                    <Box className="h-3.5 w-3.5" />
+                    MG 2: {mg2Unit.numero_economico}
+                  </Badge>
+                )}
+
+                {/* Referencia / Booking */}
+                {refActual && (
+                  <Badge className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50 tracking-widest flex items-center gap-1.5">
+                    <Hash className="h-3.5 w-3.5" />
+                    REF: {refActual}
                   </Badge>
                 )}
               </div>
@@ -1108,9 +1145,17 @@ export function NextLegModal({
             )}
 
             <div className="space-y-3">
-              <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
-                Unidad (Tractocamión)
-              </Label>
+              <div className="flex justify-between items-end">
+                <Label className="text-[11px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest ml-1">
+                  Unidad (Tractocamión)
+                </Label>
+                {/* INDICADOR VISUAL DEL ODÓMETRO INYECTADO */}
+                {odoInicial > 0 && (
+                  <span className="text-[9px] font-black bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded shadow-sm border border-emerald-200 dark:border-emerald-800/50">
+                    ODÓMETRO ACTUAL: {odoInicial.toLocaleString()} KM
+                  </span>
+                )}
+              </div>
               <Select
                 value={formData.unit_id ? String(formData.unit_id) : ""}
                 onValueChange={(v) =>
@@ -1146,9 +1191,12 @@ export function NextLegModal({
                   </Badge>
                 )}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+
+              {/* BLOQUE DE SELECCIÓN DE CHASIS, DOLLY Y MOTOGENERADORES */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                {/* CHASIS 1 */}
                 <div className="space-y-2.5">
-                  <Label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">
+                  <Label className="text-[9px] font-bold text-slate-500 uppercase ml-1">
                     Chasis 1
                   </Label>
                   <Select
@@ -1187,173 +1235,163 @@ export function NextLegModal({
                   </Select>
                 </div>
 
-                {isFullTrip && (
-                  <>
-                    <div className="space-y-2.5">
-                      <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
-                        Dolly
-                      </Label>
-                      <Select
-                        value={
-                          formData.dolly_id ? String(formData.dolly_id) : ""
-                        }
-                        onValueChange={(v) =>
-                          setFormData((p) => ({ ...p, dolly_id: Number(v) }))
-                        }
-                      >
-                        <SelectTrigger
-                          className={cn(
-                            "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
-                          )}
-                        >
-                          <SelectValue placeholder="Dolly" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
-                          {availableDollies.map((u) => (
-                            <SelectItem
-                              key={u.id}
-                              value={String(u.id)}
-                              className="font-bold dark:text-white"
-                            >
-                              {u.numero_economico}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                {/* MOTOGENERADOR 1 */}
+                {isRefrigerated1 && (
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-amber-600 uppercase ml-1">
+                      Motogenerador 1
+                    </Label>
+                    <Select
+                      value={
+                        formData.motogenerator_1_id
+                          ? String(formData.motogenerator_1_id)
+                          : "none"
+                      }
+                      onValueChange={(v) =>
+                        setFormData((p) => ({
+                          ...p,
+                          motogenerator_1_id: v === "none" ? null : Number(v),
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-10 font-bold border-amber-200 text-amber-800 bg-amber-50">
+                        <SelectValue placeholder="Sin MG" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin motogenerador</SelectItem>
+                        {availableMotogenerators.map((u) => (
+                          <SelectItem
+                            key={u.id}
+                            value={String(u.id)}
+                            className="font-bold"
+                          >
+                            {u.numero_economico}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-                    <div className="space-y-2.5">
-                      <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
-                        Chasis 2
-                      </Label>
-                      <Select
-                        value={
-                          formData.remolque_2_id
-                            ? String(formData.remolque_2_id)
-                            : ""
-                        }
-                        onValueChange={(v) =>
-                          setFormData((p) => ({
-                            ...p,
-                            remolque_2_id: Number(v),
-                          }))
-                        }
+                {/* DOLLY (Si es FULL) */}
+                {isFullTrip && (
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-rose-600 dark:text-rose-400 uppercase ml-1">
+                      Dolly
+                    </Label>
+                    <Select
+                      value={formData.dolly_id ? String(formData.dolly_id) : ""}
+                      onValueChange={(v) =>
+                        setFormData((p) => ({ ...p, dolly_id: Number(v) }))
+                      }
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
+                        )}
                       >
-                        <SelectTrigger
-                          className={cn(
-                            "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
-                          )}
-                        >
-                          <SelectValue placeholder="R2" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
-                          {availableRemolques.map((u) => (
-                            <SelectItem
-                              key={u.id}
-                              value={String(u.id)}
-                              className="font-bold dark:text-white"
-                            >
-                              {u.numero_economico}{" "}
-                              {u.is_loaded ? (
-                                <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
-                              ) : (
-                                <Minus className="inline h-3.5 w-3.5 text-slate-400 ml-1" />
-                              )}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </>
+                        <SelectValue placeholder="Dolly" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                        {availableDollies.map((u) => (
+                          <SelectItem
+                            key={u.id}
+                            value={String(u.id)}
+                            className="font-bold dark:text-white"
+                          >
+                            {u.numero_economico}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* CHASIS 2 (Si es FULL) */}
+                {isFullTrip && (
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase ml-1">
+                      Chasis 2
+                    </Label>
+                    <Select
+                      value={
+                        formData.remolque_2_id
+                          ? String(formData.remolque_2_id)
+                          : ""
+                      }
+                      onValueChange={(v) =>
+                        setFormData((p) => ({
+                          ...p,
+                          remolque_2_id: Number(v),
+                        }))
+                      }
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          "h-10 font-bold border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100 bg-card",
+                        )}
+                      >
+                        <SelectValue placeholder="R2" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10">
+                        {availableRemolques.map((u) => (
+                          <SelectItem
+                            key={u.id}
+                            value={String(u.id)}
+                            className="font-bold dark:text-white"
+                          >
+                            {u.numero_economico}{" "}
+                            {u.is_loaded ? (
+                              <Package className="inline h-3.5 w-3.5 text-amber-500 ml-1" />
+                            ) : (
+                              <Minus className="inline h-3.5 w-3.5 text-slate-400 ml-1" />
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* MOTOGENERADOR 2 (Si es FULL y requiere refri en el 2) */}
+                {isFullTrip && isRefrigerated2 && (
+                  <div className="space-y-2.5">
+                    <Label className="text-[9px] font-bold text-amber-600 uppercase ml-1">
+                      Motogenerador 2
+                    </Label>
+                    <Select
+                      value={
+                        formData.motogenerator_2_id
+                          ? String(formData.motogenerator_2_id)
+                          : "none"
+                      }
+                      onValueChange={(v) =>
+                        setFormData((p) => ({
+                          ...p,
+                          motogenerator_2_id: v === "none" ? null : Number(v),
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="h-10 font-bold border-amber-200 text-amber-800 bg-amber-50">
+                        <SelectValue placeholder="Sin MG" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sin motogenerador</SelectItem>
+                        {availableMotogenerators.map((u) => (
+                          <SelectItem
+                            key={u.id}
+                            value={String(u.id)}
+                            className="font-bold"
+                          >
+                            {u.numero_economico}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
               </div>
             </div>
-
-            {isRoadLeg && (
-              <div
-                className={cn(
-                  "p-8 rounded-3xl space-y-6 shadow-inner relative overflow-hidden",
-                  "bg-amber-500/5 dark:bg-amber-500/10",
-                  "border border-amber-500/10 dark:border-amber-500/20",
-                )}
-              >
-                <div className="absolute top-0 left-0 w-1 bg-amber-400 dark:bg-amber-500 h-full rounded-l-3xl" />
-                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" /> Registro de Anticipos y
-                  Vales
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                  {(
-                    [
-                      {
-                        key: "anticipo_casetas",
-                        label: "Casetas",
-                        accent: "amber",
-                      },
-                      {
-                        key: "anticipo_combustible",
-                        label: "Diesel",
-                        accent: "amber",
-                      },
-                      {
-                        key: "anticipo_viaticos",
-                        label: "Viáticos",
-                        accent: "amber",
-                      },
-                      {
-                        key: "otros_anticipos",
-                        label: "Vale / Otros",
-                        accent: "blue",
-                      },
-                    ] as const
-                  ).map(({ key, label, accent }) => (
-                    <div key={key} className="space-y-2.5">
-                      <Label
-                        className={cn(
-                          "text-[9px] font-bold uppercase ml-1 flex items-center gap-1",
-                          accent === "blue"
-                            ? "text-blue-600 dark:text-blue-400"
-                            : "text-slate-600 dark:text-slate-400",
-                        )}
-                      >
-                        {key === "otros_anticipos" && (
-                          <Ticket className="h-3 w-3" />
-                        )}
-                        {label}
-                      </Label>
-                      <div className="relative">
-                        <DollarSign
-                          className={cn(
-                            "absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5",
-                            accent === "blue"
-                              ? "text-blue-400"
-                              : "text-slate-400 dark:text-slate-500",
-                          )}
-                        />
-                        <Input
-                          type="number"
-                          className={cn(
-                            "pl-9 h-11 font-mono text-sm",
-                            "bg-card",
-                            "text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500",
-                            accent === "blue"
-                              ? "border-blue-200 dark:border-blue-700/50 bg-blue-50/50 dark:bg-blue-900/20"
-                              : "border-amber-200/50 dark:border-amber-700/30",
-                          )}
-                          value={formData[key] || ""}
-                          onChange={(e) =>
-                            setFormData((p) => ({
-                              ...p,
-                              [key]: Number(e.target.value),
-                            }))
-                          }
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
 

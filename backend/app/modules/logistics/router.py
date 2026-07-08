@@ -1,21 +1,25 @@
 import os
+import time  # <-- NUEVO: Para el sleep de la sincronización masiva
+import uuid
 import datetime
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime as dt_utcnow
 from pathlib import Path
 from typing import List, Optional
+import requests  # <-- NUEVO: Para la API de mapas OSRM
+import traceback  # <-- PARA IMPRIMIR EL ERROR EXACTO EN CONSOLA
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
-from sqlalchemy.orm import Session, contains_eager, joinedload
+from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
+from sqlalchemy import func, or_  # <-- NUEVO: Agregado or_ para la consulta masiva
 from jinja2 import Environment, FileSystemLoader
 
 from app.db.database import get_db
 from app.models import models
-from app.models.models import SystemConfig
+from app.models.models import SystemConfig, RecordStatus
 
-#  importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
+# importacion LOCAL (FSD): Solo busca en la misma carpeta "logistics"
 from . import schemas, crud
 
 # Autenticación
@@ -27,7 +31,7 @@ except Exception as e:
     print(f" Advertencia: WeasyPrint no se cargó correctamente ({e})")
     HTML = None
 
-#  ÚNICA INSTANCIA DEL ROUTER
+# ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter(tags=["Logistics"])
 
 # Configuración de Plantillas para PDFs
@@ -35,6 +39,48 @@ TEMPLATE_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "../../templates"
 )
 jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+
+
+# =====================================================================
+# FUNCIONES HELPER (NUEVO)
+# =====================================================================
+
+
+def get_osrm_distance(origen: str, destino: str) -> float:
+    """
+    Calcula la distancia real en carretera usando la API gratuita de OpenStreetMap / OSRM.
+    """
+    try:
+        # Se agrega un correo ficticio al User-Agent para cumplir las políticas de Nominatim y evitar bloqueos
+        headers = {"User-Agent": "TMS-Rapidos3T/1.0 (contacto@tuempresa.com)"}
+
+        # 1. Convertimos Origen a Coordenadas
+        res_orig = requests.get(
+            f"https://nominatim.openstreetmap.org/search?q={origen}, Mexico&format=json&limit=1",
+            headers=headers,
+            timeout=5,
+        ).json()
+        # 2. Convertimos Destino a Coordenadas
+        res_dest = requests.get(
+            f"https://nominatim.openstreetmap.org/search?q={destino}, Mexico&format=json&limit=1",
+            headers=headers,
+            timeout=5,
+        ).json()
+
+        if res_orig and res_dest:
+            lon1, lat1 = res_orig[0]["lon"], res_orig[0]["lat"]
+            lon2, lat2 = res_dest[0]["lon"], res_dest[0]["lat"]
+
+            # 3. Pedimos la ruta en carretera a OSRM
+            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+            route_res = requests.get(osrm_url, timeout=5).json()
+
+            if route_res.get("code") == "Ok":
+                distancia_metros = route_res["routes"][0]["distance"]
+                return round(distancia_metros / 1000.0, 2)
+    except Exception as e:
+        print(f"⚠️ Advertencia silenciosa calculando distancia OSRM: {e}")
+    return 0.0
 
 
 # =====================================================================
@@ -170,7 +216,10 @@ def check_toll_dependencies(toll_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/tolls/{toll_id}")
 def delete_toll(
-    toll_id: int, remove_from_routes: bool = Query(False), db: Session = Depends(get_db)
+    toll_id: int,
+    remove_from_routes: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ):
     db_toll = db.query(models.TollBooth).get(toll_id)
     if not db_toll:
@@ -220,6 +269,7 @@ def delete_toll(
                 template.tiempo_total_minutos = total_min
 
         db_toll.record_status = "I"
+        db_toll.updated_by_id = current_user.id
         msg = "Caseta inactivada y sus tramos marcados como eliminados en las rutas (Borrado lógico)."
     else:
         db_toll.record_status = "E"
@@ -488,41 +538,60 @@ def read_trip(trip_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/trips", response_model=schemas.TripResponse)
-def create_trip(trip: schemas.TripCreate, db: Session = Depends(get_db)):
-    if trip.initial_leg and trip.initial_leg.unit_id:
-        unit = (
-            db.query(models.Unit)
-            .filter(models.Unit.id == trip.initial_leg.unit_id)
-            .first()
-        )
-        if not unit:
-            raise HTTPException(status_code=404, detail="La unidad principal no existe")
+def create_trip(
+    trip: schemas.TripCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
+    #  LIBERADO: Ya no bloqueamos la unidad en el router, permite multiasignación en patio
 
-        estatus_permitidos = ["disponible", "bloqueado", "en_ruta"]
+    # Generamos el viaje de la forma tradicional
+    db_trip = crud.create_trip(db, trip, user_id=current_user.id)  # <--- AUDITORÍA
 
-        if unit.status.lower() not in estatus_permitidos:
-            raise HTTPException(
-                status_code=400,
-                detail=f"La unidad {unit.numero_economico} no puede ser despachada. Estatus actual: {unit.status}",
-            )
+    # CALCULAMOS LA DISTANCIA AUTOMÁTICA EN SEGUNDO PLANO Y SILENCIOSAMENTE
+    if db_trip.origin and db_trip.destination:
+        distancia_calculada = get_osrm_distance(db_trip.origin, db_trip.destination)
+        if distancia_calculada > 0:
+            try:
+                if hasattr(db_trip, "distancia_km"):
+                    db_trip.distancia_km = distancia_calculada
+                elif hasattr(db_trip, "distancia_total"):
+                    db_trip.distancia_total = distancia_calculada
+                elif hasattr(db_trip, "distancia"):
+                    db_trip.distancia = distancia_calculada
 
-    db_trip = crud.create_trip(db, trip)
+                db.commit()
+                db.refresh(db_trip)
+            except Exception as e:
+                db.rollback()
+                print(f"⚠️ Error inofensivo actualizando la distancia en BD: {e}")
+
     return db_trip
 
 
 @router.patch("/trips/{trip_id}/status", response_model=schemas.TripResponse)
 def update_status(
-    trip_id: int, status: str, location: str = None, db: Session = Depends(get_db)
+    trip_id: int,
+    status: str,
+    location: str = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.update_trip_status(db, str(trip_id), status, location)
+    trip = crud.update_trip_status(
+        db, str(trip_id), status, user_id=current_user.id, location=location
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
 
 
 @router.delete("/trips/{trip_id}", response_model=dict)
-def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
-    success = crud.delete_trip(db, trip_id)
+def delete_trip_endpoint(
+    trip_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
+    success = crud.delete_trip(db, trip_id, user_id=current_user.id)  # <--- AUDITORÍA
     if not success:
         raise HTTPException(
             status_code=404, detail="Viaje no encontrado o ya eliminado"
@@ -532,11 +601,17 @@ def delete_trip_endpoint(trip_id: str, db: Session = Depends(get_db)):
 
 @router.put("/trips/{trip_id}", response_model=schemas.TripResponse)
 def update_trip_endpoint(
-    trip_id: int, payload: schemas.TripUpdate, db: Session = Depends(get_db)
+    trip_id: int,
+    payload: schemas.TripUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     update_data = payload.dict(exclude_unset=True)
     updated_trip = crud.update_trip(
-        db=db, trip_id=trip_id, trip_update_data=update_data
+        db=db,
+        trip_id=trip_id,
+        trip_update_data=update_data,
+        user_id=current_user.id,  # <--- AUDITORÍA
     )
     if not updated_trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
@@ -548,8 +623,11 @@ def create_timeline_event(
     trip_id: int,
     payload: schemas.TripTimelineEventCreatePayload,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.add_timeline_event(db, trip_id, payload)
+    trip = crud.add_timeline_event(
+        db, trip_id, payload, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
@@ -587,8 +665,12 @@ def close_trip_settlement(
     trip_leg_id: int,
     payload: schemas.CloseSettlementPayload,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.close_trip_settlement(db, trip_leg_id, payload)
+    # NOTA: Asegúrate de actualizar crud.close_trip_settlement para recibir el user_id si no lo hemos hecho en crud_logistics.py
+    trip = crud.close_trip_settlement(
+        db, trip_leg_id, payload, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
     return trip
@@ -596,16 +678,26 @@ def close_trip_settlement(
 
 @router.post("/trips/{trip_id}/next-leg", response_model=schemas.TripResponse)
 def create_next_leg_endpoint(
-    trip_id: int, payload: schemas.TripLegCreate, db: Session = Depends(get_db)
+    trip_id: int,
+    payload: schemas.TripLegCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    trip = crud.create_next_leg(db, str(trip_id), payload)
+    trip = crud.create_next_leg(
+        db, str(trip_id), payload, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
     return trip
 
 
 @router.post("/trips/legs/{leg_id}/settle")
-def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+def settle_trip_leg(
+    leg_id: int,
+    data: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
     if not leg:
         raise HTTPException(status_code=404, detail="Tramo no encontrado")
@@ -613,6 +705,7 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     # 1. ACTUALIZAMOS EL TRAMO ACTUAL
     leg.status = "cerrado"
     leg.saldo_operador = data.get("neto_a_pagar", 0.0)
+    leg.updated_by_id = current_user.id  # <--- AUDITORÍA: Quién cerró el tramo
     db.commit()
     db.refresh(leg)
 
@@ -627,9 +720,11 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     if all_completed and trip.status != "cerrado":
         trip.status = "cerrado"
         trip.closed_at = func.now()
+        trip.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: Quién provocó que se cierre el viaje
 
     # 3. EVALUACIÓN DE TESORERÍA: ¿Se liquidó la fase de carretera?
-    # 🔧 AQUÍ ESTÁ EL FIX APLICADO: Validamos el Enum de SQLAlchemy y el Estatus.
     carretera_liquidada = any(
         (
             l.leg_type == "ruta_carretera"
@@ -641,16 +736,22 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
     )
 
     if carretera_liquidada:
+        #  FIX CRÍTICO: with_for_update() para evitar dobles facturas en clics rápidos
         existing_cxc = (
             db.query(models.ReceivableInvoice)
-            .filter(models.ReceivableInvoice.viaje_id == trip.id)
+            .filter(
+                models.ReceivableInvoice.viaje_id == trip.id,
+                models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+                models.ReceivableInvoice.is_nominal == False,
+            )
             .first()
         )
 
-        # Si ya liquidamos la carretera y NO hay CxC, la generamos
+        # Si ya liquidamos la carretera y NO hay CxC, la generamos con magia SAT
         if not existing_cxc:
-            base = trip.tarifa_base or 0.0
+            base = float(trip.tarifa_base or 0.0)
             subtotal = base
+
             iva = subtotal * 0.16
             retencion = subtotal * 0.04
             monto_total = subtotal + iva - retencion
@@ -661,11 +762,33 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
 
             fecha_vencimiento = date.today() + timedelta(days=dias_credito)
 
+            # =========================================================
+            #  MAGIA FISCAL: PREPARACIÓN PARA SUSTITUCIÓN SAT (04)
+            # =========================================================
+            cp_nominal = (
+                db.query(models.ReceivableInvoice)
+                .filter(
+                    models.ReceivableInvoice.viaje_id == trip.id,
+                    models.ReceivableInvoice.is_nominal == True,
+                    models.ReceivableInvoice.status_sat == "TIMBRADA",
+                )
+                .first()
+            )
+
+            uuid_relacionado = None
+            if cp_nominal and cp_nominal.uuid:
+                uuid_relacionado = cp_nominal.uuid
+                cp_nominal.status_sat = "PENDIENTE_CANCELAR_SAT"
+                cp_nominal.motivo_cancelacion = "01"
+                cp_nominal.updated_by_id = current_user.id  # <--- AUDITORÍA
+                db.add(cp_nominal)
+            # =========================================================
+
             nueva_cxc = models.ReceivableInvoice(
                 client_id=trip.client_id,
                 sub_client_id=trip.sub_client_id,
                 viaje_id=trip.id,
-                folio_interno=f"CXC-VIAJE-{trip.public_id or trip.id}",
+                folio_interno=f"CXC-TRP-{trip.public_id or trip.id}",
                 concepto=f"Servicio de Flete: {trip.origin} a {trip.destination}",
                 subtotal=subtotal,
                 iva=iva,
@@ -675,8 +798,15 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
                 fecha_emision=date.today(),
                 fecha_vencimiento=fecha_vencimiento,
                 estatus=models.InvoiceStatus.PENDIENTE,
+                metodo_pago="PPD",
+                tipo_comprobante="I",
+                is_nominal=False,
+                uuid_relacionado=uuid_relacionado,
+                status_sat="PROVISIONAL",
+                created_by_id=current_user.id,  # <--- AUDITORÍA: Quién desencadenó la generación de la CxC
             )
             db.add(nueva_cxc)
+            db.flush()  #  FIX: OBLIGAMOS QUE SE GRABE ANTES DE SOLTAR EL CANDADO
             cxc_creada = True
 
     # 4. GUARDAMOS TODOS LOS CAMBIOS DE GOLPE
@@ -688,37 +818,6 @@ def settle_trip_leg(leg_id: int, data: dict = Body(...), db: Session = Depends(g
         "viaje_cerrado_globalmente": all_completed,
         "cxc_generada_automaticamente": cxc_creada,
     }
-
-
-@router.post("/trips/legs/{leg_id}/reopen")
-def reopen_trip_leg(leg_id: int, db: Session = Depends(get_db)):
-    leg = db.query(models.TripLeg).filter(models.TripLeg.id == leg_id).first()
-    if not leg:
-        raise HTTPException(status_code=404, detail="Tramo no encontrado")
-
-    leg.status = "en_transito"
-    leg.saldo_operador = 0.0
-    trip = leg.trip
-
-    if trip.status == "cerrado":
-        trip.status = "en_transito"
-        trip.closed_at = None
-
-        cxc = (
-            db.query(models.ReceivableInvoice)
-            .filter(models.ReceivableInvoice.viaje_id == trip.id)
-            .first()
-        )
-        if cxc:
-            if cxc.saldo_pendiente < cxc.monto_total:
-                raise HTTPException(
-                    status_code=400,
-                    detail="No se puede reabrir la fase. Tesorería ya registró cobros.",
-                )
-            db.delete(cxc)
-
-    db.commit()
-    return {"message": "Fase reabierta exitosamente. Facturas anuladas."}
 
 
 # =========================================================
@@ -930,12 +1029,32 @@ def generate_nom_087(trip_id: int, db: Session = Depends(get_db)):
 
 @router.post("/trips/legs/settle-batch")
 def settle_trip_legs_batch(
-    payload: schemas.BatchSettlementPayload, db: Session = Depends(get_db)
+    payload: schemas.BatchSettlementPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
-    result = crud.settle_trip_legs_batch(db, payload)
-    if not result:
-        raise HTTPException(status_code=404, detail="No se encontraron los tramos")
-    return result
+    try:
+        # 1. Imprimimos qué está llegando exactamente desde React
+        print("📦 [ROUTER] Payload recibido desde React:")
+        print(payload.model_dump())
+
+        # 2. Intentamos ejecutar la magia
+        result = crud.settle_trip_legs_batch(
+            db, payload, user_id=current_user.id
+        )  # <--- AUDITORÍA
+
+        if not result:
+            raise HTTPException(status_code=404, detail="No se encontraron los tramos")
+
+        return result
+
+    except Exception as e:
+        # 3. SI ALGO EXPLOTA, ESTO LO ATRAPA Y LO ESCUPE EN LA CONSOLA
+        print("💥 [ROUTER ERROR 500] El servidor colapsó. Aquí está la razón exacta:")
+        traceback.print_exc()
+
+        # Le mandamos el error a React para que lo veas en el Toast (opcional)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
 @router.post(
@@ -952,8 +1071,14 @@ def preview_batch_settlement_endpoint(
 
 
 @router.post("/trips/{trip_id}/undo-leg", response_model=schemas.TripResponse)
-def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
-    trip = crud.undo_last_leg(db, str(trip_id))
+def undo_trip_leg_endpoint(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
+    trip = crud.undo_last_leg(
+        db, str(trip_id), user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not trip:
         raise HTTPException(
             status_code=400, detail="No se puede deshacer la fase inicial."
@@ -962,7 +1087,11 @@ def undo_trip_leg_endpoint(trip_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/trips/timeline/{event_id}")
-def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
+def delete_timeline_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     event = (
         db.query(models.TripTimelineEvent)
         .filter(models.TripTimelineEvent.id == event_id)
@@ -970,14 +1099,20 @@ def delete_timeline_event(event_id: int, db: Session = Depends(get_db)):
     )
     if not event:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
-    db.delete(event)
+
+    #  FIX: SOFT DELETE EN LUGAR DE DB.DELETE PARA NO ROMPER INTEGRIDAD REFERENCIAL
+    event.record_status = RecordStatus.ELIMINADO
+    event.updated_by_id = current_user.id  # <--- AUDITORÍA: Quién eliminó este evento
     db.commit()
     return {"message": "Evento eliminado correctamente"}
 
 
 @router.put("/trips/timeline/{event_id}")
 def update_timeline_event(
-    event_id: int, payload: dict = Body(...), db: Session = Depends(get_db)
+    event_id: int,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     event = (
         db.query(models.TripTimelineEvent)
@@ -1001,6 +1136,10 @@ def update_timeline_event(
     status_label = payload.get("status", "Reporte").replace("_", " ").title()
     event.event = f"{status_label} en {payload.get('location')}"
 
+    event.updated_by_id = (
+        current_user.id
+    )  # <--- AUDITORÍA: Quién actualizó este evento de timeline
+
     db.commit()
     return {"message": "Evento actualizado correctamente"}
 
@@ -1011,18 +1150,36 @@ def update_timeline_event(
 
 
 @router.post("/trips/{trip_id}/stamp-real", response_model=schemas.TripResponse)
-def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
+def stamp_real_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     # 1. IMPORTAMOS EL SERVICIO DE FINANZAS
     from app.integrations.sat.billing_service import BillingService
-    from app.integrations.sat.payment_service import (
-        PaymentComplementService,
-    )  # <-- ¡ESTA ES LA NUEVA!
+    from app.integrations.sat.payment_service import PaymentComplementService
 
-    # 2. USAMOS BILLING SERVICE
+    # 2. BUSCAMOS LA CXC PROVISIONAL CREADA EN LA LIQUIDACIÓN
+    cxc_provisional = (
+        db.query(models.ReceivableInvoice)
+        .filter(
+            models.ReceivableInvoice.viaje_id == trip_id,
+            models.ReceivableInvoice.is_nominal == False,
+            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    # Extraemos el UUID relacionado de la Carta Porte nominal (si existe)
+    uuid_relacionado = cxc_provisional.uuid_relacionado if cxc_provisional else None
+
+    # 3. USAMOS BILLING SERVICE (¡AHORA SÍ LE PASAMOS EL UUID_RELACIONADO!)
     billing = BillingService(db)
-    invoice_data = schemas.ReceivableInvoiceCreate(viaje_id=trip_id, is_nominal=False)
+    invoice_data = schemas.ReceivableInvoiceCreate(
+        viaje_id=trip_id, is_nominal=False, uuid_relacionado=uuid_relacionado
+    )
 
-    # 3. GENERAMOS LA FACTURA REAL
+    # 4. GENERAMOS LA FACTURA REAL (El SAT recibe la orden 04 Sustitución)
     factura = billing.generar_factura_final_relacionada(invoice_data)
 
     if not factura:
@@ -1030,19 +1187,31 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
             status_code=500, detail="No se pudo procesar el timbrado real."
         )
 
+    # 5. LIMPIEZA DE DUPLICADOS:
+    #  FIX: Usar Soft Delete para no causar un Error 500 al borrar la provisional
+    if cxc_provisional and cxc_provisional.id != factura.id:
+        cxc_provisional.record_status = RecordStatus.ELIMINADO
+        cxc_provisional.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: El usuario forzó el timbrado real y ocultó la provisoria
+        db.commit()
+
     trip = crud.get_trip(db, str(trip_id))
     return trip
 
 
 @router.put("/trips/{trip_id}/dispatch", response_model=schemas.TripResponse)
 def dispatch_trip(
-    trip_id: int, payload: schemas.TripCreate, db: Session = Depends(get_db)
+    trip_id: int,
+    payload: schemas.TripCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
 ):
     trip = db.query(models.Trip).filter(models.Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")
 
-    # 🚀 Ignoramos los campos lógicos del Pydantic para que SQLAlchemy no explote
+    #   Ignoramos los campos lógicos del Pydantic para que SQLAlchemy no explote
     trip_data = payload.model_dump(
         exclude={
             "initial_leg",
@@ -1056,7 +1225,9 @@ def dispatch_trip(
     for key, value in trip_data.items():
         setattr(trip, key, value)
 
-    # 🚀 MOTOR DUAL: GUARDAR LAS PIERNAS DEL VIAJE
+    trip.updated_by_id = current_user.id  # <--- AUDITORÍA: Quién despachó el viaje
+
+    #   MOTOR DUAL: GUARDAR LAS PIERNAS DEL VIAJE
     if payload.initial_leg:
         leg_data = payload.initial_leg
         monto_pagar = (trip.tarifa_base or 0) - (
@@ -1075,6 +1246,7 @@ def dispatch_trip(
             existing_leg.anticipo_combustible = leg_data.anticipo_combustible
             existing_leg.monto_neto_pagado = monto_pagar
             existing_leg.status = trip.status
+            existing_leg.updated_by_id = current_user.id  # <--- AUDITORÍA
         else:
             new_leg = models.TripLeg(
                 trip_id=trip.id,
@@ -1089,6 +1261,7 @@ def dispatch_trip(
                 odometro_inicial=leg_data.odometro_inicial,
                 nivel_tanque_inicial=leg_data.nivel_tanque_inicial,
                 start_date=trip.start_date,
+                created_by_id=current_user.id,  # <--- AUDITORÍA
             )
             db.add(new_leg)
 
@@ -1098,6 +1271,7 @@ def dispatch_trip(
             if len(trip.legs) > 1:
                 trip.legs[1].unit_id = leg_final.unit_id
                 trip.legs[1].operator_id = leg_final.operator_id
+                trip.legs[1].updated_by_id = current_user.id  # <--- AUDITORÍA
             else:
                 new_leg_2 = models.TripLeg(
                     trip_id=trip.id,
@@ -1106,43 +1280,12 @@ def dispatch_trip(
                     unit_id=leg_final.unit_id,
                     operator_id=leg_final.operator_id,
                     start_date=trip.start_date,
+                    created_by_id=current_user.id,  # <--- AUDITORÍA
                 )
                 db.add(new_leg_2)
 
         db.flush()
-
-        # Si el viaje ya salió (en_transito), bloqueamos recursos para que nadie más los use
-        if trip.status == "en_transito":
-            unit_ids_to_block = [
-                leg_data.unit_id,
-                trip.remolque_1_id,
-                trip.dolly_id,
-                trip.remolque_2_id,
-            ]
-            valid_unit_ids = [uid for uid in unit_ids_to_block if uid is not None]
-
-            if valid_unit_ids:
-                units = (
-                    db.query(models.Unit)
-                    .filter(
-                        models.Unit.id.in_(valid_unit_ids),
-                        models.Unit.record_status != models.RecordStatus.ELIMINADO,
-                    )
-                    .all()
-                )
-                for u in units:
-                    u.status = models.UnitStatus.EN_RUTA
-                    db.add(u)
-
-            if leg_data.operator_id:
-                operator = (
-                    db.query(models.Operator)
-                    .filter(models.Operator.id == leg_data.operator_id)
-                    .first()
-                )
-                if operator:
-                    operator.status = models.OperatorStatus.EN_RUTA
-                    db.add(operator)
+        #  LIBERADO: Removimos el bloque que forzaba status EN_RUTA a unidades y operadores.
 
     db.commit()
     db.refresh(trip)
@@ -1150,11 +1293,112 @@ def dispatch_trip(
 
 
 @router.post("/trips/{trip_id}/unhook", response_model=schemas.TripResponse)
-def unhook_trip_in_yard(trip_id: int, db: Session = Depends(get_db)):
+def unhook_trip_in_yard(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
     try:
-        trip = crud.unhook_in_yard(db, str(trip_id))
+        trip = crud.unhook_in_yard(
+            db, str(trip_id), user_id=current_user.id
+        )  # <--- AUDITORÍA
         if not trip:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
         return trip
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/rate-templates/sync-distances")
+def sync_distances(db: Session = Depends(get_db) , current_user: models.User = Depends(get_current_user)):
+    """
+    Sincroniza masivamente las distancias en carretera de los RateTemplates
+    utilizando la función helper existente (Nominatim + OSRM).
+    """
+    # 1. Filtrar registros: Estatus 'A' y distancia_total_km igual a 0 o NULL
+    templates_to_sync = (
+        db.query(models.RateTemplate)
+        .filter(
+            models.RateTemplate.record_status == "A",
+            or_(
+                models.RateTemplate.distancia_total_km == 0,
+                models.RateTemplate.distancia_total_km.is_(None),
+            ),
+        )
+        .all()
+    )
+
+    actualizados = 0
+    errores = 0
+
+    for template in templates_to_sync:
+        try:
+            # Pausa de 1 segundo requerida por las políticas de la API gratuita de Nominatim
+            time.sleep(1)
+
+            # Reutilizamos tu helper existente para obtener la distancia
+            distancia_calculada = get_osrm_distance(template.origen, template.destino)
+
+            if distancia_calculada > 0:
+                template.distancia_total_km = distancia_calculada
+                template.updated_by_id = current_user.id
+                db.commit()
+                actualizados += 1
+            else:
+                # Si el helper devolvió 0.0, asumimos que no se pudo geolocalizar/enrutar
+                errores += 1
+
+        except Exception as e:
+            # Capturamos cualquier error de base de datos o ejecución inesperada
+            print(
+                f"Error sincronizando plantilla ID {getattr(template, 'id', 'Desconocido')}: {str(e)}"
+            )
+            errores += 1
+            db.rollback()  # Limpiamos la transacción para no afectar el siguiente ciclo
+
+    # 2. Retornar el resumen solicitado
+    return {
+        "actualizados": actualizados,
+        "errores": errores,
+        "mensaje": "Sincronización completada",
+    }
+
+
+@router.post("/trips/legs/{leg_id}/reopen")
+def reopen_trip_leg_endpoint(
+    leg_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),  # <--- AUDITORÍA PARAM
+):
+    """
+    Reabre un tramo liquidado:
+    - Borra saldos
+    - Pasa a 'cerrado'
+    - Anula la CxC generada (Si no tiene pagos)
+    """
+    try:
+        leg = crud.reopen_trip_leg(
+            db, leg_id, user_id=current_user.id
+        )  # <--- AUDITORÍA
+
+        return {
+            "message": "Tramo reabierto con éxito. Listo para una nueva liquidación.",
+            "leg_id": leg.id,
+            "status_actual": leg.status,
+            "saldos_actualizados": {
+                "monto_sueldo": leg.monto_sueldo,
+                "monto_bonos": leg.monto_bonos,
+                "monto_neto_pagado": leg.monto_neto_pagado,
+                "saldo_operador": leg.saldo_operador,
+            },
+        }
+    except ValueError as e:
+        # Excepción de Reglas de Negocio (ej. CXC ya pagada)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Excepción Crítica
+        print(f"💥 Error reabriendo tramo: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500, detail="Error interno al reabrir el tramo."
+        )

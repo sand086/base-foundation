@@ -27,13 +27,14 @@ from app.models.models import User, Unit, BulkUploadHistory, UnitDocumentHistory
 
 from app.modules.auth.router import get_current_user
 from app.integrations.storage.storage import StorageService
+from app.modules.logistics.crud import get_last_unit_odometer
 
-#  importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
+# importacion LOCAL (FSD): Solo busca en la misma carpeta "fleet"
 from . import schemas, crud
 
 logger = logging.getLogger(__name__)
 
-#  ÚNICA INSTANCIA DEL ROUTER
+# ÚNICA INSTANCIA DEL ROUTER
 router = APIRouter()
 
 UPLOAD_DIR = "app/uploads/bulk_unidades"
@@ -72,7 +73,11 @@ def read_units(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 
 @router.post("/units", response_model=schemas.UnitResponse, tags=["Fleet - Units"])
-def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
+def create_unit(
+    unit: schemas.UnitCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
     clean_eco = clean_eco_prefix(unit.numero_economico)
     if db.query(models.Unit).filter(models.Unit.numero_economico == clean_eco).first():
         raise HTTPException(
@@ -86,7 +91,9 @@ def create_unit(unit: schemas.UnitCreate, db: Session = Depends(get_db)):
         unit_data["numero_economico"] = clean_eco
 
         db_unit = models.Unit(
-            **unit_data, public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}"
+            **unit_data,
+            public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}",
+            created_by_id=current_user.id,  # <--- 2. AGREGAR ESTO PARA LA AUDITORÍA
         )
         db.add(db_unit)
         db.commit()
@@ -176,6 +183,7 @@ async def upload_units_bulk(
             new_unit = Unit(
                 public_id=f"UNT-{uuid.uuid4().hex[:8].upper()}",
                 numero_economico=clean_eco,
+                created_by_id=current_user.id,
                 placas=str(row.get("placas", "SIN-PLACA")).strip(),
                 vin=str(row.get("vin", "")),
                 marca=str(row.get("marca", "GENERICO")),
@@ -239,24 +247,33 @@ async def download_upload(upload_id: int, db: Session = Depends(get_db)):
     "/units/{term}", response_model=schemas.UnitResponse, tags=["Fleet - Units"]
 )
 def read_unit(term: str, db: Session = Depends(get_db)):
+    from urllib.parse import unquote
+
+    term_decoded = unquote(term)
+
+    # 1. SIEMPRE buscar por económico primero (es lo que viaja en la URL)
+    db_unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
+    if db_unit:
+        return db_unit
+
+    # 2. Si no lo encuentra por económico, y resulta que es un número, intentar por ID interno
     if term.isdigit():
         db_unit = crud.get_unit(db, unit_id=int(term))
         if db_unit:
             return db_unit
 
-    from urllib.parse import unquote
-
-    term_decoded = unquote(term)
-    db_unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
-    if db_unit:
-        return db_unit
     raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
 
 @router.put(
     "/units/{unit_id}", response_model=schemas.UnitResponse, tags=["Fleet - Units"]
 )
-def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(get_db)):
+def update_unit(
+    unit_id: str,
+    unit: schemas.UnitUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
     try:
         if unit.numero_economico:
             unit.numero_economico = clean_eco_prefix(unit.numero_economico)
@@ -272,7 +289,7 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
             if hasattr(unit, field) and getattr(unit, field) == "":
                 setattr(unit, field, None)
 
-        db_unit = crud.update_unit(db, unit_id, unit)
+        db_unit = crud.update_unit(db, unit_id, unit, current_user.id)
         if not db_unit:
             raise HTTPException(status_code=404, detail="Unidad no encontrada")
         return db_unit
@@ -289,8 +306,12 @@ def update_unit(unit_id: str, unit: schemas.UnitUpdate, db: Session = Depends(ge
 
 
 @router.delete("/units/{unit_id}", tags=["Fleet - Units"])
-def delete_unit(unit_id: str, db: Session = Depends(get_db)):
-    if not crud.delete_unit(db, unit_id):
+def delete_unit(
+    unit_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
+    if not crud.delete_unit(db, unit_id, current_user.id):
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
     return {"message": "Unidad eliminada"}
 
@@ -314,27 +335,52 @@ def get_document_history(unit_id: int, doc_type: str, db: Session = Depends(get_
     tags=["Fleet - Units"],
 )
 def update_unit_tires(
-    unit_term: str, tires: List[schemas.TireCreate], db: Session = Depends(get_db)
+    unit_term: str,
+    tires: List[schemas.TireCreate],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
 ):
-    unit = (
-        crud.get_unit(db, int(unit_term))
-        if unit_term.isdigit()
-        else crud.get_unit_by_eco(db, unit_term)
-    )
+    from urllib.parse import unquote
+
+    term_decoded = unquote(unit_term)
+
+    # 1. CORRECCIÓN: SIEMPRE buscar por económico primero (Ej: "02" o "2")
+    unit = crud.get_unit_by_eco(db, numero_economico=term_decoded)
+
+    # 2. Si no lo encuentra por económico, y resulta que es un número, intentar por ID interno
+    if not unit and unit_term.isdigit():
+        unit = crud.get_unit(db, unit_id=int(unit_term))
+
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
+    # 3. Eliminamos lógicamente las llantas anteriores de esta unidad
     db.query(models.Tire).filter(models.Tire.unit_id == unit.id).update(
         {"record_status": models.RecordStatus.ELIMINADO.value}
     )
+    # Hacemos commit aquí para asegurarnos de que el status 'ELIMINADO' se guarde
+    # antes de intentar insertar llantas con el mismo código.
+    db.commit()
+
     new_tires = []
     for t in tires:
-        tire_db = models.Tire(**t.dict(), unit_id=unit.id)
+        # 4. CORRECCIÓN: Usamos tu función del CRUD que ejecuta el "TRUCO MAESTRO"
+        # para renombrar la llanta vieja eliminada (Ej: agregarle "_DEL_id")
+        # y así liberar el código interno sin causar IntegrityError.
+        tire_db = crud.create_tire(db, t, current_user.id)
+
+        # 5. Le asignamos la unidad actual a la llanta recién creada
+        tire_db.unit_id = unit.id
         db.add(tire_db)
         new_tires.append(tire_db)
+
+    # Guardamos la asignación de las unidades en la base de datos
     db.commit()
+
+    # Refrescamos los objetos para devolverlos con todos sus datos actualizados
     for t in new_tires:
         db.refresh(t)
+
     return new_tires
 
 
@@ -346,11 +392,17 @@ async def upload_unit_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    unit = (
-        crud.get_unit(db, int(unit_term))
-        if unit_term.isdigit()
-        else crud.get_unit_by_eco(db, unit_term)
-    )
+    unit = None
+    # 1. Intentamos buscar por ID interno si es un dígito
+    if unit_term.isdigit():
+        unit = crud.get_unit(db, int(unit_term))
+
+    # 2. Si falló la búsqueda por ID, buscamos por número económico (Ej: "02")
+    if not unit:
+        from urllib.parse import unquote
+
+        unit = crud.get_unit_by_eco(db, numero_economico=unquote(unit_term))
+
     if not unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
 
@@ -385,6 +437,7 @@ async def upload_unit_document(
     elif doc_type == "caat":
         unit.caat_url = file_url
 
+    unit.updated_by_id = current_user.id
     db.commit()
     db.refresh(unit)
     return {"url": file_url, "filename": unique_name, "message": "Archivo versionado"}
@@ -396,15 +449,42 @@ async def upload_unit_document(
     tags=["Fleet - Units"],
 )
 def update_unit_load_status(
-    unit_id: int, load_status: bool, db: Session = Depends(get_db)
+    unit_id: int,
+    load_status: bool,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     db_unit = crud.get_unit(db, unit_id=unit_id)
     if not db_unit:
         raise HTTPException(status_code=404, detail="Unidad no encontrada")
     db_unit.is_loaded = load_status
+    db_unit.updated_by_id = current_user.id  # <--- 2. AGREGAR LÍNEA DE AUDITORÍA
     db.commit()
     db.refresh(db_unit)
     return db_unit
+
+
+# =====================================================================
+# ENDPOINT PARA PERSISTENCIA DE ODÓMETRO (ESCALERITA)
+# =====================================================================
+@router.get("/units/{unit_id}/last-odometer")
+def get_unit_last_odometer_endpoint(unit_id: int, db: Session = Depends(get_db)):
+    """
+    Devuelve el último odómetro registrado para una unidad específica.
+    Busca primero en la liquidación del último viaje (TripLeg) y
+    luego en el último vale de combustible (FuelLog).
+    """
+    try:
+        # Llamamos a la función que Elena ya había construido en el CRUD
+        last_odo = get_last_unit_odometer(db, unit_id)
+
+        # Devolvemos el JSON exacto que espera tu React
+        return {"last_odometer": last_odo}
+
+    except Exception as e:
+        print(f"Error obteniendo odómetro para unidad {unit_id}: {e}")
+        # Si algo falla, devolvemos 0 para que el Frontend no se bloquee
+        return {"last_odometer": 0}
 
 
 # =========================================================
@@ -424,14 +504,19 @@ def read_operators(skip: int = 0, limit: int = 100, db: Session = Depends(get_db
 @router.post(
     "/operators", response_model=schemas.OperatorResponse, tags=["Fleet - Operators"]
 )
-def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_db)):
+def create_operator(
+    operator: schemas.OperatorCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if (
         db.query(models.Operator)
         .filter(models.Operator.license_number == operator.license_number)
         .first()
     ):
         raise HTTPException(status_code=400, detail="Licencia ya registrada")
-    return crud.create_operator(db, operator)
+    # <--- 2. PASAR current_user.id
+    return crud.create_operator(db, operator, current_user.id)
 
 
 @router.put(
@@ -440,17 +525,26 @@ def create_operator(operator: schemas.OperatorCreate, db: Session = Depends(get_
     tags=["Fleet - Operators"],
 )
 def update_operator(
-    operator_id: int, operator: schemas.OperatorUpdate, db: Session = Depends(get_db)
+    operator_id: int,
+    operator: schemas.OperatorUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
 ):
-    db_op = crud.update_operator(db, operator_id, operator)
+    # <--- 2. PASAR current_user.id
+    db_op = crud.update_operator(db, operator_id, operator, current_user.id)
     if not db_op:
         raise HTTPException(status_code=404, detail="Operador no encontrado")
     return db_op
 
 
 @router.delete("/operators/{operator_id}", tags=["Fleet - Operators"])
-def delete_operator(operator_id: int, db: Session = Depends(get_db)):
-    if not crud.delete_operator(db, operator_id):
+def delete_operator(
+    operator_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # <--- 1. AGREGAR
+):
+    # <--- 2. PASAR current_user.id
+    if not crud.delete_operator(db, operator_id, current_user.id):
         raise HTTPException(status_code=404, detail="Operador no encontrado")
     return {"message": "Operador eliminado"}
 
@@ -506,6 +600,7 @@ async def upload_operator_document(
     field_name = f"{doc_type}_url"
     if hasattr(operator, field_name):
         setattr(operator, field_name, storage_data["url"])
+        operator.updated_by_id = current_user.id
 
     db.add(new_doc)
     db.commit()
@@ -555,18 +650,72 @@ def read_tire(tire_id: int, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     tags=["Fleet - Tires"],
 )
-def create_tire(tire: schemas.TireCreate, db: Session = Depends(get_db)):
-    if crud.get_tire_by_code(db, tire.codigo_interno):
-        raise HTTPException(status_code=400, detail="El código de llanta ya existe")
-    return crud.create_tire(db, tire)
+def create_tire(
+    tire: schemas.TireCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        # 1. Buscamos la llanta directamente en la BD, ignorando cualquier filtro
+        llanta_existente = (
+            db.query(models.Tire)
+            .filter(models.Tire.codigo_interno == tire.codigo_interno)
+            .first()
+        )
+
+        if llanta_existente:
+            # 2. Forzamos la lectura del estatus a TEXTO PURO (evita el choque Enum vs String)
+            estatus_db = str(
+                getattr(
+                    llanta_existente.record_status,
+                    "value",
+                    llanta_existente.record_status,
+                )
+            ).upper()
+
+            if estatus_db == "E":
+                llanta_existente.codigo_interno = (
+                    f"{llanta_existente.codigo_interno}_DEL_{llanta_existente.id}"
+                )
+                llanta_existente.updated_by_id = (
+                    current_user.id
+                )  # <--- 2. AGREGAR ESTA LÍNEA DE AUDITORÍA
+                db.add(llanta_existente)
+                db.flush()  # Ejecutamos el cambio de nombre en la BD al instante
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El código de llanta ya existe y está ACTIVO actualmente.",
+                )
+
+        # 3. Mandamos a crear tu nueva llanta, ya con el camino despejado
+        return crud.create_tire(db, tire, current_user.id)
+
+    except HTTPException:
+        # Dejamos pasar la alerta roja a la pantalla
+        raise
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Error de Integridad: Este código interno sigue chocando en la base de datos.",
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail=f"Fallo interno al guardar la llanta: {str(e)}"
+        )
 
 
 @router.post("/tires/{tire_id}/assign", tags=["Fleet - Tires"])
 def assign_tire(
-    tire_id: int, payload: schemas.AssignTirePayload, db: Session = Depends(get_db)
+    tire_id: int,
+    payload: schemas.AssignTirePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        tire = crud.assign_tire(db, tire_id, payload)
+        tire = crud.assign_tire(db, tire_id, payload, current_user.id)
         if not tire:
             raise HTTPException(status_code=404, detail="Llanta no encontrada")
         return {"message": "Asignación exitosa", "id": tire.id}
@@ -576,9 +725,12 @@ def assign_tire(
 
 @router.post("/tires/{tire_id}/maintenance", tags=["Fleet - Tires"])
 def maintenance_tire(
-    tire_id: int, payload: schemas.MaintenanceTirePayload, db: Session = Depends(get_db)
+    tire_id: int,
+    payload: schemas.MaintenanceTirePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    tire = crud.register_maintenance(db, tire_id, payload)
+    tire = crud.register_maintenance(db, tire_id, payload, current_user.id)
     if not tire:
         raise HTTPException(status_code=404, detail="Llanta no encontrada")
     return {"message": "Maintenance registrado", "id": tire.id}
@@ -588,17 +740,24 @@ def maintenance_tire(
     "/tires/{tire_id}", response_model=schemas.TireResponse, tags=["Fleet - Tires"]
 )
 def update_tire(
-    tire_id: int, tire_in: schemas.TireUpdate, db: Session = Depends(get_db)
+    tire_id: int,
+    tire_in: schemas.TireUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    tire = crud.update_tire(db, tire_id, tire_in)
+    tire = crud.update_tire(db, tire_id, tire_in, current_user.id)
     if not tire:
         raise HTTPException(status_code=404, detail="Llanta no encontrada")
     return tire
 
 
 @router.delete("/tires/{tire_id}", tags=["Fleet - Tires"])
-def delete_tire(tire_id: int, db: Session = Depends(get_db)):
-    if not crud.delete_tire(db, tire_id):
+def delete_tire(
+    tire_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not crud.delete_tire(db, tire_id, current_user.id):
         raise HTTPException(status_code=404, detail="Llanta no encontrada")
     return {"message": "Llanta eliminada"}
 
@@ -614,7 +773,7 @@ def delete_tire(tire_id: int, db: Session = Depends(get_db)):
 def get_fuel_logs(
     unit_id: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     try:
         stmt = (
@@ -656,6 +815,10 @@ async def create_fuel_log(
     litros_urea: float = Form(0.0),
     precio_urea: float = Form(0.0),
     odometro: int = Form(0),
+    # --- NUEVOS CAMPOS MOTOGENERADOR ---
+    is_motogenerator: bool = Form(False),
+    horometro: Optional[float] = Form(None),
+    # -----------------------------------
     file: UploadFile = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -670,6 +833,44 @@ async def create_fuel_log(
         )
         evidencia_url, filename = storage["url"], storage["filename"]
 
+    # --- LÓGICA DE MEMORIA (KILÓMETROS vs HORAS) ---
+    km_recorridos = 0.0
+    horas_recorridas = 0.0
+
+    if is_motogenerator:
+        # Busca el último ticket del Motogenerador
+        last_log = (
+            db.query(models.FuelLog)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.is_motogenerator == True,
+                models.FuelLog.record_status != "E",
+            )
+            .order_by(models.FuelLog.horometro.desc())
+            .first()
+        )
+        if (
+            last_log
+            and last_log.horometro
+            and horometro
+            and horometro > last_log.horometro
+        ):
+            horas_recorridas = horometro - last_log.horometro
+    else:
+        # Busca el último ticket del Tractocamión
+        last_log = (
+            db.query(models.FuelLog)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.is_motogenerator == False,
+                models.FuelLog.record_status != "E",
+            )
+            .order_by(models.FuelLog.odometro.desc())
+            .first()
+        )
+        if last_log and last_log.odometro and odometro > last_log.odometro:
+            km_recorridos = odometro - last_log.odometro
+
     created_logs = []
 
     def _crear_registro(tipo: str, litros: float, precio: float):
@@ -683,7 +884,12 @@ async def create_fuel_log(
             litros=litros,
             precio_por_litro=precio,
             total=litros * precio,
-            odometro=odometro,
+            # Guardamos según el tipo de motor
+            odometro=odometro if not is_motogenerator else 0,
+            km_sm=km_recorridos if not is_motogenerator else 0.0,
+            is_motogenerator=is_motogenerator,
+            horometro=horometro if is_motogenerator else None,
+            horas_sm=horas_recorridas if is_motogenerator else None,
             evidencia_url=evidencia_url,
             created_by_id=current_user.id,
         )
@@ -740,6 +946,13 @@ async def update_fuel_log(
     log.odometro = data.odometro
     log.excede_tanque = data.excede_tanque
     log.capacidad_tanque_snapshot = data.capacidad_tanque_snapshot
+
+    # --- ACTUALIZACIÓN MOTOGENERADOR ---
+    log.is_motogenerator = data.is_motogenerator
+    log.horometro = data.horometro
+    log.horas_sm = data.horas_sm
+    # -----------------------------------
+
     if data.trip_leg_id:
         log.trip_leg_id = data.trip_leg_id
     log.updated_by_id = current_user.id
@@ -761,6 +974,7 @@ def delete_fuel_log(
     if not log:
         raise HTTPException(status_code=404, detail="No encontrado")
     log.record_status = "E"
+    log.updated_by_id = current_user.id  # <--- AGREGAR ESTO
     db.commit()
     return {"message": "Registro eliminado"}
 

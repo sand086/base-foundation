@@ -2,91 +2,35 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__finance__schemas__CostCenterResponse } from '../models/app__modules__finance__schemas__CostCenterResponse';
 import type { BankAccountCreate } from '../models/BankAccountCreate';
 import type { BankAccountResponse } from '../models/BankAccountResponse';
 import type { BankMovementCreate } from '../models/BankMovementCreate';
 import type { BankMovementResponse } from '../models/BankMovementResponse';
+import type { Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post } from '../models/Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post';
 import type { Body_fix_orphan_payments_api_finance_fix_orphan_payments_post } from '../models/Body_fix_orphan_payments_api_finance_fix_orphan_payments_post';
 import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } from '../models/Body_upload_payment_xml_api_finance_payments_upload_xml_post';
-import type { BulkUploadPayload } from '../models/BulkUploadPayload';
-import type { ProviderCreate } from '../models/ProviderCreate';
-import type { ProviderResponse } from '../models/ProviderResponse';
+import type { CancelPaymentsPayload } from '../models/CancelPaymentsPayload';
+import type { CFDIActivityTimeline } from '../models/CFDIActivityTimeline';
+import type { CFDIHistoryResponse } from '../models/CFDIHistoryResponse';
+import type { IndirectCategoryCreate } from '../models/IndirectCategoryCreate';
+import type { IndirectCategoryResponse } from '../models/IndirectCategoryResponse';
+import type { IndirectCategoryUpdate } from '../models/IndirectCategoryUpdate';
+import type { OperatorSettlementPayload } from '../models/OperatorSettlementPayload';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import { OpenAPI } from '../core/OpenAPI';
 import { request as __request } from '../core/request';
 export class FinanceService {
     /**
-     * Read Providers
-     * @param skip
-     * @param limit
-     * @returns ProviderResponse Successful Response
+     * Read Cost Centers
+     * Obtiene los Centros de Costos activos.
+     * @returns app__modules__finance__schemas__CostCenterResponse Successful Response
      * @throws ApiError
      */
-    public static readProvidersApiFinanceProvidersGet(
-        skip?: number,
-        limit: number = 100,
-    ): CancelablePromise<Array<ProviderResponse>> {
+    public static readCostCentersApiFinanceCostCentersGet(): CancelablePromise<Array<app__modules__finance__schemas__CostCenterResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
-            url: '/api/finance/providers',
-            query: {
-                'skip': skip,
-                'limit': limit,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Create Provider
-     * @param requestBody
-     * @returns ProviderResponse Successful Response
-     * @throws ApiError
-     */
-    public static createProviderApiFinanceProvidersPost(
-        requestBody: ProviderCreate,
-    ): CancelablePromise<ProviderResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/finance/providers',
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Delete Provider
-     * @param providerId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static deleteProviderApiFinanceProvidersProviderIdDelete(
-        providerId: string,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'DELETE',
-            url: '/api/finance/providers/{provider_id}',
-            path: {
-                'provider_id': providerId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
-     * Read Indirect Categories
-     * Obtiene las categorías de gastos indirectos (Fijos/Variables)
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static readIndirectCategoriesApiFinanceIndirectCategoriesGet(): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'GET',
-            url: '/api/finance/indirect-categories',
+            url: '/api/finance/cost-centers',
         });
     }
     /**
@@ -102,7 +46,6 @@ export class FinanceService {
     }
     /**
      * Create Bank Account
-     * Crea una nueva cuenta bancaria en Tesorería
      * @param requestBody
      * @returns BankAccountResponse Successful Response
      * @throws ApiError
@@ -122,7 +65,6 @@ export class FinanceService {
     }
     /**
      * Update Bank Account
-     * Edita la cuenta bancaria. Permite ajuste de saldo si se autorizó en el front.
      * @param accountId
      * @param requestBody
      * @returns BankAccountResponse Successful Response
@@ -147,7 +89,6 @@ export class FinanceService {
     }
     /**
      * Delete Bank Account
-     * Aplica un Soft Delete a la cuenta para proteger la integridad contable.
      * @param accountId
      * @returns any Successful Response
      * @throws ApiError
@@ -179,7 +120,6 @@ export class FinanceService {
     }
     /**
      * Create Manual Movement
-     * Crea un movimiento manual (Ingreso o Egreso) afectando el saldo directamente.
      * @param requestBody
      * @returns BankMovementResponse Successful Response
      * @throws ApiError
@@ -199,7 +139,6 @@ export class FinanceService {
     }
     /**
      * Conciliate Movement
-     * Marca un movimiento bancario como conciliado (Verificado contra el banco).
      * @param movementId
      * @returns BankMovementResponse Successful Response
      * @throws ApiError
@@ -220,7 +159,6 @@ export class FinanceService {
     }
     /**
      * Delete Bank Movement
-     * Elimina un movimiento bancario y restaura el saldo de la cuenta.
      * @param movementId
      * @returns any Successful Response
      * @throws ApiError
@@ -241,19 +179,18 @@ export class FinanceService {
     }
     /**
      * Bulk Upload Invoices
-     * Endpoint para procesar la carga masiva de facturas del SAT (CXP).
-     * @param requestBody
+     * @param formData
      * @returns any Successful Response
      * @throws ApiError
      */
     public static bulkUploadInvoicesApiFinanceInvoicesBulkUploadPost(
-        requestBody: BulkUploadPayload,
+        formData: Body_bulk_upload_invoices_api_finance_invoices_bulk_upload_post,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
             url: '/api/finance/invoices/bulk-upload',
-            body: requestBody,
-            mediaType: 'application/json',
+            formData: formData,
+            mediaType: 'multipart/form-data',
             errors: {
                 422: `Validation Error`,
             },
@@ -261,8 +198,6 @@ export class FinanceService {
     }
     /**
      * Get Receivable Invoices
-     * Obtiene todas las facturas de clientes (Cuentas por Cobrar)
-     * con la información del cliente adjunta, ignorando las que no tienen folio.
      * @param skip
      * @param limit
      * @returns any Successful Response
@@ -270,7 +205,7 @@ export class FinanceService {
      */
     public static getReceivableInvoicesApiFinanceReceivablesGet(
         skip?: number,
-        limit: number = 100,
+        limit: number = 5000,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'GET',
@@ -285,19 +220,44 @@ export class FinanceService {
         });
     }
     /**
+     * Create Manual Receivable
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static createManualReceivableApiFinanceReceivablesPost(
+        requestBody: Record<string, any>,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Delete Receivable Invoice
+     * FIX: ELIMINACIÓN TOTAL EN CASCADA (VIAJE, DIÉSEL, LIQUIDACIÓN, TRAZABILIDAD)
      * @param invoiceId
+     * @param cascade
      * @returns any Successful Response
      * @throws ApiError
      */
     public static deleteReceivableInvoiceApiFinanceReceivablesInvoiceIdDelete(
         invoiceId: number,
+        cascade: boolean = false,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'DELETE',
             url: '/api/finance/receivables/{invoice_id}',
             path: {
                 'invoice_id': invoiceId,
+            },
+            query: {
+                'cascade': cascade,
             },
             errors: {
                 422: `Validation Error`,
@@ -306,7 +266,6 @@ export class FinanceService {
     }
     /**
      * Register Receivable Payment
-     * CAMBIO CLAVE: Cobra una factura de cliente e ingresa el dinero a Tesorería.
      * @param invoiceId
      * @param requestBody
      * @returns any Successful Response
@@ -331,7 +290,6 @@ export class FinanceService {
     }
     /**
      * Upload Payment Xml
-     * CAMBIO CLAVE: Si subes el XML del REP, busca/crea una cuenta puente y hace el ingreso en tesorería.
      * @param formData
      * @returns any Successful Response
      * @throws ApiError
@@ -351,8 +309,6 @@ export class FinanceService {
     }
     /**
      * Fix Orphan Payments
-     * Busca los pagos antiguos que decían "cuenta_deposito: '' " (o null)
-     * y los inserta oficialmente en la cuenta bancaria de Tesorería que le mandes.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -371,33 +327,7 @@ export class FinanceService {
         });
     }
     /**
-     * Register Provider Payment
-     * Aplica un pago a una factura de proveedor (CXP) y descuenta del banco.
-     * @param invoiceId
-     * @param requestBody
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static registerProviderPaymentApiFinancePayablesInvoiceIdPaymentsPost(
-        invoiceId: number,
-        requestBody: Record<string, any>,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/finance/payables/{invoice_id}/payments',
-            path: {
-                'invoice_id': invoiceId,
-            },
-            body: requestBody,
-            mediaType: 'application/json',
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Register Petty Cash
-     * Registra un gasto de Caja Chica (Sin XML) afectando directo la Tesorería.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -410,6 +340,373 @@ export class FinanceService {
             url: '/api/finance/petty-cash',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Reopen Receivable Invoice
+     * FIX CRÍTICO TESORERÍA: Revertir cobros antes de reabrir factura
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static reopenReceivableInvoiceApiFinanceReceivablesInvoiceIdReopenPost(
+        invoiceId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables/{invoice_id}/reopen',
+            path: {
+                'invoice_id': invoiceId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Process Settlement For Operator
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static processSettlementForOperatorApiFinanceSettlementsOperatorPost(
+        requestBody: OperatorSettlementPayload,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/settlements/operator',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Read Indirect Categories
+     * @returns IndirectCategoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static readIndirectCategoriesApiFinanceIndirectCategoriesGet(): CancelablePromise<Array<IndirectCategoryResponse>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/indirect-categories',
+        });
+    }
+    /**
+     * Create Indirect Category
+     * @param requestBody
+     * @returns IndirectCategoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static createIndirectCategoryApiFinanceIndirectCategoriesPost(
+        requestBody: IndirectCategoryCreate,
+    ): CancelablePromise<IndirectCategoryResponse> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/indirect-categories',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Update Indirect Category
+     * @param catId
+     * @param requestBody
+     * @returns IndirectCategoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static updateIndirectCategoryApiFinanceIndirectCategoriesCatIdPut(
+        catId: number,
+        requestBody: IndirectCategoryUpdate,
+    ): CancelablePromise<IndirectCategoryResponse> {
+        return __request(OpenAPI, {
+            method: 'PUT',
+            url: '/api/finance/indirect-categories/{cat_id}',
+            path: {
+                'cat_id': catId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Delete Indirect Category
+     * @param catId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static deleteIndirectCategoryApiFinanceIndirectCategoriesCatIdDelete(
+        catId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'DELETE',
+            url: '/api/finance/indirect-categories/{cat_id}',
+            path: {
+                'cat_id': catId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Cfdi Vault
+     * Obtiene los registros de la bóveda (Facturas, Complementos, etc)
+     * tipo_documento: 'FACTURA_CLIENTE', 'FACTURA_PROVEEDOR', 'PAGO_CLIENTE'
+     * @param tipoDocumento
+     * @param startDate
+     * @param endDate
+     * @returns CFDIHistoryResponse Successful Response
+     * @throws ApiError
+     */
+    public static getCfdiVaultApiFinanceCfdiVaultGet(
+        tipoDocumento: string,
+        startDate?: string,
+        endDate?: string,
+    ): CancelablePromise<CFDIHistoryResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/cfdi-vault',
+            query: {
+                'tipo_documento': tipoDocumento,
+                'start_date': startDate,
+                'end_date': endDate,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Get Cfdi Document Timeline
+     * Obtiene la línea de tiempo de auditoría (quién canceló, quién emitió) de un CFDI específico.
+     * @param tipoDocumento
+     * @param documentId
+     * @returns CFDIActivityTimeline Successful Response
+     * @throws ApiError
+     */
+    public static getCfdiDocumentTimelineApiFinanceCfdiVaultTipoDocumentoDocumentIdTimelineGet(
+        tipoDocumento: string,
+        documentId: number,
+    ): CancelablePromise<Array<CFDIActivityTimeline>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/cfdi-vault/{tipo_documento}/{document_id}/timeline',
+            path: {
+                'tipo_documento': tipoDocumento,
+                'document_id': documentId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Aging Report
+     * Exporta un reporte de Antigüedad de Saldos en Excel con 2 pestañas:
+     * 1. Consolidado por Cliente/Proveedor
+     * 2. Detalle de Facturas
+     * @param moduleType cxc o cxp
+     * @param startDate
+     * @param endDate
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportAgingReportApiFinanceExportAgingGet(
+        moduleType: string,
+        startDate?: (string | null),
+        endDate?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/export/aging',
+            query: {
+                'module_type': moduleType,
+                'start_date': startDate,
+                'end_date': endDate,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Planchar Estatus de Facturas Canceladas
+     * Sincroniza el estatus financiero de las facturas que ya fueron
+     * canceladas en el SAT (status_sat == 'CANCELADO' o 'ERROR_SAT')
+     * pero que localmente siguen como 'pendiente', 'pagado', etc.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncCancelledInvoicesApiFinanceSyncCancelledInvoicesGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/sync-cancelled-invoices',
+        });
+    }
+    /**
+     * Forzar cancelación en el SAT
+     * Toma todas las facturas que localmente dicen 'CANCELADO' o 'PENDIENTE_CANCELAR_SAT'
+     * pero que el sistema jamás mandó a cancelar al SAT. Llama al PAC usando los sellos.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static forceCancelSatRealApiFinanceForceCancelSatRealGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/force-cancel-sat-real',
+        });
+    }
+    /**
+     * Stamp Existing Payment
+     * Toma un pago que se registró financieramente sin generar complemento
+     * y ejecuta el timbrado en el SAT (Generación Diferida).
+     * @param paymentId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static stampExistingPaymentApiFinanceReceivablesPaymentsPaymentIdStampPost(
+        paymentId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables/payments/{payment_id}/stamp',
+            path: {
+                'payment_id': paymentId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Cancel Receivable Payments
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static cancelReceivablePaymentsApiFinanceReceivablesPaymentsCancelPost(
+        requestBody: CancelPaymentsPayload,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/receivables/payments/cancel',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Fix Stuck Balances
+     * Ejecuta esto 1 vez en tu navegador para devolverle el saldo a la factura atorada
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static fixStuckBalancesApiFinanceFixStuckBalancesGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/fix-stuck-balances',
+        });
+    }
+    /**
+     * Sync Rep Cancellation Status
+     * MOTOR AUTOMÁTICO DIARIO:
+     * Busca todos los REPs que están en sala de espera en el SAT ('PROCESO_CANCELACION')
+     * y vuelve a llamar al PAC para verificar si el cliente ya aceptó o expiró el plazo.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncRepCancellationStatusApiFinanceReceivablesPaymentsSyncCancellationStatusGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/receivables/payments/sync-cancellation-status',
+        });
+    }
+    /**
+     * Force Test Cancel
+     * Fuerza los pagos de una factura a estado PROCESO_CANCELACION para probar el Cron Job
+     * @param folio
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static forceTestCancelApiFinanceReceivablesForceTestCancelFolioGet(
+        folio: string,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/receivables/force-test-cancel/{folio}',
+            path: {
+                'folio': folio,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Client Statement Excel
+     * @param clientId
+     * @param startDate
+     * @param endDate
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportClientStatementExcelApiFinanceExportStatementClientClientIdGet(
+        clientId: number,
+        startDate?: (string | null),
+        endDate?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/export/statement/client/{client_id}',
+            path: {
+                'client_id': clientId,
+            },
+            query: {
+                'start_date': startDate,
+                'end_date': endDate,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Supplier Statement Excel
+     * Exporta el Estado de Cuenta detallado de un Proveedor (Cuentas por Pagar).
+     * @param supplierId
+     * @param startDate
+     * @param endDate
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportSupplierStatementExcelApiFinanceExportStatementSupplierSupplierIdGet(
+        supplierId: number,
+        startDate?: (string | null),
+        endDate?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/export/statement/supplier/{supplier_id}',
+            path: {
+                'supplier_id': supplierId,
+            },
+            query: {
+                'start_date': startDate,
+                'end_date': endDate,
+            },
             errors: {
                 422: `Validation Error`,
             },

@@ -104,7 +104,7 @@ const Users = () => {
   const getStatusBadgeColor = (estado: string) => {
     return estado === "activo"
       ? "bg-emerald-500/10 text-emerald-600 border-emerald-200 font-black"
-      : "bg-slate-100 text-slate-400 border-slate-200 font-black";
+      : "bg-slate-100 text-slate-300 border-slate-200 font-black";
   };
 
   // --- HANDLERS ---
@@ -211,10 +211,10 @@ const Users = () => {
               />
             </div>
             <div className="flex flex-col">
-              <span className="font-black text-brand-navy text-sm uppercase tracking-tight leading-none">
+              <span className="font-black text-brand-navy text-sm uppercase tracking-tight leading-none dark:text-slate-300">
                 {user.nombre} {user.apellidos}
               </span>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-1 dark:text-slate-400">
                 {user.puesto}
               </span>
             </div>
@@ -231,7 +231,7 @@ const Users = () => {
             <Mail className="h-3 w-3 text-brand-red" />
             {user.email}
           </div>
-          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 font-bold">
+          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-300 font-bold">
             <Phone className="h-3 w-3 text-slate-300" />
             {user.telefono}
           </div>
@@ -273,7 +273,7 @@ const Users = () => {
       key: "ultimoAcceso",
       header: "Última Actividad",
       render: (value) => (
-        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 uppercase tracking-tight">
+        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-300 uppercase tracking-tight">
           <Clock className="h-3.5 w-3.5" />
           {value || "Sin actividad"}
         </div>
@@ -291,7 +291,7 @@ const Users = () => {
               size="icon"
               className="h-8 w-8 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all shadow-sm border border-slate-200/50 dark:border-white/10 bg-white/50 dark:bg-slate-900/50"
             >
-              <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+              <MoreHorizontal className="h-4 w-4 text-slate-500 dark:text-slate-300" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -315,7 +315,7 @@ const Users = () => {
                     (user as any).twoFactorEnabled ||
                     (user as any).is_2fa_enabled,
 
-                  // 👇 ESTA ES LA LÍNEA QUE TE FALTA AÑADIR 👇
+                  //   ESTA ES LA LÍNEA QUE TE FALTA AÑADIR
                   password: (user as any).password || "",
                 });
                 setIsEditModalOpen(true);
@@ -358,7 +358,7 @@ const Users = () => {
     return (
       <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-brand-red/50" />
-        <span className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">
+        <span className="text-xs font-black uppercase tracking-[0.3em] text-slate-300">
           Sincronizando Directorio...
         </span>
       </div>
@@ -373,8 +373,10 @@ const Users = () => {
         icon={<UsersIcon className="h-8 w-8 text-brand-red" />}
       >
         <Button
+          type="button"
+          size="sm"
           onClick={() => setIsAddModalOpen(true)}
-          className="btn-primary-gradient px-8 h-12 font-black uppercase text-[11px] tracking-[0.2em] shadow-xl shadow-brand-red/20 hover:-translate-y-0.5 transition-all"
+          className="bg-brand-navy hover:bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest shadow-sm"
         >
           <Plus className="h-4 w-4 mr-2" /> Nuevo Usuario
         </Button>
@@ -383,14 +385,14 @@ const Users = () => {
       {/*  2. KPIs METRICS CARDS: Indicadores visuales rápidos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card variant="glass" className="p-5 flex items-center gap-4">
-          <div className="p-3 bg-brand-navy/5 rounded-xl border border-brand-navy/10">
-            <UsersIcon className="h-6 w-6 text-brand-navy" />
+          <div className="p-3 bg-brand-navy/5 dark:bg-slate-600 rounded-xl border border-brand-navy/10">
+            <UsersIcon className="h-6 w-6 text-brand-navy dark:text-white" />
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
               Total Usuarios
             </p>
-            <p className="text-2xl font-black text-brand-navy leading-none mt-1">
+            <p className="text-2xl font-black text-brand-navy leading-none mt-1 dark:text-white">
               {stats.total}
             </p>
           </div>
@@ -401,7 +403,7 @@ const Users = () => {
             <Activity className="h-6 w-6 text-emerald-600" />
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
               Cuentas Activas
             </p>
             <p className="text-2xl font-black text-emerald-600 leading-none mt-1">
@@ -415,7 +417,7 @@ const Users = () => {
             <ShieldAlert className="h-6 w-6 text-rose-600" />
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
               Administradores
             </p>
             <p className="text-2xl font-black text-rose-600 leading-none mt-1">
@@ -429,7 +431,7 @@ const Users = () => {
             <Shield className="h-6 w-6 text-blue-600" />
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
               Protección 2FA
             </p>
             <p className="text-2xl font-black text-blue-600 leading-none mt-1">
@@ -447,85 +449,6 @@ const Users = () => {
         exportFileName="directorio_usuarios_3t"
         className="mt-2"
       />
-
-      {/* --- ALERT DIALOGS --- */}
-      <AlertDialog
-        open={showResetPasswordDialog}
-        onOpenChange={setShowResetPasswordDialog}
-      >
-        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
-          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 dark:from-amber-500/10 to-transparent pointer-events-none" />
-            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shadow-inner shrink-0 icon-plate border border-amber-200 dark:border-amber-500/20">
-                <Key className="h-7 w-7 sm:h-8 sm:w-8 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div className="flex flex-col gap-1 text-left">
-                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-amber-700 dark:text-amber-400 heading-crisp leading-none">
-                  Seguridad de Acceso
-                </AlertDialogTitle>
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
-                  Reseteo de Contraseña • Credenciales
-                </p>
-              </div>
-            </div>
-          </AlertDialogHeader>
-
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
-            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                ¿Confirmas el reseteo de contraseña para{" "}
-                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight uppercase">
-                  {selectedUser?.nombre}
-                </b>
-                ?
-              </p>
-
-              <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 rounded-2xl text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
-                  Clave Temporal
-                </p>
-                <code className="font-mono font-black text-lg text-brand-red tracking-wide">
-                  Temporal123!
-                </code>
-              </div>
-
-              <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
-                    Acción de Seguridad
-                  </h4>
-                </div>
-                <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
-                  El usuario deberá cambiar esta contraseña en su próximo inicio
-                  de sesión.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </div>
-
-          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
-            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
-              <AlertDialogCancel
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
-              >
-                Cancelar
-              </AlertDialogCancel>
-              <AlertDialogAction
-                variant="default"
-                size="lg"
-                onClick={handleResetPasswordConfirm}
-                className="w-full sm:w-auto haptic-press flex-shrink-0 border-none bg-amber-600 hover:bg-amber-700 text-white font-black uppercase tracking-widest text-[10px] shadow-md"
-              >
-                Confirmar Reset
-              </AlertDialogAction>
-            </div>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* --- MODAL 2: CAMBIAR ESTATUS --- */}
       <AlertDialog
@@ -570,7 +493,7 @@ const Users = () => {
                     ? "Suspender Acceso"
                     : "Reactivar Acceso"}
                 </AlertDialogTitle>
-                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 dark:text-slate-500 mt-1">
                   Gestión de Estatus • Usuarios
                 </p>
               </div>

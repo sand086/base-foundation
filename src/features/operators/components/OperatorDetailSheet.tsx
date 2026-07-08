@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -34,7 +34,7 @@ import {
   FileText,
 } from "lucide-react";
 import { DocumentUploadManager } from "@/components/common/DocumentUploadManager";
-
+import { useLicenseTypes } from "@/features/settings/hooks/useLicenseTypes"; // ⚡ NUEVO IMPORT
 import { FleetOperatorsService } from "@/api/generated";
 import { Operator } from "../types";
 
@@ -156,6 +156,7 @@ export function OperatorDetailSheet({
 }: OperatorDetailSheetProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { licenseTypes } = useLicenseTypes();
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -202,6 +203,14 @@ export function OperatorDetailSheet({
     },
   });
 
+  const licenseName = useMemo(() => {
+    if (!operator || !operator.license_type_id) return "SIN LICENCIA";
+    const found = licenseTypes?.find(
+      (lt) => String(lt.id) === String(operator.license_type_id),
+    );
+    return found ? found.nombre : `TIPO ${operator.license_type_id}`;
+  }, [operator, licenseTypes]);
+
   const { reset, handleSubmit } = form;
 
   useEffect(() => {
@@ -225,6 +234,8 @@ export function OperatorDetailSheet({
       setIsEditing(false);
       setTempFotoUrl(null); // Reseteamos la foto temporal al abrir
     }
+    // Omitimos isEditing de las dependencias intencionalmente para evitar ciclos
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operator, open, reset]);
 
   const handleStartEditing = () => setIsEditing(true);
@@ -248,8 +259,12 @@ export function OperatorDetailSheet({
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       emergency_contact: data.emergency_contact,
       emergency_phone: data.emergency_phone,
-      foto_url: tempFotoUrl || operator.foto_url, // Mandamos la nueva foto si hay
     };
+
+    delete updatedOperator.foto_url;
+    if (tempFotoUrl) {
+      updatedOperator.foto_url = tempFotoUrl;
+    }
 
     onSave?.(updatedOperator);
     toast({
@@ -401,7 +416,7 @@ export function OperatorDetailSheet({
                     className="h-10 w-10 haptic-press rounded-xl text-slate-500"
                     title="Cancelar"
                   >
-                    <X className="h-5 w-5" />
+                    <X className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </Button>
                   <Button
                     size="icon"
@@ -409,7 +424,7 @@ export function OperatorDetailSheet({
                     className="h-10 w-10 bg-emerald-600 hover:bg-emerald-700 text-white haptic-press border-none rounded-xl shadow-emerald-500/20"
                     title="Guardar Cambios"
                   >
-                    <Save className="h-5 w-5" />
+                    <Save className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </Button>
                 </>
               ) : (
@@ -563,7 +578,7 @@ export function OperatorDetailSheet({
                     Licencia Federal
                   </p>
                   <p className="text-2xl font-black text-brand-navy dark:text-white uppercase tracking-tighter">
-                    Tipo {operator.license_type}
+                    {licenseName}
                   </p>
                 </div>
 

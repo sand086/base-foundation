@@ -4,6 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+// 1. IMPORTACIÓN DEL PROVEEDOR DE RECAPTCHA
+import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
+
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeProvider";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
@@ -42,6 +45,7 @@ import TwoFactorAuth from "./pages/TwoFactorAuth";
 import TrafficControl from "./pages/TrafficControl";
 import Verify2FA from "@/features/users/components/Verify2FA";
 import SuppliersCatalog from "./pages/SuppliersCatalog";
+import CFDIVault from "./pages/CFDIVault";
 
 // Wizard de Despacho
 import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
@@ -49,153 +53,171 @@ import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <ThemeProvider>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <Routes>
-              {/* ============================== */}
-              {/* RUTAS PÚBLICAS Y DE VERIFICACIÓN */}
-              {/* ============================== */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/verify-2fa" element={<Verify2FA />} />
+  // 2. ENVOLVEMOS LA APP CON EL PROVEEDOR DE RECAPTCHA PASANDO LA VARIABLE DE ENTORNO
+  <GoogleReCaptchaProvider
+    reCaptchaKey={import.meta.env.VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY}
+  >
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <Routes>
+                {/* ============================== */}
+                {/* RUTAS PÚBLICAS Y DE VERIFICACIÓN */}
+                {/* ============================== */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/verify-2fa" element={<Verify2FA />} />
 
-              {/* ============================== */}
-              {/* RUTAS PROTEGIDAS (Requieren Login General) */}
-              {/* ============================== */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/2fa-setup" element={<TwoFactorAuth />} />
+                {/* ============================== */}
+                {/* RUTAS PROTEGIDAS (Requieren Login General) */}
+                {/* ============================== */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/2fa-setup" element={<TwoFactorAuth />} />
 
-                {/* APP LAYOUT CON NAVEGACIÓN */}
-                <Route path="/" element={<AppLayout />}>
-                  {/*  ACCESO GENERAL (Todo usuario logueado lo ve) */}
-                  <Route index element={<Dashboard />} />
-                  <Route path="profile" element={<Profile />} />
-                  <Route path="manuals" element={<Manuals />} />
+                  {/* APP LAYOUT CON NAVEGACIÓN */}
+                  <Route path="/" element={<AppLayout />}>
+                    {/* ACCESO GENERAL (Todo usuario logueado lo ve) */}
+                    <Route index element={<Dashboard />} />
+                    <Route path="profile" element={<Profile />} />
+                    <Route path="manuals" element={<Manuals />} />
 
-                  {/*  MÓDULO: MONITOREO */}
-                  <Route
-                    element={<ProtectedRoute requiredModule="monitoring" />}
-                  >
-                    <Route path="monitoring" element={<MonitoringCenter />} />
-                  </Route>
-
-                  {/*  MÓDULO: TRÁFICO */}
-                  <Route element={<ProtectedRoute requiredModule="traffic" />}>
+                    {/* MÓDULO: MONITOREO */}
                     <Route
-                      path="traffic-control"
-                      element={<TrafficControl />}
-                    />
-                  </Route>
+                      element={<ProtectedRoute requiredModule="monitoring" />}
+                    >
+                      <Route path="monitoring" element={<MonitoringCenter />} />
+                    </Route>
 
-                  {/*  MÓDULO: FLOTA */}
-                  <Route element={<ProtectedRoute requiredModule="fleet" />}>
-                    <Route path="fleet" element={<FleetUnits />} />
+                    {/* MÓDULO: TRÁFICO */}
                     <Route
-                      path="fleet/unit/:id"
-                      element={<FleetUnitDetail />}
-                    />
+                      element={<ProtectedRoute requiredModule="traffic" />}
+                    >
+                      <Route
+                        path="traffic-control"
+                        element={<TrafficControl />}
+                      />
+                    </Route>
+
+                    {/* MÓDULO: FLOTA */}
+                    <Route element={<ProtectedRoute requiredModule="fleet" />}>
+                      <Route path="fleet" element={<FleetUnits />} />
+                      <Route
+                        path="fleet/unit/:id"
+                        element={<FleetUnitDetail />}
+                      />
+                      <Route
+                        path="fleet/operators"
+                        element={<FleetOperators />}
+                      />
+                      <Route path="fleet/tires" element={<FleetTires />} />
+                      <Route
+                        path="fleet/maintenance"
+                        element={<Maintenance />}
+                      />
+                      <Route path="fleet/mechanics" element={<Mechanics />} />
+                    </Route>
+
+                    {/* MÓDULO: COMBUSTIBLE */}
+                    <Route element={<ProtectedRoute requiredModule="fuel" />}>
+                      <Route path="fuel" element={<FuelLoads />} />
+                      <Route path="fuel/loads" element={<FuelLoads />} />
+                      <Route
+                        path="fuel/conciliation"
+                        element={<FuelConciliation />}
+                      />
+                    </Route>
+
+                    {/* MÓDULO: CLIENTES */}
                     <Route
-                      path="fleet/operators"
-                      element={<FleetOperators />}
-                    />
-                    <Route path="fleet/tires" element={<FleetTires />} />
-                    <Route path="fleet/maintenance" element={<Maintenance />} />
-                    <Route path="fleet/mechanics" element={<Mechanics />} />
-                  </Route>
+                      element={<ProtectedRoute requiredModule="clients" />}
+                    >
+                      <Route path="clients" element={<ClientsCatalog />} />
+                      <Route path="clients/new" element={<ClientForm />} />
+                      <Route
+                        path="clients/edit/:clientId"
+                        element={<ClientForm />}
+                      />
+                    </Route>
 
-                  {/*  MÓDULO: COMBUSTIBLE */}
-                  <Route element={<ProtectedRoute requiredModule="fuel" />}>
-                    <Route path="fuel" element={<FuelLoads />} />
-                    <Route path="fuel/loads" element={<FuelLoads />} />
+                    {/* MÓDULO: LIQUIDACIONES */}
                     <Route
-                      path="fuel/conciliation"
-                      element={<FuelConciliation />}
-                    />
-                  </Route>
+                      element={<ProtectedRoute requiredModule="settlements" />}
+                    >
+                      <Route path="settlements" element={<TripSettlement />} />
+                    </Route>
 
-                  {/*  MÓDULO: CLIENTES */}
-                  <Route element={<ProtectedRoute requiredModule="clients" />}>
-                    <Route path="clients" element={<ClientsCatalog />} />
-                    <Route path="clients/new" element={<ClientForm />} />
+                    {/* MÓDULO: COBRANZA */}
                     <Route
-                      path="clients/edit/:clientId"
-                      element={<ClientForm />}
-                    />
-                  </Route>
+                      element={<ProtectedRoute requiredModule="receivables" />}
+                    >
+                      <Route path="receivables" element={<Receivables />} />
+                    </Route>
 
-                  {/*  MÓDULO: LIQUIDACIONES */}
-                  <Route
-                    element={<ProtectedRoute requiredModule="settlements" />}
-                  >
-                    <Route path="settlements" element={<TripSettlement />} />
-                  </Route>
-
-                  {/*  MÓDULO: COBRANZA */}
-                  <Route
-                    element={<ProtectedRoute requiredModule="receivables" />}
-                  >
-                    <Route path="receivables" element={<Receivables />} />
-                  </Route>
-
-                  {/*  MÓDULO: PROVEEDORES (Y COMPRAS) */}
-                  <Route element={<ProtectedRoute requiredModule="payables" />}>
-                    <Route path="suppliers" element={<SuppliersCatalog />} />{" "}
-                    {/* <-- NUEVA RUTA */}
-                    <Route path="payables" element={<Payables />} />
-                    <Route path="purchases" element={<Purchases />} />
-                  </Route>
-
-                  {/*  MÓDULO: TARIFAS */}
-                  <Route element={<ProtectedRoute requiredModule="rates" />}>
-                    <Route path="rates" element={<RateManagement />} />
-                  </Route>
-
-                  {/*  MÓDULO: DESPACHO */}
-                  <Route element={<ProtectedRoute requiredModule="dispatch" />}>
-                    <Route path="dispatch" element={<Dispatch />} />
-                    <Route path="dispatch/new" element={<DispatchWizard />} />
-                  </Route>
-
-                  {/*  MÓDULO: TESORERÍA */}
-                  <Route element={<ProtectedRoute requiredModule="treasury" />}>
-                    <Route path="treasury" element={<Treasury />} />
+                    {/* MÓDULO: PROVEEDORES (Y COMPRAS) */}
                     <Route
-                      path="finance-dashboard"
-                      element={<FinanceDashboard />}
-                    />
-                  </Route>
+                      element={<ProtectedRoute requiredModule="payables" />}
+                    >
+                      <Route path="suppliers" element={<SuppliersCatalog />} />{" "}
+                      <Route path="payables" element={<Payables />} />
+                      {/* <Route path="purchases" element={<Purchases />} /> */}
+                    </Route>
 
-                  {/*  MÓDULO: ADMINISTRACIÓN */}
-                  <Route element={<ProtectedRoute requiredModule="admin" />}>
-                    <Route path="users" element={<Users />} />
+                    {/* MÓDULO: TARIFAS */}
+                    <Route element={<ProtectedRoute requiredModule="rates" />}>
+                      <Route path="rates" element={<RateManagement />} />
+                    </Route>
+
+                    {/* MÓDULO: DESPACHO */}
                     <Route
-                      path="roles-permissions"
-                      element={<RolesPermissions />}
-                    />
+                      element={<ProtectedRoute requiredModule="dispatch" />}
+                    >
+                      <Route path="dispatch" element={<Dispatch />} />
+                      <Route path="dispatch/new" element={<DispatchWizard />} />
+                    </Route>
+
+                    {/* MÓDULO: TESORERÍA */}
                     <Route
-                      path="notifications"
-                      element={<NotificationsConfig />}
-                    />
-                    <Route path="bulk-uploads" element={<BulkUploads />} />
-                    <Route path="settings" element={<Settings />} />
+                      element={<ProtectedRoute requiredModule="treasury" />}
+                    >
+                      <Route path="treasury" element={<Treasury />} />
+                      <Route path="history-cfdi" element={<CFDIVault />} />
+                      <Route
+                        path="finance-dashboard"
+                        element={<FinanceDashboard />}
+                      />
+                    </Route>
+
+                    {/* MÓDULO: ADMINISTRACIÓN */}
+                    <Route element={<ProtectedRoute requiredModule="admin" />}>
+                      <Route path="users" element={<Users />} />
+                      <Route
+                        path="roles-permissions"
+                        element={<RolesPermissions />}
+                      />
+                      <Route
+                        path="notifications"
+                        element={<NotificationsConfig />}
+                      />
+                      <Route path="bulk-uploads" element={<BulkUploads />} />
+                      <Route path="settings" element={<Settings />} />
+                    </Route>
                   </Route>
                 </Route>
-              </Route>
 
-              {/* ============================== */}
-              {/* Catch-all (404) */}
-              {/* ============================== */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ThemeProvider>
+                {/* ============================== */}
+                {/* Catch-all (404) */}
+                {/* ============================== */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  </GoogleReCaptchaProvider>
 );
 
 export default App;

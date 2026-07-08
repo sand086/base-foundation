@@ -213,7 +213,7 @@ export const StandByTrips = () => {
           }
           return false;
         }}
-        // 👇 AGREGA ESTA LÍNEA (Reemplaza fetchTrips por el nombre real de tu función)
+        //   AGREGA ESTA LÍNEA (Reemplaza fetchTrips por el nombre real de tu función)
         onSuccessRefresh={fetchTrips}
       />
 

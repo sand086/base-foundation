@@ -52,7 +52,9 @@ def get_client(db: Session, client_id: int):
     )
 
 
-def create_client(db: Session, client: schemas.ClientCreate):
+def create_client(
+    db: Session, client: schemas.ClientCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     """Crea cliente + subclientes + tarifas con mapeo completo."""
     try:
         # 1. Crear el objeto principal Client
@@ -75,6 +77,10 @@ def create_client(db: Session, client: schemas.ClientCreate):
             comprobante_domicilio_url=getattr(
                 client, "comprobante_domicilio_url", None
             ),
+            forma_pago=getattr(client, "forma_pago", "99"),
+            metodo_pago=getattr(client, "metodo_pago", "PPD"),
+            moneda=getattr(client, "moneda", "MXN"),
+            created_by_id=user_id,  # <--- AUDITORÍA
         )
         db.add(db_client)
         db.flush()  # Para obtener el db_client.id
@@ -98,6 +104,7 @@ def create_client(db: Session, client: schemas.ClientCreate):
                 requiere_contrato=sub.requiere_contrato,
                 convenio_especial=sub.convenio_especial,
                 contrato_url=sub.contrato_url if hasattr(sub, "contrato_url") else None,
+                created_by_id=user_id,  # <--- AUDITORÍA
             )
             db.add(db_sub)
             db.flush()
@@ -118,6 +125,7 @@ def create_client(db: Session, client: schemas.ClientCreate):
                     moneda=tariff.moneda,
                     vigencia=tariff.vigencia,
                     estatus=tariff.estatus,
+                    created_by_id=user_id,  # <--- AUDITORÍA
                 )
                 db.add(db_tariff)
 
@@ -133,7 +141,9 @@ def create_client(db: Session, client: schemas.ClientCreate):
         raise HTTPException(status_code=400, detail=f"Error de base de datos: {str(e)}")
 
 
-def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate):
+def update_client(
+    db: Session, client_id: int, client_data: schemas.ClientUpdate, user_id: int
+):  # <--- AUDITORÍA PARAM
     """Update con Upsert para subclientes y tarifas."""
     db_client = get_client(db, client_id)
     if not db_client:
@@ -143,6 +153,8 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
     update_data = client_data.model_dump(exclude={"sub_clients"}, exclude_unset=True)
     for key, value in update_data.items():
         setattr(db_client, key, value)
+
+    db_client.updated_by_id = user_id  # <--- AUDITORÍA
 
     # 2) Manejo de Subclientes
     if client_data.sub_clients is not None:
@@ -164,6 +176,8 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
                 for k, v in sub_update_data.items():
                     setattr(db_sub, k, v)
 
+                db_sub.updated_by_id = user_id  # <--- AUDITORÍA
+
                 # --- Manejo de Tarifas (Nested) ---
                 if sub_in.tariffs is not None:
                     existing_tariffs = {
@@ -180,9 +194,13 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
                             t_up_data = t_in.model_dump(exclude_unset=True)
                             for tk, tv in t_up_data.items():
                                 setattr(db_t, tk, tv)
+
+                            db_t.updated_by_id = user_id  # <--- AUDITORÍA
                         else:
                             # CREATE Tarifa nueva
-                            new_t = models.Tariff(**t_in.model_dump(exclude={"id"}))
+                            new_t = models.Tariff(
+                                **t_in.model_dump(exclude={"id"}), created_by_id=user_id
+                            )  # <--- AUDITORÍA
                             new_t.sub_client_id = db_sub.id
                             db.add(new_t)
 
@@ -190,15 +208,20 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
                     for t_id, t_obj in existing_tariffs.items():
                         if t_id not in incoming_tariff_ids:
                             t_obj.record_status = RecordStatus.ELIMINADO
+                            t_obj.updated_by_id = user_id  # <--- AUDITORÍA
             else:
                 # CREATE Subcliente nuevo
                 new_sub_dict = sub_in.model_dump(exclude={"tariffs", "id"})
-                new_sub = models.SubClient(**new_sub_dict, client_id=db_client.id)
+                new_sub = models.SubClient(
+                    **new_sub_dict, client_id=db_client.id, created_by_id=user_id
+                )  # <--- AUDITORÍA
                 db.add(new_sub)
                 db.flush()
                 for t_in in sub_in.tariffs or []:
                     new_t = models.Tariff(
-                        **t_in.model_dump(exclude={"id"}), sub_client_id=new_sub.id
+                        **t_in.model_dump(exclude={"id"}),
+                        sub_client_id=new_sub.id,
+                        created_by_id=user_id,  # <--- AUDITORÍA
                     )
                     db.add(new_t)
 
@@ -206,25 +229,29 @@ def update_client(db: Session, client_id: int, client_data: schemas.ClientUpdate
         for s_id, s_obj in existing_subs.items():
             if s_id not in incoming_sub_ids:
                 s_obj.record_status = RecordStatus.ELIMINADO
+                s_obj.updated_by_id = user_id  # <--- AUDITORÍA
 
     db.commit()
     db.refresh(db_client)
     return db_client
 
 
-def delete_client(db: Session, client_id: int):
+def delete_client(db: Session, client_id: int, user_id: int):  # <--- AUDITORÍA PARAM
     """Soft delete en cascada."""
     client = get_client(db, client_id)
     if not client:
         return False
 
     client.record_status = RecordStatus.ELIMINADO
+    client.updated_by_id = user_id  # <--- AUDITORÍA
 
     # El get_client ya filtró y trajo solo subclientes y tarifas activos
     for sub in client.sub_clients:
         sub.record_status = RecordStatus.ELIMINADO
+        sub.updated_by_id = user_id  # <--- AUDITORÍA
         for t in sub.tariffs:
             t.record_status = RecordStatus.ELIMINADO
+            t.updated_by_id = user_id  # <--- AUDITORÍA
 
     db.commit()
     return True

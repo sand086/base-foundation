@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__suppliers__schemas__CostCenterResponse } from './app__modules__suppliers__schemas__CostCenterResponse';
 import type { Currency } from './Currency';
 import type { InvoicePaymentResponse } from './InvoicePaymentResponse';
 import type { InvoiceStatus } from './InvoiceStatus';
@@ -9,6 +10,7 @@ import type { RecordStatus } from './RecordStatus';
 export type PayableInvoiceResponse = {
     id: number;
     supplier_id?: (number | null);
+    cost_center_id?: (number | null);
     uuid?: (string | null);
     folio_interno?: (string | null);
     supplier_razon_social?: (string | null);
@@ -27,6 +29,7 @@ export type PayableInvoiceResponse = {
     xml_url?: (string | null);
     orden_compra_id?: (string | null);
     payments?: Array<InvoicePaymentResponse>;
+    cost_center?: (app__modules__suppliers__schemas__CostCenterResponse | null);
     record_status: RecordStatus;
     created_at?: (string | null);
     updated_at?: (string | null);

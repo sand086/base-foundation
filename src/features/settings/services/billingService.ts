@@ -1,5 +1,5 @@
 import { DefaultService } from "@/api/generated";
-
+import axiosClient from "@/api/axiosClient";
 export interface BillingResponse {
   status: string;
   message: string;
@@ -12,20 +12,49 @@ export interface BillingResponse {
 
 export const billingService = {
   stampNominal: async (viajeId: number): Promise<BillingResponse> => {
-    const response = await DefaultService.generarCartaPorteNominalApiSatStampNominalPost({
-      viaje_id: viajeId,
-      is_nominal: true,
-    } as any);
-    return response as BillingResponse;
+    try {
+      const response =
+        await DefaultService.generarCartaPorteNominalApiSatStampNominalPost({
+          viaje_id: viajeId,
+          is_nominal: true,
+        } as any);
+      return response as BillingResponse;
+    } catch (error: any) {
+      //   MAGIA: Los clientes generados por OpenAPI guardan el JSON del backend en "error.body"
+      if (error.body) {
+        // Lo empaquetamos simulando la estructura de Axios para que tu useBilling.ts lo atrape perfecto
+        throw { response: { data: error.body } };
+      }
+      throw error;
+    }
   },
 
-  stampFinal: async (viajeId: number, uuidRelacionado: string): Promise<BillingResponse> => {
-    const response = await DefaultService.generarFacturaFinalApiSatStampFinalPost({
-      viaje_id: viajeId,
-      is_nominal: false,
-      tipo_relacion: "04",
-      uuid_relacionado: uuidRelacionado,
-    } as any);
-    return response as BillingResponse;
+  stampFinal: async (
+    viajeId: number,
+    uuidRelacionado: string,
+  ): Promise<BillingResponse> => {
+    try {
+      const response =
+        await DefaultService.generarFacturaFinalApiSatStampFinalPost({
+          viaje_id: viajeId,
+          is_nominal: false,
+          tipo_relacion: "04",
+          uuid_relacionado: uuidRelacionado,
+        } as any);
+      return response as BillingResponse;
+    } catch (error: any) {
+      //   MAGIA: Mismo blindaje para la factura final
+      if (error.body) {
+        throw { response: { data: error.body } };
+      }
+      throw error;
+    }
+  },
+
+  stampOneShot: async (payload: any): Promise<BillingResponse> => {
+    // Como usamos axiosClient, Axios ya empaqueta el error correctamente.
+    // Si falla, el error subirá automáticamente hasta tu useBilling.ts
+    const response = await axiosClient.post("/api/sat/stamp/one-shot", payload);
+    return response.data as BillingResponse;
   },
 };

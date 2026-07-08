@@ -17,6 +17,7 @@ export interface Tire {
   profundidad_actual?: number;
   estado?: string;
   estado_fisico?: string;
+  estadoFisico?: string;
   codigo_interno?: string;
 }
 
@@ -30,34 +31,44 @@ interface TruckChassisSVGProps {
 // =====================
 
 //  Criterio del Mecánico (Opción B): Colores basados en el texto del estado
-const getTireStatusByCondition = (condition: string) => {
-  const cond = condition?.toLowerCase() || "desconocido";
+const getTireStatusByDepth = (depth?: number | null) => {
+  // Si no hay profundidad registrada, la pintamos gris
+  if (depth === undefined || depth === null) {
+    return {
+      fill: "fill-slate-800/50",
+      stroke: "stroke-slate-600",
+      pulse: "",
+      label: "N/D",
+      labelColor: "text-slate-400",
+    };
+  }
 
-  if (cond === "mala") {
+  // 🔴 MALA / CRÍTICA (Ej. 4 mm o menos)
+  if (depth <= 4) {
     return {
       fill: "fill-red-950/50",
       stroke: "stroke-red-500",
-      glow: "drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]",
       pulse: "animate-pulse",
       label: "MALA",
       labelColor: "text-red-400",
     };
   }
-  if (cond === "regular") {
+
+  // 🟡 REGULAR (Ej. Entre 5 mm y 7 mm)
+  if (depth > 4 && depth <= 7) {
     return {
       fill: "fill-amber-950/50",
       stroke: "stroke-amber-500",
-      glow: "drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]",
       pulse: "",
       label: "REGULAR",
       labelColor: "text-amber-400",
     };
   }
-  // "buena" u óptima
+
+  // 🟢 BUENA (Ej. 8 mm o más)
   return {
     fill: "fill-emerald-950/50",
     stroke: "stroke-emerald-500",
-    glow: "drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]",
     pulse: "",
     label: "BUENA",
     labelColor: "text-emerald-400",
@@ -130,13 +141,17 @@ export function TruckChassisSVG({
   // Contadores basados exclusivamente en lo que se dibujó y en el reporte del mecánico
   const stats = useMemo(() => {
     return {
-      mala: drawnTires.filter((t) => t.estado_fisico?.toLowerCase() === "mala")
-        .length,
+      mala: drawnTires.filter(
+        (t) => t.profundidad_actual != null && t.profundidad_actual <= 4,
+      ).length,
       regular: drawnTires.filter(
-        (t) => t.estado_fisico?.toLowerCase() === "regular",
+        (t) =>
+          t.profundidad_actual != null &&
+          t.profundidad_actual > 4 &&
+          t.profundidad_actual <= 7,
       ).length,
       buena: drawnTires.filter(
-        (t) => t.estado_fisico?.toLowerCase() === "buena",
+        (t) => t.profundidad_actual != null && t.profundidad_actual > 7,
       ).length,
     };
   }, [drawnTires]);
@@ -248,7 +263,8 @@ export function TruckChassisSVG({
               );
             }
 
-            const status = getTireStatusByCondition(tire.estado_fisico || "");
+            const physicalState = tire.estado_fisico || tire.estadoFisico || "";
+            const status = getTireStatusByDepth(tire.profundidad_actual);
             const isHovered = hoveredTire === tire.id;
             const isDual = pos.position > 2;
 

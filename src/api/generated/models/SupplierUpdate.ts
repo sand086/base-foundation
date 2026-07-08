@@ -14,12 +14,12 @@ export type SupplierUpdate = {
     dias_credito?: (number | null);
     limite_credito?: (number | null);
     contacto_principal?: (string | null);
-    categoria?: (string | null);
     tipo_proveedor?: (string | null);
     zonas_cobertura?: (string | null);
     banco?: (string | null);
     cuenta_bancaria?: (string | null);
     clabe?: (string | null);
+    cost_center_id?: (number | null);
     estatus?: (SupplierStatus | null);
     tariffs?: (Array<SupplierTariffUpdate> | null);
 };

@@ -39,7 +39,6 @@ const SelectTrigger = React.forwardRef<
       // ESTADOS DESHABILITADOS: Atenuación táctica en ambos modos
       "disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-slate-50 dark:disabled:bg-white/5 disabled:grayscale",
 
-      // CORRECCIÓN: Quitamos las comillas a className
       className,
     )}
     {...props}
@@ -140,9 +139,12 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName;
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, textValue, value, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
+    value={value}
+    //   LA MAGIA GLOBAL: Si no hay textValue explícito, usa el value para ocultar basura del SVG en el select nativo
+    textValue={textValue || value}
     className={cn(
       "relative flex w-full cursor-pointer select-none items-center rounded-xl py-2.5 pl-8 pr-2 text-sm font-semibold outline-none transition-colors duration-200",
       // Hover/Focus: Azul suave de Tahoe (Light) o fondo sutil en (Dark)

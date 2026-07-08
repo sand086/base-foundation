@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { app__modules__catalogs__schemas__SettlementConceptCreate } from '../models/app__modules__catalogs__schemas__SettlementConceptCreate';
 import type { Body_download_csd_secure_api_sat_csd_download_post } from '../models/Body_download_csd_secure_api_sat_csd_download_post';
 import type { Body_upload_client_document_api_clients__client_id__documents__doc_type__post } from '../models/Body_upload_client_document_api_clients__client_id__documents__doc_type__post';
 import type { Body_upload_csd_files_api_sat_csd_post } from '../models/Body_upload_csd_files_api_sat_csd_post';
@@ -20,8 +21,8 @@ import type { ModuleSchema } from '../models/ModuleSchema';
 import type { ReceivableInvoiceCreate } from '../models/ReceivableInvoiceCreate';
 import type { RegistroPagoPayload } from '../models/RegistroPagoPayload';
 import type { RouteCreate } from '../models/RouteCreate';
+import type { SatCancelPayload } from '../models/SatCancelPayload';
 import type { SettlementConceptBase } from '../models/SettlementConceptBase';
-import type { SettlementConceptCreate } from '../models/SettlementConceptCreate';
 import type { SystemConfigResponse } from '../models/SystemConfigResponse';
 import type { SystemConfigUpdate } from '../models/SystemConfigUpdate';
 import type { TerminalBase } from '../models/TerminalBase';
@@ -318,7 +319,7 @@ export class DefaultService {
      * @throws ApiError
      */
     public static saveSettlementConceptsBulkApiCatalogsSettlementConceptsBulkPost(
-        requestBody: Array<SettlementConceptCreate>,
+        requestBody: Array<app__modules__catalogs__schemas__SettlementConceptCreate>,
     ): CancelablePromise<any> {
         return __request(OpenAPI, {
             method: 'POST',
@@ -464,6 +465,19 @@ export class DefaultService {
             errors: {
                 422: `Validation Error`,
             },
+        });
+    }
+    /**
+     * Get Costs By Ceco
+     * TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
+     * Ideal para inyectar directo en un PieChart de React.
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getCostsByCecoApiDashboardStatsCostsByCecoGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/dashboard/stats/costs-by-ceco',
         });
     }
     /**
@@ -644,6 +658,72 @@ export class DefaultService {
         });
     }
     /**
+     * Get Unit Last Odometer Endpoint
+     * Devuelve el último odómetro registrado para una unidad específica.
+     * Busca primero en la liquidación del último viaje (TripLeg) y
+     * luego en el último vale de combustible (FuelLog).
+     * @param unitId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getUnitLastOdometerEndpointApiFleetUnitsUnitIdLastOdometerGet(
+        unitId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/fleet/units/{unit_id}/last-odometer',
+            path: {
+                'unit_id': unitId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Generar Factura Libre
+     * Endpoint Exclusivo para Facturas Libres (SIN CARTA PORTE) generadas desde cero.
+     * Crea un CFDI 4.0 de Ingreso puro usando solo los datos del frontend.
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static generarFacturaLibreApiSatStampFreeInvoicePost(
+        requestBody: Record<string, any>,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/free-invoice',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Stamp Existing Free Invoice
+     * Endpoint Exclusivo para timbrar Facturas Libres (CxC) que ya existen en la BD como provisionales.
+     * No requiere datos del frontend, los lee de la base de datos.
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static stampExistingFreeInvoiceApiSatStampInvoiceInvoiceIdPost(
+        invoiceId: number,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/invoice/{invoice_id}',
+            path: {
+                'invoice_id': invoiceId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Test Invoice Pro
      * @returns any Successful Response
      * @throws ApiError
@@ -756,8 +836,6 @@ export class DefaultService {
     }
     /**
      * Download Invoice Pdf
-     * Busca el archivo PDF generado en el disco y lo descarga,
-     * soportando prefijos del frontend (ej. CFDI_Final_UUID).
      * @param uuid
      * @returns any Successful Response
      * @throws ApiError
@@ -778,8 +856,6 @@ export class DefaultService {
     }
     /**
      * Download Invoice Xml
-     * Busca el archivo XML timbrado en el disco y lo descarga,
-     * soportando prefijos del frontend.
      * @param uuid
      * @returns any Successful Response
      * @throws ApiError
@@ -889,9 +965,35 @@ export class DefaultService {
         });
     }
     /**
+     * Cancel Invoice In Sat
+     * Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.
+     * Aplica para Cuentas por Cobrar (Facturas Libres o Cartas Porte).
+     * @param invoiceId
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static cancelInvoiceInSatApiSatStampCancelInvoiceIdPost(
+        invoiceId: number,
+        requestBody: SatCancelPayload,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/stamp/cancel/{invoice_id}',
+            path: {
+                'invoice_id': invoiceId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Generar Complemento de Pago
-     * Endpoint Fase 3.2: Registra el pago de una o múltiples facturas y genera
-     * el Complemento de Pago (REP) ante el SAT.
+     * Endpoint Fase 3.2: Registra el pago y genera el Complemento (REP).
+     * (Bypass desactivado para ver el error real del SAT)
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
@@ -907,6 +1009,39 @@ export class DefaultService {
             errors: {
                 422: `Validation Error`,
             },
+        });
+    }
+    /**
+     * Reconstruir Pdf Factura
+     * Lee el XML timbrado del disco y re-crea el PDF de la factura.
+     * [VERSIÓN GET - PARA PROBAR DESDE EL NAVEGADOR]
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static reconstruirPdfFacturaApiSatRebuildPdfInvoiceIdGet(
+        invoiceId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/sat/rebuild-pdf/{invoice_id}',
+            path: {
+                'invoice_id': invoiceId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Rebuild All Pdfs
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static rebuildAllPdfsApiSatRebuildAllPdfsGet(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/sat/rebuild-all-pdfs',
         });
     }
     /**

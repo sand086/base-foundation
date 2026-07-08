@@ -1,8 +1,9 @@
 import { FinanceService } from "@/api/generated";
 import { ReceivableInvoice } from "@/features/receivables/types";
+import axiosClient from "@/api/axiosClient";
 
 export const receivableService = {
-  getInvoices: async (skip = 0, limit = 100) => {
+  getInvoices: async (skip = 0, limit = 5000) => {
     const data =
       await FinanceService.getReceivableInvoicesApiFinanceReceivablesGet(
         skip,
@@ -11,10 +12,15 @@ export const receivableService = {
     return data as ReceivableInvoice[];
   },
 
-  deleteInvoice: async (id: number | string) => {
-    return await FinanceService.deleteReceivableInvoiceApiFinanceReceivablesInvoiceIdDelete(
-      Number(id),
+  //  FIX: Modificado para usar AxiosClient directo y soportar la query string ?cascade=true
+  deleteInvoice: async (id: number | string, cascade?: boolean) => {
+    const { data } = await axiosClient.delete(
+      `/api/finance/receivables/${id}`,
+      {
+        params: cascade !== undefined ? { cascade } : undefined,
+      },
     );
+    return data;
   },
 
   registerPayment: async (invoiceId: number | string, paymentData: any) => {
@@ -38,5 +44,25 @@ export const receivableService = {
     return await FinanceService.uploadPaymentXmlApiFinancePaymentsUploadXmlPost(
       { file },
     );
+  },
+
+  cancelInvoiceSAT: async (
+    invoiceId: number | string,
+    motivo: string = "02",
+  ) => {
+    const { data } = await axiosClient.post(
+      `/api/sat/stamp/cancel/${invoiceId}`,
+      {
+        motivo: motivo,
+        uuid_sustituto: null,
+      },
+    );
+    return data;
+  },
+
+  // NUEVO: Endpoint para Timbrar la Factura CXC Provisional
+  stampInvoice: async (id: number | string) => {
+    const { data } = await axiosClient.post(`/api/sat/stamp/invoice/${id}`);
+    return data;
   },
 };

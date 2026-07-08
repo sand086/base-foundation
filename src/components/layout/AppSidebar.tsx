@@ -28,14 +28,11 @@ import type { SidebarIconKey } from "@/assets/img/icons/sidebar";
 import { SidebarSvgIcon } from "@/components/common/SidebarSvgIcon";
 import { AnimatedLogo } from "@/components/common/AnimatedLogo";
 
-//  1. IMPORTAMOS LOS HOOKS DE SEGURIDAD
-import {
-  getPermissionSnapshot,
-  usePermissions,
-} from "@/hooks/use-permissions";
+// 1. IMPORTAMOS LOS HOOKS DE SEGURIDAD
+import { getPermissionSnapshot, usePermissions } from "@/hooks/use-permissions";
 import { useAuth } from "@/context/AuthContext";
 
-//  2. AGREGAMOS EL MODULE_CODE A LA INTERFAZ
+// 2. AGREGAMOS EL MODULE_CODE A LA INTERFAZ
 interface MenuItem {
   title: string;
   icon?: React.ElementType;
@@ -46,14 +43,13 @@ interface MenuItem {
   children?: { title: string; path: string; moduleCode?: string }[];
 }
 
-//  3. MAPEAMOS LOS CÓDIGOS DE MÓDULO EXACTOS
-// Nota: Si un item NO tiene moduleCode, todos lo podrán ver (ej: Dashboard).
+// 3. MAPEAMOS LOS CÓDIGOS DE MÓDULO EXACTOS
 const menuItems: MenuItem[] = [
   {
     title: "Dashboard",
     icon: LayoutDashboard,
     path: "/",
-    // Sin moduleCode = Público para cualquier logueado
+    // Sin moduleCode = Público para cualquier usuario logueado
   },
   {
     title: "Clientes",
@@ -123,16 +119,16 @@ const menuItems: MenuItem[] = [
   },
   {
     title: "Proveedores",
-    icon: Briefcase, // Elegimos un icono que tenga sentido (Maletín/Empresa)
-    iconName: "Proveedores", // Si tienes un SVG para proveedores
+    icon: Briefcase,
+    iconName: "Proveedores",
     path: "/suppliers",
-    moduleCode: "payables", // <- Se protege con el permiso de payables
+    moduleCode: "suppliers",
   },
   {
     title: "Cuentas por Pagar",
     icon: CreditCard,
     path: "/payables",
-    moduleCode: "payables", // <- Se protege con el permiso de payables
+    moduleCode: "payables",
   },
   {
     title: "Cuentas por Cobrar",
@@ -140,6 +136,12 @@ const menuItems: MenuItem[] = [
     iconName: "Cobranza",
     path: "/receivables",
     moduleCode: "receivables",
+  },
+  {
+    title: "Historico CFDI",
+    icon: FileCheck,
+    path: "/history-cfdi",
+    moduleCode: "historico",
   },
   {
     title: "Tesorería",
@@ -151,14 +153,22 @@ const menuItems: MenuItem[] = [
     title: "Administración",
     icon: Settings,
     iconName: "Administracion",
-    moduleCode: "admin", // Solo roles de administración verán esto
+    // ⚠️ NOTA: El padre no tiene moduleCode porque el filtrado de hijos decidirá si se muestra.
     children: [
-      { title: "Usuarios", path: "/users" },
-      { title: "Roles y Permisos", path: "/roles-permissions" },
-      { title: "Mi Perfil", path: "/profile" },
-      { title: "Configuración", path: "/settings" },
-      { title: "Notificaciones", path: "/notifications" },
-      { title: "Cargas Masivas", path: "/bulk-uploads" },
+      { title: "Usuarios", path: "/users", moduleCode: "users" },
+      {
+        title: "Roles y Permisos",
+        path: "/roles-permissions",
+        moduleCode: "roles",
+      },
+      { title: "Configuración", path: "/settings", moduleCode: "settings" },
+      /*  {
+        title: "Cargas Masivas",
+        path: "/bulk-uploads",
+        moduleCode: "settings",
+      }, */
+      { title: "Mi Perfil", path: "/profile" }, // Público
+      { title: "Notificaciones", path: "/notifications" }, // Público
     ],
   },
 ];
@@ -178,7 +188,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const location = useLocation();
 
-  //  4. INVOCAMOS LOS HOOKS DE SEGURIDAD
+  // 4. INVOCAMOS LOS HOOKS DE SEGURIDAD
   const { isAdmin } = usePermissions();
   const { user } = useAuth();
 
@@ -201,16 +211,43 @@ export function AppSidebar({
     return false;
   };
 
-  //  5. LÓGICA DE FILTRADO (MAGIA RBAC)
-  const filteredMenu = menuItems.filter((item) => {
-    // Si es administrador o superadmin, dejamos pasar todo
-    if (isAdmin) return true;
+  // 5. LÓGICA DE FILTRADO (MAGIA RBAC)
+  const filteredMenu = menuItems
+    .map((item) => {
+      // A) Si es administrador o superadmin, dejamos pasar todo
+      if (isAdmin) return item;
 
-    // Si el ítem no tiene código (es público como el Dashboard), lo dejamos pasar
-    if (!item.moduleCode) return true;
+      // B) Si el item tiene sub-menús (hijos)
+      if (item.children) {
+        // Verificamos si la carpeta principal está bloqueada
+        if (
+          item.moduleCode &&
+          !getPermissionSnapshot(user, item.moduleCode).canRead
+        ) {
+          return null;
+        }
 
-    return getPermissionSnapshot(user, item.moduleCode).canRead;
-  });
+        // Filtramos a los hijos según los permisos
+        const allowedChildren = item.children.filter((child) => {
+          if (!child.moduleCode) return true; // Público
+          return getPermissionSnapshot(user, child.moduleCode).canRead;
+        });
+
+        // Si no tiene acceso a ningún hijo, ocultamos toda la carpeta
+        if (allowedChildren.length === 0) return null;
+
+        // Devolvemos el menú con los hijos filtrados
+        return { ...item, children: allowedChildren };
+      }
+
+      // C) Si es un menú simple sin hijos
+      if (!item.moduleCode) return item; // Si no tiene moduleCode, es público
+      if (getPermissionSnapshot(user, item.moduleCode).canRead) return item;
+
+      // Si no tiene permisos, lo ocultamos
+      return null;
+    })
+    .filter(Boolean) as MenuItem[]; // Eliminamos los nulos
 
   const RenderIcon = ({
     item,
@@ -319,7 +356,7 @@ export function AppSidebar({
 
       <ScrollArea className="flex-1 custom-scrollbar">
         <nav className="p-3 space-y-1 relative z-10">
-          {/*  6. RENDERIZAMOS EL MENÚ FILTRADO */}
+          {/* 6. RENDERIZAMOS EL MENÚ FILTRADO */}
           {filteredMenu.map((item) => {
             const active = isActive(item.path, item.children);
             const showLabels = !collapsed || mobileOpen;

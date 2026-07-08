@@ -13,18 +13,36 @@ import {
   Package,
   Trash2,
   Receipt,
+  Clock,
   FileCode2,
   Loader2,
+  Briefcase,
+  FilterX,
+  Check,
+  Filter,
+  Calendar,
+  ChevronsUpDown,
+  CheckSquare,
+  Ban,
+  RefreshCcw,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
 import { ActionButton } from "@/components/ui/action-button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, getStatusFromLabel } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +65,21 @@ import {
   ColumnDef,
 } from "@/components/ui/enhanced-data-table";
 
+// NUEVOS COMPONENTES IMPORTADOS PARA EL BUSCADOR Y CHECKBOX
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -61,18 +94,15 @@ import {
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
 import { PayableInvoice } from "@/features/payables/types";
 
-// 🚀 FIX FASE 3: Importamos el Modal de Carga Masiva (Ya no necesitamos XMLParsedData)
 import { ImportXMLExpenseModal } from "@/features/payables/components/ImportXMLExpenseModal";
+import { AgingExportModal } from "@/components/common/AgingExportModal";
+import { AccountStatementModal } from "@/features/receivables/components/AccountStatementModal";
 
 import { RegisterPaymentModal } from "@/features/treasury/components/RegisterPaymentModal";
 import { useBankAccounts } from "@/features/treasury/hooks/useBankAccounts";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
 
-import {
-  getInvoiceStatusInfo,
-  getClasificacionLabel,
-  getClasificacionColor,
-} from "@/lib/utils";
+import { getInvoiceStatusInfo } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 const isValidDate = (d: Date) => !Number.isNaN(d.getTime());
@@ -104,16 +134,30 @@ export default function Payables() {
     indirectCategories,
   } = useSuppliers();
 
-  const { bankAccounts, isLoading: isLoadingBankAccounts } = useBankAccounts();
+  const {
+    bankAccounts,
+    isLoading: isLoadingBankAccounts,
+    refresh: refreshBankAccounts,
+  } = useBankAccounts();
 
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDeleteInvoiceOpen, setIsDeleteInvoiceOpen] = useState(false);
   const [isManageCatOpen, setIsManageCatOpen] = useState(false);
-
-  // Estado para el modal de Carga Masiva SAT
   const [isXmlModalOpen, setIsXmlModalOpen] = useState(false);
+  const [isAgingModalOpen, setIsAgingModalOpen] = useState(false);
+  const [isAccountStatementOpen, setIsAccountStatementOpen] = useState(false);
+
+  // ESTADOS PARA CANCELAR Y REABRIR
+  const [isCancelInvoiceOpen, setIsCancelInvoiceOpen] = useState(false);
+  const [isReopenInvoiceOpen, setIsReopenInvoiceOpen] = useState(false);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<PayableInvoice | null>(
+    null,
+  );
+  const [invoiceToReopen, setInvoiceToReopen] = useState<PayableInvoice | null>(
+    null,
+  );
 
   const [invoiceToDelete, setInvoiceToDelete] = useState<PayableInvoice | null>(
     null,
@@ -125,6 +169,20 @@ export default function Payables() {
     null,
   );
   const [prefillData, setPrefillData] = useState<LocalPrefillData | null>(null);
+
+  // ==========================================
+  // ESTADOS PARA LOS FILTROS Y SELECCIÓN
+  // ==========================================
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [cecoFilter, setCecoFilter] = useState("all");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [openSupplierCombo, setOpenSupplierCombo] = useState(false);
+
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<number[]>([]);
 
   useEffect(() => {
     const fromPurchases = searchParams.get("fromPurchases");
@@ -156,36 +214,138 @@ export default function Payables() {
       document.removeEventListener("open-manage-categories", handleOpen);
   }, []);
 
-  // 🚀 FIX FASE 3: Al terminar la carga masiva, solo cerramos y recargamos la tabla.
   const handleBulkUploadSuccess = () => {
     setIsXmlModalOpen(false);
     refreshInvoices?.();
   };
 
-  // 1. FORMATEO DE DATOS DE FACTURAS
+  // ==========================================
+  // NORMALIZACIÓN DE DATOS Y CÁLCULO DE ESTATUS
+  // ==========================================
   const normalizedInvoices = useMemo(() => {
     const dataArray = Array.isArray(invoices)
       ? invoices
-      : (invoices as any).items ||
-        (invoices as any).data ||
-        (invoices as any).results ||
+      : (invoices as any)?.items ||
+        (invoices as any)?.data ||
+        (invoices as any)?.results ||
         [];
 
-    return dataArray.map((inv: any) => ({
-      ...inv,
-      supplier_razon_social:
-        inv.supplier_razon_social ||
-        inv.supplier?.razon_social ||
-        inv.proveedor ||
-        "Desconocido",
-      saldo_pendiente: inv.saldo_pendiente || 0,
-      monto_total: inv.monto_total || 0,
-    })) as PayableInvoice[];
+    return dataArray.map((inv: any) => {
+      const saldo = inv.saldo_pendiente || 0;
+      const monto = inv.monto_total || 0;
+      let finalEstatus = "";
+
+      if (String(inv.estatus || inv.status).toLowerCase() === "cancelado") {
+        finalEstatus = "CANCELADO";
+      } else {
+        const statusInfoCalculated = getInvoiceStatusInfo({
+          ...inv,
+          saldo_pendiente: saldo,
+          monto_total: monto,
+          fecha_vencimiento: inv.fecha_vencimiento,
+        } as any);
+        finalEstatus = statusInfoCalculated.label;
+      }
+
+      return {
+        ...inv,
+        supplier_razon_social:
+          inv.supplier_razon_social ||
+          inv.supplier?.razon_social ||
+          inv.proveedor ||
+          "Desconocido",
+        supplier_id: inv.supplier_id || inv.supplier?.id || null,
+        saldo_pendiente: saldo,
+        monto_total: monto,
+        estatus: finalEstatus,
+      };
+    }) as PayableInvoice[];
   }, [invoices]);
 
-  // 2. FORMATEO DE DATOS DE PAGOS
+  const uniqueCecos = useMemo(() => {
+    const cecosMap = new Map();
+    normalizedInvoices.forEach((inv: any) => {
+      if (inv.cost_center) {
+        cecosMap.set(inv.cost_center.id, inv.cost_center.nombre);
+      }
+    });
+    return Array.from(cecosMap.entries()).map(([id, nombre]) => ({
+      id: String(id),
+      nombre,
+    }));
+  }, [normalizedInvoices]);
+
+  // ==========================================
+  // MOTOR DE FILTRADO
+  // ==========================================
+  const filteredInvoices = useMemo(() => {
+    return normalizedInvoices.filter((inv: any) => {
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch =
+        !searchTerm ||
+        inv.folio_interno?.toLowerCase().includes(searchLower) ||
+        inv.supplier_razon_social?.toLowerCase().includes(searchLower) ||
+        inv.uuid?.toLowerCase().includes(searchLower) ||
+        inv.concepto?.toLowerCase().includes(searchLower);
+
+      // FILTRO POR ESTATUS
+      let matchesStatus = true;
+      if (statusFilter !== "all") {
+        matchesStatus =
+          String(inv.estatus).toUpperCase() === statusFilter.toUpperCase();
+      }
+
+      const matchesCeco =
+        cecoFilter === "all" || String(inv.cost_center_id) === cecoFilter;
+
+      const matchesSupplier =
+        supplierFilter === "all" || String(inv.supplier_id) === supplierFilter;
+
+      // Filtro de Fechas
+      let matchesDate = true;
+      if (startDate || endDate) {
+        if (!inv.fecha_vencimiento) {
+          matchesDate = false;
+        } else {
+          const vencimiento = inv.fecha_vencimiento.includes("T")
+            ? inv.fecha_vencimiento.split("T")[0]
+            : inv.fecha_vencimiento;
+
+          if (startDate && vencimiento < startDate) matchesDate = false;
+          if (endDate && vencimiento > endDate) matchesDate = false;
+        }
+      }
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesCeco &&
+        matchesSupplier &&
+        matchesDate
+      );
+    });
+  }, [
+    normalizedInvoices,
+    searchTerm,
+    statusFilter,
+    cecoFilter,
+    supplierFilter,
+    startDate,
+    endDate,
+  ]);
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setCecoFilter("all");
+    setSupplierFilter("all");
+    setStartDate("");
+    setEndDate("");
+    setSelectedInvoiceIds([]);
+  };
+
   const allPayments = useMemo(() => {
-    const rows = normalizedInvoices.flatMap((inv) => {
+    const rows = filteredInvoices.flatMap((inv: any) => {
       const supplierName = inv.supplier_razon_social || "";
       const folioFactura =
         inv.folio_interno ||
@@ -210,30 +370,92 @@ export default function Payables() {
       const db = parseDateSafe(b.fecha_pago)?.getTime() ?? 0;
       return db - da;
     });
-  }, [normalizedInvoices]);
+  }, [filteredInvoices]);
 
+  // 🔥 1. TABLA PRINCIPAL: Muestra TODO el historial (Pagadas, Canceladas, Pendientes)
+  // EXCEPTO las Notas de Crédito / Egresos
+  const facturasTablaPrincipal = useMemo(() => {
+    return filteredInvoices.filter(
+      (inv: any) => !(inv.saldo_pendiente < 0 || inv.tipo_comprobante === "E"),
+    );
+  }, [filteredInvoices]);
+
+  // 🔥 2. NOTAS DE CRÉDITO: Se van a su propia pestaña
+  const notasDeCredito = useMemo(() => {
+    return filteredInvoices.filter(
+      (inv: any) => inv.saldo_pendiente < 0 || inv.tipo_comprobante === "E",
+    );
+  }, [filteredInvoices]);
+
+  // 🔥 3. KPIS (TARJETAS): Solo calculan matemáticas sobre facturas con saldo > 0
   const kpis = useMemo(() => {
-    const totalVencido = normalizedInvoices
-      .filter((inv) => getInvoiceStatusInfo(inv).status === "danger")
-      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+    // Filtro interno solo para que la matemática sea exacta y no sume pagadas/canceladas
+    const facturasConDeuda = facturasTablaPrincipal.filter(
+      (inv: any) => inv.saldo_pendiente > 0,
+    );
 
-    const totalPorPagar = normalizedInvoices
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const en7Dias = new Date(hoy);
+    en7Dias.setDate(hoy.getDate() + 7);
+
+    const totalVencido = facturasConDeuda
       .filter((inv) => {
-        const s = getInvoiceStatusInfo(inv).status;
-        return s === "warning" || s === "default";
+        const fechaVencimiento = new Date(inv.fecha_vencimiento);
+        return (
+          fechaVencimiento < hoy &&
+          inv.estatus !== "PAGADA" &&
+          inv.estatus !== "CANCELADO"
+        );
       })
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const totalParcial = normalizedInvoices
-      .filter((inv) => getInvoiceStatusInfo(inv).status === "info")
+    const totalPorPagar = facturasConDeuda
+      .filter((inv) => inv.estatus !== "PAGADA" && inv.estatus !== "CANCELADO")
       .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    const fromPurchasesCount = normalizedInvoices.filter(
-      (inv) => !!inv.orden_compra_id,
-    ).length;
+    const totalParcial = facturasConDeuda
+      .filter(
+        (inv) =>
+          inv.estatus === "PAGO PARCIAL" ||
+          inv.estatus === "PAGO PARCIAL (+90d)",
+      )
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
 
-    return { totalVencido, totalPorPagar, totalParcial, fromPurchasesCount };
-  }, [normalizedInvoices]);
+    const compromisos7Dias = facturasConDeuda
+      .filter((inv) => {
+        if (inv.estatus === "PAGADA" || inv.estatus === "CANCELADO")
+          return false;
+        const fechaVencimiento = new Date(inv.fecha_vencimiento);
+        return fechaVencimiento >= hoy && fechaVencimiento <= en7Dias;
+      })
+      .reduce((sum, inv) => sum + (inv.saldo_pendiente || 0), 0);
+
+    // TOTAL DE SALDOS A FAVOR (Convirtiendo a positivo para la vista)
+    const totalAFavor = notasDeCredito.reduce(
+      (sum, inv) => sum + Math.abs(inv.saldo_pendiente || 0),
+      0,
+    );
+
+    return {
+      totalVencido,
+      totalPorPagar,
+      totalParcial,
+      compromisos7Dias,
+      totalAFavor,
+    };
+  }, [facturasTablaPrincipal, notasDeCredito]);
+
+  const selectedTotalAmount = useMemo(() => {
+    const selectedInvoicesData = filteredInvoices.filter((inv) =>
+      selectedInvoiceIds.includes(inv.id),
+    );
+    return selectedInvoicesData.reduce(
+      (sum, inv) => sum + (inv.saldo_pendiente || 0),
+      0,
+    );
+  }, [filteredInvoices, selectedInvoiceIds]);
 
   const handleCreateInvoice = async (invoiceData: Partial<PayableInvoice>) => {
     const payloadConDefaults = {
@@ -267,6 +489,32 @@ export default function Payables() {
     }
   };
 
+  const handleConfirmCancelInvoice = async () => {
+    if (!invoiceToCancel) return;
+    const ok = await updateInvoice(invoiceToCancel.id, {
+      estatus: "cancelado",
+    });
+    if (ok) {
+      setIsCancelInvoiceOpen(false);
+      setInvoiceToCancel(null);
+      toast.success("Factura cancelada correctamente.");
+      await refreshInvoices?.();
+    }
+  };
+
+  const handleConfirmReopenInvoice = async () => {
+    if (!invoiceToReopen) return;
+    const ok = await updateInvoice(invoiceToReopen.id, {
+      estatus: "pendiente",
+    });
+    if (ok) {
+      setIsReopenInvoiceOpen(false);
+      setInvoiceToReopen(null);
+      toast.success("Factura reabierta exitosamente.");
+      await refreshInvoices?.();
+    }
+  };
+
   const handleConfirmDeleteInvoice = async () => {
     if (!invoiceToDelete) return;
     const ok = await deleteInvoice(invoiceToDelete.id);
@@ -282,7 +530,8 @@ export default function Payables() {
     if (ok) {
       setIsPaymentModalOpen(false);
       setSelectedInvoice(null);
-      await refreshInvoices?.();
+      setSelectedInvoiceIds((prev) => prev.filter((id) => id !== invoiceId));
+      await Promise.all([refreshInvoices?.(), refreshBankAccounts?.()]);
     }
   };
 
@@ -294,9 +543,39 @@ export default function Payables() {
     }).format(amount || 0);
   };
 
-  // 3. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (FACTURAS)
+  // ==========================================
+  // COLUMNAS
+  // ==========================================
   const payablesColumns: ColumnDef<PayableInvoice>[] = useMemo(
     () => [
+      {
+        key: "select",
+        header: "Sel.",
+        sortable: false,
+        render: (_, row) => {
+          const isDisabled =
+            row.estatus === "PAGADA" || row.estatus === "CANCELADO";
+          return (
+            <div className="flex justify-center items-center h-full">
+              <Checkbox
+                checked={selectedInvoiceIds.includes(row.id)}
+                disabled={isDisabled}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setSelectedInvoiceIds((prev) => [...prev, row.id]);
+                  } else {
+                    setSelectedInvoiceIds((prev) =>
+                      prev.filter((id) => id !== row.id),
+                    );
+                  }
+                }}
+                aria-label={`Seleccionar factura ${row.folio_interno || row.id}`}
+                className={cn(isDisabled && "opacity-50")}
+              />
+            </div>
+          );
+        },
+      },
       {
         key: "folio_interno",
         header: "Folio / ID",
@@ -310,51 +589,64 @@ export default function Payables() {
         key: "supplier_razon_social",
         header: "Proveedor",
         render: (value) => (
-          <span className="font-black text-brand-navy dark:text-white uppercase tracking-tight">
+          <span
+            className="font-black text-brand-navy dark:text-white uppercase tracking-tight block max-w-[200px] truncate"
+            title={value}
+          >
             {value || "—"}
           </span>
         ),
       },
       {
-        key: "clasificacion",
-        header: "Clasificación",
-        render: (value) => {
-          if (!value)
-            return <span className="text-[10px] text-muted-foreground">—</span>;
-          return (
-            <Badge className={getClasificacionColor(value)}>
-              {getClasificacionLabel(value)}
-            </Badge>
-          );
-        },
+        key: "cost_center",
+        header: "Centro de Costos",
+        render: (_, row) =>
+          row.cost_center ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 uppercase tracking-widest whitespace-nowrap">
+              <Briefcase className="h-3 w-3" />
+              {row.cost_center.codigo || row.cost_center.nombre}
+            </span>
+          ) : (
+            <span className="text-[10px] font-medium italic text-slate-400 uppercase tracking-widest">
+              Sin Asignar
+            </span>
+          ),
       },
       {
         key: "concepto",
         header: "Concepto",
         render: (value) => (
-          <span className="max-w-[200px] truncate text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block">
+          <span
+            className="max-w-[200px] truncate text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 block"
+            title={value}
+          >
             {value}
           </span>
         ),
       },
       {
         key: "fecha_vencimiento",
-        header: "Vencimiento",
+        header: "Vencimiento / Crédito",
         type: "date",
         render: (value, row) => {
-          const statusInfo = getInvoiceStatusInfo(row);
-          const isOverdue =
-            statusInfo.status === "danger" && (row.saldo_pendiente || 0) > 0;
+          const isVencida =
+            new Date(value as string) < new Date() &&
+            row.estatus !== "PAGADA" &&
+            row.estatus !== "CANCELADO";
+          const diasCredito =
+            row.supplier?.dias_credito || (row as any).dias_credito || 0;
+
           return (
-            <span
-              className={
-                isOverdue
-                  ? "text-red-600 font-bold"
-                  : "text-slate-600 dark:text-slate-300 font-medium text-xs"
-              }
-            >
-              {value || "—"}
-            </span>
+            <div className="flex flex-col">
+              <span
+                className={`text-xs font-black ${isVencida ? "text-brand-red dark:text-red-500" : "text-slate-600 dark:text-slate-300"}`}
+              >
+                {value ? format(new Date(value as string), "dd/MMM/yyyy") : "—"}
+              </span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5 font-bold">
+                {diasCredito > 0 ? `${diasCredito} Días` : "Contado"}
+              </span>
+            </div>
           );
         },
       },
@@ -373,17 +665,16 @@ export default function Payables() {
         header: "Saldo",
         type: "number",
         render: (value, row) => {
-          const statusInfo = getInvoiceStatusInfo(row);
-          const isOverdue =
-            statusInfo.status === "danger" && (row.saldo_pendiente || 0) > 0;
+          const isNotaCredito =
+            row.tipo_comprobante === "E" || (value as number) < 0;
           return (
             <span
               className={`font-mono text-sm font-black ${
-                value === 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : isOverdue
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-amber-600 dark:text-amber-400"
+                isNotaCredito
+                  ? "text-blue-600 dark:text-blue-500"
+                  : (value as number) > 0
+                    ? "text-amber-600 dark:text-amber-500"
+                    : "text-emerald-600 dark:text-emerald-500"
               }`}
             >
               {formatMoney(value)}
@@ -394,13 +685,14 @@ export default function Payables() {
       {
         key: "estatus",
         header: "Estatus",
-        type: "status",
-        statusOptions: ["pendiente", "pago_parcial", "pagado", "cancelado"],
-        render: (_, row) => {
+        render: (value, row) => {
           const statusInfo = getInvoiceStatusInfo(row);
           return (
-            <StatusBadge status={statusInfo.status}>
-              {statusInfo.label}
+            <StatusBadge
+              status={statusInfo.status}
+              className="uppercase font-bold text-[10px] tracking-wider px-2 py-1"
+            >
+              {value} {/* Muestra la etiqueta oficial */}
             </StatusBadge>
           );
         },
@@ -445,22 +737,51 @@ export default function Payables() {
                   <Edit className="h-4 w-4 mr-2 text-brand-green" /> Editar
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="dark:bg-white/10" />
+
                 <DropdownMenuItem
                   onClick={() => {
                     setSelectedInvoice(row);
                     setIsPaymentModalOpen(true);
                   }}
-                  disabled={row.saldo_pendiente === 0}
+                  disabled={
+                    row.estatus === "CANCELADO" || row.estatus === "PAGADA"
+                  }
                   className={cn(
                     "gap-2 font-bold text-xs uppercase tracking-tight cursor-pointer",
-                    row.saldo_pendiente > 0
+                    row.estatus !== "CANCELADO" && row.estatus !== "PAGADA"
                       ? "text-amber-600 focus:text-amber-700 focus:bg-amber-50 dark:focus:bg-amber-900/30"
                       : "opacity-50",
                   )}
                 >
                   <CreditCard className="h-4 w-4 mr-2" /> Registrar Pago
                 </DropdownMenuItem>
+
+                {row.estatus !== "PAGADA" && row.estatus !== "CANCELADO" && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setInvoiceToCancel(row);
+                      setIsCancelInvoiceOpen(true);
+                    }}
+                    className="gap-2 font-bold text-xs uppercase tracking-tight text-orange-600 cursor-pointer dark:focus:bg-orange-950/30"
+                  >
+                    <Ban className="h-4 w-4 mr-2" /> Cancelar Factura
+                  </DropdownMenuItem>
+                )}
+
+                {row.estatus === "CANCELADO" && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setInvoiceToReopen(row);
+                      setIsReopenInvoiceOpen(true);
+                    }}
+                    className="gap-2 font-bold text-xs uppercase tracking-tight text-emerald-600 cursor-pointer dark:focus:bg-emerald-950/30"
+                  >
+                    <RefreshCcw className="h-4 w-4 mr-2" /> Reabrir Factura
+                  </DropdownMenuItem>
+                )}
+
                 <DropdownMenuSeparator className="dark:bg-white/10" />
+
                 <DropdownMenuItem
                   onClick={() => {
                     setInvoiceToDelete(row);
@@ -476,10 +797,9 @@ export default function Payables() {
         ),
       },
     ],
-    [],
+    [selectedInvoiceIds],
   );
 
-  // 4. DEFINICIÓN DE COLUMNAS PARA TABLA INTELIGENTE (PAGOS)
   const paymentsColumns: ColumnDef<any>[] = useMemo(
     () => [
       {
@@ -572,13 +892,12 @@ export default function Payables() {
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
       <PageHeader
         title="Cuentas por Pagar & Gastos"
-        description="Gestión centralizada de facturas de proveedores y control de pagos."
+        description="Gestión centralizada de facturas, control de pagos y filtros operativos."
         icon={
           <CreditCard className="h-8 w-8 text-brand-navy dark:text-white" />
         }
       >
         <div className="flex flex-wrap items-center gap-3">
-          {/* BOTÓN PARA ABRIR MODAL DE CARGA MASIVA */}
           <Button
             variant="outline"
             className="border-indigo-500 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 font-black tracking-wide shadow-sm haptic-press transition-all"
@@ -586,6 +905,24 @@ export default function Payables() {
           >
             <FileCode2 className="h-4 w-4 mr-2 text-indigo-600" /> Leer Reporte
             SAT
+          </Button>
+
+          <Button
+            onClick={() => setIsAgingModalOpen(true)}
+            variant="outline"
+            className="bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 font-bold transition-all shadow-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            Exportar consolidado
+          </Button>
+          <Button
+            variant="outline"
+            className="bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10 text-brand-navy dark:text-slate-200 font-bold shadow-sm"
+            disabled={supplierFilter === "all" || filteredInvoices.length === 0}
+            onClick={() => setIsAccountStatementOpen(true)}
+          >
+            <FileText className="h-4 w-4 mr-2 text-indigo-500" />
+            Estado de Cuenta
           </Button>
 
           <ActionButton
@@ -601,6 +938,305 @@ export default function Payables() {
           </ActionButton>
         </div>
       </PageHeader>
+
+      {/* ==========================================
+          BARRA DE FILTROS SUPERIOR
+          ========================================== */}
+      <div className="bg-white dark:bg-slate-900/60 backdrop-blur-xl p-5 rounded-2xl border border-slate-200/60 dark:border-white/10 shadow-sm flex flex-col gap-5 relative z-10 transition-all">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/5">
+          <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+            <Filter className="h-4 w-4 text-brand-blue" />
+            <h3 className="font-black text-xs uppercase tracking-widest text-slate-600 dark:text-slate-300">
+              Filtros de Búsqueda
+            </h3>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-8 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 dark:hover:text-red-400 flex items-center gap-2 font-bold text-[10px] uppercase tracking-widest transition-colors rounded-lg"
+          >
+            <FilterX className="h-3 w-3" /> Limpiar todo
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="relative group col-span-1 md:col-span-2 xl:col-span-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-brand-blue transition-colors" />
+            <Input
+              placeholder="Buscar folio, UUID o concepto..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus-visible:ring-brand-blue/30 focus-visible:bg-white dark:focus-visible:bg-slate-900 transition-all rounded-xl"
+            />
+          </div>
+
+          <div className="col-span-1">
+            <Popover
+              open={openSupplierCombo}
+              onOpenChange={setOpenSupplierCombo}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={openSupplierCombo}
+                  className="h-10 justify-between bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-900 w-full font-medium overflow-hidden rounded-xl transition-all"
+                >
+                  <span className="truncate text-slate-600 dark:text-slate-300 text-sm">
+                    {supplierFilter === "all"
+                      ? "Todos los Proveedores"
+                      : suppliers?.find(
+                          (s: any) => String(s.id) === supplierFilter,
+                        )?.razon_social || "Proveedor"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0 max-h-[300px] overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-xl z-50">
+                <Command>
+                  <CommandInput
+                    placeholder="Buscar proveedor..."
+                    className="h-10 text-sm"
+                  />
+                  <CommandEmpty className="p-4 text-sm text-center text-slate-500">
+                    No se encontró el proveedor.
+                  </CommandEmpty>
+                  <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                    <CommandItem
+                      onSelect={() => {
+                        setSupplierFilter("all");
+                        setOpenSupplierCombo(false);
+                      }}
+                      className="cursor-pointer font-bold text-xs uppercase tracking-tight"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 text-brand-blue",
+                          supplierFilter === "all"
+                            ? "opacity-100"
+                            : "opacity-0",
+                        )}
+                      />
+                      Todos los Proveedores
+                    </CommandItem>
+                    {suppliers?.map((s: any) => (
+                      <CommandItem
+                        key={s.id}
+                        value={s.razon_social}
+                        onSelect={() => {
+                          setSupplierFilter(String(s.id));
+                          setOpenSupplierCombo(false);
+                        }}
+                        className="cursor-pointer text-xs uppercase tracking-tight"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4 text-brand-blue",
+                            supplierFilter === String(s.id)
+                              ? "opacity-100"
+                              : "opacity-0",
+                          )}
+                        />
+                        {s.razon_social}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="col-span-1">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus:ring-brand-blue/30 rounded-xl text-slate-600 dark:text-slate-300 font-medium">
+                <SelectValue placeholder="Filtrar por Estatus" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-xl border-slate-200 dark:border-white/10">
+                <SelectItem value="all" className="font-bold text-xs uppercase">
+                  Todos los Estatus
+                </SelectItem>
+                <SelectItem
+                  value="POR COBRAR"
+                  className="text-xs uppercase text-amber-600 font-bold"
+                >
+                  Por Pagar
+                </SelectItem>
+                <SelectItem
+                  value="PAGO PARCIAL"
+                  className="text-xs uppercase text-blue-600 font-bold"
+                >
+                  Pago Parcial
+                </SelectItem>
+                <SelectItem
+                  value="VENCIDA 1-30D"
+                  className="text-xs uppercase text-rose-500 font-bold"
+                >
+                  Vencida 1-30d
+                </SelectItem>
+                <SelectItem
+                  value="VENCIDA 31-60D"
+                  className="text-xs uppercase text-rose-600 font-bold"
+                >
+                  Vencida 31-60d
+                </SelectItem>
+                <SelectItem
+                  value="ATRASADO +90D"
+                  className="text-xs uppercase text-rose-700 font-bold"
+                >
+                  Atrasado +90d
+                </SelectItem>
+                <SelectItem
+                  value="PAGADA"
+                  className="text-xs uppercase text-emerald-600 font-bold"
+                >
+                  Pagada
+                </SelectItem>
+                <SelectItem
+                  value="CANCELADO"
+                  className="text-xs uppercase text-slate-500"
+                >
+                  Cancelado
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="col-span-1">
+            <Select value={cecoFilter} onValueChange={setCecoFilter}>
+              <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-white/10 focus:ring-brand-blue/30 rounded-xl text-slate-600 dark:text-slate-300 font-medium">
+                <SelectValue placeholder="Centro de Costos (CECO)" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl shadow-xl border-slate-200 dark:border-white/10">
+                <SelectItem value="all" className="font-bold text-xs uppercase">
+                  Todos los CECOs
+                </SelectItem>
+                {uniqueCecos.map((c) => (
+                  <SelectItem
+                    key={c.id}
+                    value={c.id}
+                    className="text-xs uppercase"
+                  >
+                    {c.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="col-span-1 md:col-span-2 xl:col-span-4 mt-1">
+            <div className="flex items-center bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl px-3 h-11 shadow-inner focus-within:ring-2 focus-within:ring-brand-blue/20 transition-all w-full max-w-2xl group">
+              <Calendar className="h-4 w-4 text-slate-400 group-focus-within:text-brand-blue transition-colors mr-3 shrink-0" />
+
+              <div className="flex items-center flex-1">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">
+                  De
+                </span>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="h-8 flex-1 text-sm border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300 font-medium"
+                />
+              </div>
+
+              <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 mx-4"></div>
+
+              <div className="flex items-center flex-1">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mr-2">
+                  Hasta
+                </span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-8 flex-1 text-sm border-none bg-transparent p-0 focus-visible:ring-0 shadow-none text-slate-700 dark:text-slate-300 font-medium"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ==========================================
+          PROYECCIÓN DINÁMICA DE PROVEEDOR
+          ========================================== */}
+      {supplierFilter !== "all" && (
+        <div className="p-5 bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/50 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in zoom-in-95 duration-300 shadow-sm">
+          <div className="flex items-start md:items-center gap-4">
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl text-indigo-600 dark:text-indigo-400 shrink-0">
+              <Briefcase className="h-6 w-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 uppercase tracking-widest mb-1">
+                Proyección de Pago al Proveedor
+              </h4>
+              <p className="text-xs text-indigo-700 dark:text-indigo-400/80 font-medium leading-relaxed max-w-2xl">
+                Si decides liquidar a este proveedor hoy, el total vencido
+                actual es de{" "}
+                <b className="font-black text-indigo-800 dark:text-indigo-200">
+                  {formatMoney(kpis.totalVencido)}
+                </b>{" "}
+                y en los próximos 7 días vencerán{" "}
+                <b className="font-black text-indigo-800 dark:text-indigo-200">
+                  {formatMoney(kpis.compromisos7Dias)}
+                </b>{" "}
+                adicionales.
+              </p>
+            </div>
+          </div>
+          <div className="md:text-right border-t md:border-t-0 md:border-l border-indigo-200 dark:border-indigo-800/50 pt-4 md:pt-0 md:pl-6 shrink-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-1">
+              Total a Pagar a proveedor seleccionado
+            </p>
+            <p className="text-2xl lg:text-3xl font-black text-indigo-700 dark:text-indigo-400 leading-none">
+              {formatMoney(kpis.totalVencido + kpis.compromisos7Dias)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          BANNER DE FACTURAS SELECCIONADAS
+          ========================================== */}
+      {selectedInvoiceIds.length > 0 && (
+        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in slide-in-from-bottom-4 duration-300 shadow-lg relative z-20">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
+              <CheckSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-widest">
+                Facturas Seleccionadas ({selectedInvoiceIds.length})
+              </h4>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400/80 font-medium">
+                Has palomeado {selectedInvoiceIds.length} documento
+                {selectedInvoiceIds.length > 1 ? "s" : ""} para analizar o
+                liquidar.
+              </p>
+            </div>
+          </div>
+          <div className="md:text-right border-t md:border-t-0 md:border-l border-emerald-200 dark:border-emerald-800/50 pt-3 md:pt-0 md:pl-5 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">
+                Monto Total Seleccionado
+              </p>
+              <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400 leading-none">
+                {formatMoney(selectedTotalAmount)}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedInvoiceIds([])}
+              className="text-emerald-700 border-emerald-300 hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-900"
+            >
+              Desmarcar Todo
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="cuentas" className="w-full space-y-6">
         <div className="w-full overflow-x-auto hide-scrollbar pb-2 sm:pb-0">
@@ -620,16 +1256,23 @@ export default function Payables() {
               <Receipt className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Pagos Emitidos
             </TabsTrigger>
+
+            {/* NUEVO TAB DE SALDOS */}
+            <TabsTrigger
+              value="saldos"
+              className="gap-2 text-[11px] font-black uppercase tracking-widest rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-brand-navy dark:data-[state=active]:text-white data-[state=active]:shadow-sm h-full px-6 transition-all"
+            >
+              <CreditCard className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Saldos a Favor
+            </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* TAB 1: CUENTAS POR PAGAR */}
         <TabsContent
           value="cuentas"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
         >
-          {/* KPI CARDS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             <Card
               className={cn(
                 "p-6 flex items-center gap-5 group transition-all cursor-default relative overflow-hidden",
@@ -644,7 +1287,7 @@ export default function Payables() {
                   Total Vencido
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-rose-600 dark:text-rose-400">
-                  ${kpis.totalVencido.toLocaleString("es-MX")}
+                  {formatMoney(kpis.totalVencido)}
                 </p>
               </div>
             </Card>
@@ -658,7 +1301,7 @@ export default function Payables() {
                   Por Pagar (Vigente)
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-amber-600 dark:text-amber-400">
-                  ${kpis.totalPorPagar.toLocaleString("es-MX")}
+                  {formatMoney(kpis.totalPorPagar)}
                 </p>
               </div>
             </Card>
@@ -672,30 +1315,48 @@ export default function Payables() {
                   Pagos Parciales
                 </p>
                 <p className="text-2xl font-black leading-none tracking-tighter text-blue-600 dark:text-blue-400">
-                  ${kpis.totalParcial.toLocaleString("es-MX")}
+                  {formatMoney(kpis.totalParcial)}
                 </p>
               </div>
             </Card>
 
-            <Card className="p-6 flex items-center gap-5 group hover:border-slate-300 dark:hover:border-white/20 transition-all cursor-default">
-              <div className="p-3.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out">
-                <Package className="h-6 w-6 text-brand-navy dark:text-slate-300" />
+            <Card className="p-6 flex items-center gap-5 group hover:border-indigo-300 dark:hover:border-indigo-500/50 transition-all cursor-default relative overflow-hidden">
+              <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-indigo-600 dark:text-indigo-400">
+                <Clock className="h-6 w-6" />
               </div>
-              <div className="flex flex-col justify-center">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-                  Desde Purchases
+              <div className="flex flex-col justify-center relative z-10">
+                <p
+                  className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1"
+                  title="Flujo de efectivo requerido para facturas que vencen en los próximos 7 días"
+                >
+                  A Vencer (7 Días)
                 </p>
-                <p className="text-3xl font-black text-brand-navy dark:text-white leading-none tracking-tighter">
-                  {kpis.fromPurchasesCount}
+                <p className="text-2xl font-black leading-none tracking-tighter text-indigo-600 dark:text-indigo-400">
+                  {formatMoney(kpis.compromisos7Dias)}
                 </p>
               </div>
             </Card>
+
+            {/* AGREGA ESTA NUEVA CARD AL FINAL DEL GRID */}
+            {/*        <Card className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default relative overflow-hidden">
+              <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 shadow-inner group-hover:scale-110 transition-transform duration-500 ease-out relative z-10 text-emerald-600 dark:text-emerald-400">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div className="flex flex-col justify-center relative z-10">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
+                  Saldos a Favor
+                </p>
+                <p className="text-2xl font-black leading-none tracking-tighter text-emerald-600 dark:text-emerald-400">
+                  {formatMoney(kpis.totalAFavor)}
+                </p>
+              </div>
+            </Card> */}
           </div>
 
           <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
             <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
               <EnhancedDataTable
-                data={normalizedInvoices}
+                data={facturasTablaPrincipal}
                 columns={payablesColumns}
                 exportFileName="cuentas_por_pagar"
               />
@@ -703,7 +1364,6 @@ export default function Payables() {
           </Card>
         </TabsContent>
 
-        {/* TAB 2: PAGOS Y COMPLEMENTOS */}
         <TabsContent
           value="pagos"
           className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
@@ -718,11 +1378,24 @@ export default function Payables() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* NUEVO TAB CONTENT PARA SALDOS A FAVOR */}
+        <TabsContent
+          value="saldos"
+          className="m-0 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 duration-500 space-y-6"
+        >
+          <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
+            <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
+              <EnhancedDataTable
+                data={notasDeCredito}
+                columns={payablesColumns}
+                exportFileName="saldos_a_favor"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
-      {/* MODALES */}
-
-      {/* 🚀 MODAL DE IMPORTACIÓN MASIVA SAT */}
       <ImportXMLExpenseModal
         open={isXmlModalOpen}
         onOpenChange={setIsXmlModalOpen}
@@ -761,7 +1434,6 @@ export default function Payables() {
           onSubmit={handleRegisterPayment}
         />
       )}
-
       <ManageCategoriesModal
         open={isManageCatOpen}
         onOpenChange={setIsManageCatOpen}
@@ -770,6 +1442,206 @@ export default function Payables() {
         onDelete={deleteIndirectCategory}
       />
 
+      {/* AGREGA ESTE BLOQUE COMPLETO */}
+      {(() => {
+        const supplierName =
+          supplierFilter === "all"
+            ? "all"
+            : suppliers?.find((s: any) => String(s.id) === supplierFilter)
+                ?.razon_social || "all";
+        return (
+          <AccountStatementModal
+            open={isAccountStatementOpen}
+            onClose={() => setIsAccountStatementOpen(false)}
+            invoices={filteredInvoices as any}
+            initialClient={supplierName}
+            bankAccounts={bankAccounts}
+            isSupplierMode={true} // <-- Bandera especial para que el modal sepa que está en CxP
+          />
+        );
+      })()}
+      {/* FIN DEL BLOQUE */}
+
+      {/* ================================================== */}
+      {/* NUEVO MODAL: CANCELAR FACTURA */}
+      {/* ================================================== */}
+      <AlertDialog
+        open={isCancelInvoiceOpen}
+        onOpenChange={setIsCancelInvoiceOpen}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 dark:from-orange-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center shadow-inner shrink-0 border border-orange-200 dark:border-orange-500/20">
+                <Ban className="h-7 w-7 sm:h-8 sm:w-8 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-orange-600 dark:text-orange-500 heading-crisp leading-none">
+                  ¿Cancelar Factura?
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Cancelación Lógica • Cuentas por Pagar
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de cancelar la factura con folio{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
+                  {invoiceToCancel?.folio_interno || invoiceToCancel?.id}
+                </b>
+                .
+              </p>
+
+              {invoiceToCancel &&
+              (invoiceToCancel.saldo_pendiente || 0) <
+                (invoiceToCancel.monto_total || 0) ? (
+                <div className="p-5 bg-orange-50 dark:bg-orange-950/20 border-l-4 border-orange-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-orange-800 dark:text-orange-400 uppercase tracking-widest">
+                      BLOQUEO POR AUDITORÍA (TESORERÍA)
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-orange-900 dark:text-orange-200/80 font-bold">
+                    Esta factura no se puede cancelar porque ya tiene abonos o
+                    pagos registrados en los bancos. <br />
+                    <br />
+                    Si necesitas cancelarla,{" "}
+                    <span className="underline">
+                      primero debes ir al módulo de Tesorería y anular el pago
+                    </span>{" "}
+                    para que el dinero regrese a la cuenta.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border-l-4 border-orange-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
+                      Efecto de la Cancelación
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                    La factura cambiará a estatus <b>Cancelado</b> y dejará de
+                    sumar a tu deuda total en las proyecciones. El registro
+                    original <b>se conservará intacto</b> en la base de datos
+                    para fines de auditoría, y podrás reabrirla posteriormente
+                    si es necesario.
+                  </p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setInvoiceToCancel(null)}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cerrar
+              </AlertDialogCancel>
+
+              {(!invoiceToCancel ||
+                (invoiceToCancel.saldo_pendiente || 0) ===
+                  (invoiceToCancel.monto_total || 0)) && (
+                <AlertDialogAction
+                  size="lg"
+                  onClick={handleConfirmCancelInvoice}
+                  className="w-full sm:w-auto haptic-press shadow-orange-600/10 flex-shrink-0 border-none bg-orange-600 hover:bg-orange-700 text-white font-black uppercase tracking-widest text-[10px]"
+                >
+                  Confirmar Cancelación
+                </AlertDialogAction>
+              )}
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ================================================== */}
+      {/* NUEVO MODAL: REABRIR FACTURA */}
+      {/* ================================================== */}
+      <AlertDialog
+        open={isReopenInvoiceOpen}
+        onOpenChange={setIsReopenInvoiceOpen}
+      >
+        <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
+          <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 dark:from-emerald-500/10 to-transparent pointer-events-none" />
+            <div className="relative z-10 flex items-center gap-4 sm:gap-5">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shadow-inner shrink-0 border border-emerald-200 dark:border-emerald-500/20">
+                <RefreshCcw className="h-7 w-7 sm:h-8 sm:w-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="flex flex-col gap-1 text-left">
+                <AlertDialogTitle className="text-2xl font-black uppercase tracking-tighter text-emerald-600 dark:text-emerald-500 heading-crisp leading-none">
+                  ¿Reabrir Factura?
+                </AlertDialogTitle>
+                <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mt-1">
+                  Reactivación • Cuentas por Pagar
+                </p>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
+            <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Estás a punto de reabrir la factura con folio{" "}
+                <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
+                  {invoiceToReopen?.folio_interno || invoiceToReopen?.id}
+                </b>
+                .
+              </p>
+
+              <div className="p-5 bg-slate-100 dark:bg-slate-800/50 border-l-4 border-emerald-500 rounded-r-2xl shadow-sm">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <h4 className="text-[10px] sm:text-[11px] font-black text-slate-800 dark:text-slate-300 uppercase tracking-widest">
+                    Efecto de la Reapertura
+                  </h4>
+                </div>
+                <p className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                  La factura regresará al estatus <b>Pendiente</b> y volverá a
+                  ser calculada en tu deuda total. Su saldo pendiente se
+                  restaurará al monto total de la factura.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </div>
+
+          <AlertDialogFooter className="p-6 sm:p-8 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row sm:flex-wrap justify-end items-stretch sm:items-center gap-3 w-full">
+              <AlertDialogCancel
+                variant="outline"
+                size="lg"
+                onClick={() => setInvoiceToReopen(null)}
+                className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
+              >
+                Cancelar
+              </AlertDialogCancel>
+
+              <AlertDialogAction
+                size="lg"
+                onClick={handleConfirmReopenInvoice}
+                className="w-full sm:w-auto haptic-press shadow-emerald-600/10 flex-shrink-0 border-none bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase tracking-widest text-[10px]"
+              >
+                Sí, Reabrir
+              </AlertDialogAction>
+            </div>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ================================================== */}
+      {/* MODAL ORIGINAL: ELIMINAR FACTURA DEFINITIVAMENTE   */}
+      {/* ================================================== */}
       <AlertDialog
         open={isDeleteInvoiceOpen}
         onOpenChange={setIsDeleteInvoiceOpen}
@@ -795,28 +1667,52 @@ export default function Payables() {
           <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
             <AlertDialogDescription className="text-slate-600 dark:text-slate-300 block space-y-6">
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                Se eliminará la factura con folio interno{" "}
+                Estás intentando eliminar la factura con folio interno{" "}
                 <b className="text-slate-900 dark:text-white text-lg font-black tracking-tight font-mono">
                   {invoiceToDelete?.folio_interno || "—"}
                 </b>
                 .
               </p>
 
-              <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                  <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
-                    Pérdida de Datos
-                  </h4>
+              {invoiceToDelete &&
+              (invoiceToDelete.saldo_pendiente || 0) <
+                (invoiceToDelete.monto_total || 0) ? (
+                <div className="p-5 bg-rose-50 dark:bg-rose-950/20 border-l-4 border-rose-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-rose-800 dark:text-rose-400 uppercase tracking-widest">
+                      BLOQUEO POR AUDITORÍA (TESORERÍA)
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80 font-bold">
+                    Esta factura no se puede eliminar porque ya tiene abonos o
+                    pagos registrados en los bancos. <br />
+                    <br />
+                    Si necesitas corregirla,{" "}
+                    <span className="underline">
+                      primero debes ir al módulo de Tesorería y anular el pago
+                    </span>{" "}
+                    para que el dinero regrese a la cuenta.
+                  </p>
                 </div>
-                <p className="text-xs sm:text-sm leading-relaxed text-rose-900 dark:text-rose-200/80">
-                  Esta acción no se puede deshacer y{" "}
-                  <b className="font-black underline">
-                    borrará los pagos asociados
-                  </b>
-                  .
-                </p>
-              </div>
+              ) : (
+                <div className="p-5 bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500 rounded-r-2xl shadow-sm">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    <h4 className="text-[10px] sm:text-[11px] font-black text-amber-800 dark:text-amber-400 uppercase tracking-widest">
+                      Pérdida de Datos
+                    </h4>
+                  </div>
+                  <p className="text-xs sm:text-sm leading-relaxed text-amber-900 dark:text-amber-200/80">
+                    Esta acción no se puede deshacer y{" "}
+                    <b className="font-black underline">
+                      borrará permanentemente el registro
+                    </b>
+                    . Considera usar la opción "Cancelar Factura" si solo
+                    quieres ocultarla de los reportes.
+                  </p>
+                </div>
+              )}
             </AlertDialogDescription>
           </div>
 
@@ -828,20 +1724,32 @@ export default function Payables() {
                 onClick={() => setInvoiceToDelete(null)}
                 className="w-full sm:w-auto haptic-press flex-shrink-0 font-black uppercase tracking-widest text-[10px]"
               >
-                Cancelar
+                Cerrar
               </AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                size="lg"
-                onClick={handleConfirmDeleteInvoice}
-                className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
-              >
-                Sí, eliminar
-              </AlertDialogAction>
+
+              {(!invoiceToDelete ||
+                (invoiceToDelete.saldo_pendiente || 0) ===
+                  (invoiceToDelete.monto_total || 0)) && (
+                <AlertDialogAction
+                  variant="destructive"
+                  size="lg"
+                  onClick={handleConfirmDeleteInvoice}
+                  className="w-full sm:w-auto haptic-press shadow-rose-600/10 flex-shrink-0 border-none bg-rose-600 hover:bg-rose-700 text-white font-black uppercase tracking-widest text-[10px]"
+                >
+                  Sí, eliminar definitivamente
+                </AlertDialogAction>
+              )}
             </div>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AgingExportModal
+        open={isAgingModalOpen}
+        onOpenChange={setIsAgingModalOpen}
+        type="cxp"
+        invoices={filteredInvoices}
+      />
     </div>
   );
 }

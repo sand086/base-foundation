@@ -467,26 +467,6 @@ export class LogisticsService {
         });
     }
     /**
-     * Reopen Trip Leg
-     * @param legId
-     * @returns any Successful Response
-     * @throws ApiError
-     */
-    public static reopenTripLegApiLogisticsTripsLegsLegIdReopenPost(
-        legId: number,
-    ): CancelablePromise<any> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/logistics/trips/legs/{leg_id}/reopen',
-            path: {
-                'leg_id': legId,
-            },
-            errors: {
-                422: `Validation Error`,
-            },
-        });
-    }
-    /**
      * Generate Carta Porte
      * @param tripId
      * @returns any Successful Response
@@ -686,6 +666,43 @@ export class LogisticsService {
             url: '/api/logistics/trips/{trip_id}/unhook',
             path: {
                 'trip_id': tripId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Sync Distances
+     * Sincroniza masivamente las distancias en carretera de los RateTemplates
+     * utilizando la función helper existente (Nominatim + OSRM).
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static syncDistancesApiLogisticsRateTemplatesSyncDistancesPost(): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/logistics/rate-templates/sync-distances',
+        });
+    }
+    /**
+     * Reopen Trip Leg Endpoint
+     * Reabre un tramo liquidado:
+     * - Borra saldos
+     * - Pasa a 'cerrado'
+     * - Anula la CxC generada (Si no tiene pagos)
+     * @param legId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static reopenTripLegEndpointApiLogisticsTripsLegsLegIdReopenPost(
+        legId: number,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/logistics/trips/legs/{leg_id}/reopen',
+            path: {
+                'leg_id': legId,
             },
             errors: {
                 422: `Validation Error`,

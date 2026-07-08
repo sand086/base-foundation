@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import type { User } from "@/features/users/types";
 import {
-  ROUTE_TO_PERM_KEYS,
+  MODULE_PERMISSIONS,
   pickPermisosInsensitive,
 } from "@/lib/module-permission-keys";
 
@@ -14,10 +14,9 @@ export type PermissionSnapshot = {
   isAdmin: boolean;
 };
 
-function flagsFromPermValue(modulePerms: unknown): Omit<
-  PermissionSnapshot,
-  "isAdmin"
-> {
+function flagsFromPermValue(
+  modulePerms: unknown,
+): Omit<PermissionSnapshot, "isAdmin"> {
   if (typeof modulePerms === "boolean") {
     return {
       canRead: modulePerms,
@@ -30,10 +29,10 @@ function flagsFromPermValue(modulePerms: unknown): Omit<
   if (typeof modulePerms === "object" && modulePerms !== null) {
     const o = modulePerms as Record<string, unknown>;
     return {
-      canRead: !!(o.read || o.ver),
-      canCreate: !!(o.create || o.update || o.editar),
-      canUpdate: !!(o.update || o.editar),
-      canDelete: !!(o.delete || o.eliminar),
+      canRead: !!(o.view || o.read || o.ver),
+      canCreate: !!(o.create || o.crear),
+      canUpdate: !!(o.edit || o.update || o.editar),
+      canDelete: !!(o.delete || o.eliminar || o.cancel),
       canExport: !!(o.export || o.exportar),
     };
   }
@@ -50,17 +49,9 @@ function resolveModulePermBlock(
   permisos: Record<string, unknown>,
   moduleCode: string,
 ): unknown {
-  const keys = ROUTE_TO_PERM_KEYS[moduleCode] ?? [moduleCode];
-  for (const k of keys) {
-    const v = pickPermisosInsensitive(permisos, k);
-    if (v !== undefined) return v;
-  }
-  return undefined;
+  return pickPermisosInsensitive(permisos, moduleCode);
 }
 
-/**
- * Misma lógica que el hook, usable en el filtro del menú sin depender de hooks.
- */
 export function getPermissionSnapshot(
   user: User | null | undefined,
   moduleCode?: string,
@@ -98,12 +89,13 @@ export function getPermissionSnapshot(
   }
 
   if (moduleCode === "admin") {
-    const adminKeys = ROUTE_TO_PERM_KEYS.admin;
+    const adminKeys = ["users", "roles", "settings"];
     let canRead = false;
     let canCreate = false;
     let canUpdate = false;
     let canDelete = false;
     let canExport = false;
+
     for (const k of adminKeys) {
       const raw = pickPermisosInsensitive(permisos, k);
       const f = flagsFromPermValue(raw);
@@ -125,6 +117,7 @@ export function getPermissionSnapshot(
 
   const block = resolveModulePermBlock(permisos, moduleCode);
   const flags = flagsFromPermValue(block);
+
   if (
     flags.canRead ||
     flags.canCreate ||
@@ -147,5 +140,54 @@ export function getPermissionSnapshot(
 
 export const usePermissions = (moduleCode?: string) => {
   const { user } = useAuth();
-  return getPermissionSnapshot(user, moduleCode);
+  const snapshot = getPermissionSnapshot(user, moduleCode);
+
+  const hasPermission = (permissionKey: string): boolean => {
+    if (snapshot.isAdmin) return true;
+
+    const permisos = (user?.role?.permisos || {}) as Record<string, any>;
+
+    if (permisos[permissionKey] === true) return true;
+
+    const parts = permissionKey.split(":");
+    if (parts.length === 2) {
+      const [mod, action] = parts;
+
+      const moduleName =
+        mod === "finance" ? "receivables" : mod === "sat" ? "receivables" : mod;
+
+      // 👇 FIX CRÍTICO: Traductor exacto Backend -> DB
+      const actionName =
+        action === "cancel_invoice"
+          ? "cancel"
+          : action === "create_invoice"
+            ? "create"
+            : action === "stamp_cfdi"
+              ? "create"
+              : action === "reopen_invoice"
+                ? "update"
+                : action === "delete_movement"
+                  ? "delete"
+                  : action;
+
+      const modulePerms = pickPermisosInsensitive(permisos, moduleName) as any;
+      if (modulePerms && typeof modulePerms === "object") {
+        // Mapeo inverso de seguridad: Si pide "cancel" y tiene "delete", lo dejamos pasar
+        if (modulePerms[actionName] === true) return true;
+        if (actionName === "cancel" && modulePerms["delete"] === true)
+          return true;
+      }
+    }
+
+    if (Array.isArray(permisos) && permisos.includes(permissionKey)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  return {
+    ...snapshot,
+    hasPermission,
+  };
 };

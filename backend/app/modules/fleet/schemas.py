@@ -55,7 +55,7 @@ class OperatorBase(ORMBase):
     public_id: Optional[str] = Field(default=None, max_length=50)
     name: str = Field(..., min_length=1, max_length=100)
     license_number: str = Field(..., min_length=1, max_length=50)
-    license_type: str = Field(default="E", max_length=5)
+    license_type_id: Optional[int] = None
     license_expiry: date
     medical_check_expiry: date
     phone: Optional[str] = Field(default=None, max_length=20)
@@ -81,7 +81,7 @@ class OperatorUpdate(ORMBase):
     public_id: Optional[str] = Field(default=None, max_length=50)
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     license_number: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    license_type: Optional[str] = Field(default=None, max_length=5)
+    license_type_id: Optional[int] = None
     license_expiry: Optional[date] = None
     medical_check_expiry: Optional[date] = None
     phone: Optional[str] = Field(default=None, max_length=20)
@@ -134,14 +134,14 @@ class MaintenanceTirePayload(BaseModel):
 
 
 class TireHistoryBase(ORMBase):
-    fecha: datetime
+    fecha: Optional[datetime] = None
     tipo: TireEventType
     descripcion: Optional[str] = Field(default=None, max_length=255)
     unit_id: Optional[int] = None
     unidad_economico: Optional[str] = Field(default=None, max_length=50)
     posicion: Optional[int] = None
-    km: float = 0.0
-    costo: float = 0.0
+    km: Optional[float] = 0.0
+    costo: Optional[float] = 0.0
     responsable: Optional[str] = Field(default=None, max_length=100)
 
 
@@ -187,14 +187,14 @@ class TireBase(ORMBase):
     dot: Optional[str] = Field(default=None, max_length=10)
     unit_id: Optional[int] = None
     posicion: Optional[int] = None
-    estado: TireStatus = TireStatus.NUEVO
-    estado_fisico: TireCondition = TireCondition.BUENA
-    profundidad_actual: float = 0.0
-    profundidad_original: float = 0.0
-    km_recorridos: float = 0.0
+    estado: Optional[TireStatus] = TireStatus.NUEVO
+    estado_fisico: Optional[TireCondition] = TireCondition.BUENA
+    profundidad_actual: Optional[float] = 0.0
+    profundidad_original: Optional[float] = 0.0
+    km_recorridos: Optional[float] = 0.0
     fecha_compra: Optional[date] = None
-    precio_compra: float = 0.0
-    costo_acumulado: float = 0.0
+    precio_compra: Optional[float] = 0.0
+    costo_acumulado: Optional[float] = 0.0
     proveedor: Optional[str] = Field(default=None, max_length=100)
 
 
@@ -231,6 +231,10 @@ class TireResponse(TireBase):
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
+
+    unidad_actual_economico: Optional[str] = None
+    unidad_actual_id: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -279,6 +283,12 @@ class UnitBase(ORMBase):
     caat_url: Optional[str] = Field(default=None, max_length=500)
     tarjeta_circulacion_folio: Optional[str] = Field(default=None, max_length=50)
 
+    # NUEVOS CAMPOS: SEGURO DE MEDIO AMBIENTE
+    aseguradora_med_ambiente_id: Optional[int] = Field(
+        default=None, description="ID del catálogo de aseguradoras (Medio Ambiente)"
+    )
+    poliza_med_ambiente: Optional[str] = Field(default=None, max_length=50)
+
 
 class UnitCreate(UnitBase):
     public_id: Optional[str] = Field(default=None, max_length=50)
@@ -325,6 +335,10 @@ class UnitUpdate(ORMBase):
     permiso_sct_url: Optional[str] = Field(default=None, max_length=500)
     caat_url: Optional[str] = Field(default=None, max_length=500)
     tarjeta_circulacion_folio: Optional[str] = Field(default=None, max_length=50)
+
+    # NUEVOS CAMPOS: SEGURO DE MEDIO AMBIENTE
+    aseguradora_med_ambiente_id: Optional[int] = None
+    poliza_med_ambiente: Optional[str] = Field(default=None, max_length=50)
 
     model_config = ConfigDict(extra="ignore")
 
@@ -373,10 +387,17 @@ class FuelLogBase(BaseModel):
     trip_leg_id: Optional[int] = None
     estacion: str = Field(..., min_length=1, max_length=200)
     tipo_combustible: str
-    litros: float = Field(..., gt=0)
-    precio_por_litro: float = Field(..., gt=0)
-    total: float = Field(..., gt=0)
-    odometro: int = Field(..., ge=0)
+    litros: float = Field(..., ge=0)
+    precio_por_litro: float = Field(..., ge=0)
+    total: float = Field(..., ge=0)
+
+    # --- MODIFICACIONES PARA SOPORTE DE MOTOGENERADORES ---
+    odometro: Optional[int] = Field(default=0, ge=0)
+    is_motogenerator: bool = False
+    horometro: Optional[float] = Field(default=None, ge=0)
+    horas_sm: Optional[float] = Field(default=None, ge=0)
+    # ------------------------------------------------------
+
     model_config = ConfigDict(from_attributes=True)
 
     @field_validator("tipo_combustible")
@@ -400,10 +421,17 @@ class FuelLogUpdate(BaseModel):
     operator_id: Optional[int] = None
     estacion: Optional[str] = Field(default=None, min_length=1, max_length=200)
     tipo_combustible: Optional[str] = None
-    litros: Optional[float] = Field(default=None, gt=0)
-    precio_por_litro: Optional[float] = Field(default=None, gt=0)
-    total: Optional[float] = Field(default=None, gt=0)
+    litros: Optional[float] = Field(default=None, ge=0)
+    precio_por_litro: Optional[float] = Field(default=None, ge=0)
+    total: Optional[float] = Field(default=None, ge=0)
+
+    # --- MODIFICACIONES PARA SOPORTE DE MOTOGENERADORES ---
     odometro: Optional[int] = Field(default=None, ge=0)
+    is_motogenerator: Optional[bool] = None
+    horometro: Optional[float] = Field(default=None, ge=0)
+    horas_sm: Optional[float] = Field(default=None, ge=0)
+    # ------------------------------------------------------
+
     fecha_hora: Optional[datetime] = None
     evidencia_url: Optional[str] = Field(default=None, max_length=500)
     excede_tanque: Optional[bool] = None

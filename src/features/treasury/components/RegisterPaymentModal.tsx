@@ -1,3 +1,5 @@
+// src/features/payables/components/RegisterPaymentModal.tsx
+
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -16,7 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CreditCard, DollarSign, AlertCircle, Check } from "lucide-react";
+import {
+  CreditCard,
+  DollarSign,
+  AlertCircle,
+  Check,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -72,6 +80,7 @@ export function RegisterPaymentModal({
   });
 
   const [error, setError] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const invoiceId = useMemo(() => {
     return invoice ? toInt(invoice.id) : 0;
@@ -93,16 +102,20 @@ export function RegisterPaymentModal({
   useEffect(() => {
     if (!invoice || !open) return;
 
+    // VERIFICAMOS SI EXISTE LA CUENTA BANAMEX (ID 1)
+    const hasBanamex = bankAccounts.some((acc) => acc.id.toString() === "1");
+
     setFormData({
       fecha_pago: today(),
-      monto: saldoPendiente,
+      monto: saldoPendiente > 0 ? saldoPendiente : 0, // Inyecta 0 si es negativo
       metodo_pago: defaultMethod,
-      cuenta_retiro: "",
-      // 👇 AQUÍ ES DONDE JALAMOS EL FOLIO AUTOMÁTICAMENTE
+      // SI EXISTE, LA PONEMOS POR DEFECTO, DE LO CONTRARIO SE QUEDA VACÍO
+      cuenta_retiro: hasBanamex ? "1" : "",
       referencia: invoice.folio_interno || "",
     });
     setError("");
-  }, [invoice, open, saldoPendiente, defaultMethod]);
+    setIsSubmitting(false);
+  }, [invoice, open, saldoPendiente, defaultMethod, bankAccounts]);
 
   if (!invoice) return null;
 
@@ -110,13 +123,19 @@ export function RegisterPaymentModal({
     const errors: string[] = [];
 
     if (!formData.fecha_pago) errors.push("Selecciona la fecha de pago");
-    if (!formData.monto || formData.monto <= 0)
-      errors.push("El monto debe ser mayor a 0");
-    if (formData.monto > saldoPendiente) {
-      errors.push(
-        `El monto no puede exceder el saldo pendiente ($${saldoPendiente.toLocaleString("es-MX")})`,
-      );
+
+    // Si la factura tiene deuda, debe pagar más de 0. Si tiene a favor (negativo) o es 0, permite 0.
+    if (saldoPendiente > 0) {
+      if (formData.monto <= 0) errors.push("El monto debe ser mayor a 0");
+      if (formData.monto > saldoPendiente) {
+        errors.push(
+          `El monto no puede exceder el saldo pendiente ($${saldoPendiente.toLocaleString("es-MX")})`,
+        );
+      }
+    } else {
+      if (formData.monto < 0) errors.push("El monto no puede ser negativo");
     }
+
     if (!formData.cuenta_retiro)
       errors.push("Debes seleccionar una cuenta de retiro o Caja General");
     if (!formData.metodo_pago)
@@ -139,6 +158,7 @@ export function RegisterPaymentModal({
       return;
     }
 
+    setIsSubmitting(true);
     const isVirtualCash = formData.cuenta_retiro === "virtual";
 
     const payload = {
@@ -154,12 +174,14 @@ export function RegisterPaymentModal({
       await onSubmit(invoiceId, payload);
       onOpenChange(false);
     } catch (e: any) {
-      toast.error("No se pudo registrar el pago");
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => !isSubmitting && onOpenChange(o)}>
       <DialogContent className="w-[95vw] sm:max-w-lg flex flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-card/95 backdrop-blur-xl rounded-2xl">
         {/* HEADER */}
         <DialogHeader className="p-6 sm:px-8 sm:py-6 bg-card dark:bg-card border-b border-slate-200 dark:border-white/10 shrink-0 relative z-10">
@@ -181,7 +203,6 @@ export function RegisterPaymentModal({
 
         {/* BODY */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 sm:px-8 sm:pb-8 bg-muted/50 dark:bg-transparent custom-scrollbar space-y-5 mt-4">
-          {/* Resumen */}
           <div className="p-5 border border-slate-200 dark:border-white/10 rounded-2xl bg-card shadow-sm">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
@@ -223,7 +244,6 @@ export function RegisterPaymentModal({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {/* Fecha pago */}
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                 Fecha de Pago <span className="text-destructive">*</span>
@@ -239,7 +259,6 @@ export function RegisterPaymentModal({
               />
             </div>
 
-            {/* 👇 NUEVO: Método de Pago (SAT) */}
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                 Método de Pago <span className="text-destructive">*</span>
@@ -267,7 +286,6 @@ export function RegisterPaymentModal({
             </div>
           </div>
 
-          {/* Monto */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               <DollarSign className="h-3 w-3 inline mr-1" />
@@ -276,7 +294,8 @@ export function RegisterPaymentModal({
             <Input
               type="number"
               placeholder="0.00"
-              value={formData.monto || ""}
+              // Fix del Bug de React: Permitir que "0" se muestre
+              value={formData.monto === 0 ? 0 : formData.monto || ""}
               onChange={(e) => {
                 setFormData((p) => ({ ...p, monto: toNumber(e.target.value) }));
                 setError("");
@@ -288,19 +307,24 @@ export function RegisterPaymentModal({
               <button
                 type="button"
                 onClick={() =>
-                  setFormData((p) => ({ ...p, monto: saldoPendiente }))
+                  setFormData((p) => ({
+                    ...p,
+                    monto: saldoPendiente > 0 ? saldoPendiente : 0,
+                  }))
                 }
                 className="text-primary hover:underline font-bold"
               >
                 Pagar saldo completo
               </button>
               <span className="text-muted-foreground font-mono">
-                Máximo: ${saldoPendiente.toLocaleString("es-MX")}
+                Máximo: $
+                {saldoPendiente > 0
+                  ? saldoPendiente.toLocaleString("es-MX")
+                  : "0.00"}
               </span>
             </div>
           </div>
 
-          {/* Cuenta retiro (Selector) */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               Cuenta de Retiro (Afecta Tesorería){" "}
@@ -348,7 +372,6 @@ export function RegisterPaymentModal({
             </Select>
           </div>
 
-          {/* Referencia (AHORA SE LLENA SOLA CON EL FOLIO) */}
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
               Referencia / Número de Operación
@@ -363,7 +386,6 @@ export function RegisterPaymentModal({
             />
           </div>
 
-          {/* Preview saldo */}
           {formData.monto > 0 && (
             <div
               className={`p-3 rounded-lg border ${
@@ -400,7 +422,6 @@ export function RegisterPaymentModal({
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div className="flex items-center gap-2 text-destructive text-sm p-3 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-800/50 font-bold">
               <AlertCircle className="h-4 w-4" />
@@ -416,16 +437,26 @@ export function RegisterPaymentModal({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
               className="w-full sm:w-auto haptic-press font-black uppercase tracking-widest text-[10px]"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSubmit}
+              disabled={
+                isSubmitting ||
+                !formData.cuenta_retiro ||
+                formData.monto < 0 ||
+                (saldoPendiente > 0 && formData.monto <= 0)
+              }
               className="w-full sm:w-auto haptic-press border-none text-white bg-brand-green hover:bg-[hsl(152,100%,24%)] shadow-[0_4px_15px_rgba(0,151,64,0.3)] font-black uppercase tracking-widest text-[10px]"
-              disabled={formData.monto <= 0 || !formData.cuenta_retiro}
             >
-              <Check className="h-4 w-4 mr-2" />
+              {isSubmitting ? (
+                <Loader2 className="animate-spin h-4 w-4 mr-2" />
+              ) : (
+                <Check className="h-4 w-4 mr-2" />
+              )}
               Confirmar Pago
             </Button>
           </div>

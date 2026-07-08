@@ -7,7 +7,7 @@ export type OperatorUpdate = {
     public_id?: (string | null);
     name?: (string | null);
     license_number?: (string | null);
-    license_type?: (string | null);
+    license_type_id?: (number | null);
     license_expiry?: (string | null);
     medical_check_expiry?: (string | null);
     phone?: (string | null);

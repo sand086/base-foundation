@@ -7,16 +7,10 @@ from . import schemas
 
 # =========================================================
 # OPERATORS - CRUD con AuditMixin + Soft Delete (E)
-# Reglas:
-# - No mostrar record_status = E
-# - record_status = I sí se muestra
-# - Delete => record_status = E (no delete físico)
-# - Update puede cambiar record_status si viene explícito (A/I)
 # =========================================================
 
 
 def get_operators(db: Session, skip: int = 0, limit: int = 100):
-
     return (
         db.query(models.Operator)
         .filter(models.Operator.record_status != RecordStatus.ELIMINADO)
@@ -38,8 +32,11 @@ def get_operator(db: Session, operator_id: str):
     )
 
 
-def create_operator(db: Session, operator: schemas.OperatorCreate):
-    db_op = models.Operator(**operator.model_dump())
+def create_operator(
+    db: Session, operator: schemas.OperatorCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
+    # <--- AUDITORÍA: Inyectar quién lo crea
+    db_op = models.Operator(**operator.model_dump(), created_by_id=user_id)
     db.add(db_op)
     db.commit()
     db.refresh(db_op)
@@ -47,7 +44,10 @@ def create_operator(db: Session, operator: schemas.OperatorCreate):
 
 
 def update_operator(
-    db: Session, operator_id: str, operator_data: schemas.OperatorUpdate
+    db: Session,
+    operator_id: str,
+    operator_data: schemas.OperatorUpdate,
+    user_id: int,  # <--- AUDITORÍA PARAM
 ):
     db_op = get_operator(db, operator_id)
     if not db_op:
@@ -55,10 +55,12 @@ def update_operator(
 
     data = operator_data.model_dump(exclude_unset=True)
 
-    # Actualiza solo lo que venga (y evita pisar con None salvo que tu schema lo mande explícito)
     for key, value in data.items():
         if value is not None:
             setattr(db_op, key, value)
+
+    # <--- AUDITORÍA: Inyectar quién edita
+    db_op.updated_by_id = user_id
 
     db.add(db_op)
     db.commit()
@@ -66,7 +68,9 @@ def update_operator(
     return db_op
 
 
-def delete_operator(db: Session, operator_id: str):
+def delete_operator(
+    db: Session, operator_id: str, user_id: int
+):  # <--- AUDITORÍA PARAM
     db_op = (
         db.query(models.Operator)
         .filter(
@@ -79,6 +83,7 @@ def delete_operator(db: Session, operator_id: str):
         return False
 
     db_op.record_status = RecordStatus.ELIMINADO
+    db_op.updated_by_id = user_id  # <--- AUDITORÍA: Quién lo eliminó
     db.add(db_op)
     db.commit()
     return True
@@ -86,11 +91,8 @@ def delete_operator(db: Session, operator_id: str):
 
 # --- Fuente: crud_tires.py ---
 
-
 from datetime import datetime
-
 from sqlalchemy.orm import Session, joinedload
-
 from app.models import models
 from app.models.models import RecordStatus, TireEventType
 from . import schemas
@@ -101,9 +103,6 @@ from . import schemas
 
 
 def _enrich_tire_data(tire: models.Tire):
-    """
-    Enriquecimiento solo para response (no persiste columnas).
-    """
     if tire.unit:
         tire.unidad_actual_economico = tire.unit.numero_economico
         tire.unidad_actual_id = tire.unit.id
@@ -112,13 +111,12 @@ def _enrich_tire_data(tire: models.Tire):
         tire.unidad_actual_id = None
 
     if tire.history:
-        tire.history.sort(key=lambda x: x.fecha, reverse=True)
+        tire.history.sort(
+            key=lambda x: x.fecha.timestamp() if x.fecha else 0, reverse=True
+        )
 
 
 def _visible_tire_query(db: Session):
-    """
-    Query base: oculta record_status = E (ELIMINADO). Muestra A e I.
-    """
     return (
         db.query(models.Tire)
         .options(joinedload(models.Tire.unit), joinedload(models.Tire.history))
@@ -127,7 +125,6 @@ def _visible_tire_query(db: Session):
 
 
 def _visible_unit(db: Session, unit_id: int | None):
-
     if unit_id is None:
         return None
     return (
@@ -177,7 +174,29 @@ def get_tire_by_code(db: Session, codigo: str):
 # =========================================================
 
 
-def create_tire(db: Session, tire_in: schemas.TireCreate):
+def create_tire(
+    db: Session, tire_in: schemas.TireCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
+    from app.models.models import RecordStatus
+    from sqlalchemy.sql import func
+
+    old_deleted_tire = (
+        db.query(models.Tire)
+        .filter(
+            models.Tire.codigo_interno == tire_in.codigo_interno,
+            models.Tire.record_status == RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if old_deleted_tire:
+        old_deleted_tire.codigo_interno = (
+            f"{old_deleted_tire.codigo_interno}_DEL_{old_deleted_tire.id}"
+        )
+        old_deleted_tire.updated_by_id = user_id  # <--- AUDITORÍA
+        db.add(old_deleted_tire)
+        db.flush()
+
     db_tire = models.Tire(
         codigo_interno=tire_in.codigo_interno,
         marca=tire_in.marca,
@@ -188,25 +207,27 @@ def create_tire(db: Session, tire_in: schemas.TireCreate):
         profundidad_actual=tire_in.profundidad_actual,
         fecha_compra=tire_in.fecha_compra,
         precio_compra=tire_in.precio_compra,
-        costo_acumulado=tire_in.precio_compra,
+        costo_acumulado=tire_in.precio_compra or 0.0,
         proveedor=tire_in.proveedor,
-        estado=tire_in.estado,  # Enum TireStatus en tu modelo
-        km_recorridos=0,
+        estado=tire_in.estado,
+        estado_fisico=getattr(tire_in, "estado_fisico", None),
+        km_recorridos=0.0,
         unit_id=None,
         posicion=None,
-        # record_status default A por AuditMixin
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(db_tire)
-    db.flush()  # para obtener id
+    db.flush()
 
     history = models.TireHistory(
         tire_id=db_tire.id,
-        fecha=datetime.utcnow(),
-        tipo=TireEventType.COMPRA,  #   enum (no string)
+        fecha=func.now(),
+        tipo=TireEventType.COMPRA,
         descripcion=f"Alta inicial - Compra a {tire_in.proveedor}",
-        costo=tire_in.precio_compra,
+        costo=tire_in.precio_compra or 0.0,
         responsable="Admin",
-        km=0,
+        km=0.0,
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
     db.add(history)
 
@@ -221,7 +242,9 @@ def create_tire(db: Session, tire_in: schemas.TireCreate):
 # =========================================================
 
 
-def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
+def assign_tire(
+    db: Session, tire_id: int, payload: schemas.AssignTirePayload, user_id: int
+):  # <--- AUDITORÍA PARAM
     tire = (
         db.query(models.Tire)
         .options(joinedload(models.Tire.unit), joinedload(models.Tire.history))
@@ -244,7 +267,6 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
 
         unit_economico_str = unit.numero_economico
 
-        # Si hay posición, validar ocupante (visible). Si existe -> desmontaje del ocupante (soft delete NO aplica)
         if payload.posicion:
             occupant = (
                 db.query(models.Tire)
@@ -260,6 +282,9 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
             if occupant:
                 occupant.unit_id = None
                 occupant.posicion = None
+                occupant.updated_by_id = (
+                    user_id  # <--- AUDITORÍA: El usuario desasignó la llanta vieja
+                )
 
                 occ_history = models.TireHistory(
                     tire_id=occupant.id,
@@ -270,6 +295,7 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
                     unit_id=payload.unit_id,
                     km=occupant.km_recorridos,
                     responsable="Sistema",
+                    created_by_id=user_id,  # <--- AUDITORÍA
                 )
                 db.add(occ_history)
                 db.add(occupant)
@@ -279,7 +305,6 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
         if payload.posicion:
             desc += f" - {payload.posicion}"
 
-        # Cambiar estado de nuevo->usado si se monta
         if (
             str(tire.estado) == "TireStatus.NUEVO"
             or str(tire.estado).lower() == "nuevo"
@@ -295,17 +320,19 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
 
     tire.unit_id = payload.unit_id
     tire.posicion = payload.posicion
+    tire.updated_by_id = user_id  # <--- AUDITORÍA
 
     history = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
-        tipo=tipo_evento,  #   enum
+        tipo=tipo_evento,
         descripcion=desc,
         unidad_economico=unit_economico_str,
         unit_id=payload.unit_id,
         posicion=payload.posicion,
         km=tire.km_recorridos,
         responsable="Operaciones",
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
 
     db.add(history)
@@ -323,7 +350,10 @@ def assign_tire(db: Session, tire_id: int, payload: schemas.AssignTirePayload):
 
 
 def register_maintenance(
-    db: Session, tire_id: int, payload: schemas.MaintenanceTirePayload
+    db: Session,
+    tire_id: int,
+    payload: schemas.MaintenanceTirePayload,
+    user_id: int,  # <--- AUDITORÍA PARAM
 ):
     tire = (
         db.query(models.Tire)
@@ -338,9 +368,8 @@ def register_maintenance(
         return None
 
     tire.costo_acumulado = (tire.costo_acumulado or 0) + (payload.costo or 0)
+    tire.updated_by_id = user_id  # <--- AUDITORÍA
 
-    # payload.tipo viene como string; lo convertimos a enum válido
-    # Esperado: "desecho" / "renovado" / "reparacion" / etc.
     try:
         tipo_enum = TireEventType(payload.tipo)
     except Exception:
@@ -354,7 +383,6 @@ def register_maintenance(
 
     elif tipo_enum == TireEventType.RENOVADO:
         tire.estado = models.TireStatus.RENOVADO
-        # regla de negocio
         if tire.profundidad_original:
             tire.profundidad_actual = float(tire.profundidad_original) * 0.95
         tire.unit_id = None
@@ -363,11 +391,12 @@ def register_maintenance(
     history = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
-        tipo=tipo_enum,  #   enum
+        tipo=tipo_enum,
         descripcion=payload.descripcion,
         costo=payload.costo,
         km=tire.km_recorridos,
         responsable="Maintenance",
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
 
     db.add(history)
@@ -384,7 +413,9 @@ def register_maintenance(
 # =========================================================
 
 
-def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
+def update_tire(
+    db: Session, tire_id: int, tire_in: schemas.TireUpdate, user_id: int
+):  # <--- AUDITORÍA PARAM
     tire = (
         db.query(models.Tire)
         .options(joinedload(models.Tire.unit), joinedload(models.Tire.history))
@@ -399,7 +430,6 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
 
     incoming_data = tire_in.model_dump(exclude_unset=True)
 
-    # No permitir que te manden auditoría desde front
     for forbidden in (
         "record_status",
         "created_at",
@@ -419,7 +449,6 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
         _enrich_tire_data(tire)
         return tire
 
-    # Nota: si cambia precio_compra, ajustar costo_acumulado correctamente
     old_price = tire.precio_compra or 0
 
     for field, value in changes_map.items():
@@ -430,13 +459,15 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
         diff = new_price - old_price
         tire.costo_acumulado = (tire.costo_acumulado or 0) + diff
 
+    tire.updated_by_id = user_id  # <--- AUDITORÍA
+
     unit_eco = tire.unit.numero_economico if tire.unit else None
     campos_editados = ", ".join(changes_map.keys())
 
     history_entry = models.TireHistory(
         tire_id=tire.id,
         fecha=datetime.utcnow(),
-        tipo=TireEventType.INSPECCION,  #   usa un enum válido (no existe "edicion")
+        tipo=TireEventType.INSPECCION,
         descripcion=f"Datos editados: {campos_editados}",
         unidad_economico=unit_eco,
         unit_id=tire.unit_id,
@@ -444,6 +475,7 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
         km=tire.km_recorridos,
         costo=0,
         responsable="Admin",
+        created_by_id=user_id,  # <--- AUDITORÍA
     )
 
     db.add(history_entry)
@@ -460,7 +492,7 @@ def update_tire(db: Session, tire_id: int, tire_in: schemas.TireUpdate):
 # =========================================================
 
 
-def delete_tire(db: Session, tire_id: int):
+def delete_tire(db: Session, tire_id: int, user_id: int):  # <--- AUDITORÍA PARAM
     tire = (
         db.query(models.Tire)
         .filter(
@@ -473,6 +505,7 @@ def delete_tire(db: Session, tire_id: int):
         return False
 
     tire.record_status = RecordStatus.ELIMINADO
+    tire.updated_by_id = user_id  # <--- AUDITORÍA
     db.add(tire)
     db.commit()
     return True
@@ -480,16 +513,13 @@ def delete_tire(db: Session, tire_id: int):
 
 # --- Fuente: crud_units.py ---
 
-
 from datetime import date
 from sqlalchemy.orm import Session, joinedload
-
 from app.models import models
 from app.models.models import RecordStatus
 from . import schemas
 import uuid
 
-# Configuración de llantas esperadas por tipo
 EXPECTED_TIRES = {
     "TRACTOCAMION": 10,
     "REMOLQUE": 8,
@@ -500,7 +530,20 @@ EXPECTED_TIRES = {
 
 
 def get_unit_last_odometer(db: Session, unit_id: int):
-    # 1. Busca en el último tramo de viaje de esa unidad (PROTEGIDO)
+    unit = db.query(models.Unit).filter(models.Unit.id == unit_id).first()
+    if unit and str(unit.tipo_1).upper() == "MOTOGENERADOR":
+        last_fuel = (
+            db.query(models.FuelLog)
+            .filter(
+                models.FuelLog.unit_id == unit_id,
+                models.FuelLog.is_motogenerator == True,
+                models.FuelLog.record_status != RecordStatus.ELIMINADO,
+            )
+            .order_by(models.FuelLog.id.desc())
+            .first()
+        )
+        return last_fuel.horometro if last_fuel and last_fuel.horometro else 0
+
     last_leg = (
         db.query(models.TripLeg)
         .filter(
@@ -511,7 +554,6 @@ def get_unit_last_odometer(db: Session, unit_id: int):
         .first()
     )
 
-    # 2. Si no hay viajes, busca en el último vale de combustible (PROTEGIDO)
     if not last_leg or not last_leg.odometro_final:
         last_fuel = (
             db.query(models.FuelLog)
@@ -530,11 +572,9 @@ def get_unit_last_odometer(db: Session, unit_id: int):
 def _update_unit_status(db: Session, unit: models.Unit) -> None:
     if not unit:
         return
-
     today = date.today()
     razones_bloqueo: list[str] = []
 
-    # 1) Documentos vencidos (Se mantiene igual)
     expired_count = 0
     date_fields = [
         "seguro_vence",
@@ -553,10 +593,7 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
     if expired_count > 0:
         razones_bloqueo.append(f"{expired_count} documentos vencidos")
 
-    # 2) Llantas
     unit_tires = unit.tires or []
-
-    # 2a) Llantas críticas (Ajustado a la "Opción B" del mecánico)
     critical_tires = 0
     for t in unit_tires:
         estado_fisico = str(getattr(t, "estado_fisico", "")).lower()
@@ -564,17 +601,12 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
             estado_fisico = estado_fisico.split(".")[-1]
 
         profundidad = getattr(t, "profundidad_actual", 0) or 0
-
-        # Una llanta es crítica si el mecánico dice "Mala"
-        # o si físicamente es peligrosa (<= 3mm)
         if profundidad <= 3 or estado_fisico == "mala":
             critical_tires += 1
 
     if critical_tires > 0:
         razones_bloqueo.append(f"{critical_tires} llantas críticas")
 
-    # 2b) Llantas incompletas
-    #  CAMBIO CLAVE: Usamos tipo_1 (Naturaleza) para saber cuántas llantas pedir
     tipo_fisico = str(unit.tipo_1).upper() if unit.tipo_1 else "TRACTOCAMION"
     llantas_esperadas = EXPECTED_TIRES.get(tipo_fisico, 0)
 
@@ -582,11 +614,6 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
         faltantes = llantas_esperadas - len(unit_tires)
         razones_bloqueo.append(f"Faltan {faltantes} llantas")
 
-    # 3) Validación de Material Peligroso (IMO)
-    # Si la carga es peligrosa, podrías agregar validaciones extra aquí en el futuro
-    # Por ahora el campo tipo_carga ya viaja en el objeto unit.
-
-    # --- Aplicar cambios ---
     unit.documentos_vencidos = expired_count
     unit.llantas_criticas = critical_tires
 
@@ -603,17 +630,12 @@ def _update_unit_status(db: Session, unit: models.Unit) -> None:
         unit.status = "bloqueado"
         unit.razon_bloqueo = new_reason
     else:
-        # Si ya no hay razones de bloqueo y el estatus era "bloqueado", lo liberamos
         if current_status == "bloqueado":
             unit.status = "disponible"
             unit.razon_bloqueo = None
 
 
 def get_units(db: Session, skip: int = 0, limit: int = 100):
-    """
-    Lista unidades visibles (A e I). Oculta eliminadas (E).
-    Recalcula estatus/contadores “al vuelo” y persiste cambios en un solo commit.
-    """
     units = (
         db.query(models.Unit)
         .options(joinedload(models.Unit.tires))
@@ -650,10 +672,6 @@ def get_units(db: Session, skip: int = 0, limit: int = 100):
 
 
 def get_unit(db: Session, unit_id: int):
-    """
-    Obtiene unidad visible (A e I). Oculta eliminada (E).
-    Recalcula estatus/contadores y persiste si cambia.
-    """
     unit = (
         db.query(models.Unit)
         .options(joinedload(models.Unit.tires))
@@ -663,7 +681,6 @@ def get_unit(db: Session, unit_id: int):
         )
         .first()
     )
-
     if not unit:
         return None
 
@@ -680,6 +697,7 @@ def get_unit(db: Session, unit_id: int):
         unit.documentos_vencidos,
         unit.llantas_criticas,
     )
+
     if before != after:
         db.add(unit)
         db.commit()
@@ -689,9 +707,6 @@ def get_unit(db: Session, unit_id: int):
 
 
 def get_unit_by_eco(db: Session, numero_economico: str):
-    """
-    Busca por número económico (visible A/I). Oculta eliminadas (E).
-    """
     unit = (
         db.query(models.Unit)
         .options(joinedload(models.Unit.tires))
@@ -718,6 +733,7 @@ def get_unit_by_eco(db: Session, numero_economico: str):
         unit.documentos_vencidos,
         unit.llantas_criticas,
     )
+
     if before != after:
         db.add(unit)
         db.commit()
@@ -726,20 +742,21 @@ def get_unit_by_eco(db: Session, numero_economico: str):
     return unit
 
 
-def create_unit(db: Session, unit: schemas.UnitCreate):
-    # Convertimos el esquema a diccionario
+def create_unit(
+    db: Session, unit: schemas.UnitCreate, user_id: int
+):  # <--- AUDITORÍA PARAM
     data = unit.model_dump()
 
-    #  AUTO-GENERACIÓN DE ID SI NO VIENE DEL FRONTEND
     if not data.get("public_id"):
         data["public_id"] = f"UNT-{uuid.uuid4().hex[:8].upper()}"
+
+    data["created_by_id"] = user_id  # <--- AUDITORÍA
 
     db_unit = models.Unit(**data)
     db.add(db_unit)
     db.commit()
     db.refresh(db_unit)
 
-    # Forzamos la primera evaluación de estatus
     _update_unit_status(db, db_unit)
     db.commit()
     db.refresh(db_unit)
@@ -747,13 +764,9 @@ def create_unit(db: Session, unit: schemas.UnitCreate):
     return db_unit
 
 
-def update_unit(db: Session, unit_id: str, unit_data: schemas.UnitUpdate):
-    """
-    Update unidad:
-    - NO tocar created_at/updated_at manual
-    - Permite actualizar record_status si viene (A/I), pero jamás “revive” una E vía update normal.
-    - Recalcula estatus/contadores.
-    """
+def update_unit(
+    db: Session, unit_id: str, unit_data: schemas.UnitUpdate, user_id: int
+):  # <--- AUDITORÍA PARAM
     try:
         uid = int(unit_id)
     except ValueError:
@@ -773,18 +786,18 @@ def update_unit(db: Session, unit_id: str, unit_data: schemas.UnitUpdate):
 
     payload = unit_data.model_dump(exclude_unset=True)
 
-    # Bloqueo de campos de auditoría (se manejan por mixin / server defaults)
     payload.pop("created_at", None)
     payload.pop("updated_at", None)
     payload.pop("created_by_id", None)
     payload.pop("updated_by_id", None)
 
-    # Si por error intentan mandar E en update, lo ignoramos (el delete controla E)
     if payload.get("record_status") == RecordStatus.ELIMINADO:
         payload.pop("record_status", None)
 
     for key, value in payload.items():
         setattr(db_unit, key, value)
+
+    db_unit.updated_by_id = user_id  # <--- AUDITORÍA
 
     _update_unit_status(db, db_unit)
 
@@ -794,12 +807,7 @@ def update_unit(db: Session, unit_id: str, unit_data: schemas.UnitUpdate):
     return db_unit
 
 
-def delete_unit(db: Session, unit_id: str):
-    """
-    Soft delete:
-    - record_status = E
-    - No se borra físico.
-    """
+def delete_unit(db: Session, unit_id: str, user_id: int):  # <--- AUDITORÍA PARAM
     try:
         uid = int(unit_id)
     except ValueError:
@@ -817,6 +825,8 @@ def delete_unit(db: Session, unit_id: str):
         return False
 
     unit.record_status = RecordStatus.ELIMINADO
+    unit.updated_by_id = user_id  # <--- AUDITORÍA
+
     db.add(unit)
     db.commit()
     return True

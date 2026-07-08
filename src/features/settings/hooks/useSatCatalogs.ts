@@ -1,22 +1,16 @@
 import { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
+import axiosClient from "@/api/axiosClient";
 
-// Importamos tus servicios autogenerados exactos
-import {
-  SatProductosCpService,
-  SatCartaPorteService,
-  SatUbicacionesService,
-} from "@/api/generated";
+// Tipo base para retrocompatibilidad
+export type SatProduct = {
+  id?: number;
+  clave: string;
+  descripcion: string;
+  es_material_peligroso?: string;
+  activo?: boolean;
+};
 
-// Importamos el tipo para retrocompatibilidad
-import type { SatProductResponse } from "@/api/generated";
-
-export type SatProduct = SatProductResponse;
-
-// =========================================================================
-// PATRÓN ADAPTER: Diccionario que mapea el string del endpoint del UI
-// con la función estática exacta autogenerada de OpenAPI.
-// =========================================================================
 type CatalogMethods = {
   getAll: () => Promise<any>;
   create: (data: any) => Promise<any>;
@@ -24,140 +18,38 @@ type CatalogMethods = {
   delete: (id: number) => Promise<any>;
 };
 
+// =========================================================================
+// PATRÓN ADAPTER SIMPLIFICADO: Consumimos directamente la API con Axios
+// para evitar que los nombres autogenerados de Swagger rompan la UI.
+// =========================================================================
+
+// Esta pequeña función genera mágicamente el CRUD para cualquier catálogo SAT
+const createAdapter = (endpointPath: string): CatalogMethods => ({
+  getAll: () => axiosClient.get(`/api/sat/${endpointPath}`).then((r) => r.data),
+  create: (data) =>
+    axiosClient.post(`/api/sat/${endpointPath}`, data).then((r) => r.data),
+  update: (id, data) =>
+    axiosClient.put(`/api/sat/${endpointPath}/${id}`, data).then((r) => r.data),
+  delete: (id) =>
+    axiosClient.delete(`/api/sat/${endpointPath}/${id}`).then((r) => r.data),
+});
+
+// ¡Mira qué limpio queda el diccionario ahora!
 const CATALOG_ADAPTERS: Record<string, CatalogMethods> = {
-  // ---------------- PRODUCTOS ----------------
-  "sat-products": {
-    getAll: () => SatProductosCpService.getAllApiSatSatProductsGet(),
-    create: (data) =>
-      SatProductosCpService.createItemApiSatSatProductsPost(data),
-    update: (id, data) =>
-      SatProductosCpService.updateItemApiSatSatProductsItemIdPut(id, data),
-    delete: (id) =>
-      SatProductosCpService.deleteItemApiSatSatProductsItemIdDelete(id),
-  },
-
-  // ---------------- CARTA PORTE ----------------
-  "sat-services": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatServicesGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatServicesPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatServicesItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatServicesItemIdDelete(id),
-  },
-  "sat-cargo-types": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatCargoTypesGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatCargoTypesPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatCargoTypesItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatCargoTypesItemIdDelete(id),
-  },
-  "sat-trailer-subtypes": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatTrailerSubtypesGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatTrailerSubtypesPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatTrailerSubtypesItemIdPut(
-        id,
-        data,
-      ),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatTrailerSubtypesItemIdDelete(id),
-  },
-  "sat-truck-configs": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatTruckConfigsGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatTruckConfigsPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatTruckConfigsItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatTruckConfigsItemIdDelete(id),
-  },
-  "sat-permit-types": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatPermitTypesGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatPermitTypesPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatPermitTypesItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatPermitTypesItemIdDelete(id),
-  },
-  "sat-packaging-types": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatPackagingTypesGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatPackagingTypesPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatPackagingTypesItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatPackagingTypesItemIdDelete(id),
-  },
-  "sat-hazardous-materials": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatHazardousMaterialsGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatHazardousMaterialsPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatHazardousMaterialsItemIdPut(
-        id,
-        data,
-      ),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatHazardousMaterialsItemIdDelete(
-        id,
-      ),
-  },
-  "sat-stations": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatStationsGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatStationsPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatStationsItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatStationsItemIdDelete(id),
-  },
-  "sat-unit-weights": {
-    getAll: () => SatCartaPorteService.getAllApiSatSatUnitWeightsGet(),
-    create: (data) =>
-      SatCartaPorteService.createItemApiSatSatUnitWeightsPost(data),
-    update: (id, data) =>
-      SatCartaPorteService.updateItemApiSatSatUnitWeightsItemIdPut(id, data),
-    delete: (id) =>
-      SatCartaPorteService.deleteItemApiSatSatUnitWeightsItemIdDelete(id),
-  },
-
-  // ---------------- UBICACIONES ----------------
-  "sat-municipalities": {
-    getAll: () => SatUbicacionesService.getAllApiSatSatMunicipalitiesGet(),
-    create: (data) =>
-      SatUbicacionesService.createItemApiSatSatMunicipalitiesPost(data),
-    update: (id, data) =>
-      SatUbicacionesService.updateItemApiSatSatMunicipalitiesItemIdPut(
-        id,
-        data,
-      ),
-    delete: (id) =>
-      SatUbicacionesService.deleteItemApiSatSatMunicipalitiesItemIdDelete(id),
-  },
-  "sat-localities": {
-    getAll: () => SatUbicacionesService.getAllApiSatSatLocalitiesGet(),
-    create: (data) =>
-      SatUbicacionesService.createItemApiSatSatLocalitiesPost(data),
-    update: (id, data) =>
-      SatUbicacionesService.updateItemApiSatSatLocalitiesItemIdPut(id, data),
-    delete: (id) =>
-      SatUbicacionesService.deleteItemApiSatSatLocalitiesItemIdDelete(id),
-  },
-  "sat-neighborhoods": {
-    getAll: () => SatUbicacionesService.getAllApiSatSatNeighborhoodsGet(),
-    create: (data) =>
-      SatUbicacionesService.createItemApiSatSatNeighborhoodsPost(data),
-    update: (id, data) =>
-      SatUbicacionesService.updateItemApiSatSatNeighborhoodsItemIdPut(id, data),
-    delete: (id) =>
-      SatUbicacionesService.deleteItemApiSatSatNeighborhoodsItemIdDelete(id),
-  },
+  "sat-products": createAdapter("sat-products"),
+  "sat-services": createAdapter("sat-services"),
+  "sat-cargo-types": createAdapter("sat-cargo-types"),
+  "sat-trailer-subtypes": createAdapter("sat-trailer-subtypes"),
+  "sat-truck-configs": createAdapter("sat-truck-configs"),
+  "sat-permit-types": createAdapter("sat-permit-types"),
+  "sat-packaging-types": createAdapter("sat-packaging-types"),
+  "sat-hazardous-materials": createAdapter("sat-hazardous-materials"),
+  "sat-stations": createAdapter("sat-stations"),
+  "sat-unit-weights": createAdapter("sat-unit-weights"),
+  "sat-municipalities": createAdapter("sat-municipalities"),
+  "sat-localities": createAdapter("sat-localities"),
+  "sat-neighborhoods": createAdapter("sat-neighborhoods"),
+  "sat-location-codes": createAdapter("sat-location-codes"),
 };
 
 export const useSatCatalogs = () => {
@@ -190,7 +82,6 @@ export const useSatCatalogs = () => {
     if (productData.id && productData.id > 0) {
       return await adapter.update(Number(productData.id), productData);
     } else {
-      // Separamos la data para que coincida con el schema de creación puro
       const { id, ...dataToCreate } = productData;
       return await adapter.create(dataToCreate);
     }
@@ -239,8 +130,6 @@ export const useSatCatalogs = () => {
     const adapter = CATALOG_ADAPTERS[endpoint];
     if (!adapter) throw new Error("Catálogo no soportado");
 
-    // Al no usar try/catch aquí, el catch en el Súper Gestor lo atrapa
-    // y muestra el mensaje de error validado de tu backend.
     if (id && id !== 0) {
       const data = await adapter.update(id, payload);
       return data as T;

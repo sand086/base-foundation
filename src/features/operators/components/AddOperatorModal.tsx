@@ -25,6 +25,7 @@ import {
   CreditCard,
   Truck,
   Loader2,
+  Info,
   Check,
   Fingerprint,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 import { Operator } from "@/features/operators/types";
 import { useUnits } from "@/features/units/hooks/useUnits";
+import { useLicenseTypes } from "@/features/settings/hooks/useLicenseTypes";
 
 import {
   Form,
@@ -55,7 +57,7 @@ const operatorSchema = z.object({
   name: z.string().min(2, "El nombre es requerido"),
   rfc: z.string().min(12, "RFC inválido").max(13, "RFC inválido"),
   license_number: z.string().min(3, "Número de licencia requerido"),
-  license_type: z.string().min(1, "Seleccione el tipo de licencia"),
+  license_type_id: z.string().min(1, "Seleccione el tipo de licencia"),
   license_expiry: z.date({ required_error: "Fecha requerida" }),
   medical_check_expiry: z.date({ required_error: "Fecha requerida" }),
   phone: z.string().min(10, "Ingrese un número válido a 10 dígitos"),
@@ -75,6 +77,7 @@ export function AddOperatorModal({
   isSaving = false,
 }: AddOperatorModalProps) {
   const { unidades } = useUnits();
+  const { licenseTypes } = useLicenseTypes();
   const isEditMode = !!operatorToEdit;
 
   const unidadesSelectables = useMemo(() => {
@@ -91,7 +94,7 @@ export function AddOperatorModal({
       name: "",
       rfc: "XAXX010101000",
       license_number: "",
-      license_type: "",
+      license_type_id: "",
       phone: "",
       assigned_unit_id: "none",
       hire_date: new Date(),
@@ -107,7 +110,9 @@ export function AddOperatorModal({
           name: operatorToEdit.name,
           rfc: operatorToEdit.rfc || "XAXX010101000",
           license_number: operatorToEdit.license_number,
-          license_type: operatorToEdit.license_type,
+          license_type_id: operatorToEdit.license_type_id
+            ? String(operatorToEdit.license_type_id)
+            : "",
           license_expiry: operatorToEdit.license_expiry
             ? new Date(`${operatorToEdit.license_expiry}T12:00:00`)
             : undefined,
@@ -128,7 +133,7 @@ export function AddOperatorModal({
           name: "",
           rfc: "XAXX010101000",
           license_number: "",
-          license_type: "",
+          license_type_id: "",
           assigned_unit_id: "none",
           hire_date: new Date(),
         });
@@ -150,7 +155,7 @@ export function AddOperatorModal({
       name: data.name.trim(),
       rfc: data.rfc.trim().toUpperCase(),
       license_number: data.license_number.trim().toUpperCase(),
-      license_type: data.license_type,
+      license_type_id: parseInt(data.license_type_id, 10),
       license_expiry: format(data.license_expiry, "yyyy-MM-dd"),
       medical_check_expiry: format(data.medical_check_expiry, "yyyy-MM-dd"),
       phone: data.phone.trim(),
@@ -180,11 +185,11 @@ export function AddOperatorModal({
               )}
             >
               <User
-                  className={cn(
-                    "h-6 w-6",
-                    isEditMode
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-emerald-600 dark:text-emerald-400",
+                className={cn(
+                  "h-6 w-6",
+                  isEditMode
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-emerald-600 dark:text-emerald-400",
                 )}
               />
             </div>
@@ -301,28 +306,29 @@ export function AddOperatorModal({
                   />
                   <FormField
                     control={form.control}
-                    name="license_type"
+                    name="license_type_id" // ⚡ Cambiado a ID
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel variant="brand" required>
-                          Tipo
+                          Tipo de Licencia
                         </FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          defaultValue={field.value}
                           value={field.value}
                         >
                           <FormControl>
-                            <SelectTrigger className="h-11 font-bold shadow-sm bg-card border-slate-200 dark:border-white/10 text-slate-800 dark:text-slate-100">
-                              <SelectValue placeholder="Tipo" />
+                            <SelectTrigger className="h-11 font-bold">
+                              <SelectValue placeholder="Selecciona..." />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="A">Tipo A</SelectItem>
-                            <SelectItem value="B">Tipo B</SelectItem>
-                            <SelectItem value="E">
-                              Tipo E (Federal)
-                            </SelectItem>
+                            {licenseTypes
+                              ?.filter((lt) => lt.activo)
+                              .map((lt) => (
+                                <SelectItem key={lt.id} value={String(lt.id)}>
+                                  {lt.nombre}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />

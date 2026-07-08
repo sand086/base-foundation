@@ -1,7 +1,17 @@
+import re
 from datetime import datetime
 from typing import List, Optional, TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    validator,
+    field_validator,
+    ValidationInfo,
+    model_validator,
+)
 
 from app.models.models import RecordStatus, TollUnitType, PaymentMethod
 
@@ -292,6 +302,7 @@ class TripTimelineEventCreatePayload(BaseModel):
     lng: Optional[str] = None
     notifyClient: Optional[bool] = False
     odometro: Optional[int] = None
+    odometro_final: Optional[float] = None
     combustible_porcentaje: Optional[float] = None
     combustible_litros: Optional[float] = None
     terminal_entrega_vacio: Optional[str] = None
@@ -395,15 +406,38 @@ class TripBase(ORMBase):
         default="Carga General", max_length=255
     )
     peso_toneladas: Optional[float] = Field(default=0.0, ge=0.0)
-    es_material_peligroso: Optional[bool] = False
-    clase_imo: Optional[str] = Field(default=None, max_length=50)
+
+    # --- INICIO NUEVOS CAMPOS MATERIAL PELIGROSO Y CFDI ---
+    sat_clave_servicio: Optional[str] = Field(
+        default="78101802", max_length=20, description="Clave SAT Servicio de Flete"
+    )
     sat_clave_producto: Optional[str] = Field(
-        default="01010101", max_length=20, description="Clave SAT para Fletes"
+        default="01010101",
+        max_length=20,
+        description="Clave SAT de la Mercancía Transportada",
     )
     sat_clave_unidad: Optional[str] = Field(
         default="E48", max_length=10, description="Clave SAT Unidad de Servicio"
     )
+    es_material_peligroso: Optional[bool] = False
+    cve_material_peligroso: Optional[str] = Field(default=None, max_length=10)
+    embalaje: Optional[str] = Field(default=None, max_length=10)
+    clase_imo: Optional[str] = Field(default=None, max_length=50)
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
+
+    is_refrigerated_1: Optional[bool] = Field(
+        default=False, description="¿Remolque 1 es refrigerado?"
+    )
+    motogenerator_1_id: Optional[int] = Field(
+        default=None, description="ID del motogenerador 1"
+    )
+
+    is_refrigerated_2: Optional[bool] = Field(
+        default=False, description="¿Remolque 2 es refrigerado?"
+    )
+    motogenerator_2_id: Optional[int] = Field(
+        default=None, description="ID del motogenerador 2"
+    )
 
     status: TripStatus = TripStatus.CREADO
 
@@ -423,7 +457,7 @@ class TripCreate(TripBase):
 
     initial_leg: Optional[TripLegCreate] = None
 
-    # 🚀 NUEVOS CAMPOS DEL MOTOR DUAL
+    #   NUEVOS CAMPOS DEL MOTOR DUAL
     final_leg: Optional[TripLegCreate] = None
     conoce_ruta_completa: Optional[bool] = False
     ocultar_montos_pdf: Optional[bool] = False
@@ -437,6 +471,53 @@ class TariffBasicInfo(ORMBase):
     tipo_unidad: str
 
 
+# ==========================================
+# DOCUMENT HISTORY SCHEMAS (NUEVO)
+# ==========================================
+class DocumentHistoryResponse(BaseModel):
+    id: int
+    document_type: str
+    filename: str
+    file_url: str
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    version: int
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReceivableInvoiceLite(ORMBase):
+    id: int
+    viaje_id: Optional[int] = None
+    uuid: Optional[str] = None
+    folio_interno: Optional[str] = None
+    is_nominal: Optional[bool] = False
+    monto_total: float = 0.0
+    saldo_pendiente: float = 0.0
+    status_sat: Optional[str] = None
+    estatus: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    pdf_url: Optional[str] = None
+    xml_url: Optional[str] = None
+
+    # CAMPOS DE CANCELACIÓN
+    motivo_cancelacion: Optional[str] = None
+    acuse_cancelacion_url: Optional[str] = None
+    fecha_cancelacion: Optional[datetime] = None
+
+    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
+    intentos_cancelacion: Optional[int] = 0
+    detalle_sat: Optional[str] = None
+    factura_padre_id: Optional[int] = None
+    factura_padre: Optional[Any] = None
+    cartas_porte_hijas: Optional[List[Any]] = Field(default_factory=list)
+
+    # NUEVO: HISTORIAL DE DOCUMENTOS ANIDADO
+    document_history: List[DocumentHistoryResponse] = Field(default_factory=list)
+
+
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
@@ -447,8 +528,11 @@ class TripResponse(TripBase):
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None
+    motogenerator_1_unit: Optional[UnitResponse] = None
+    motogenerator_2_unit: Optional[UnitResponse] = None
 
     legs: List[TripLegResponse] = Field(default_factory=list)
+    receivable_invoices: List[ReceivableInvoiceLite] = Field(default_factory=list)
 
     record_status: RecordStatus
     created_at: Optional[datetime] = None
@@ -480,10 +564,15 @@ class TripUpdate(ORMBase):
     contenedor_2: Optional[str] = None
     terminal_entrega_vacio: Optional[str] = None
     peso_toneladas: Optional[float] = None
-    es_material_peligroso: Optional[bool] = None
-    clase_imo: Optional[str] = Field(default=None, max_length=50)
+
+    # --- INICIO NUEVOS CAMPOS MATERIAL PELIGROSO Y CFDI ---
+    sat_clave_servicio: Optional[str] = Field(default=None, max_length=20)
     sat_clave_producto: Optional[str] = Field(default=None, max_length=20)
     sat_clave_unidad: Optional[str] = Field(default=None, max_length=10)
+    es_material_peligroso: Optional[bool] = None
+    cve_material_peligroso: Optional[str] = Field(default=None, max_length=10)
+    embalaje: Optional[str] = Field(default=None, max_length=10)
+    clase_imo: Optional[str] = Field(default=None, max_length=50)
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
     status: Optional[TripStatus] = None
     uuid_fiscal: Optional[str] = None
@@ -493,6 +582,15 @@ class TripUpdate(ORMBase):
 
     start_date: Optional[datetime] = None
     closed_at: Optional[datetime] = None
+    is_refrigerated_1: Optional[bool] = None
+    motogenerator_1_id: Optional[int] = Field(
+        default=None, description="ID del motogenerador 1"
+    )
+
+    is_refrigerated_2: Optional[bool] = None
+    motogenerator_2: Optional[int] = Field(
+        default=None, description="ID del motogenerador 2"
+    )
 
     unit_id: Optional[int] = None
     operator_id: Optional[int] = None
@@ -594,8 +692,9 @@ class ReceivableInvoiceCreate(BaseModel):
         default=False,
         description="Si es True, genera factura por $1 Peso para Bypass Aduanal",
     )
+    folio_forzado: Optional[int] = None
 
-    # 🚀 NUEVOS CAMPOS DEL MOTOR DUAL
+    #   NUEVOS CAMPOS DEL MOTOR DUAL
     use_dummy: Optional[bool] = False
     ocultar_montos: Optional[bool] = False
 
@@ -621,6 +720,187 @@ class ReceivableInvoiceCreate(BaseModel):
                 "El UUID relacionado es obligatorio para la sustitución de CFDI (Relación 04)"
             )
         return v
+
+
+class SatCfdiPayload(BaseModel):
+    """
+    Esquema estricto para validar los datos antes de armar el XML del SAT (CFDI 4.0 + Carta Porte 3.1).
+    Aplica reglas de negocio y valores por defecto tolerantes según configuración.
+    """
+
+    fecha: str = Field(default="")
+    serie: Optional[str] = None
+    folio: Optional[str] = None
+    folio_interno: Optional[str] = None
+    subtotal: str = Field(default="0.00")
+    iva: str = Field(default="0.00")
+    retenciones: str = Field(default="0.00")
+    total: str = Field(default="0.00")
+    id_ccp: Optional[str] = None
+    # 1. Datos del CFDI (Factura)
+    forma_pago: str = Field(default="99")
+    metodo_pago: str = Field(default="PPD")
+    uso_cfdi: str = Field(default="G03")
+    moneda: str = Field(default="MXN")
+
+    # 2. Entidades
+    rfc_cliente: str = Field(default="XAXX010101000")
+    rfc_operador: str = Field(default="XAXX010101000")
+    cp_cliente: str
+    cp_destino: str
+
+    # 3. Operación y Carta Porte
+    peso_bruto: float
+    distancia_total: int
+
+    permiso_sct: str = Field(default="TPAF01")
+    num_permiso: str = Field(default="123456")
+    placas: str = Field(default="XXXXXX")
+    placa_remolque_1: str = Field(default="1XXXX99")
+    placa_remolque_2: Optional[str] = Field(default="1XXXX99")
+    aseguradora: str = Field(default="POR DEFINIR")
+    poliza: str = Field(default="00000000")
+
+    # 4. MATERIALES PELIGROSOS
+    sat_clave_producto: str = Field(default="01010101")
+    es_material_peligroso: bool = Field(default=False)
+    flag_peligroso_catalogo: Optional[str] = "0,1"
+    cve_material_peligroso: Optional[str] = None
+    embalaje: Optional[str] = None
+    aseguradora_med_ambiente: Optional[str] = None
+    poliza_med_ambiente: Optional[str] = None
+    cantidad: Optional[str] = None
+    bienes_transp: Optional[str] = None
+    descripcion_mercancia_pdf: Optional[str] = None
+    contenedor_1: Optional[str] = None
+    contenedor_2: Optional[str] = None
+    referencia_cliente: Optional[str] = None
+    subcliente_nombre: Optional[str] = None
+    subcliente_telefono: Optional[str] = None
+    subcliente_correo: Optional[str] = None
+    subcliente_direccion: Optional[str] = None
+    info_material_peligroso: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
+
+    # --- VALIDADORES INDIVIDUALES ---
+
+    @field_validator("rfc_cliente", "rfc_operador", mode="before")
+    @classmethod
+    def validate_rfc(cls, v):
+        if not v or str(v).strip() in ["", "None"]:
+            return "XAXX010101000"
+        cleaned = re.sub(r"[^A-Z0-9Ñ]", "", str(v).upper().strip())
+        if len(cleaned) not in [12, 13]:
+            return "XAXX010101000"
+        return cleaned
+
+    @field_validator("cp_cliente", "cp_destino", mode="before")
+    @classmethod
+    def validate_cp(cls, v, info: ValidationInfo):
+        cp_str = str(v).strip() if v else ""
+        if len(cp_str) == 4 and cp_str.isdigit():
+            return f"0{cp_str}"
+        if len(cp_str) != 5 or not cp_str.isdigit():
+            campo = "Destino" if "destino" in info.field_name else "Cliente"
+            raise ValueError(
+                f"El Código Postal del {campo} debe tener exactamente 5 dígitos. Recibido: '{cp_str}'"
+            )
+        return cp_str
+
+    @field_validator("peso_bruto", mode="before")
+    @classmethod
+    def validate_peso(cls, v):
+        try:
+            val = float(v)
+            if val <= 0.0:
+                raise ValueError()
+            return val
+        except (ValueError, TypeError):
+            raise ValueError(
+                "El peso de la mercancía no puede ser 0 ni estar vacío. Por favor, captura el peso en el viaje."
+            )
+
+    @field_validator("distancia_total", mode="before")
+    @classmethod
+    def validate_distancia(cls, v):
+        try:
+            val = int(float(v))
+            if val <= 0:
+                raise ValueError()
+            return val
+        except (ValueError, TypeError):
+            raise ValueError(
+                "La distancia recorrida (km) no puede ser 0 ni estar vacía. Verifica la ruta o tarifa del viaje."
+            )
+
+    @field_validator("placas", "placa_remolque_1", "placa_remolque_2", mode="before")
+    @classmethod
+    def validate_placas(cls, v, info: ValidationInfo):
+        if not v or str(v).strip() in ["", "None"]:
+            return "1XXXX99" if "remolque" in info.field_name else "XXXXXX"
+        return str(v).replace("-", "").strip().upper()
+
+    @field_validator(
+        "permiso_sct", "num_permiso", "aseguradora", "poliza", mode="before"
+    )
+    @classmethod
+    def defaults_strings(cls, v, info: ValidationInfo):
+        if not v or str(v).strip() in ["", "None"]:
+            default_map = {
+                "permiso_sct": "TPAF01",
+                "num_permiso": "123456",
+                "aseguradora": "POR DEFINIR",
+                "poliza": "00000000",
+            }
+            return default_map.get(info.field_name, "N/A")
+        return str(v).strip()
+
+    @field_validator("es_material_peligroso", mode="before")
+    @classmethod
+    def parse_peligroso(cls, v):
+        if v in [True, "true", "1", "Sí", "Si", "SI", "si"]:
+            return True
+        return False
+
+    # --- VALIDADOR CRUZADO (MATERIAL PELIGROSO) ---
+
+    @model_validator(mode="after")
+    def validate_material_peligroso(self) -> "SatCfdiPayload":
+        # 1. Imprimir lo que estamos mandando antes de la validación para verlo en consola
+        print("=" * 50)
+        print("DEBUG - Validando Material Peligroso en SatCfdiPayload")
+        print(f"es_material_peligroso: {self.es_material_peligroso}")
+        print(f"cve_material_peligroso: '{self.cve_material_peligroso}'")
+        print(f"embalaje: '{self.embalaje}'")
+        print(f"aseguradora_med_ambiente: '{self.aseguradora_med_ambiente}'")
+        print(f"poliza_med_ambiente: '{self.poliza_med_ambiente}'")
+        print("=" * 50)
+
+        if self.es_material_peligroso:
+            if not self.cve_material_peligroso or str(
+                self.cve_material_peligroso
+            ).strip() in ["", "None"]:
+                raise ValueError(
+                    f"El viaje transporta MATERIAL PELIGROSO. Se requiere Clave ONU (Ej. UN1005). Valor recibido: '{self.cve_material_peligroso}'"
+                )
+            if not self.embalaje or str(self.embalaje).strip() in ["", "None"]:
+                raise ValueError(
+                    f"El viaje transporta MATERIAL PELIGROSO. Se requiere Embalaje (Ej. 4G). Valor recibido: '{self.embalaje}'"
+                )
+            if not self.aseguradora_med_ambiente or str(
+                self.aseguradora_med_ambiente
+            ).strip() in ["", "None"]:
+                raise ValueError(
+                    f"Material peligroso: El camión DEBE tener registrada una Aseguradora de Medio Ambiente. Valor recibido: '{self.aseguradora_med_ambiente}'"
+                )
+            if not self.poliza_med_ambiente or str(
+                self.poliza_med_ambiente
+            ).strip() in ["", "None"]:
+                raise ValueError(
+                    f"Material peligroso: El camión DEBE tener registrada una Póliza de Medio Ambiente. Valor recibido: '{self.poliza_med_ambiente}'"
+                )
+        return self
 
 
 from app.modules.clients.schemas import ClientResponse

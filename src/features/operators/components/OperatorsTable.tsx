@@ -29,6 +29,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { OperatorDetailSheet } from "./OperatorDetailSheet";
 import { Operator } from "../types";
+import { useLicenseTypes } from "@/features/settings/hooks/useLicenseTypes";
 
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,8 @@ const getExpiryStatus = (dateStr?: string) => {
 
 const getExpiryLabel = (dateStr?: string) => {
   if (!dateStr) return "Sin fecha";
-  return new Date(dateStr).toLocaleDateString("es-MX", { timeZone: "UTC" });
+  // Forzamos el parseo a UTC para evitar desfases de zona horaria en la tabla
+  return new Date(dateStr + "T12:00:00").toLocaleDateString("es-MX");
 };
 // ----------------------------------------
 
@@ -163,6 +165,9 @@ export function OperadoresTable({
   );
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
+  // ⚡ LLAMADA AL CATÁLOGO DE LICENCIAS
+  const { licenseTypes } = useLicenseTypes();
+
   const handleViewDetails = (operador: Operator) => {
     setSelectedOperator(operador);
     setIsDetailOpen(true);
@@ -180,20 +185,32 @@ export function OperadoresTable({
               {operador.name}
             </span>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mt-1">
-              ID: {operador.id} • Lic: {operador.license_type}
+              ID: {operador.id}
             </span>
           </div>
         ),
       },
       {
-        key: "license_number",
+        key: "license_type_id",
         header: "Licencia",
-        sortable: true,
-        render: (value) => (
-          <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
-            {value}
-          </span>
-        ),
+        render: (value, row) => {
+          // ⚡ BUSCAMOS EL NOMBRE DE LA LICENCIA EN EL CATÁLOGO
+          const license = licenseTypes?.find(
+            (lt) => String(lt.id) === String(value),
+          );
+          const nombreLicencia = license ? license.nombre : "SIN ASIGNAR";
+
+          return (
+            <div className="flex flex-col">
+              <span className="font-bold text-slate-800 dark:text-slate-200">
+                {row.license_number || "S/N"}
+              </span>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-black uppercase tracking-widest">
+                {nombreLicencia}
+              </span>
+            </div>
+          );
+        },
       },
       {
         key: "license_expiry",
@@ -204,9 +221,9 @@ export function OperadoresTable({
             date={value as string}
             label={
               value
-                ? format(new Date(value as string), "dd MMM yyyy", {
+                ? format(new Date(`${value}T12:00:00`), "dd MMM yyyy", {
                     locale: es,
-                  })
+                  }).toUpperCase()
                 : "N/A"
             }
           />
@@ -221,9 +238,9 @@ export function OperadoresTable({
             date={value as string}
             label={
               value
-                ? format(new Date(value as string), "dd MMM yyyy", {
+                ? format(new Date(`${value}T12:00:00`), "dd MMM yyyy", {
                     locale: es,
-                  })
+                  }).toUpperCase()
                 : "N/A"
             }
           />
@@ -242,15 +259,15 @@ export function OperadoresTable({
         ),
       },
       {
-        key: "assigned_unit", // Puede requerir join desde el backend o venir como unit_id
+        key: "assigned_unit_id",
         header: "Unidad",
-        render: (value, operador) =>
-          value || operador.assigned_unit_id ? (
+        render: (value) =>
+          value ? (
             <Badge
               variant="outline"
               className="font-mono text-[10px] bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 font-bold"
             >
-              {value || `ECO-${operador.assigned_unit_id}`}
+              ECO-{value}
             </Badge>
           ) : (
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 italic">
@@ -265,10 +282,9 @@ export function OperadoresTable({
         render: (value) => getStatusBadge(value as string),
       },
       {
-        key: "actions",
+        key: "id",
         header: "Acciones",
         sortable: false,
-        width: "w-[80px]",
         render: (_, operador) => (
           <div
             className="flex justify-end pr-2"
@@ -315,11 +331,11 @@ export function OperadoresTable({
         ),
       },
     ],
-    [onEdit, onDelete],
+    [onEdit, onDelete, licenseTypes],
   );
 
   return (
-    <Card variant="default" className="shadow-2xl border-none overflow-hidden">
+    <Card className="shadow-2xl border-none overflow-hidden bg-transparent">
       <CardHeader className="flex flex-row items-center justify-between border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-xl py-6 px-6">
         <CardTitle className="text-xl font-black uppercase tracking-tighter text-brand-navy dark:text-white heading-crisp flex items-center gap-3">
           <FileText className="h-6 w-6 text-brand-red" /> Listado de Operadores
@@ -337,6 +353,9 @@ export function OperadoresTable({
         operator={selectedOperator as any}
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
+        onSave={(updatedOp) => {
+          if (onEdit) onEdit(updatedOp as any);
+        }}
       />
     </Card>
   );

@@ -41,7 +41,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-//  IMPORTACIONES FSD (Ahora sí encontrarán a OrderItem e IndirectCategory)
+// IMPORTACIONES FSD
 import {
   PurchaseOrder,
   OrderItem,
@@ -52,11 +52,12 @@ import { IndirectCategory } from "@/features/payables/types";
 
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 import { useInventory } from "@/features/inventory/hooks/useInventory";
+
 interface PurchaseOrderWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (order: PurchaseOrder) => void; // Ya no usa 'any', usa el tipo estricto
-  editingOrder?: PurchaseOrder | null; // Ya no usa 'any'
+  onSave: (order: PurchaseOrder) => void;
+  editingOrder?: PurchaseOrder | null;
 }
 
 const STEPS = [
@@ -77,11 +78,11 @@ export function PurchaseOrderWizard({
 }: PurchaseOrderWizardProps) {
   const { suppliers = [] } = useSuppliers();
   const { inventoryItems = [] } = useInventory();
-  const { indirectCategories = [] } = useSuppliers();
+  const { indirectCategories = [] } = useSuppliers(); // Asumiendo que viene de aquí en tu lógica
   const [currentStep, setCurrentStep] = useState(1);
 
   // ==========================================
-  // ESTADOS DEL FORMULARIO (Mapeados a FSD)
+  // ESTADOS DEL FORMULARIO
   // ==========================================
 
   // Step 1: Encabezado
@@ -108,7 +109,6 @@ export function PurchaseOrderWizard({
     editingOrder?.service_description || "",
   );
 
-  // Campo explícito para el monto del servicio
   const [serviceAmount, setServiceAmount] = useState<number>(
     editingOrder?.subtotal || 0,
   );
@@ -125,7 +125,6 @@ export function PurchaseOrderWizard({
   // LÓGICA DE NEGOCIO Y CÁLCULOS
   // ==========================================
 
-  // Filtramos proveedores según el tipo de orden
   const filteredSuppliers = (suppliers || []).filter((s: any) => {
     if (tipo === "compra")
       return (
@@ -135,7 +134,7 @@ export function PurchaseOrderWizard({
       return s.tipo_proveedor === "servicios" || s.tipo_proveedor === "general";
     return true;
   });
-  // Cálculo de Subtotal inteligente
+
   const subtotal = useMemo(() => {
     if (tipo === "servicio" || tipo === "gasto_indirecto") {
       return items.length > 0
@@ -153,7 +152,6 @@ export function PurchaseOrderWizard({
   // ==========================================
 
   const handleAddItem = () => {
-    //  Cambiado a inventoryItems y comparación de ID string
     const inventoryItem = inventoryItems.find(
       (i) => i.id.toString() === selectedInventoryItem,
     );
@@ -164,10 +162,10 @@ export function PurchaseOrderWizard({
 
     const newItem: OrderItem = {
       id: `item-${Date.now()}`,
-      descripcion: inventoryItem.descripcion, //  Antes era .nombre
+      descripcion: inventoryItem.descripcion,
       cantidad: itemCantidad,
-      unidad: inventoryItem.unidad || "PZ", //  Antes era .unidad (agregamos fallback "PZ")
-      precioUnitario: inventoryItem.precio_unitario || 0, //  Antes era .precio_promedio
+      unidad: inventoryItem.unidad || "PZ",
+      precioUnitario: inventoryItem.precio_unitario || 0,
       subtotal: (inventoryItem.precio_unitario || 0) * itemCantidad,
     };
 
@@ -182,7 +180,7 @@ export function PurchaseOrderWizard({
     setSupplierId("");
     setRequiredDate(undefined);
     setCostCenter("mantenimiento");
-    setIndirectCategoryId(""); //  Nombre de función corregido
+    setIndirectCategoryId("");
     setRequester("");
     setItems([]);
     setServiceDescription("");
@@ -191,21 +189,20 @@ export function PurchaseOrderWizard({
   };
 
   const handleSubmit = () => {
-    //  Cambiado a 'suppliers'
     const proveedor = suppliers.find((s) => s.id.toString() === supplierId);
     const categoriaSeleccionada = indirectCategories.find(
-      (c) => c.id.toString() === indirectCategoryId,
+      (c: any) => c.id.toString() === indirectCategoryId,
     );
 
     const payload: PurchaseOrder = {
       ...editingOrder,
       id: editingOrder?.id || `po-${Date.now()}`,
-      folio: editingOrder?.folio || "PENDIENTE", //  Eliminada función generateFolio
+      folio: editingOrder?.folio || "PENDIENTE",
       tipo,
       supplier_id: supplierId,
       supplier_name: (proveedor as any)?.razon_social || "Proveedor",
       requester,
-      required_date: requiredDate?.toISOString(),
+      required_date: requiredDate?.toISOString() as string,
       cost_center: costCenter,
       indirect_category:
         tipo === "gasto_indirecto" ? categoriaSeleccionada : undefined,
@@ -225,11 +222,11 @@ export function PurchaseOrderWizard({
     handleReset();
     onOpenChange(false);
   };
+
   const handleRemoveItem = (itemId: string) => {
     setItems(items.filter((i) => i.id !== itemId));
   };
 
-  // Validación dinámica de pasos
   const canProceed = () => {
     switch (currentStep) {
       case 1:
@@ -274,7 +271,7 @@ export function PurchaseOrderWizard({
           </DialogDescription>
         </DialogHeader>
 
-        {/* PROGRESS STEPS - TAHOE STYLE */}
+        {/* PROGRESS STEPS */}
         <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-white/5">
           {STEPS.map((step, index) => (
             <div key={step.id} className="flex items-center gap-3 flex-1">
@@ -289,7 +286,7 @@ export function PurchaseOrderWizard({
                 )}
               >
                 {currentStep > step.id ? (
-                  <Check className="h-5 w-5" />
+                  <Check className="h-5 w-5 text-slate-500 dark:text-white/70" />
                 ) : (
                   step.id
                 )}
@@ -325,9 +322,6 @@ export function PurchaseOrderWizard({
 
         {/* STEP CONTENT */}
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 dark:bg-slate-900/20 custom-scrollbar">
-          {/* ==========================================
-              PASO 1: ENCABEZADO Y CLASIFICACIÓN
-             ========================================== */}
           {currentStep === 1 && (
             <div className="space-y-8 animate-in fade-in duration-300">
               <div className="space-y-3">
@@ -547,7 +541,7 @@ export function PurchaseOrderWizard({
                     </Label>
                     <Select
                       value={indirectCategoryId}
-                      onValueChange={setIndirectCategoryId} // Ya no necesita 'as IndirectCategory' porque es string
+                      onValueChange={setIndirectCategoryId}
                     >
                       <SelectTrigger className="h-11 font-bold text-xs uppercase bg-white dark:bg-slate-950">
                         <SelectValue placeholder="Seleccionar..." />
@@ -609,12 +603,8 @@ export function PurchaseOrderWizard({
             </div>
           )}
 
-          {/* ==========================================
-              PASO 2: CONCEPTOS Y DETALLES
-             ========================================== */}
           {currentStep === 2 && (
             <div className="space-y-6 animate-in fade-in duration-300">
-              {/* VISTA 1: Búsqueda en Catálogo (Bienes/Refacciones) */}
               {tipo === "compra" && (
                 <div className="space-y-6">
                   <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/5 space-y-4 shadow-sm">
@@ -634,7 +624,7 @@ export function PurchaseOrderWizard({
                           {inventoryItems.map((item) => (
                             <SelectItem
                               key={item.id}
-                              value={item.id.toString()} //  ID a string
+                              value={item.id.toString()}
                               className="py-3 border-b last:border-0 border-slate-100 dark:border-white/5"
                             >
                               <div className="flex flex-col">
@@ -644,7 +634,6 @@ export function PurchaseOrderWizard({
                                 <span className="text-[10px] text-slate-500 font-medium">
                                   Stock en almacén: {item.stock_actual}{" "}
                                   {item.unidad}{" "}
-                                  {/*  stock_actual en snake_case */}
                                 </span>
                               </div>
                             </SelectItem>
@@ -706,7 +695,7 @@ export function PurchaseOrderWizard({
                             className="h-10 w-10 text-rose-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                             onClick={() => handleRemoveItem(item.id)}
                           >
-                            <Trash2 className="h-5 w-5" />
+                            <Trash2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
                           </Button>
                         </div>
                       ))}
@@ -722,7 +711,6 @@ export function PurchaseOrderWizard({
                 </div>
               )}
 
-              {/* VISTA 2: Descripción Manual (Servicios e Indirectos) */}
               {(tipo === "servicio" || tipo === "gasto_indirecto") && (
                 <div className="space-y-6">
                   <div className="space-y-2">
@@ -769,20 +757,16 @@ export function PurchaseOrderWizard({
             </div>
           )}
 
-          {/* ==========================================
-              PASO 3: FINANZAS Y CIERRE
-             ========================================== */}
           {currentStep === 3 && (
             <div className="space-y-8 animate-in fade-in duration-300">
               <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-white/5 max-w-lg mx-auto shadow-xl ring-4 ring-slate-50 dark:ring-slate-950 relative overflow-hidden">
-                {/* Decoration */}
                 <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
                   <Receipt className="h-40 w-40 rotate-12" />
                 </div>
 
                 <h3 className="font-black text-center mb-8 flex items-center justify-center gap-3 uppercase tracking-widest text-brand-navy dark:text-blue-100">
                   <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600">
-                    <DollarSign className="h-5 w-5" />
+                    <DollarSign className="h-5 w-5 text-slate-500 dark:text-white/70" />
                   </div>
                   Resumen Financiero
                 </h3>

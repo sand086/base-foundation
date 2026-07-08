@@ -9,7 +9,7 @@ const Maintenance = () => {
     <div className="p-4 md:p-8 space-y-8 animate-page-enter pb-20">
       {/*  PAGE HEADER TAHOE */}
       <PageHeader
-        title="Maintenance & Inventario"
+        title="Mantenimiento e inventario"
         description="Gestión centralizada de refacciones y control de órdenes de trabajo operativas."
         icon={<Settings2 className="h-8 w-8 text-brand-navy dark:text-white" />}
       />

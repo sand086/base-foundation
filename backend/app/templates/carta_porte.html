@@ -15,7 +15,7 @@
               {% if logo_src %}
               <img src="{{ logo_src }}" class="logo-img" alt="Logo" />
               {% else %}
-              <div class="header-company">TRANSPORTES RAPIDOS 3T</div>
+              <div class="header-company">RÁPIDOS 3T</div>
               {% endif %}
             </td>
 
@@ -28,7 +28,7 @@
                 class="bold text-dark"
                 style="font-size: 10pt; margin-bottom: 2px"
               >
-                TRANSPORTES RAPIDOS 3T
+                RÁPIDOS 3T
               </div>
               <div>
                 <span class="bold text-muted">RFC:</span>
@@ -98,7 +98,9 @@
           <tr>
             <td colspan="2">
               <span class="grid-label">Dirección Fiscal</span>
-              <span class="text-dark">{{ cp_cliente }} (C.P.)</span>
+              <span class="text-dark"
+                >{{ direccion_cliente }}, C.P. {{ cp_cliente }}</span
+              >
             </td>
             <td>
               <span class="grid-label">C.P. Receptor</span>
@@ -180,30 +182,88 @@
         <table class="grid-table">
           <tr>
             <td width="25%">
-              <span class="grid-label">Uso CFDI</span
-              ><span class="text-dark">{{ uso_cfdi }}</span>
+              <span class="grid-label">Uso CFDI</span>
+              <span class="text-dark">
+                {{ uso_cfdi }} {% if uso_cfdi == 'G01' %}(Adquisición de
+                mercancías) {% elif uso_cfdi == 'G02' %}(Devoluciones,
+                descuentos o bonificaciones) {% elif uso_cfdi == 'G03' %}(Gastos
+                en general) {% elif uso_cfdi == 'I04' %}(Equipo de computo y
+                accesorios) {% elif uso_cfdi == 'I08' %}(Otra maquinaria y
+                equipo) {% elif uso_cfdi == 'P01' %}(Por definir) {% elif
+                uso_cfdi == 'S01' %}(Sin efectos fiscales) {% elif uso_cfdi ==
+                'CP01' %}(Pagos) {% endif %}
+              </span>
             </td>
             <td width="30%">
-              <span class="grid-label">Método de Pago</span
-              ><span class="text-dark">{{ metodo_pago }}</span>
+              <span class="grid-label">Método de Pago</span>
+              <span class="text-dark">
+                {{ metodo_pago }} {% if metodo_pago == 'PUE' %}(Pago en una sola
+                exhibición) {% elif metodo_pago == 'PPD' %}(Pago en
+                parcialidades o diferido) {% endif %}
+              </span>
             </td>
             <td width="20%">
-              <span class="grid-label">Moneda</span
-              ><span class="bold text-dark">{{ moneda }}</span>
+              <span class="grid-label">Moneda</span>
+              <span class="bold text-dark">{{ moneda }}</span>
             </td>
             <td width="25%">
-              <span class="grid-label">Forma de Pago</span
-              ><span class="text-dark">{{ forma_pago }}</span>
+              <span class="grid-label">Forma de Pago</span>
+              <span class="text-dark">
+                {{ forma_pago }} {% if forma_pago == '01' %}(Efectivo) {% elif
+                forma_pago == '02' %}(Cheque nominativo) {% elif forma_pago ==
+                '03' %}(Transferencia electrónica de fondos) {% elif forma_pago
+                == '04' %}(Tarjeta de crédito) {% elif forma_pago == '28'
+                %}(Tarjeta de débito) {% elif forma_pago == '99' %}(Por definir)
+                {% endif %}
+              </span>
             </td>
           </tr>
         </table>
       </div>
 
+      {% if subcliente_nombre %}
+      <div class="bento-card">
+        <div
+          class="bento-card-header"
+          style="color: #0f172a; border-left-color: #cbd5e1"
+        >
+          Destino Físico
+        </div>
+        <table class="grid-table">
+          <tr>
+            <td width="40%">
+              <span class="grid-label">Nombre</span>
+              <span class="bold text-dark" style="font-size: 7.5pt"
+                >{{ subcliente_nombre }}</span
+              >
+            </td>
+
+            <td width="60%">
+              <span class="grid-label">Contacto (Teléfono / Correo)</span>
+              <span class="text-dark" style="font-size: 6.5pt"
+                >{{ subcliente_telefono }} {% if subcliente_correo %}| {{
+                subcliente_correo }}{% endif %}</span
+              >
+            </td>
+          </tr>
+          <tr>
+            <td colspan="3">
+              <span class="grid-label">Dirección de Entrega</span>
+              <span class="text-dark" style="font-size: 6.5pt"
+                >{{ subcliente_direccion }}</span
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+      {% endif %}
+
       <table class="table-main">
         <thead>
           <tr>
             <td width="15%" class="center">CÓDIGO</td>
-            <td width="55%">DESCRIPCIÓN SERVICIO</td>
+            <td width="10%" class="center">CANT.</td>
+            <td width="45%">DESCRIPCIÓN SERVICIO</td>
             <td width="15%" class="right">UNITARIO</td>
             <td width="15%" class="right">IMPORTE</td>
           </tr>
@@ -212,6 +272,7 @@
           {% for c in conceptos %}
           <tr>
             <td class="center text-muted bold">{{ c.clave }}</td>
+            <td class="center text-dark">{{ c.cantidad }}</td>
             <td>
               <span class="bold text-dark">{{ c.descripcion }}</span><br />
               <span style="font-size: 6pt; color: #64748b"
@@ -284,7 +345,7 @@
           <tr>
             <td width="50%">
               <span class="grid-label">Remitente</span
-              ><span class="bold text-dark">TRANSPORTES RAPIDOS 3T</span>
+              ><span class="bold text-dark">RÁPIDOS 3T</span>
             </td>
             <td width="50%">
               <span class="grid-label">RFC Remitente</span
@@ -298,7 +359,10 @@
             </td>
             <td>
               <span class="grid-label">Domicilio Origen</span
-              ><span class="text-dark">{{ domicilio_origen }}</span>
+              ><span class="text-dark"
+                >Desarrollo, Mz 3, Lt. 10 y 11, Col. Renacimiento, 91808
+                Veracruz, Ver.</span
+              >
             </td>
           </tr>
         </table>
@@ -315,7 +379,7 @@
           <tr>
             <td width="50%">
               <span class="grid-label">Destinatario</span
-              ><span class="bold text-dark">{{ destinatario_nombre }}</span>
+              ><span class="bold text-dark">{{ subcliente_nombre }}</span>
             </td>
             <td width="50%">
               <span class="grid-label">RFC Destinatario</span
@@ -329,7 +393,7 @@
             </td>
             <td>
               <span class="grid-label">Domicilio Destino</span
-              ><span class="text-dark">{{ domicilio_destino }}</span>
+              ><span class="text-dark">{{ subcliente_direccion }}</span>
             </td>
           </tr>
         </table>
@@ -377,8 +441,11 @@
             <td width="60%">
               <span class="grid-label">Bienes</span>
               <span class="text-dark"
-                >{{ bienes_transp }} - {{ descripcion_mercancia }}</span
+                >[{{ bienes_transp }}] - {{ descripcion_mercancia_pdf }}</span
               >
+              <div class="text-dark" style="font-size: 6.5pt; margin-top: 3px">
+                Cantidad: {{ cantidad }} pza | {{ info_material_peligroso }}
+              </div>
             </td>
             <td width="40%">
               <span class="grid-label">Peso Bruto Total</span>
@@ -388,9 +455,9 @@
           <tr>
             <td colspan="2">
               <span class="grid-label text-primary"
-                >Equipos Especiales y Referencia</span
+                >Contenedores y Referencia</span
               >
-              <span class="bold text-dark" style="font-size: 8pt">
+              <span class="bold text-dark">
                 {% if contenedor_1 and contenedor_1 != 'N/A' %} CONTENEDOR 1: {{
                 contenedor_1 }} {% endif %} {% if contenedor_2 and contenedor_2
                 != 'N/A' %} | CONTENEDOR 2: {{ contenedor_2 }} {% endif %} {% if
@@ -423,8 +490,8 @@
       </div>
 
       <div class="addenda-box">
-        <span class="bold text-dark">Leyes y Condiciones:</span><br />
-        {{ leyenda_legal }}
+        <span class="bold text-dark">Addenda:</span><br />
+        {{ leyenda_legal | striptags }}
       </div>
     </main>
   </body>

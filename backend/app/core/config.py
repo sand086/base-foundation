@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # El refresh token durará 7 días
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
+    # <-- NUEVO: Llave secreta de Google reCAPTCHA V3 -->
+    # La inicializamos vacía por defecto, pero Pydantic la llenará
+    # automáticamente con lo que encuentre en tu archivo .env
+    GOOGLE_RECAPTCHA_V3_SECRET_KEY: str = ""
+
     # Base de Datos
     POSTGRES_SERVER: str = "localhost"
     POSTGRES_USER: str = "postgres"

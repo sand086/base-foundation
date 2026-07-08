@@ -6,6 +6,7 @@ SQLAlchemy ORM Models for TMS
 - Enum names alineados a los tipos existentes en Postgres.
 """
 
+import uuid
 from datetime import date
 from enum import Enum as PyEnum
 from sqlalchemy import Enum as SAEnum
@@ -63,6 +64,7 @@ class UnitType(str, PyEnum):
     REMOLQUE = "remolque"
     CAMIONETA = "camioneta"
     CAMION = "camion"
+    MOTOGENERADOR = "motogenerador"
     OTRO = "otro"
 
 
@@ -161,9 +163,9 @@ class WorkOrderStatus(str, PyEnum):
 class InventoryCategory(str, PyEnum):
     MOTOR = "motor"
     FRENOS = "frenos"
-    ELECTRICO = "eléctrico"
-    SUSPENSION = "suspensión"
-    TRANSMISION = "transmisión"
+    ELECTRICO = "electrico"  # Sin acento
+    SUSPENSION = "suspension"  # Sin acento
+    TRANSMISION = "transmision"  # Sin acento
     GENERAL = "general"
 
 
@@ -177,6 +179,7 @@ class InvoiceStatus(str, PyEnum):
     PENDIENTE = "pendiente"
     PAGO_PARCIAL = "pago_parcial"
     PAGADO = "pagado"
+    PROCESO_CANCELACION = "proceso_cancelacion"
     CANCELADO = "cancelado"
 
 
@@ -289,6 +292,10 @@ class Client(AuditMixin, Base):
     estatus = Column(
         pg_enum(ClientStatus, "clientstatus"), default=ClientStatus.PENDIENTE
     )
+
+    forma_pago = Column(String(5), default="99")  # Ej: 01, 03, 99
+    metodo_pago = Column(String(5), default="PPD")  # PUE o PPD
+    moneda = Column(String(5), default="MXN")  # MXN, USD
 
     dias_credito = Column(Integer, default=0)
     contrato_url = Column(String(500))
@@ -449,6 +456,15 @@ class Unit(AuditMixin, Base):
     configuracion_ejes = Column(
         pg_enum(UnitAxleConfig, "unitaxleconfig"), nullable=True
     )
+    aseguradora_med_ambiente_id = Column(
+        Integer, ForeignKey("insurers_catalog.id", ondelete="SET NULL"), nullable=True
+    )
+    poliza_med_ambiente = Column(String(50), nullable=True)
+
+    # Relación para poder sacar el nombre fácilmente en Python
+    aseguradora_ambiental = relationship(
+        "InsurerCatalog", foreign_keys=[aseguradora_med_ambiente_id]
+    )
 
     operators = relationship("Operator", back_populates="assigned_unit")
     tires = relationship("Tire", back_populates="unit")
@@ -572,7 +588,12 @@ class Operator(AuditMixin, Base):
 
     name = Column(String(100), nullable=False)
     license_number = Column(String(50), unique=True, nullable=False)
-    license_type = Column(String(5), default="E")
+    license_type = relationship("LicenseTypeCatalog")
+    license_type_id = Column(
+        Integer,
+        ForeignKey("license_types_catalog.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     license_expiry = Column(Date, nullable=False)
     medical_check_expiry = Column(Date, nullable=False)
     phone = Column(String(20))
@@ -635,6 +656,16 @@ class Trip(AuditMixin, Base):
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
 
+    is_refrigerated_1 = Column(Boolean, default=False, server_default="false")
+    motogenerator_1_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+
+    is_refrigerated_2 = Column(Boolean, default=False, server_default="false")
+    motogenerator_2_id = Column(
+        Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
+    )
+
     origin = Column(String(200), nullable=False)
     destination = Column(String(200), nullable=False)
     route_name = Column(String(200))
@@ -643,6 +674,9 @@ class Trip(AuditMixin, Base):
     descripcion_mercancia = Column(String(255), default="Carga General")
     peso_toneladas = Column(Float, default=0.0)
     es_material_peligroso = Column(Boolean, default=False)
+    cve_material_peligroso = Column(String(10), nullable=True)  # Ej: UN1005
+    embalaje = Column(String(10), nullable=True)  # Ej: 4G
+    sat_clave_servicio = Column(String(20), default="78101802")  # Flete
     referencia = Column(String(100), nullable=True)
     contenedor_1 = Column(String(100), nullable=True)
     contenedor_2 = Column(String(100), nullable=True)
@@ -684,6 +718,14 @@ class Trip(AuditMixin, Base):
         order_by="TripLeg.id",
     )
     work_orders = relationship("WorkOrder", back_populates="trip")
+
+    motogenerator_1_unit = relationship(
+        "Unit", foreign_keys=[motogenerator_1_id], viewonly=True
+    )
+    motogenerator_2_unit = relationship(
+        "Unit", foreign_keys=[motogenerator_2_id], viewonly=True
+    )
+    receivable_invoices = relationship("ReceivableInvoice", back_populates="trip")
 
 
 class TripLeg(AuditMixin, Base):
@@ -727,6 +769,7 @@ class TripLeg(AuditMixin, Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     last_location = Column(String(200))
+    diesel_audit_completed = Column(Boolean, default=False, server_default="false")
 
     trip = relationship("Trip", back_populates="legs")
     unit = relationship("Unit", foreign_keys=[unit_id], back_populates="trip_legs")
@@ -817,18 +860,6 @@ class SystemConfig(AuditMixin, Base):
     grupo = Column(String(50), nullable=True)
     tipo = Column(String(20), default="string")
     is_public = Column(Boolean, default=False)
-
-
-class Provider(AuditMixin, Base):
-    __tablename__ = "providers"
-
-    id = Column(Integer, primary_key=True, index=True)
-    razon_social = Column(String(200), nullable=False)
-    rfc = Column(String(13), unique=True, nullable=False)
-    email = Column(String(100))
-    telefono = Column(String(20))
-    direccion = Column(Text)
-    dias_credito = Column(Integer, default=0)
 
 
 class BulkUploadHistory(AuditMixin, Base):
@@ -952,6 +983,10 @@ class WorkOrder(AuditMixin, Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     fecha_cierre = Column(DateTime(timezone=True), nullable=True)
+    porcentaje_iva = Column(Float, default=16.0, server_default="16.0")
+    subtotal = Column(Float, default=0.0)
+    total = Column(Float, default=0.0)
+    costo_mano_obra = Column(Float, default=0.0)
 
     unit = relationship("Unit", back_populates="work_orders")
     mechanic = relationship("Mechanic", back_populates="work_orders")
@@ -994,7 +1029,6 @@ class Supplier(AuditMixin, Base):
     limite_credito = Column(Float, default=0.0)
 
     contacto_principal = Column(String(100))
-    categoria = Column(String(50))
 
     tipo_proveedor = Column(String(50))
     zonas_cobertura = Column(String(255))
@@ -1002,11 +1036,14 @@ class Supplier(AuditMixin, Base):
     banco = Column(String(100))
     cuenta_bancaria = Column(String(50))
     clabe = Column(String(18))
+    cost_center_id = Column(
+        Integer, ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True
+    )
 
     estatus = Column(
         pg_enum(SupplierStatus, "supplierstatus"), default=SupplierStatus.ACTIVO
     )
-
+    cost_center = relationship("CostCenter")
     invoices = relationship("PayableInvoice", back_populates="supplier")
     tariffs = relationship(
         "SupplierTariff", back_populates="supplier", cascade="all, delete-orphan"
@@ -1081,7 +1118,6 @@ class PayableInvoice(AuditMixin, Base):
     supplier_id = Column(
         Integer, ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=True
     )
-
     viaje_id = Column(
         Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
     )
@@ -1091,29 +1127,54 @@ class PayableInvoice(AuditMixin, Base):
     categoria_indirecto_id = Column(
         Integer, ForeignKey("indirect_expense_categories.id"), nullable=True
     )
-
     orden_compra_id = Column(
         Integer, ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # NUEVO: Relación a CECO (nullable=True para no romper registros existentes)
+    cost_center_id = Column(
+        Integer, ForeignKey("cost_centers.id", ondelete="RESTRICT"), nullable=True
     )
 
     uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
 
+    # NUEVO: Campos SAT (nullable=True)
+    serie = Column(String(20), nullable=True)
+    folio = Column(String(50), nullable=True)
+
     subtotal = Column(Float, default=0.0)
+    # NUEVO: Descuento
+    descuento = Column(Float, default=0.0)
     iva = Column(Float, default=0.0)
     retenciones = Column(Float, default=0.0)
     monto_total = Column(Float, nullable=False)
     saldo_pendiente = Column(Float, nullable=False)
 
+    # NUEVO: Impuestos detallados (usamos server_default para que la BD no llore con los viejos)
+    desglose_impuestos = Column(JSONB, default=dict, server_default="{}")
+
     moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
+    # NUEVO: Tipo de cambio
+    tipo_cambio = Column(Float, default=1.0)
+
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
-    concepto = Column(String(200))
+    concepto = Column(Text, nullable=True)
+
+    # MANTENIDO: No borramos este campo para no romper tu código actual
     clasificacion = Column(String(50))
 
-    metodo_pago = Column(String(5), nullable=True)  # PUE o PPD
-    forma_pago = Column(String(5), nullable=True)  # 01, 03, 99...
+    metodo_pago = Column(String(5), nullable=True)
+    forma_pago = Column(String(5), nullable=True)
     tipo_comprobante = Column(String(5), nullable=True)
+
+    # NUEVO: Clasificadores SAT
+    uso_cfdi = Column(String(5), nullable=True)
+    validacion_efos = Column(Boolean, default=False, server_default="false")
+    motivo_cancelacion = Column(String(5), nullable=True)  # Ej: "01", "02"
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
 
     estatus = Column(
         pg_enum(InvoiceStatus, "invoicestatus"), default=InvoiceStatus.PENDIENTE
@@ -1123,10 +1184,26 @@ class PayableInvoice(AuditMixin, Base):
     xml_url = Column(String(500))
 
     supplier = relationship("Supplier", back_populates="invoices")
+    cost_center = relationship("CostCenter", back_populates="invoices")
     payments = relationship(
         "InvoicePayment", back_populates="invoice", cascade="all, delete-orphan"
     )
     document_history = relationship("InvoiceDocumentHistory", back_populates="invoice")
+
+
+## =========================================================
+# COSTOS (CECOS)
+# =========================================================
+class CostCenter(AuditMixin, Base):
+    __tablename__ = "cost_centers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    codigo = Column(String(20), unique=True, nullable=False, index=True)
+    nombre = Column(String(100), nullable=False)
+    presupuesto_mensual = Column(Float, default=0.0)
+    activo = Column(Boolean, default=True)
+
+    invoices = relationship("PayableInvoice", back_populates="cost_center")
 
 
 class InvoiceDocumentHistory(AuditMixin, Base):
@@ -1134,10 +1211,74 @@ class InvoiceDocumentHistory(AuditMixin, Base):
     id = Column(Integer, primary_key=True)
     invoice_id = Column(Integer, ForeignKey("payable_invoices.id", ondelete="CASCADE"))
     document_type = Column(String(20))
+    filename = Column(String(255), nullable=False, server_default="documento.pdf")
     file_url = Column(String(500))
     version = Column(Integer, default=1)
     is_active = Column(Boolean, default=True)
     invoice = relationship("PayableInvoice", back_populates="document_history")
+
+
+class ReceivableInvoiceDocumentHistory(AuditMixin, Base):
+    __tablename__ = "receivable_invoice_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(
+        Integer,
+        ForeignKey("receivable_invoices.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_type = Column(String(50), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    invoice = relationship("ReceivableInvoice", back_populates="document_history")
+
+
+class ReceivablePaymentDocumentHistory(AuditMixin, Base):
+    __tablename__ = "receivable_payment_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(
+        Integer,
+        ForeignKey("receivable_invoice_payments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    document_type = Column(String(50), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    payment = relationship(
+        "ReceivableInvoicePayment", back_populates="document_history"
+    )
+
+
+class PayablePaymentDocumentHistory(AuditMixin, Base):
+    __tablename__ = "payable_payment_document_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(
+        Integer, ForeignKey("invoice_payments.id", ondelete="CASCADE"), nullable=False
+    )
+    document_type = Column(String(50), nullable=False)
+    filename = Column(String(255), nullable=False)
+    file_url = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+
+    version = Column(Integer, default=1)
+    is_active = Column(Boolean, default=True)
+
+    payment = relationship("InvoicePayment", back_populates="document_history")
 
 
 class InvoicePayment(AuditMixin, Base):
@@ -1153,11 +1294,31 @@ class InvoicePayment(AuditMixin, Base):
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
+
+    # NUEVOS: Complementos de pago (nullable=True para no romper pagos viejos)
+    parcialidad = Column(Integer, default=1, server_default="1")
+    saldo_anterior = Column(Float, nullable=True)
+    saldo_insoluto = Column(Float, nullable=True)
+
     metodo_pago = Column(String(50))
-    referencia = Column(String(100))
+    # referencia = Column(String(100))
+    referencia = Column(Text)
     cuenta_retiro = Column(String(50))
     complemento_uuid = Column(String(36))
     comprobante_url = Column(String(500), nullable=True)
+
+    # 👇 LOS CAMPOS QUE FALTABAN Y CAUSABAN EL CRASH 👇
+    estatus = Column(String(50), default="ACTIVO", server_default="ACTIVO")
+    motivo_cancelacion = Column(String(5), nullable=True)
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
+
+    document_history = relationship(
+        "PayablePaymentDocumentHistory",
+        back_populates="payment",
+        cascade="all, delete-orphan",
+    )
+    # 👆 -------------------------------------------- 👆
 
     invoice = relationship("PayableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")
@@ -1347,6 +1508,10 @@ class FuelLog(AuditMixin, Base):
     total = Column(Float, default=0.0, nullable=False)
     odometro = Column(Integer, nullable=False)  # Odómetro inicial
 
+    is_motogenerator = Column(Boolean, default=False, server_default="false")
+    horometro = Column(Float, nullable=True)  # Lectura inicial del generador
+    horas_sm = Column(Float, nullable=True)  # Horas de trabajo registradas al conciliar
+
     evidencia_url = Column(String(500), nullable=True)
     excede_tanque = Column(Boolean, default=False)
     capacidad_tanque_snapshot = Column(Float, nullable=True)
@@ -1411,6 +1576,13 @@ class ReceivableInvoice(AuditMixin, Base):
         Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
     )
 
+    # 🚨 NUEVO FASE 1: Jerarquía Padre-Hijo (Factura Real -> Cartas Porte)
+    factura_padre_id = Column(
+        Integer,
+        ForeignKey("receivable_invoices.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
     is_nominal = Column(Boolean, default=False)
@@ -1426,6 +1598,7 @@ class ReceivableInvoice(AuditMixin, Base):
     moneda = Column(pg_enum(Currency, "currency"), default=Currency.MXN)
     fecha_emision = Column(Date, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)
+    conceptos_detalle = Column(JSONB, default=list, server_default="[]")
     concepto = Column(String(255))
 
     estatus = Column(
@@ -1437,6 +1610,14 @@ class ReceivableInvoice(AuditMixin, Base):
     acuse_cancelacion_url = Column(String(500), nullable=True)
     fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
 
+    # 🚨 NUEVO FASE 1: Trazabilidad y Memoria de Errores
+    intentos_cancelacion = Column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    detalle_sat = Column(
+        Text, nullable=True
+    )  # Aquí guardaremos "Rechazo del receptor" o "Error 305"
+
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
 
@@ -1444,14 +1625,28 @@ class ReceivableInvoice(AuditMixin, Base):
     forma_pago = Column(String(5), nullable=True)  # 01, 03, 99...
     tipo_comprobante = Column(String(5), nullable=True)  # I, E, P
 
+    # RELACIONES
     sub_client = relationship("SubClient")
-    trip = relationship("Trip")
+    trip = relationship("Trip", back_populates="receivable_invoices")
     payments = relationship(
         "ReceivableInvoicePayment",
         back_populates="invoice",
         cascade="all, delete-orphan",
     )
     client = relationship("Client", back_populates="receivable_invoices")
+    document_history = relationship(
+        "ReceivableInvoiceDocumentHistory",
+        back_populates="invoice",
+        cascade="all, delete-orphan",
+    )
+
+    # 🚨 NUEVO FASE 1: Relaciones recursivas para encontrar hijos y al padre fácilmente en Python
+    factura_padre = relationship(
+        "ReceivableInvoice", remote_side=[id], back_populates="cartas_porte_hijas"
+    )
+    cartas_porte_hijas = relationship(
+        "ReceivableInvoice", back_populates="factura_padre"
+    )
 
 
 class ReceivableInvoicePayment(AuditMixin, Base):
@@ -1469,11 +1664,36 @@ class ReceivableInvoicePayment(AuditMixin, Base):
 
     fecha_pago = Column(Date, default=date.today)
     monto = Column(Float, nullable=False)
+
+    # NUEVOS CAMPOS AGREGADOS PARA EL REP (Complemento de Pago)
+    parcialidad = Column(Integer, default=1, server_default="1")
+    saldo_anterior = Column(Float, nullable=True)
+    saldo_insoluto = Column(Float, nullable=True)
+
     metodo_pago = Column(String(50))
-    referencia = Column(String(100))
+    # referencia = Column(String(100))
+    referencia = Column(Text)
     cuenta_deposito = Column(String(50))
     complemento_uuid = Column(String(36), nullable=True)
     comprobante_url = Column(String(500), nullable=True)
+    folio_complemento = Column(String(50), nullable=True)
+
+    # NUEVO: CAMPOS DE ESTATUS Y CANCELACIÓN
+    estatus = Column(String(50), default="ACTIVO", server_default="ACTIVO")
+    motivo_cancelacion = Column(String(5), nullable=True)
+    acuse_cancelacion_url = Column(String(500), nullable=True)
+    fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
+    intentos_cancelacion = Column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    detalle_sat = Column(Text, nullable=True)
+
+    # NUEVO: Relación de historial documental
+    document_history = relationship(
+        "ReceivablePaymentDocumentHistory",
+        back_populates="payment",
+        cascade="all, delete-orphan",
+    )
 
     invoice = relationship("ReceivableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")
@@ -1533,8 +1753,17 @@ class BankMovement(AuditMixin, Base):
 
     conciliado = Column(Boolean, default=False, server_default="false")
     fecha_conciliacion = Column(Date, nullable=True)
+    origen_modulo = Column(String(50), nullable=True)
 
     bank_account = relationship("BankAccount", backref="movements")
+
+    @property
+    def banco(self):
+        return self.bank_account.banco if self.bank_account else None
+
+    @property
+    def cuenta_bancaria(self):
+        return self.bank_account.numero_cuenta if self.bank_account else None
 
 
 class UserNotification(AuditMixin, Base):
@@ -1606,6 +1835,94 @@ class SettlementConceptCatalog(AuditMixin, Base):
     )
     descripcion = Column(String(255), nullable=True)
     activo = Column(Boolean, default=True, server_default="true")
+
+
+class SettlementBatch(AuditMixin, Base):
+    """
+    El Registro Maestro del Lote de pago (Generado con UUID desde el Frontend).
+    Agrupa peticiones para no perder el tracking temporal.
+    """
+
+    __tablename__ = "settlement_batches"
+
+    # Usamos UUIDs para poder mandarlo generado desde el frontend y agrupar peticiones asíncronas
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Relaciones
+    settlements = relationship(
+        "OperatorSettlement", back_populates="batch", cascade="all, delete-orphan"
+    )
+
+
+class OperatorSettlement(AuditMixin, Base):
+    """
+    Foto inmutable del tramo operado. Protege la historia.
+    Si mañana cambian la tarifa_base, la liquidación histórica no se rompe.
+    """
+
+    __tablename__ = "operator_settlements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(
+        String(36),
+        ForeignKey("settlement_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    trip_leg_id = Column(
+        Integer, ForeignKey("trip_legs.id", ondelete="RESTRICT"), nullable=False
+    )
+    operator_id = Column(
+        Integer, ForeignKey("operators.id", ondelete="RESTRICT"), nullable=False
+    )
+
+    # Snapshots Financieros y Operativos Inmutables
+    snapshot_km = Column(Float, default=0.0)
+    snapshot_diesel_liters = Column(Float, default=0.0)
+    snapshot_base_salary = Column(Float, default=0.0)
+
+    # Relaciones
+    batch = relationship("SettlementBatch", back_populates="settlements")
+    leg = relationship("TripLeg")
+    operator = relationship("Operator")
+    concepts = relationship(
+        "OperatorSettlementConcept",
+        back_populates="settlement",
+        cascade="all, delete-orphan",
+    )
+
+
+class OperatorSettlementConcept(AuditMixin, Base):
+    """
+    Desglose por bolsa de operador.
+    Separa bonos/cargos ingresados a mano (Bolsa de Juan) vs los inyectados por el sistema (Sueldo base).
+    """
+
+    __tablename__ = "operator_settlement_concepts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operator_settlement_id = Column(
+        Integer,
+        ForeignKey("operator_settlements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    concept_id = Column(
+        Integer,
+        ForeignKey("settlement_concepts_catalog.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    descripcion = Column(String(255), nullable=False)
+    tipo = Column(
+        pg_enum(SettlementConceptType, "settlementconcepttype"), nullable=False
+    )
+    amount = Column(Float, nullable=False, default=0.0)
+
+    # EL FILTRO ANTI-DUPLICIDAD: True = Sistema (ej. Sueldo Base), False = Manual (ej. Bono extra)
+    is_automatic = Column(Boolean, default=False, server_default="false")
+
+    # Relaciones
+    settlement = relationship("OperatorSettlement", back_populates="concepts")
+    catalog_concept = relationship("SettlementConceptCatalog")
 
 
 class InsurerCatalog(AuditMixin, Base):
@@ -1793,3 +2110,82 @@ class SatUnitWeight(Base):
     descripcion = Column(Text, nullable=True)
     simbolo = Column(String(20), nullable=True)
     activo = Column(Boolean, default=True)
+
+
+# =========================================================
+# 🛡️ EVENT LISTENER GLOBAL DE AUDITORÍA (AL FINAL DEL ARCHIVO)
+# =========================================================
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import get_history
+
+
+@event.listens_for(Session, "before_flush")
+def generate_global_audit_logs(session, flush_context, instances):
+    """
+    Escucha automáticamente todas las inserciones, ediciones y eliminaciones (Soft/Hard)
+    en todo el sistema y crea un registro en AuditLog para que aparezca en el Frontend.
+    """
+
+    # 1. Detectar registros CREADOS
+    for obj in session.new:
+        # Filtramos para que solo audite modelos que tienen created_by_id y evitamos bucles infinitos en AuditLog
+        if hasattr(obj, "created_by_id") and type(obj).__name__ != "AuditLog":
+            user_id = getattr(obj, "created_by_id", None)
+            if user_id:
+                log = AuditLog(
+                    user_id=user_id,
+                    accion=f"Creó un nuevo registro",
+                    tipo_accion="crear",
+                    modulo=type(obj).__name__,  # Ej: "Client", "Supplier", "Trip"
+                    detalles=f"Inserción en tabla: {getattr(obj, '__tablename__', 'N/A')}",
+                )
+                session.add(log)
+
+    # 2. Detectar registros EDITADOS o ELIMINADOS LÓGICAMENTE (Soft Delete)
+    for obj in session.dirty:
+        if hasattr(obj, "updated_by_id") and type(obj).__name__ != "AuditLog":
+            user_id = getattr(obj, "updated_by_id", None) or getattr(
+                obj, "created_by_id", None
+            )
+            if user_id:
+                tipo_acc = "editar"
+                acc_text = "Editó un registro"
+
+                # Detectar si fue un Soft Delete (cambio de estado a 'E' o ELIMINADO)
+                if hasattr(obj, "record_status"):
+                    hist = get_history(obj, "record_status")
+                    if hist.added:
+                        nuevo_estado = hist.added[0]
+                        # Validamos si el Enum o string es "E" o "ELIMINADO"
+                        if (
+                            str(nuevo_estado) == "E"
+                            or getattr(nuevo_estado, "value", str(nuevo_estado)) == "E"
+                        ):
+                            tipo_acc = "eliminar"
+                            acc_text = "Eliminó un registro (Soft Delete)"
+
+                log = AuditLog(
+                    user_id=user_id,
+                    accion=acc_text,
+                    tipo_accion=tipo_acc,
+                    modulo=type(obj).__name__,
+                    detalles=f"Modificación en tabla: {getattr(obj, '__tablename__', 'N/A')} (ID: {getattr(obj, 'id', 'N/A')})",
+                )
+                session.add(log)
+
+    # 3. Detectar registros ELIMINADOS FÍSICAMENTE (Hard Delete)
+    for obj in session.deleted:
+        # Aquí intentamos sacar el user_id si el objeto lo tenía cargado antes de borrarse
+        user_id = getattr(obj, "updated_by_id", None) or getattr(
+            obj, "created_by_id", None
+        )
+        if type(obj).__name__ != "AuditLog":
+            log = AuditLog(
+                user_id=user_id,  # Puede ser None si era un delete directo por SQL
+                accion="Eliminó un registro permanentemente",
+                tipo_accion="eliminar",
+                modulo=type(obj).__name__,
+                detalles=f"Borrado definitivo en tabla: {getattr(obj, '__tablename__', 'N/A')} (ID: {getattr(obj, 'id', 'N/A')})",
+            )
+            session.add(log)

@@ -10,6 +10,7 @@ export type TripTimelineEventCreatePayload = {
     lng?: (string | null);
     notifyClient?: (boolean | null);
     odometro?: (number | null);
+    odometro_final?: (number | null);
     combustible_porcentaje?: (number | null);
     combustible_litros?: (number | null);
     terminal_entrega_vacio?: (string | null);

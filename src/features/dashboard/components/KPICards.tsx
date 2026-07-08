@@ -75,9 +75,9 @@ export function KPICards({ stats }: KPICardsProps) {
         {/* Total Servicios */}
         <Card
           ref={refServicios}
-          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden"
+          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden dark:text-white"
         >
-          <CardHeader className="pb-2 pt-4 px-4">
+          <CardHeader className="pb-2 pt-4 px-4 ">
             <CardTitle>
               <ChartActionMenu
                 title="Servicios"
@@ -94,13 +94,13 @@ export function KPICards({ stats }: KPICardsProps) {
                 }
               />
             </CardTitle>
-            <div className="h-8 w-8 rounded-xl bg-brand-dark/10 flex items-center justify-center mt-2">
-              <Truck className="h-4 w-4 text-brand-dark" />
+            <div className="h-8 w-8 rounded-xl bg-brand-dark/10 flex items-center justify-center mt-2 ">
+              <Truck className="h-4 w-4 text-brand-dark dark:text-white" />
             </div>
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-brand-dark tracking-tight">
+              <span className="text-3xl font-bold text-brand-dark dark:text-white tracking-tight">
                 {stats.totalServices.toLocaleString("es-MX")}
               </span>
             </div>
@@ -110,7 +110,7 @@ export function KPICards({ stats }: KPICardsProps) {
         {/* On Time % */}
         <Card
           ref={refOnTime}
-          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden"
+          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden dark:text-white"
         >
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle>
@@ -135,7 +135,7 @@ export function KPICards({ stats }: KPICardsProps) {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-brand-green tracking-tight">
+              <span className="text-3xl font-bold text-brand-green dark:text-white tracking-tight">
                 {stats.onTimePercentage}%
               </span>
             </div>
@@ -145,7 +145,7 @@ export function KPICards({ stats }: KPICardsProps) {
         {/* Servicios con Retraso */}
         <Card
           ref={refTardios}
-          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden"
+          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden "
         >
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle>
@@ -170,7 +170,7 @@ export function KPICards({ stats }: KPICardsProps) {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-brand-red tracking-tight">
+              <span className="text-3xl font-bold text-brand-red dark:text-white tracking-tight">
                 {stats.lateCount}
               </span>
             </div>
@@ -180,7 +180,7 @@ export function KPICards({ stats }: KPICardsProps) {
         {/* Ingresos */}
         <Card
           ref={refIngresos}
-          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden"
+          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden "
         >
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle>
@@ -208,7 +208,7 @@ export function KPICards({ stats }: KPICardsProps) {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-brand-dark tracking-tight">
+              <span className="text-2xl font-bold text-brand-dark dark:text-white tracking-tight">
                 {formatCurrency(stats.estimatedRevenue)}
               </span>
             </div>
@@ -218,7 +218,7 @@ export function KPICards({ stats }: KPICardsProps) {
         {/* Eficiencia */}
         <Card
           ref={refEficiencia}
-          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden"
+          className="kpi-card rounded-2xl border-0 shadow-none glass-card overflow-hidden dark:text-white"
         >
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle>
@@ -246,11 +246,11 @@ export function KPICards({ stats }: KPICardsProps) {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-blue-600 tracking-tight">
+              <span className="text-3xl font-bold text-blue-600 dark:text-white tracking-tight">
                 {stats.avgRendimiento}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground  dark:text-slate-300 mt-1 ">
               {stats.totalKms.toLocaleString("es-MX")} km
             </p>
           </CardContent>
@@ -259,7 +259,7 @@ export function KPICards({ stats }: KPICardsProps) {
         {/* Maintenance */}
         <Card
           ref={refMantenimiento}
-          className={`kpi-card rounded-2xl border-0 shadow-none overflow-hidden ${maintenanceAlerts.length > 0 ? "bg-amber-50" : "glass-card"}`}
+          className={`kpi-card rounded-2xl border-0 shadow-none  overflow-hidden ${maintenanceAlerts.length > 0 ? "bg-amber-50" : "glass-card"}`}
         >
           <CardHeader className="pb-2 pt-4 px-4">
             <CardTitle>
@@ -285,11 +285,11 @@ export function KPICards({ stats }: KPICardsProps) {
           </CardHeader>
           <CardContent className="px-4 pb-4">
             <span
-              className={`text-3xl font-bold tracking-tight ${maintenanceAlerts.length > 0 ? "text-amber-700" : "text-brand-dark"}`}
+              className={`text-3xl font-bold  tracking-tight ${maintenanceAlerts.length > 0 ? "text-amber-700 dark:text-amber-400" : "text-brand-dark dark:text-white"}`}
             >
               {maintenanceAlerts.length}
             </span>
-            <p className="text-[10px] text-muted-foreground font-medium">
+            <p className="text-[10px] text-muted-foreground dark:text-slate-300 font-medium">
               Próximos servicios
             </p>
           </CardContent>

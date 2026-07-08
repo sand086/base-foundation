@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label"; // Label genérico para fuera de forms
+import { Label } from "@/components/ui/label";
 
 import {
   Table,
@@ -170,29 +170,50 @@ export const TollBoothCatalog = () => {
     return currentNombre || "";
   }, [currentOrigen, currentDestino, currentNombre, showAdvanced]);
 
-  //  KPIs
+  // KPIs
   const kpis = useMemo(() => {
     if (!tollBooths.length)
-      return { total: 0, avgSencillo: 0, avgFull: 0, estados: 0 };
+      return {
+        total: 0,
+        totalSencillo: 0,
+        totalFull: 0,
+        totalSencilloPrecio: "$0.00",
+        totalFullPrecio: "$0.00",
+        estados: 0,
+      };
 
-    const sumSencillo = tollBooths.reduce(
-      (acc, t) => acc + (t.costo_5_ejes_sencillo || 0),
-      0,
-    );
-    const sumFull = tollBooths.reduce(
-      (acc, t) => acc + (t.costo_9_ejes_full || 0),
-      0,
-    );
+    const sumSencillo = tollBooths
+      .map((t) => t.costo_5_ejes_sencillo || 0)
+      .reduce((a, b) => a + b, 0);
+
+    const sumFull = tollBooths
+      .map((t) => t.costo_9_ejes_full || 0)
+      .reduce((a, b) => a + b, 0);
+
     const estadosUnicos = new Set(
       tollBooths.map((t) => (t as any).estado?.toUpperCase()).filter(Boolean),
     );
 
-    return {
+    // Función auxiliar para darle formato de Moneda (MXN)
+    const formatearPrecio = (monto: number) =>
+      new Intl.NumberFormat("es-MX", {
+        style: "currency",
+        currency: "MXN",
+        minimumFractionDigits: 2,
+      }).format(monto);
+
+    const reps = {
       total: tollBooths.length,
-      avgSencillo: sumSencillo / tollBooths.length,
-      avgFull: sumFull / tollBooths.length,
+      totalSencillo: sumSencillo, // Ya no se divide entre .length, entregando el total bruto
+      totalFull: sumFull, // Ya no se divide entre .length, entregando el total bruto
+      totalSencilloPrecio: formatearPrecio(sumSencillo), // Formateado como "$1,500.00"
+      totalFullPrecio: formatearPrecio(sumFull), // Formateado como "$2,300.00"
       estados: estadosUnicos.size,
     };
+
+    console.log(reps);
+
+    return reps;
   }, [tollBooths]);
 
   const getFormaPagoBadge = (formaPago: string) => {
@@ -424,6 +445,7 @@ export const TollBoothCatalog = () => {
   return (
     <div className="space-y-6">
       {/*  KPIs METRICS CARDS */}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         {/* 1. TOTAL PEAJES */}
         <Card
@@ -443,7 +465,7 @@ export const TollBoothCatalog = () => {
           </div>
         </Card>
 
-        {/* 2. COSTO PROMEDIO FULL */}
+        {/* 2. COSTO TOTAL FULL */}
         <Card
           variant="default"
           className="p-6 flex items-center gap-5 group hover:border-emerald-300 dark:hover:border-emerald-500/50 transition-all cursor-default"
@@ -453,15 +475,15 @@ export const TollBoothCatalog = () => {
           </div>
           <div className="flex flex-col justify-center">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Full
+              Total Full
             </p>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tighter leading-none mt-0.5">
-              {formatCurrency(kpis.avgFull)}
+              {kpis.totalFullPrecio}
             </p>
           </div>
         </Card>
 
-        {/* 3. COSTO PROMEDIO SENCILLO */}
+        {/* 3. COSTO TOTAL SENCILLO */}
         <Card
           variant="default"
           className="p-6 flex items-center gap-5 group hover:border-blue-300 dark:hover:border-blue-500/50 transition-all cursor-default"
@@ -471,10 +493,10 @@ export const TollBoothCatalog = () => {
           </div>
           <div className="flex flex-col justify-center">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-1">
-              Sencillo
+              Total Sencillo
             </p>
             <p className="text-2xl font-black text-blue-600 dark:text-blue-400 font-mono tracking-tighter leading-none mt-0.5">
-              {formatCurrency(kpis.avgSencillo)}
+              {kpis.totalSencilloPrecio}
             </p>
           </div>
         </Card>

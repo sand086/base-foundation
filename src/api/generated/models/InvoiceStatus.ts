@@ -6,5 +6,6 @@ export enum InvoiceStatus {
     PENDIENTE = 'pendiente',
     PAGO_PARCIAL = 'pago_parcial',
     PAGADO = 'pagado',
+    PROCESO_CANCELACION = 'proceso_cancelacion',
     CANCELADO = 'cancelado',
 }

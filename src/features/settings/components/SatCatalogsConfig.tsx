@@ -97,7 +97,7 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "es_material_peligroso", label: "Mat. Peligroso" },
     ],
   },
-  {
+  /*   {
     id: "sat-services",
     endpoint: "sat-services",
     name: "Tipos de Servicio",
@@ -106,7 +106,7 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "clave", label: "Clave" },
       { key: "descripcion", label: "Descripción" },
     ],
-  },
+  }, */
   {
     id: "sat-cargo-types",
     endpoint: "sat-cargo-types",
@@ -139,7 +139,7 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "llantas", label: "Llantas" },
     ],
   },
-  {
+  /*   {
     id: "sat-municipalities",
     endpoint: "sat-municipalities",
     name: "Municipios",
@@ -171,7 +171,7 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "codigo_postal", label: "C.P." },
       { key: "nombre", label: "Nombre" },
     ],
-  },
+  }, */
   {
     id: "sat-permit-types",
     endpoint: "sat-permit-types",
@@ -226,6 +226,18 @@ const SAT_CATALOGS: CatalogDef[] = [
       { key: "nombre", label: "Nombre" },
       { key: "descripcion", label: "Descripción" },
       { key: "simbolo", label: "Símbolo" },
+    ],
+  },
+  {
+    id: "sat-location-codes",
+    endpoint: "sat-location-codes", // Debe coincidir con la llave del hook
+    name: "Códigos Postales (Ubicaciones)",
+    icon: MapPin, // Asegúrate de que MapPin esté importado de lucide-react
+    fields: [
+      { key: "codigo_postal", label: "C.P." },
+      { key: "estado_clave", label: "Estado" },
+      { key: "municipio_clave", label: "Municipio" },
+      { key: "localidad_clave", label: "Localidad" },
     ],
   },
 ];
@@ -464,8 +476,19 @@ export function SatCatalogsConfig() {
       return;
     }
 
+    //   SOLUCIÓN: Limpieza de datos (Parseo a números si aplica y limpieza de vacíos)
+    const payload = { ...formData };
+    activeCatalog.fields.forEach((field) => {
+      if (field.key === "ejes" || field.key === "llantas") {
+        // Convertimos el string a número entero, o a null si está vacío
+        payload[field.key] = payload[field.key]
+          ? parseInt(payload[field.key].toString(), 10)
+          : null;
+      }
+    });
+
     try {
-      await saveItem(activeCatalog.endpoint, formData);
+      await saveItem(activeCatalog.endpoint, payload);
       toast.success(
         editingItem ? "Registro actualizado" : "Registro agregado con éxito",
       );

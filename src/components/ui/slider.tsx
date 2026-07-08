@@ -49,7 +49,7 @@ const Slider = React.forwardRef<
         "block h-5 w-5 rounded-full border-2 transition-all outline-none",
         // 🌓 COLORES & ELEVACIÓN
         "bg-white dark:bg-slate-100 border-white dark:border-white shadow-[0_2px_8px_rgba(0,0,0,0.15)]",
-        // ⚡ INTERACCIÓN HÁPTICA
+        // ❄️ INTERACCIÓN HÁPTICA
         "hover:scale-110 active:scale-95 cursor-grab active:cursor-grabbing",
         "hover:border-brand-red dark:hover:border-brand-red",
         // Foco de seguridad

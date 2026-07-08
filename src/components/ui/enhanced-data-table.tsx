@@ -1,5 +1,7 @@
+"use client";
+
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,7 +55,14 @@ export interface ColumnDef<T> {
   width?: string;
 }
 
-// ⚠️ AQUÍ ESTÁ LA MAGIA: Declaramos customFilters como Opcional (?)
+type SortDirection = "asc" | "desc" | null;
+
+interface SortConfig {
+  key: string;
+  direction: SortDirection;
+}
+
+//  AÑADIDO: initialSort para ordenar por fecha de más reciente a más viejo
 interface EnhancedDataTableProps<T> {
   data: T[];
   columns: ColumnDef<T>[];
@@ -66,15 +75,12 @@ interface EnhancedDataTableProps<T> {
   selectedRows?: T[];
   onSelectedRowsChange?: (rows: T[]) => void;
   rowKey?: keyof T;
-  customFilters?: React.ReactNode; // <- Prop opcional para no romper otros módulos
+  customFilters?: React.ReactNode;
   onCustomExport?: () => void;
-}
-
-type SortDirection = "asc" | "desc" | null;
-
-interface SortConfig {
-  key: string;
-  direction: SortDirection;
+  isRowSelectable?: (row: T) => boolean;
+  initialSort?: SortConfig;
+  hideGlobalSearch?: boolean; // <-- NUEVA
+  hideInternalFilters?: boolean; // <-- NUEVO: Para ocultar buscador global sin romper otros componentes
 }
 
 interface DateRange {
@@ -89,13 +95,32 @@ interface ColumnFilters {
   };
 }
 
+//   Función que extrae TODOS los textos y números de un objeto (Deep Search)
+const extractAllValues = (obj: any): string => {
+  if (obj === null || obj === undefined) return "";
+  if (
+    typeof obj === "string" ||
+    typeof obj === "number" ||
+    typeof obj === "boolean"
+  ) {
+    return String(obj).toLowerCase();
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(extractAllValues).join(" ");
+  }
+  if (typeof obj === "object") {
+    return Object.values(obj).map(extractAllValues).join(" ");
+  }
+  return "";
+};
+
 export function EnhancedDataTable<T extends Record<string, any>>({
   data,
   columns,
   className,
   onRowClick,
   exportFileName = "export",
-  searchPlaceholder = "BUSCAR REGISTROS...",
+  searchPlaceholder = "BUSCAR EN CUALQUIER COLUMNA...",
   isLoading = false,
   enableRowSelection = false,
   selectedRows = [],
@@ -103,9 +128,16 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   rowKey = "id" as keyof T,
   customFilters,
   onCustomExport,
+  isRowSelectable,
+  initialSort,
+  hideGlobalSearch = false, // <-- NUEVO: Por defecto es falso para no afectar a otros
+  hideInternalFilters = false, // <-- NUEVO: Para ocultar filtros internos sin romper otros componentes
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  //  INICIALIZA EL ORDEN CON LO QUE LE MANDEMOS DESDE EL PADRE
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(
+    initialSort || null,
+  );
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
@@ -118,30 +150,35 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   const filteredData = useMemo(() => {
     let result = [...data];
 
-    if (globalSearch) {
-      const searchLower = globalSearch.toLowerCase();
-      result = result.filter((row) =>
-        columns.some((col) => {
-          const value = getValue(row, col.key as string);
-          return String(value).toLowerCase().includes(searchLower);
-        }),
-      );
+    //   Buscador global inteligente
+    if (globalSearch && !hideGlobalSearch) {
+      const searchTerms = globalSearch
+        .toLowerCase()
+        .split(" ")
+        .filter((t) => t.trim() !== "");
+
+      result = result.filter((row) => {
+        let rowText = extractAllValues(row);
+
+        columns.forEach((col) => {
+          if (col.statusNormalizer) {
+            const rawValue = getValue(row, col.key as string);
+            if (rawValue) {
+              rowText +=
+                " " + String(col.statusNormalizer(rawValue)).toLowerCase();
+            }
+          }
+        });
+
+        return searchTerms.every((term) => rowText.includes(term));
+      });
     }
 
+    // --- Filtros Internos Específicos ---
     Object.entries(columnFilters).forEach(([key, filter]) => {
       if (!filter.value) return;
 
       if (
-        filter.type === "text" &&
-        typeof filter.value === "string" &&
-        filter.value
-      ) {
-        result = result.filter((row) =>
-          String(getValue(row, key))
-            .toLowerCase()
-            .includes(filter.value.toString().toLowerCase()),
-        );
-      } else if (
         filter.type === "date" &&
         typeof filter.value === "object" &&
         "from" in filter.value
@@ -149,7 +186,14 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         const range = filter.value as DateRange;
         if (range.from || range.to) {
           result = result.filter((row) => {
-            const dateValue = new Date(getValue(row, key));
+            const rowVal = getValue(row, key);
+            if (!rowVal) return false;
+
+            // 🚨 CORRECCIÓN: Evitar que la zona horaria retrase el día
+            const cleanDateStr = String(rowVal).includes("T")
+              ? String(rowVal).split("T")[0]
+              : String(rowVal);
+            const dateValue = new Date(`${cleanDateStr}T00:00:00`);
 
             if (range.from) {
               const fromDate = new Date(range.from);
@@ -174,17 +218,24 @@ export function EnhancedDataTable<T extends Record<string, any>>({
 
         result = result.filter((row) => {
           const rawValue = getValue(row, key);
-          const comparableValue = column?.statusNormalizer
-            ? column.statusNormalizer(rawValue)
-            : String(rawValue ?? "");
 
-          return statusValues.includes(comparableValue);
+          // Normalizamos el valor de la fila eliminando espacios y pasando a minúsculas
+          const comparableValue = column?.statusNormalizer
+            ? String(column.statusNormalizer(rawValue)).trim().toLowerCase()
+            : String(rawValue ?? "")
+                .trim()
+                .toLowerCase();
+
+          // Normalizamos también los valores seleccionados del filtro para asegurar el match
+          return statusValues
+            .map((v) => v.trim().toLowerCase())
+            .includes(comparableValue);
         });
       }
     });
 
     return result;
-  }, [data, globalSearch, columnFilters, columns]);
+  }, [data, globalSearch, columnFilters, columns, hideGlobalSearch]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig || !sortConfig.direction) return filteredData;
@@ -272,25 +323,41 @@ export function EnhancedDataTable<T extends Record<string, any>>({
     return <ChevronDown className="h-3.5 w-3.5 text-brand-red ml-2" />;
   };
 
+  const selectablePaginatedData = useMemo(() => {
+    return paginatedData.filter((row) =>
+      isRowSelectable ? isRowSelectable(row) : true,
+    );
+  }, [paginatedData, isRowSelectable]);
+
+  const hasAdvancedFilters = useMemo(() => {
+    return columns.some(
+      (col) =>
+        col.type === "date" ||
+        (col.type === "status" &&
+          col.statusOptions &&
+          col.statusOptions.length > 0),
+    );
+  }, [columns]);
+
   return (
     <div className={cn("space-y-4 animate-in fade-in duration-500", className)}>
       <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-2 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
-        {/* Left Side: Global Search + Custom Filters (Si existen) */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          <div className="relative flex-1 min-w-[250px] max-w-sm group">
-            <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
-            <Input
-              placeholder={searchPlaceholder}
-              value={globalSearch}
-              onChange={(e) => {
-                setGlobalSearch(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
-            />
-          </div>
+          {!hideGlobalSearch && (
+            <div className="relative flex-1 min-w-[250px] max-w-md group">
+              <Search className="absolute z-10 left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 dark:text-white/60 pointer-events-none" />
+              <Input
+                placeholder={searchPlaceholder}
+                value={globalSearch}
+                onChange={(e) => {
+                  setGlobalSearch(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
+              />
+            </div>
+          )}
 
-          {/* AQUI SE INYECTA LA ESTACIÓN Y FECHAS DE FuelLoads.tsx */}
           {customFilters && (
             <div className="flex flex-wrap items-center gap-2">
               {customFilters}
@@ -299,197 +366,204 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
 
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          <Popover open={showFilters} onOpenChange={setShowFilters}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "h-11 px-5 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm rounded-xl haptic-press",
-                  hasActiveFilters
-                    ? "bg-brand-red text-white border-brand-red shadow-lg shadow-brand-red/20 hover:bg-red-700 hover:text-white"
-                    : "bg-white dark:bg-slate-900 text-slate-600 dark:text-white/70 hover:text-brand-navy dark:hover:text-white",
-                )}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filtros Int.
-                {hasActiveFilters && (
-                  <Badge className="ml-2 h-5 px-1.5 bg-white/20 text-white border-none shadow-sm font-mono text-[10px]">
-                    {Object.keys(columnFilters).length + (globalSearch ? 1 : 0)}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-80 glass-panel bg-white/95 dark:bg-brand-navy/95 border-slate-200 dark:border-white/10 shadow-2xl p-6 backdrop-blur-2xl rounded-2xl"
-              align="end"
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-4">
-                  <h4 className="text-[11px] font-black text-brand-navy dark:text-white uppercase tracking-[0.2em]">
-                    Filtros Internos
-                  </h4>
-                  {hasActiveFilters && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="h-7 text-[9px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 haptic-press rounded-lg"
-                    >
-                      <X className="h-3 w-3 mr-1" />
-                      Limpiar
-                    </Button>
+          {!hideInternalFilters && hasAdvancedFilters && (
+            <Popover open={showFilters} onOpenChange={setShowFilters}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "h-11 px-5 border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest transition-all shadow-sm rounded-xl haptic-press",
+                    Object.keys(columnFilters).length > 0
+                      ? "bg-brand-red text-white border-brand-red shadow-lg shadow-brand-red/20 hover:bg-red-700 hover:text-white"
+                      : "bg-white dark:bg-slate-900 text-slate-600 dark:text-white/70 hover:text-brand-navy dark:hover:text-white",
                   )}
-                </div>
-
-                <ScrollArea className="max-h-[300px] pr-4 custom-scrollbar">
-                  <div className="space-y-6">
-                    {columns.map((col) => {
-                      const key = col.key as string;
-                      const colType = col.type || "text";
-
-                      if (colType === "date") {
-                        const dateFilter = (columnFilters[key]
-                          ?.value as DateRange) || {
-                          from: undefined,
-                          to: undefined,
-                        };
-                        return (
-                          <div key={key} className="space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
-                              {col.header}
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
-                                  >
-                                    <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
-                                    {dateFilter.from
-                                      ? format(dateFilter.from, "dd/MM/yy")
-                                      : "Desde"}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
-                                  align="start"
-                                >
-                                  <Calendar
-                                    mode="single"
-                                    selected={dateFilter.from}
-                                    onSelect={(date) => {
-                                      setColumnFilters((prev) => ({
-                                        ...prev,
-                                        [key]: {
-                                          type: "date",
-                                          value: { ...dateFilter, from: date },
-                                        },
-                                      }));
-                                      setCurrentPage(1);
-                                    }}
-                                    locale={es}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
-                                  >
-                                    <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
-                                    {dateFilter.to
-                                      ? format(dateFilter.to, "dd/MM/yy")
-                                      : "Hasta"}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent
-                                  className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
-                                  align="start"
-                                >
-                                  <Calendar
-                                    mode="single"
-                                    selected={dateFilter.to}
-                                    onSelect={(date) => {
-                                      setColumnFilters((prev) => ({
-                                        ...prev,
-                                        [key]: {
-                                          type: "date",
-                                          value: { ...dateFilter, to: date },
-                                        },
-                                      }));
-                                      setCurrentPage(1);
-                                    }}
-                                    locale={es}
-                                  />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      if (colType === "status" && col.statusOptions) {
-                        const selectedStatuses =
-                          (columnFilters[key]?.value as string[]) || [];
-                        return (
-                          <div key={key} className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
-                              {col.header}
-                            </label>
-                            <div className="flex flex-wrap gap-2">
-                              {col.statusOptions.map((status) => (
-                                <div
-                                  key={status}
-                                  className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all haptic-press select-none",
-                                    selectedStatuses.includes(status)
-                                      ? "bg-brand-navy dark:bg-white text-white dark:text-brand-navy border-brand-navy dark:border-white shadow-md"
-                                      : "bg-white dark:bg-white/5 text-slate-500 dark:text-white/50 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10",
-                                  )}
-                                  onClick={() => {
-                                    const newSelected =
-                                      selectedStatuses.includes(status)
-                                        ? selectedStatuses.filter(
-                                            (s) => s !== status,
-                                          )
-                                        : [...selectedStatuses, status];
-
-                                    if (newSelected.length === 0) {
-                                      const { [key]: _, ...rest } =
-                                        columnFilters;
-                                      setColumnFilters(rest);
-                                    } else {
-                                      setColumnFilters((prev) => ({
-                                        ...prev,
-                                        [key]: {
-                                          type: "status",
-                                          value: newSelected,
-                                        },
-                                      }));
-                                    }
-                                    setCurrentPage(1);
-                                  }}
-                                >
-                                  <Checkbox
-                                    checked={selectedStatuses.includes(status)}
-                                    className="h-3 w-3 border-current rounded-sm"
-                                  />
-                                  {status}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filtros Int.
+                  {Object.keys(columnFilters).length > 0 && (
+                    <Badge className="ml-2 h-5 px-1.5 bg-white/20 text-white border-none shadow-sm font-mono text-[10px]">
+                      {Object.keys(columnFilters).length}
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-80 glass-panel bg-white/95 dark:bg-brand-navy/95 border-slate-200 dark:border-white/10 shadow-2xl p-6 backdrop-blur-2xl rounded-2xl"
+                align="end"
+              >
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-white/10 pb-4">
+                    <h4 className="text-[11px] font-black text-brand-navy dark:text-white uppercase tracking-[0.2em]">
+                      Filtros Avanzados
+                    </h4>
+                    {Object.keys(columnFilters).length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setColumnFilters({})}
+                        className="h-7 text-[9px] font-black uppercase tracking-widest text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 haptic-press rounded-lg"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Limpiar
+                      </Button>
+                    )}
                   </div>
-                </ScrollArea>
-              </div>
-            </PopoverContent>
-          </Popover>
+
+                  <ScrollArea className="max-h-[300px] pr-4 custom-scrollbar">
+                    <div className="space-y-6">
+                      {columns.map((col) => {
+                        const key = col.key as string;
+                        const colType = col.type || "text";
+
+                        if (colType === "date") {
+                          const dateFilter = (columnFilters[key]
+                            ?.value as DateRange) || {
+                            from: undefined,
+                            to: undefined,
+                          };
+                          return (
+                            <div key={key} className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
+                                {col.header}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
+                                    >
+                                      <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
+                                      {dateFilter.from
+                                        ? format(dateFilter.from, "dd/MM/yy")
+                                        : "Desde"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
+                                    align="start"
+                                  >
+                                    <Calendar
+                                      mode="single"
+                                      selected={dateFilter.from}
+                                      onSelect={(date) => {
+                                        setColumnFilters((prev) => ({
+                                          ...prev,
+                                          [key]: {
+                                            type: "date",
+                                            value: {
+                                              ...dateFilter,
+                                              from: date,
+                                            },
+                                          },
+                                        }));
+                                        setCurrentPage(1);
+                                      }}
+                                      locale={es}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="h-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-[10px] font-bold uppercase tracking-widest justify-start text-slate-600 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 haptic-press"
+                                    >
+                                      <CalendarIcon className="h-3.5 w-3.5 mr-2 text-slate-400 dark:text-white/40" />
+                                      {dateFilter.to
+                                        ? format(dateFilter.to, "dd/MM/yy")
+                                        : "Hasta"}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent
+                                    className="w-auto p-0 glass-panel bg-white dark:bg-brand-navy border-slate-200 dark:border-white/10 rounded-2xl shadow-xl"
+                                    align="start"
+                                  >
+                                    <Calendar
+                                      mode="single"
+                                      selected={dateFilter.to}
+                                      onSelect={(date) => {
+                                        setColumnFilters((prev) => ({
+                                          ...prev,
+                                          [key]: {
+                                            type: "date",
+                                            value: { ...dateFilter, to: date },
+                                          },
+                                        }));
+                                        setCurrentPage(1);
+                                      }}
+                                      locale={es}
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (colType === "status" && col.statusOptions) {
+                          const selectedStatuses =
+                            (columnFilters[key]?.value as string[]) || [];
+                          return (
+                            <div key={key} className="space-y-3">
+                              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-white/40 block">
+                                {col.header}
+                              </label>
+                              <div className="flex flex-wrap gap-2">
+                                {col.statusOptions.map((status) => (
+                                  <div
+                                    key={status}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all haptic-press select-none",
+                                      selectedStatuses.includes(status)
+                                        ? "bg-brand-navy dark:bg-white text-white dark:text-brand-navy border-brand-navy dark:border-white shadow-md"
+                                        : "bg-white dark:bg-white/5 text-slate-500 dark:text-white/50 border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10",
+                                    )}
+                                    onClick={() => {
+                                      const newSelected =
+                                        selectedStatuses.includes(status)
+                                          ? selectedStatuses.filter(
+                                              (s) => s !== status,
+                                            )
+                                          : [...selectedStatuses, status];
+
+                                      if (newSelected.length === 0) {
+                                        const { [key]: _, ...rest } =
+                                          columnFilters;
+                                        setColumnFilters(rest);
+                                      } else {
+                                        setColumnFilters((prev) => ({
+                                          ...prev,
+                                          [key]: {
+                                            type: "status",
+                                            value: newSelected,
+                                          },
+                                        }));
+                                      }
+                                      setCurrentPage(1);
+                                    }}
+                                  >
+                                    <Checkbox
+                                      checked={selectedStatuses.includes(
+                                        status,
+                                      )}
+                                      className="h-3 w-3 border-current rounded-sm pointer-events-none"
+                                    />
+                                    {status}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           <Button
             variant="outline"
@@ -508,7 +582,6 @@ export function EnhancedDataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* CAPA 1: TABLE CONTAINER */}
       <div className="relative w-full overflow-hidden rounded-[2rem] border border-slate-200 dark:border-white/10 bg-white/40 dark:bg-brand-navy/30 backdrop-blur-xl shadow-2xl transition-all">
         <div className="overflow-auto max-h-[65vh] custom-scrollbar">
           <table className="w-full caption-bottom text-sm border-collapse">
@@ -517,9 +590,10 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 {enableRowSelection && (
                   <th className="h-14 px-6 py-4 text-center align-middle w-16">
                     <Checkbox
+                      disabled={selectablePaginatedData.length === 0}
                       checked={
-                        paginatedData.length > 0 &&
-                        paginatedData.every((row) =>
+                        selectablePaginatedData.length > 0 &&
+                        selectablePaginatedData.every((row) =>
                           selectedRows?.some(
                             (sr) => sr[rowKey] === row[rowKey],
                           ),
@@ -529,7 +603,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         if (!onSelectedRowsChange) return;
                         if (checked) {
                           const newRows = [...selectedRows];
-                          paginatedData.forEach((row) => {
+                          selectablePaginatedData.forEach((row) => {
                             if (
                               !newRows.some((sr) => sr[rowKey] === row[rowKey])
                             ) {
@@ -540,7 +614,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                         } else {
                           const newRows = selectedRows.filter(
                             (sr) =>
-                              !paginatedData.some(
+                              !selectablePaginatedData.some(
                                 (row) => row[rowKey] === sr[rowKey],
                               ),
                           );
@@ -556,7 +630,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     key={col.key as string}
                     className={cn(
                       "h-14 px-6 py-4 text-left align-middle transition-colors",
-                      "text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white group/head",
+                      "text-[14px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white group/head",
                       col.sortable !== false && "cursor-pointer select-none",
                       col.width,
                     )}
@@ -582,7 +656,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                     <div className="flex flex-col items-center justify-center gap-4">
                       <Loader2 className="h-10 w-10 animate-spin text-brand-red" />
                       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-white/40">
-                        Cargando Registros de Flota...
+                        Cargando Registros...
                       </span>
                     </div>
                   </td>
@@ -602,59 +676,67 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                   </td>
                 </tr>
               ) : (
-                paginatedData.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    className={cn(
-                      "interactive-row transition-all duration-300 outline-none group",
-                      "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
-                      selectedRows?.some((sr) => sr[rowKey] === row[rowKey]) &&
-                        "bg-brand-navy/5 dark:bg-brand-navy/20",
-                      onRowClick && "cursor-pointer active:scale-[0.998]",
-                    )}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {enableRowSelection && (
-                      <td
-                        className="px-6 py-4 align-middle text-center"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Checkbox
-                          checked={selectedRows?.some(
-                            (sr) => sr[rowKey] === row[rowKey],
-                          )}
-                          onCheckedChange={(checked) => {
-                            if (!onSelectedRowsChange) return;
-                            if (checked) {
-                              onSelectedRowsChange([...selectedRows, row]);
-                            } else {
-                              onSelectedRowsChange(
-                                selectedRows.filter(
-                                  (sr) => sr[rowKey] !== row[rowKey],
-                                ),
-                              );
-                            }
-                          }}
-                        />
-                      </td>
-                    )}
+                paginatedData.map((row, idx) => {
+                  const isSelectable = isRowSelectable
+                    ? isRowSelectable(row)
+                    : true;
 
-                    {columns.map((col) => (
-                      <td
-                        key={col.key as string}
-                        className={cn(
-                          "px-6 py-4 align-middle transition-all duration-300",
-                          "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
-                          "group-hover:text-slate-900 dark:group-hover:text-white group-hover:translate-x-0.5",
-                        )}
-                      >
-                        {col.render
-                          ? col.render(getValue(row, col.key as string), row)
-                          : getValue(row, col.key as string)}
-                      </td>
-                    ))}
-                  </tr>
-                ))
+                  return (
+                    <tr
+                      key={idx}
+                      className={cn(
+                        "interactive-row transition-all duration-300 outline-none group",
+                        "hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.02]",
+                        selectedRows?.some(
+                          (sr) => sr[rowKey] === row[rowKey],
+                        ) && "bg-brand-navy/5 dark:bg-brand-navy/20",
+                        onRowClick && "cursor-pointer active:scale-[0.998]",
+                      )}
+                      onClick={() => onRowClick?.(row)}
+                    >
+                      {enableRowSelection && (
+                        <td
+                          className="px-6 py-4 align-middle text-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            disabled={!isSelectable}
+                            checked={selectedRows?.some(
+                              (sr) => sr[rowKey] === row[rowKey],
+                            )}
+                            onCheckedChange={(checked) => {
+                              if (!onSelectedRowsChange || !isSelectable)
+                                return;
+                              if (checked) {
+                                onSelectedRowsChange([...selectedRows, row]);
+                              } else {
+                                onSelectedRowsChange(
+                                  selectedRows.filter(
+                                    (sr) => sr[rowKey] !== row[rowKey],
+                                  ),
+                                );
+                              }
+                            }}
+                          />
+                        </td>
+                      )}
+
+                      {columns.map((col) => (
+                        <td
+                          key={col.key as string}
+                          className={cn(
+                            "px-6 py-4 align-middle transition-all duration-300",
+                            "text-[13px] font-medium text-slate-700 dark:text-slate-300 tracking-tight",
+                          )}
+                        >
+                          {col.render
+                            ? col.render(getValue(row, col.key as string), row)
+                            : getValue(row, col.key as string)}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

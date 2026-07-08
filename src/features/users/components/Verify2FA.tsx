@@ -183,7 +183,7 @@ export default function Verify2FA() {
                 </div>
               </div>
 
-              <h1 className="text-2xl lg:text-5xl font-black uppercase tracking-tighter text-white heading-crisp">
+              <h1 className="uppercase text-2xl lg:text-5xl font-black uppercase tracking-tighter text-white heading-crisp">
                 {isEmailMode ? "Acceso Auxiliar" : "Confirmación de Identidad"}
               </h1>
 

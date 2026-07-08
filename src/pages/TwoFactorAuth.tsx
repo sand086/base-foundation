@@ -129,7 +129,7 @@ export default function TwoFactorAuth() {
         <div
           className="absolute inset-0 bg-cover bg-center scale-105 animate-[subtle-float_20s_ease-in-out_infinite]"
           style={{
-            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpg"})`,
+            backgroundImage: `url(${logos_3t?.login_bg_3t || "/assets/img/login-bg.jpeg"})`,
           }}
         />
         <div className="absolute inset-0 bg-gradient-to-br from-black/70 via-black/50 to-black/60" />
@@ -146,7 +146,7 @@ export default function TwoFactorAuth() {
                 <Shield className="h-10 w-10 text-brand-red drop-shadow-[0_0_10px_rgba(190,8,17,0.5)]" />
               </div>
 
-              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+              <h1 className="uppercase text-2xl md:text-3xl font-bold text-white tracking-tight">
                 Verificación de Seguridad
               </h1>
 
@@ -233,7 +233,7 @@ export default function TwoFactorAuth() {
                   </span>
                 ) : (
                   <span className="flex items-center justify-center gap-2">
-                    <CheckCircle2 className="h-5 w-5" />
+                    <CheckCircle2 className="h-5 w-5 text-slate-500 dark:text-white/70" />
                     Verificar Acceso
                   </span>
                 )}

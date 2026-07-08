@@ -104,6 +104,7 @@ const LEYENDA_DEFAULT = `Condiciones de prestación de servicios que ampara la C
 const DEFAULT_CONFIGS: SystemConfig[] = [
   {
     key: "empresa_nombre",
+
     value: "ESCUELA KEMPER URGATE SA DE CV",
     grupo: "empresa",
     tipo: "string",
@@ -139,14 +140,14 @@ const DEFAULT_CONFIGS: SystemConfig[] = [
   },
   {
     key: "empresa_telefono",
-    value: "555-123-4567",
+    value: "2291000240",
     grupo: "empresa",
     tipo: "string",
     is_public: true,
   },
   {
     key: "empresa_email",
-    value: "contacto@kemper.edu.mx",
+    value: "gerencia@3t.com.mx",
     grupo: "empresa",
     tipo: "string",
     is_public: true,
@@ -217,23 +218,65 @@ const CONFIG_METADATA: Record<string, any> = {
   },
   empresa_regimen_fiscal: {
     label: "Régimen Fiscal",
-    description: "Clave del régimen fiscal ante el SAT.",
+    description: "Clave del régimen fiscal ante el SAT (Catálogo CFDI 4.0).",
     required: true,
     options: [
+      // Personas Morales
       { label: "601 - General de Ley Personas Morales", value: "601" },
       { label: "603 - Personas Morales con Fines no Lucrativos", value: "603" },
+      { label: "620 - Sociedades Cooperativas de Producción", value: "620" },
       {
-        label: "612 - Personas Físicas con Actividades Empresariales",
+        label: "622 - Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras",
+        value: "622",
+      },
+      { label: "623 - Opcional para Grupos de Sociedades", value: "623" },
+      { label: "624 - Coordinados", value: "624" },
+
+      // Personas Físicas
+      {
+        label: "605 - Sueldos y Salarios e Ingresos Asimilados a Salarios",
+        value: "605",
+      },
+      { label: "606 - Arrendamiento", value: "606" },
+      {
+        label: "607 - Régimen de Enajenación o Adquisición de Bienes",
+        value: "607",
+      },
+      { label: "608 - Demás ingresos", value: "608" },
+      {
+        label: "611 - Ingresos por Dividendos (socios y accionistas)",
+        value: "611",
+      },
+      {
+        label:
+          "612 - Personas Físicas con Actividades Empresariales y Profesionales",
         value: "612",
       },
+      { label: "614 - Ingresos por intereses", value: "614" },
+      {
+        label: "615 - Régimen de los ingresos por obtención de premios",
+        value: "615",
+      },
+      { label: "621 - Incorporación Fiscal (RIF)", value: "621" },
+      {
+        label:
+          "625 - Actividades Empresariales con ingresos a través de Plataformas Tecnológicas",
+        value: "625",
+      },
+
+      // Mixtos / Nuevos
       {
         label: "626 - Régimen Simplificado de Confianza (RESICO)",
         value: "626",
       },
+
+      // Extranjeros / Sin Obligaciones
       {
-        label: "622 - Actividades Agrícolas, Silvícolas y Pesqueras",
-        value: "622",
+        label:
+          "610 - Residentes en el Extranjero sin Establecimiento Permanente en México",
+        value: "610",
       },
+      { label: "616 - Sin obligaciones fiscales", value: "616" },
     ],
   },
   empresa_cp: {
@@ -433,14 +476,16 @@ const Settings = () => {
         description="Administra los parámetros globales de la plataforma"
       >
         <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="bg-slate-100 p-1.5 rounded-xl flex items-center border border-slate-200 shadow-inner">
+          <div className="bg-slate-100 dark:bg-black/20 p-1.5 rounded-xl flex items-center border border-slate-200 dark:border-white/10 shadow-inner">
             <Button
               type="button"
               variant={environment === "PROD" ? "default" : "ghost"}
               size="sm"
               className={cn(
                 "rounded-lg font-bold transition-all",
-                environment === "PROD" && "bg-brand-navy text-white shadow-md",
+                environment === "PROD"
+                  ? "bg-brand-navy text-white shadow-md dark:bg-white dark:text-brand-navy"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
               )}
               onClick={() => setEnvironment("PROD")}
             >
@@ -452,8 +497,9 @@ const Settings = () => {
               size="sm"
               className={cn(
                 "rounded-lg font-bold transition-all",
-                environment === "QA" &&
-                  "bg-amber-500 text-white hover:bg-amber-600 shadow-md",
+                environment === "QA"
+                  ? "bg-amber-500 text-white hover:bg-amber-600 shadow-md"
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white",
               )}
               onClick={() => setEnvironment("QA")}
             >
@@ -467,10 +513,10 @@ const Settings = () => {
             className={cn(
               "text-white gap-2 rounded-xl h-10 px-6 shadow-md transition-all",
               isFormInvalid
-                ? "bg-slate-300 cursor-not-allowed opacity-70"
+                ? "bg-slate-300 dark:bg-white/10 cursor-not-allowed opacity-70 text-slate-500 dark:text-white/40"
                 : environment === "QA"
                   ? "bg-amber-600 hover:bg-amber-700"
-                  : "bg-brand-navy hover:bg-brand-navy/90",
+                  : "bg-brand-navy hover:bg-brand-navy/90 dark:bg-brand-red dark:hover:bg-brand-red/90",
             )}
           >
             {isFormInvalid ? (
@@ -501,10 +547,10 @@ const Settings = () => {
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
-                  "w-full text-left p-4 rounded-xl transition-all border",
+                  "w-full text-left p-4 rounded-xl transition-all border outline-none",
                   activeCategory === cat.id
-                    ? "bg-brand-navy text-primary shadow-lg border-brand-navy"
-                    : "bg-primary/5 hover:bg-slate-50 border-primary text-slate-600",
+                    ? "bg-brand-navy text-white shadow-lg border-brand-navy dark:bg-white/10 dark:border-white/20"
+                    : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 dark:bg-transparent dark:border-white/5 dark:hover:bg-white/5 dark:text-slate-400",
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -512,18 +558,27 @@ const Settings = () => {
                     className={cn(
                       "h-5 w-5",
                       activeCategory === cat.id
-                        ? "text-emerald-400"
-                        : "text-brand-navy",
+                        ? "text-emerald-400 dark:text-brand-red"
+                        : "text-brand-navy dark:text-slate-500",
                     )}
                   />
                   <div>
-                    <p className="font-bold text-sm">{cat.label}</p>
+                    <p
+                      className={cn(
+                        "font-bold text-sm",
+                        activeCategory === cat.id
+                          ? "text-white"
+                          : "text-slate-700 dark:text-slate-300",
+                      )}
+                    >
+                      {cat.label}
+                    </p>
                     <p
                       className={cn(
                         "text-[10px]",
                         activeCategory === cat.id
-                          ? "text-primary"
-                          : "text-slate-500",
+                          ? "text-slate-300 dark:text-white/60"
+                          : "text-slate-500 dark:text-slate-500",
                       )}
                     >
                       {cat.description}
@@ -535,9 +590,9 @@ const Settings = () => {
           })}
         </div>
 
-        <Card className="flex-1 overflow-hidden rounded-2xl border-slate-200 shadow-sm relative">
+        <Card className="flex-1 overflow-hidden rounded-2xl border-slate-200 dark:border-white/10 shadow-sm relative glass-panel dark:bg-brand-navy/30">
           {environment === "QA" && (
-            <div className="absolute top-0 left-0 w-full h-1 bg-amber-500 z-50"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-amber-500 z-50 animate-pulse"></div>
           )}
           <ScrollArea className="h-full">
             <CardContent className="p-6 md:p-8 space-y-8">
@@ -546,16 +601,16 @@ const Settings = () => {
                 activeCategory === "operacion") && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   {activeCategory === "empresa" && (
-                    <Card className="border-none shadow-md bg-gradient-to-br from-slate-50 to-white overflow-hidden rounded-3xl">
+                    <Card className="border border-slate-100 dark:border-white/5 shadow-md bg-gradient-to-br from-slate-50 to-white dark:from-white/5 dark:to-transparent overflow-hidden rounded-3xl">
                       <CardContent className="p-8">
                         <div className="flex flex-col md:flex-row items-center gap-8">
                           <div className="relative group">
                             <div
                               className={cn(
-                                "h-32 w-32 rounded-3xl border-4 flex items-center justify-center bg-white shadow-xl transition-all overflow-hidden",
+                                "h-32 w-32 rounded-3xl border-4 flex items-center justify-center bg-white dark:bg-black/40 shadow-xl transition-all overflow-hidden",
                                 !logoPreview
-                                  ? "border-dashed border-slate-200"
-                                  : "border-warning",
+                                  ? "border-dashed border-slate-200 dark:border-white/10"
+                                  : "border-brand-navy dark:border-brand-red",
                               )}
                             >
                               {logoPreview ? (
@@ -565,11 +620,11 @@ const Settings = () => {
                                   className="h-full w-full object-contain p-4"
                                 />
                               ) : (
-                                <Building2 className="h-12 w-12 text-slate-600" />
+                                <Building2 className="h-12 w-12 text-slate-600 dark:text-slate-500" />
                               )}
                             </div>
-                            <label className="absolute -bottom-2 -right-2 bg-brand-navy text-secondary p-2.5 rounded-2xl cursor-pointer shadow-lg hover:scale-110 active:scale-95 transition-all">
-                              <Upload className="h-4 w-4 text-primary" />
+                            <label className="absolute -bottom-2 -right-2 bg-brand-navy dark:bg-white text-white dark:text-brand-navy p-2.5 rounded-2xl cursor-pointer shadow-lg hover:scale-110 active:scale-95 transition-all">
+                              <Upload className="h-4 w-4" />
                               <input
                                 type="file"
                                 className="hidden"
@@ -581,14 +636,14 @@ const Settings = () => {
                           <div className="flex-1 text-center md:text-left space-y-2">
                             <Badge
                               variant="outline"
-                              className="bg-white/50 text-brand-navy border-brand-navy/20 mb-1"
+                              className="bg-white/50 dark:bg-white/10 text-brand-navy dark:text-white border-brand-navy/20 dark:border-white/20 mb-1"
                             >
                               Branding Oficial
                             </Badge>
-                            <h3 className="text-xl font-black text-slate-800">
+                            <h3 className="text-xl font-black text-slate-800 dark:text-white">
                               Logotipo de la Empresa
                             </h3>
-                            <p className="text-sm text-slate-500 max-w-md leading-relaxed">
+                            <p className="text-sm text-slate-500 dark:text-white/60 max-w-md leading-relaxed">
                               Este archivo se utilizará para membretar tus
                               Cartas Porte, Facturas y Reportes. Se recomienda
                               un archivo **PNG transparente** de al menos 500px.
@@ -620,8 +675,8 @@ const Settings = () => {
                                 className={cn(
                                   "text-[11px] font-black uppercase tracking-wider transition-colors",
                                   hasError
-                                    ? "text-red-500"
-                                    : "text-slate-500 group-focus-within:text-brand-navy",
+                                    ? "text-red-500 dark:text-red-400"
+                                    : "text-slate-500 dark:text-slate-400 group-focus-within:text-brand-navy dark:group-focus-within:text-white",
                                 )}
                               >
                                 <span className="flex items-center gap-2">
@@ -632,7 +687,7 @@ const Settings = () => {
                                 </span>
                               </Label>
                               {hasError && (
-                                <span className="text-[10px] font-bold text-red-500 animate-pulse flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-red-500 dark:text-red-400 animate-pulse flex items-center gap-1">
                                   <AlertCircle className="h-3 w-3" />{" "}
                                   {errors[config.key]}
                                 </span>
@@ -642,20 +697,21 @@ const Settings = () => {
                             {config.tipo === "boolean" ? (
                               <div
                                 className={cn(
-                                  "flex items-center justify-between p-4 rounded-2xl border transition-all bg-white shadow-sm",
+                                  "flex items-center justify-between p-4 rounded-2xl border transition-all shadow-sm",
+                                  "bg-white dark:bg-white/5",
                                   config.value === "true"
-                                    ? "border-emerald-100 bg-emerald-50/20"
-                                    : "border-slate-100",
+                                    ? "border-emerald-100 bg-emerald-50/20 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+                                    : "border-slate-100 dark:border-white/10",
                                 )}
                               >
                                 <div className="space-y-0.5">
-                                  <p className="text-xs font-bold text-slate-700">
+                                  <p className="text-xs font-bold text-slate-700 dark:text-white">
                                     Estado:{" "}
                                     {config.value === "true"
                                       ? "Activo"
                                       : "Inactivo"}
                                   </p>
-                                  <p className="text-[10px] text-slate-600">
+                                  <p className="text-[10px] text-slate-600 dark:text-slate-400">
                                     {meta.description}
                                   </p>
                                 </div>
@@ -677,22 +733,30 @@ const Settings = () => {
                                     )
                                   }
                                   className={cn(
-                                    "h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 font-semibold text-slate-700 outline-none transition-all appearance-none cursor-pointer focus:ring-4",
+                                    "h-12 w-full rounded-2xl border bg-white dark:bg-black/40 px-4 font-semibold outline-none transition-all appearance-none cursor-pointer focus:ring-4",
                                     hasError
-                                      ? "border-red-300 bg-red-50/30 focus:ring-red-100"
-                                      : "focus:border-brand-navy focus:ring-brand-navy/5 group-hover:border-slate-300",
+                                      ? "border-red-300 bg-red-50/30 focus:ring-red-100 dark:border-red-500/50 dark:bg-red-500/10 dark:focus:ring-red-500/20"
+                                      : "border-slate-200 dark:border-white/10 text-slate-700 dark:text-white focus:border-brand-navy dark:focus:border-brand-red focus:ring-brand-navy/5 dark:focus:ring-brand-red/20 hover:border-slate-300 dark:hover:border-white/20",
                                   )}
                                 >
-                                  <option value="" disabled>
+                                  <option
+                                    value=""
+                                    disabled
+                                    className="dark:bg-slate-900"
+                                  >
                                     Selecciona una opción...
                                   </option>
                                   {meta.options.map((opt: any) => (
-                                    <option key={opt.value} value={opt.value}>
+                                    <option
+                                      key={opt.value}
+                                      value={opt.value}
+                                      className="dark:bg-slate-900"
+                                    >
                                       {opt.label}
                                     </option>
                                   ))}
                                 </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-600">
+                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-600 dark:text-slate-400">
                                   <svg
                                     className="h-4 w-4 fill-current"
                                     viewBox="0 0 20 20"
@@ -716,17 +780,17 @@ const Settings = () => {
                                     handleConfigChange(config.key, val);
                                   }}
                                   className={cn(
-                                    "h-12 rounded-2xl border-slate-200 bg-white px-4 font-semibold text-slate-700 transition-all focus:ring-4",
+                                    "h-12 rounded-2xl border bg-white dark:bg-black/40 px-4 font-semibold transition-all focus:ring-4",
                                     hasError
-                                      ? "border-red-300 focus:border-red-500 focus:ring-red-100 bg-red-50/30"
-                                      : "focus:border-brand-navy focus:ring-brand-navy/5 group-hover:border-slate-300",
+                                      ? "border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-red-100 dark:border-red-500/50 dark:bg-red-500/10 dark:focus:ring-red-500/20 text-red-700 dark:text-red-400"
+                                      : "border-slate-200 dark:border-white/10 text-slate-700 dark:text-white focus:border-brand-navy dark:focus:border-brand-red focus:ring-brand-navy/5 dark:focus:ring-brand-red/20 group-hover:border-slate-300 dark:hover:border-white/20",
                                   )}
                                 />
                                 {isPercentage && (
-                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-600">
+                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-600 dark:text-slate-400">
                                     <Separator
                                       orientation="vertical"
-                                      className="h-4 mr-1"
+                                      className="h-4 mr-1 dark:bg-white/20"
                                     />
                                     <Percent className="h-4 w-4" />
                                   </div>
@@ -734,7 +798,7 @@ const Settings = () => {
                               </div>
                             )}
                             {!hasError && meta.description && (
-                              <p className="text-[10px] text-slate-600 px-1 mt-1 font-medium flex items-center gap-1">
+                              <p className="text-[10px] text-slate-600 dark:text-slate-400 px-1 mt-1 font-medium flex items-center gap-1">
                                 <Info className="h-3 w-3" /> {meta.description}
                               </p>
                             )}
@@ -748,12 +812,12 @@ const Settings = () => {
               {/* FACTURACIÓN SAT */}
               {activeCategory === "facturacion" && (
                 <div className="space-y-6 w-full animate-in fade-in duration-300">
-                  <h3 className="text-lg font-black text-brand-navy flex items-center gap-2">
-                    <FileSignature className="h-5 w-5 text-emerald-600" />{" "}
+                  <h3 className="text-lg font-black text-brand-navy dark:text-white flex items-center gap-2">
+                    <FileSignature className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />{" "}
                     Facturación SAT y Complementos
                   </h3>
                   <Tabs defaultValue="sellos" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 h-12 bg-slate-100 p-1.5 rounded-xl shadow-inner mb-6">
+                    <TabsList className="grid w-full grid-cols-3 h-12 bg-slate-100 dark:bg-black/40 p-1.5 rounded-xl shadow-inner mb-6 border border-transparent dark:border-white/5">
                       <TabsTrigger
                         value="sellos"
                         className="rounded-lg font-bold text-xs gap-2"
@@ -807,7 +871,7 @@ const Settings = () => {
                             e.target.value,
                           )
                         }
-                        className="min-h-[400px] font-mono text-[11px] bg-slate-50 p-4 rounded-xl"
+                        className="min-h-[400px] font-mono text-[11px] bg-slate-50 dark:bg-black/40 dark:border-white/10 dark:text-white p-4 rounded-xl"
                       />
                     </TabsContent>
                   </Tabs>
@@ -818,17 +882,17 @@ const Settings = () => {
               {activeCategory === "catalogos" && (
                 <div className="space-y-6 w-full animate-in fade-in duration-300">
                   <div>
-                    <h3 className="text-lg font-black text-brand-navy flex items-center gap-2">
-                      <Layers className="h-5 w-5 text-emerald-600" /> Catálogos
-                      Maestros
+                    <h3 className="text-lg font-black text-brand-navy dark:text-white flex items-center gap-2">
+                      <Layers className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />{" "}
+                      Catálogos Maestros
                     </h3>
-                    <p className="text-sm text-slate-500 mt-1">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                       Gestiona la base de datos de vehículos, requisitos de
                       operadores y conceptos financieros.
                     </p>
                   </div>
                   <Tabs defaultValue="unidades" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto bg-slate-100 p-1.5 rounded-xl shadow-inner mb-6">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto bg-slate-100 dark:bg-black/40 p-1.5 rounded-xl shadow-inner mb-6 border border-transparent dark:border-white/5">
                       <TabsTrigger
                         value="unidades"
                         className="font-bold text-xs gap-2 py-2.5"
@@ -885,13 +949,13 @@ const Settings = () => {
               {/* NOTIFICACIONES */}
               {activeCategory === "notificaciones" && (
                 <div className="space-y-6 animate-in fade-in duration-300">
-                  <div className="bg-amber-50 border border-amber-200 p-5 rounded-xl flex gap-4 items-start shadow-sm">
-                    <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="bg-amber-50 border border-amber-200 dark:bg-amber-500/10 dark:border-amber-500/20 p-5 rounded-xl flex gap-4 items-start shadow-sm">
+                    <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-500 shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-sm font-bold text-amber-800 mb-1">
+                      <h4 className="text-sm font-bold text-amber-800 dark:text-amber-400 mb-1">
                         Configuración en construcción
                       </h4>
-                      <p className="text-xs text-amber-700/80 leading-relaxed">
+                      <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
                         Las notificaciones SMS y Email se están disparando
                         automáticamente según los eventos de cambio de estatus
                         de los viajes.

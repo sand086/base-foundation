@@ -4,12 +4,12 @@ from sqlalchemy import func, case
 from datetime import date, timedelta
 from typing import Optional
 import traceback
-from app.models.models import SystemConfig
 
 from app.db.database import get_db
 
-# Agregamos RecordStatus y los modelos de Taller
+# Agregamos RecordStatus y todos los modelos necesarios
 from app.models.models import (
+    SystemConfig,
     Trip,
     Client,
     Operator,
@@ -17,10 +17,13 @@ from app.models.models import (
     Unit,
     FuelLog,
     RecordStatus,
-    Mechanic,  # <-- NUEVO
-    WorkOrder,  # <-- NUEVO
-    WorkOrderPart,  # <-- NUEVO
-    WorkOrderStatus,  # <-- NUEVO
+    Mechanic,
+    WorkOrder,
+    WorkOrderPart,
+    WorkOrderStatus,
+    TripTimelineEvent,
+    CostCenter,
+    PayableInvoice,
 )
 from app.modules.dashboard.schemas import DashboardData
 
@@ -41,14 +44,14 @@ def get_dashboard_stats(
         # Total servicios y ganancias
         base_query = db.query(Trip).filter(
             Trip.start_date.between(start_date, end_date),
-            Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+            Trip.record_status != RecordStatus.ELIMINADO,
         )
         total_services = base_query.count()
         total_revenue = (
             db.query(func.sum(Trip.tarifa_base))
             .filter(
                 Trip.start_date.between(start_date, end_date),
-                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+                Trip.record_status != RecordStatus.ELIMINADO,
             )
             .scalar()
             or 0.0
@@ -60,24 +63,7 @@ def get_dashboard_stats(
             (on_time / total_services * 100) if total_services > 0 else 0
         )
 
-        # Métricas de Flota
-        fleet_metrics = (
-            db.query(
-                func.sum(FuelLog.km_sm).label("total_kms"),
-                func.sum(FuelLog.litros).label("total_liters"),
-            )
-            .filter(
-                FuelLog.fecha_hora.between(start_date, end_date),
-                FuelLog.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
-            )
-            .first()
-        )
-
-        t_kms = float(fleet_metrics.total_kms or 0.0) if fleet_metrics else 0.0
-        t_liters = float(fleet_metrics.total_liters or 0.0) if fleet_metrics else 0.0
-        avg_rendimiento = round((t_kms / t_liters), 2) if t_liters > 0 else 0.0
-
-        # Top Clientes (AHORA TODOS, ORDENADOS POR MONTO)
+        # Top Clientes
         top_clients = (
             db.query(
                 Client.razon_social.label("client"),
@@ -88,66 +74,118 @@ def get_dashboard_stats(
             .join(Trip, Trip.client_id == Client.id)
             .filter(
                 Trip.start_date.between(start_date, end_date),
-                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
+                Trip.record_status != RecordStatus.ELIMINADO,
             )
             .group_by(Client.id)
-            .order_by(func.sum(Trip.tarifa_base).desc())  # Ordenado por ingresos ($)
-            .all()  # <-- SIN LÍMITE (Trae todos los del mes)
-        )
-
-        # --- 2. OPERATOR STATS ACTUALIZADO ---
-        op_stats = (
-            db.query(
-                Operator.name.label("name"),
-                Operator.name.label("shortName"),
-                func.count(TripLeg.id.distinct()).label("trips"),
-                func.sum(case((TripLeg.rendimiento_real == None, 0), else_=0)).label(
-                    "incidents"
-                ),
-                func.avg(FuelLog.rendimiento_sm).label("rendimiento_lectura"),
-                func.avg(FuelLog.rendimiento_real).label("rendimiento_real"),
-                func.sum(Trip.tarifa_base).label("revenue"),
-            )
-            .join(TripLeg, TripLeg.operator_id == Operator.id)
-            .join(Trip, TripLeg.trip_id == Trip.id)
-            .outerjoin(
-                FuelLog, TripLeg.id == FuelLog.trip_leg_id
-            )  # Outerjoin para métricas de telemetría
-            .filter(
-                TripLeg.start_date.between(start_date, end_date),
-                TripLeg.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN
-                Trip.record_status != RecordStatus.ELIMINADO,  # <-- PROTECCIÓN EXTRA
-            )
-            .group_by(Operator.id)
-            .limit(8)
+            .order_by(func.sum(Trip.tarifa_base).desc())
             .all()
         )
+
+        # --- 2. OPERATOR STATS (CÁLCULO EN PYTHON PURO) ---
+        op_stats_data = []
+        operadores = db.query(Operator).filter(Operator.status != "inactivo").all()
+
+        for op in operadores:
+            # A) Viajes y Revenue
+            trips_del_operador = (
+                db.query(Trip)
+                .join(TripLeg, TripLeg.trip_id == Trip.id)
+                .filter(
+                    TripLeg.operator_id == op.id,
+                    Trip.start_date.between(start_date, end_date),
+                    Trip.record_status != RecordStatus.ELIMINADO,
+                )
+                .distinct()
+                .all()
+            )
+
+            trips_count = len(trips_del_operador)
+            revenue = sum(t.tarifa_base for t in trips_del_operador)
+
+            # B) Incidencias (Tabla Monitoreo)
+            incidents = (
+                db.query(func.count(TripTimelineEvent.id))
+                .join(TripLeg, TripTimelineEvent.trip_leg_id == TripLeg.id)
+                .filter(
+                    TripLeg.operator_id == op.id,
+                    TripTimelineEvent.time.between(start_date, end_date),
+                    TripTimelineEvent.event_type.in_(
+                        ["warning", "danger", "incidencia", "alerta", "retraso"]
+                    ),
+                )
+                .scalar()
+                or 0
+            )
+
+            # C) RENDIMIENTO (SIN FALLAS - Lista extraída a Python)
+            fuel_logs_op = (
+                db.query(FuelLog.odometro, FuelLog.litros)
+                .filter(
+                    FuelLog.operator_id == op.id,
+                    FuelLog.fecha_hora.between(start_date, end_date),
+                    FuelLog.record_status != RecordStatus.ELIMINADO,
+                    FuelLog.is_conciliated == True,
+                    FuelLog.odometro > 0,
+                )
+                .all()
+            )
+
+            rend_real = 0.0
+
+            #   LA REGLA DE ORO: Si hay más de 1 ticket, calculamos. Si no, es 0.0
+            if len(fuel_logs_op) > 1:
+                odometros = [f.odometro for f in fuel_logs_op]
+                litros = [f.litros for f in fuel_logs_op]
+
+                distancia = max(odometros) - min(odometros)
+                litros_totales = sum(litros)
+
+                if litros_totales > 0 and distancia > 0:
+                    rend_real = round((distancia / litros_totales), 2)
+
+            # Solo agregamos al operador a la gráfica si tiene algún viaje, o un rendimiento registrado
+            if trips_count > 0 or len(fuel_logs_op) > 0:
+                op_stats_data.append(
+                    {
+                        "name": op.name,
+                        "shortName": op.name.split(" ")[0] if op.name else "N/A",
+                        "trips": trips_count,
+                        "incidents": incidents,
+                        "onTimeRate": 95.0,
+                        "rendimiento_lectura": rend_real,  # Igualamos hasta tener API ECM
+                        "rendimiento_real": rend_real,
+                        "revenue": float(revenue),
+                    }
+                )
+
+        # Ordenamos a los operadores (Top 8 por ingresos)
+        op_stats_data = sorted(op_stats_data, key=lambda x: x["revenue"], reverse=True)[
+            :8
+        ]
 
         # Recent Services
         recent = (
             db.query(Trip)
             .join(Client, Trip.client_id == Client.id)
-            .filter(Trip.record_status != RecordStatus.ELIMINADO)  # <-- PROTECCIÓN
+            .filter(Trip.record_status != RecordStatus.ELIMINADO)
             .order_by(Trip.created_at.desc())
             .limit(10)
             .all()
         )
 
         # --- 4. VENTAS DIARIAS VS META ---
-
         meta_config = (
             db.query(SystemConfig)
             .filter(SystemConfig.key == "meta_diaria_ventas")
             .first()
         )
 
-        # Si la configuración existe, la usamos. Si no, la dejamos en 0.0 por defecto
         try:
             META_DIARIA = (
                 float(meta_config.value) if meta_config and meta_config.value else 0.0
             )
         except ValueError:
-            META_DIARIA = 0.0  # Por si alguien guardó texto en lugar de números
+            META_DIARIA = 0.0
 
         daily_query = (
             db.query(
@@ -168,7 +206,7 @@ def get_dashboard_stats(
             for d in daily_query
         ]
 
-        # --- 5. MÉTRICAS DE TALLER (Órdenes cerradas y gastos por mecánico) ---
+        # --- 5. MÉTRICAS DE TALLER ---
         mechanic_query = (
             db.query(
                 Mechanic.nombre.label("mechanic_name"),
@@ -196,10 +234,99 @@ def get_dashboard_stats(
             for m in mechanic_query
         ]
 
-        # --- 3. MÉTRICAS MENSUALES PARA GRÁFICAS (Mantenemos por si las usas en DashboardTrends) ---
-        revenueTrend = []
-        tripConfigTrend = []
+        # --- 3. MÉTRICAS MENSUALES PARA GRÁFICAS ---
+
+        # 1. Tendencia de Ingresos (Últimos 6 meses)
+        revenue_trend_query = (
+            db.query(
+                func.to_char(Trip.start_date, "YYYY-MM").label("month"),
+                func.sum(Trip.tarifa_base).label("revenue"),
+            )
+            .filter(
+                Trip.start_date >= (date.today() - timedelta(days=180)),
+                Trip.record_status != RecordStatus.ELIMINADO,
+            )
+            .group_by(func.to_char(Trip.start_date, "YYYY-MM"))
+            .order_by("month")
+            .all()
+        )
+        revenueTrend = [
+            {"month": r.month, "revenue": float(r.revenue or 0.0)}
+            for r in revenue_trend_query
+        ]
+
+        # 2. Configuración de Viaje (Full vs Sencillo)
+        config_query = (
+            db.query(
+                func.to_char(Trip.start_date, "YYYY-MM").label("month"),
+                func.count(case((Unit.tipo_1.ilike("%full%"), 1), else_=None)).label(
+                    "fullCount"
+                ),
+                func.count(case((~Unit.tipo_1.ilike("%full%"), 1), else_=None)).label(
+                    "sencilloCount"
+                ),
+            )
+            .join(TripLeg, TripLeg.trip_id == Trip.id)
+            .join(Unit, TripLeg.unit_id == Unit.id)
+            .filter(
+                Trip.start_date >= (date.today() - timedelta(days=180)),
+                Trip.record_status != RecordStatus.ELIMINADO,
+                TripLeg.leg_type == "ruta_carretera",
+            )
+            .group_by(func.to_char(Trip.start_date, "YYYY-MM"))
+            .order_by("month")
+            .all()
+        )
+        tripConfigTrend = [
+            {
+                "month": r.month,
+                "fullCount": r.fullCount,
+                "sencilloCount": r.sencilloCount,
+            }
+            for r in config_query
+        ]
+
+        # 3. Tendencia de Combustible (Arreglado para sacar Max/Min por mes en la BD)
+        fuel_query_global = (
+            db.query(
+                func.to_char(FuelLog.fecha_hora, "YYYY-MM").label("month"),
+                func.min(FuelLog.odometro).label("min_odo"),
+                func.max(FuelLog.odometro).label("max_odo"),
+                func.sum(FuelLog.litros).label("litros_tot"),
+            )
+            .filter(
+                FuelLog.fecha_hora >= (date.today() - timedelta(days=180)),
+                FuelLog.record_status != RecordStatus.ELIMINADO,
+                FuelLog.is_conciliated == True,
+                FuelLog.odometro > 0,
+            )
+            .group_by(func.to_char(FuelLog.fecha_hora, "YYYY-MM"))
+            .order_by("month")
+            .all()
+        )
+
         fuelTrend = []
+        for r in fuel_query_global:
+            dist = (r.max_odo or 0) - (r.min_odo or 0)
+            lts = float(r.litros_tot or 0.0)
+            rend = round((dist / lts), 2) if lts > 0 and dist > 0 else 0.0
+            fuelTrend.append(
+                {
+                    "month": r.month,
+                    "liters": lts,
+                    "kms": dist,
+                    "rendimiento": rend,
+                }
+            )
+
+        # Calcular flota global usando la misma lógica robusta (Para la KPI card)
+        total_kms_global = sum(f["kms"] for f in fuelTrend)
+        total_litros_global = sum(f["liters"] for f in fuelTrend)
+        avg_rendimiento_global = (
+            round(total_kms_global / total_litros_global, 2)
+            if total_litros_global > 0
+            else 0.0
+        )
 
         return {
             "serviceStats": {
@@ -208,37 +335,18 @@ def get_dashboard_stats(
                 "lateCount": late,
                 "estimatedRevenue": total_revenue,
                 "onTimePercentage": round(on_time_percentage, 1),
-                "totalKms": t_kms,
-                "totalLiters": t_liters,
-                "avgRendimiento": avg_rendimiento,
+                "totalKms": total_kms_global,
+                "totalLiters": total_litros_global,
+                "avgRendimiento": avg_rendimiento_global,
             },
             "clientServices": [dict(c._mapping) for c in top_clients],
-            "operatorStats": [
-                {
-                    "name": o.name,
-                    "shortName": o.shortName,
-                    "trips": o.trips,
-                    "incidents": o.incidents,
-                    "onTimeRate": 95.0,
-                    # Mapeo de los nuevos campos de rendimiento, protegidos contra nulos
-                    "rendimiento_lectura": (
-                        round(o.rendimiento_lectura, 2)
-                        if o.rendimiento_lectura
-                        else 0.0
-                    ),
-                    "rendimiento_real": (
-                        round(o.rendimiento_real, 2) if o.rendimiento_real else 0.0
-                    ),
-                    "revenue": float(o.revenue or 0.0),
-                }
-                for o in op_stats
-            ],
+            "operatorStats": op_stats_data,
             "recentServices": [
                 {
                     "id": f"TRP-{t.id}",
                     "clientId": str(t.client_id),
                     "clientName": t.client.razon_social,
-                    "route": f"{t.origin} → {t.destination}",
+                    "route": f"{t.origin} -> {t.destination}",
                     "origin": t.origin,
                     "destination": t.destination,
                     "operator": (
@@ -256,8 +364,8 @@ def get_dashboard_stats(
             "revenueTrend": revenueTrend,
             "tripConfigTrend": tripConfigTrend,
             "fuelTrend": fuelTrend,
-            "dailyRevenue": daily_revenue_data,  # <-- NUEVO
-            "mechanicStats": mechanic_stats_data,  # <-- NUEVO
+            "dailyRevenue": daily_revenue_data,
+            "mechanicStats": mechanic_stats_data,
         }
 
     except Exception as e:
@@ -266,3 +374,56 @@ def get_dashboard_stats(
 
         print(traceback.format_exc())
         raise HTTPException(status_code=400, detail=error_detail)
+
+
+from sqlalchemy import func
+
+# Asegúrate de que tus imports arriba tengan CostCenter y PayableInvoice así:
+# from app.models.models import CostCenter, PayableInvoice, RecordStatus, ...
+
+
+@router.get("/stats/costs-by-ceco")
+def get_costs_by_ceco(db: Session = Depends(get_db)):
+    """
+     TICKET 4: Devuelve la suma de Cuentas por Pagar agrupadas por Centro de Costos.
+    Ideal para inyectar directo en un PieChart de React.
+    """
+    try:
+        # Usamos los modelos directamente, sin el prefijo "models."
+        results = (
+            db.query(
+                CostCenter.nombre,
+                func.sum(PayableInvoice.monto_total).label("total_gastado"),
+            )
+            .join(
+                PayableInvoice,
+                PayableInvoice.cost_center_id == CostCenter.id,
+            )
+            .filter(PayableInvoice.record_status != RecordStatus.ELIMINADO)
+            .group_by(CostCenter.nombre)
+            .all()
+        )
+
+        data = [
+            {"name": row.nombre, "value": float(row.total_gastado)} for row in results
+        ]
+
+        sin_asignar = (
+            db.query(func.sum(PayableInvoice.monto_total))
+            .filter(PayableInvoice.cost_center_id == None)
+            .filter(PayableInvoice.record_status != RecordStatus.ELIMINADO)
+            .scalar()
+        )
+
+        if sin_asignar and float(sin_asignar) > 0:
+            data.append(
+                {"name": "Sin Asignar (Revisión Manual)", "value": float(sin_asignar)}
+            )
+
+        return data
+
+    except Exception as e:
+        import traceback
+
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Error obteniendo stats de CECOs")

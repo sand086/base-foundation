@@ -265,7 +265,7 @@ export function AssignTireModal({
                   )}
                 </div>
 
-                {/* 🚚 Selector de Unidad / Almacén */}
+                {/*  Selector de Unidad / Almacén */}
                 <FormField
                   control={form.control}
                   name="selectedUnit"
@@ -366,7 +366,7 @@ export function AssignTireModal({
                   </div>
                 )}
 
-                {/* 📝 Notas */}
+                {/*  Notas */}
                 <FormField
                   control={form.control}
                   name="notas"

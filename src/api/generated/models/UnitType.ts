@@ -10,5 +10,6 @@ export enum UnitType {
     REMOLQUE = 'remolque',
     CAMIONETA = 'camioneta',
     CAMION = 'camion',
+    MOTOGENERADOR = 'motogenerador',
     OTRO = 'otro',
 }

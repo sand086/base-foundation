@@ -61,7 +61,7 @@ const ToggleGroupItem = React.forwardRef<
           variant: context.variant || variant,
           size: context.size || size,
         }),
-        // 🛠 REFINAMIENTO INDUSTRIAL
+        //   REFINAMIENTO INDUSTRIAL
         "relative transition-all duration-300 ease-out",
         "rounded-lg border-transparent",
 
@@ -71,7 +71,7 @@ const ToggleGroupItem = React.forwardRef<
         "data-[state=on]:shadow-[0_4px_12px_rgba(190,8,17,0.2)]",
         "data-[state=on]:border-brand-red/30",
 
-        // ⚡ EFECTO HÁPTICO
+        // ❄️ EFECTO HÁPTICO
         "haptic-press active:scale-95",
 
         // Bordes HD entre botones

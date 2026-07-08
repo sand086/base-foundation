@@ -8,21 +8,26 @@ from fastapi import (
     status,
     Body,
     Request,
+    UploadFile,
+    File,
 )
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from jose import JWTError, jwt, ExpiredSignatureError
 from app.core.security import verify_password
+import requests  # <-- NUEVO: Para hacer la petición a Google reCAPTCHA
 
 from app.db.database import get_db
 from app.models import models
 from app.core import security
 from app.core.config import settings
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from . import schemas
+from . import crud
 
+from app.integrations.storage.storage import StorageService
 from app.modules.monitoring.crud import log_audit
 
 router = APIRouter(tags=["Authentication"])
@@ -91,7 +96,41 @@ async def get_current_active_user(
 def login(
     request_data: schemas.LoginRequest, request: Request, db: Session = Depends(get_db)
 ):
+    cliente_ip = request.client.host if request.client else "Desconocida"
+
+    # ==========================================
+    # 0. VALIDACIÓN DE reCAPTCHA V3
+    # ==========================================
+    if (
+        settings.GOOGLE_RECAPTCHA_V3_SECRET_KEY
+    ):  # Solo validamos si la key existe en el .env
+        recaptcha_url = "https://www.google.com/recaptcha/api/siteverify"
+        recaptcha_payload = {
+            "secret": settings.GOOGLE_RECAPTCHA_V3_SECRET_KEY,
+            "response": request_data.recaptcha_token,
+        }
+
+        try:
+            r = requests.post(recaptcha_url, data=recaptcha_payload, timeout=5)
+            result = r.json()
+
+            # Score de 0.0 a 1.0 (1.0 es muy seguro que es humano)
+            if not result.get("success") or result.get("score", 0) < 0.5:
+                print(
+                    f"Bloqueo por Bot detectado en IP: {cliente_ip} - Score: {result.get('score')}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Validación de seguridad fallida. Nuestro sistema detectó actividad sospechosa (Bot).",
+                )
+        except requests.exceptions.RequestException:
+            # Si Google falla en responder, permitimos el login por fallback o lo denegamos según tu preferencia.
+            # Por ahora, si Google se cae, mejor dejar entrar al usuario (fail-open)
+            print("Advertencia: No se pudo contactar al servidor de Google reCAPTCHA.")
+
+    # ==========================================
     # 1. Buscar usuario
+    # ==========================================
     user = db.query(models.User).filter(models.User.email == request_data.email).first()
     if not user:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
@@ -136,9 +175,11 @@ def login(
     # 5. Persistencia y Registro de Auditoría
     user.last_login = datetime.utcnow()
     user.refresh_token = refresh_token
+    user.updated_by_id = (
+        user.id
+    )  # <--- AUDITORÍA: El propio usuario actualizó su registro al loguearse
     db.commit()
 
-    cliente_ip = request.client.host if request.client else "Desconocida"
     log_audit(
         db=db,
         user_id=user.id,
@@ -246,6 +287,7 @@ def verify_2fa(
 
     user.last_login = datetime.utcnow()
     user.refresh_token = refresh_token
+    user.updated_by_id = user.id  # <--- AUDITORÍA
     db.commit()
 
     cliente_ip = request.client.host if request.client else "Desconocida"
@@ -279,6 +321,7 @@ def logout(
     """
     # 1. Limpiar el token en la DB
     current_user.refresh_token = None
+    current_user.updated_by_id = current_user.id  # <--- AUDITORÍA
     db.commit()
 
     # 2. Registrar en Registro de detalles
@@ -311,6 +354,7 @@ def setup_2fa(
     uri = totp.provisioning_uri(name=current_user.email, issuer_name="TMS Sistema")
 
     current_user.two_factor_secret = secret
+    current_user.updated_by_id = current_user.id  # <--- AUDITORÍA
     db.commit()
 
     return schemas.TwoFactorSetupResponse(
@@ -340,6 +384,7 @@ def enable_2fa(
         raise HTTPException(status_code=400, detail="Código incorrecto")
 
     current_user.is_2fa_enabled = True
+    current_user.updated_by_id = current_user.id  # <--- AUDITORÍA
     db.commit()
 
     # ==========================================
@@ -361,20 +406,6 @@ def enable_2fa(
     return {"message": "2FA Activado correctamente"}
 
 
-import json
-from typing import List, Dict, Any
-
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from app.integrations.storage.storage import StorageService
-from sqlalchemy.orm import Session
-
-
-from app.db.database import get_db
-from . import crud
-from app.models import models
-from . import schemas
-from app.modules.auth.router import get_current_active_user
-
 # =========================================================
 # ROLES (Deben ir primero para evitar conflicto con {user_id})
 # =========================================================
@@ -387,11 +418,17 @@ def read_roles(db: Session = Depends(get_db)):
 
 
 @router.post("/roles", response_model=schemas.RoleResponse)
-def create_role(payload: schemas.RoleCreate, db: Session = Depends(get_db)):
+def create_role(
+    payload: schemas.RoleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
     # name_key es unique en el modelo
     if crud.get_role_by_key(db, payload.name_key):
         raise HTTPException(status_code=400, detail="Ya existe un rol con ese name_key")
-    return crud.create_role(db, payload)
+    return crud.create_role(db, payload, current_user.id)  # <--- AUDITORÍA
 
 
 @router.get("/roles/{role_id}", response_model=schemas.RoleResponse)
@@ -404,7 +441,12 @@ def read_role(role_id: int, db: Session = Depends(get_db)):
 
 @router.put("/roles/{role_id}", response_model=schemas.RoleResponse)
 def update_role(
-    role_id: int, payload: schemas.RoleUpdate, db: Session = Depends(get_db)
+    role_id: int,
+    payload: schemas.RoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
 ):
     if payload.name_key:
         exists = crud.get_role_by_key(db, payload.name_key)
@@ -413,15 +455,21 @@ def update_role(
                 status_code=400, detail="Ya existe un rol con ese name_key"
             )
 
-    role = crud.update_role(db, role_id, payload)
+    role = crud.update_role(db, role_id, payload, current_user.id)  # <--- AUDITORÍA
     if not role:
         raise HTTPException(status_code=404, detail="Rol no encontrado")
     return role
 
 
 @router.delete("/roles/{role_id}")
-def delete_role(role_id: int, db: Session = Depends(get_db)):
-    result = crud.delete_role(db, role_id)
+def delete_role(
+    role_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
+    result = crud.delete_role(db, role_id, current_user.id)  # <--- AUDITORÍA
     if result is False:
         raise HTTPException(status_code=404, detail="Rol no encontrado")
     if result is None:
@@ -506,7 +554,13 @@ def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.UserResponse)
-def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    payload: schemas.UserCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
     if crud.get_user_by_email(db, payload.email):
         raise HTTPException(status_code=400, detail="El correo ya existe")
 
@@ -515,7 +569,7 @@ def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
         if not role:
             raise HTTPException(status_code=404, detail="Rol no encontrado")
 
-    user = crud.create_user(db, payload)
+    user = crud.create_user(db, payload, current_user.id)  # <--- AUDITORÍA
     # Mandar contraseña desencriptada al crearlo
     user.password = security.decrypt_password(user.password_hash)
     return user
@@ -539,7 +593,12 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{user_id}", response_model=schemas.UserResponse)
 def update_user(
-    user_id: int, payload: schemas.UserUpdate, db: Session = Depends(get_db)
+    user_id: int,
+    payload: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
 ):
     if payload.email:
         existing = crud.get_user_by_email(db, payload.email)
@@ -551,7 +610,7 @@ def update_user(
         if not role:
             raise HTTPException(status_code=404, detail="Rol no encontrado")
 
-    user = crud.update_user(db, user_id, payload)
+    user = crud.update_user(db, user_id, payload, current_user.id)  # <--- AUDITORÍA
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -561,8 +620,16 @@ def update_user(
 
 
 @router.patch("/{user_id}/status")
-def toggle_status(user_id: int, db: Session = Depends(get_db)):
-    status_value = crud.toggle_user_status(db, user_id)
+def toggle_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
+    status_value = crud.toggle_user_status(
+        db, user_id, current_user.id
+    )  # <--- AUDITORÍA
     if status_value is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"activo": status_value}
@@ -570,17 +637,30 @@ def toggle_status(user_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{user_id}/reset-password")
 def reset_password(
-    user_id: int, payload: schemas.PasswordReset, db: Session = Depends(get_db)
+    user_id: int,
+    payload: schemas.PasswordReset,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
 ):
-    ok = crud.reset_password(db, user_id, payload.new_password)
+    ok = crud.reset_password(
+        db, user_id, payload.new_password, current_user.id
+    )  # <--- AUDITORÍA
     if not ok:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"message": "Contraseña actualizada"}
 
 
 @router.delete("/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    ok = crud.delete_user(db, user_id)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        get_current_active_user
+    ),  # <--- AUDITORÍA PARAM
+):
+    ok = crud.delete_user(db, user_id, current_user.id)  # <--- AUDITORÍA
     if not ok:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     return {"message": "Usuario eliminado"}
@@ -606,6 +686,9 @@ async def upload_user_avatar(
 
         # 3. Actualizar solo el campo avatar_url en la BD
         user.avatar_url = storage_data["url"]
+        user.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: Registrar subida de avatar
         db.commit()
         db.refresh(user)
 
@@ -634,6 +717,9 @@ async def request_emergency_code(
     # 3. Guardamos con expiración de 5 minutos
     user.emergency_code = code
     user.emergency_code_expires = datetime.utcnow() + timedelta(minutes=5)
+    user.updated_by_id = (
+        user.id
+    )  # <--- AUDITORÍA: El propio usuario pidió el código de emergencia
     db.commit()
 
     # 4. DISPARAR EMAIL (Aquí llamas a tu EmailService)
@@ -654,7 +740,7 @@ def verify_user_password(
     """
     Verifica la contraseña del usuario en sesión para operaciones críticas.
     """
-    # ✅ FIX: Cambiado a current_user.password_hash
+    #  FIX: Cambiado a current_user.password_hash
     if not security.verify_password(request.password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -708,6 +794,7 @@ def setup_2fa_temp(
     # Generamos secreto y QR al vuelo
     secret = security.generate_2fa_secret()
     user.two_factor_secret = secret  # Lo guardamos provisionalmente
+    user.updated_by_id = user.id  # <--- AUDITORÍA
     db.commit()
 
     totp = security.get_totp(secret)
@@ -718,3 +805,53 @@ def setup_2fa_temp(
         qr_code=f"data:image/png;base64,{security.generate_qr_code(uri)}",
         manual_entry_key=secret,
     )
+
+
+# -----------------------------------------------------------------------------
+# NUEVO: DEPENDENCY DE PERMISOS (RBAC)
+# -----------------------------------------------------------------------------
+class RequirePermission:
+    def __init__(self, required_permission: str):
+        self.required_permission = required_permission
+
+    def __call__(self, current_user: models.User = Depends(get_current_active_user)):
+        # 1. Bypass para Super Administradores (Opcional, ajusta el name_key a tu gusto)
+        if current_user.role and current_user.role.name_key == "superadmin":
+            return current_user
+
+        # 2. Verificar que tenga rol y permisos asignados
+        if not current_user.role or not current_user.role.permisos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Acceso denegado. No tienes permisos configurados.",
+            )
+
+        permisos = current_user.role.permisos
+
+        # 3. Lógica de evaluación flexible del JSONB
+        # Soporta formato plano: {"finance:cancel_invoice": True}
+        if (
+            isinstance(permisos, dict)
+            and permisos.get(self.required_permission) is True
+        ):
+            return current_user
+
+        # Soporta formato anidado: {"finance": {"cancel_invoice": True}}
+        parts = self.required_permission.split(":")
+        if len(parts) == 2:
+            module, action = parts
+            if (
+                isinstance(permisos.get(module), dict)
+                and permisos[module].get(action) is True
+            ):
+                return current_user
+
+        # Soporta formato de lista plana: ["finance:cancel_invoice"]
+        if isinstance(permisos, list) and self.required_permission in permisos:
+            return current_user
+
+        # Si no pasó ninguna validación, se rechaza la petición
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Permiso denegado. Requiere el privilegio: '{self.required_permission}'",
+        )

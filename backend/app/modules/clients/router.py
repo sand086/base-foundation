@@ -34,7 +34,13 @@ def read_client(client_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=schemas.ClientResponse)
-def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
+def create_client(
+    client: schemas.ClientCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),  # <--- AUDITORÍA: Pedir usuario logueado
+):
     # Verificamos si el RFC ya existe
     existing = db.query(models.Client).filter(models.Client.rfc == client.rfc).first()
     if existing:
@@ -43,7 +49,8 @@ def create_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
         )
 
     try:
-        return crud.create_client(db=db, client=client)
+        # <--- AUDITORÍA: Pasar el ID al CRUD
+        return crud.create_client(db=db, client=client, user_id=current_user.id)
     except IntegrityError:
         # Por si hay algún otro error de integridad (ej. public_id único)
         db.rollback()
@@ -58,6 +65,9 @@ def update_client(
     client_id: int,
     client: schemas.ClientUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),  # <--- AUDITORÍA: Pedir usuario logueado
 ):
     # Verificamos si el cliente a actualizar existe
     db_client_exist = crud.get_client(db, client_id=client_id)
@@ -80,7 +90,10 @@ def update_client(
             )
 
     try:
-        updated_client = crud.update_client(db, client_id=client_id, client_data=client)
+        # <--- AUDITORÍA: Pasar el ID al CRUD
+        updated_client = crud.update_client(
+            db, client_id=client_id, client_data=client, user_id=current_user.id
+        )
         return updated_client
     except IntegrityError:
         db.rollback()
@@ -91,8 +104,16 @@ def update_client(
 
 
 @router.delete("/{client_id}")
-def delete_client(client_id: int, db: Session = Depends(get_db)):
-    success = crud.delete_client(db, client_id=client_id)
+def delete_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        get_current_user
+    ),  # <--- AUDITORÍA: Pedir usuario logueado
+):
+    success = crud.delete_client(
+        db, client_id=client_id, user_id=current_user.id
+    )  # <--- AUDITORÍA
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Client not found"
@@ -106,7 +127,7 @@ async def upload_client_document(
     doc_type: str,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),  # Este ya lo tenías, ¡genial!
 ):
     # 1. Verificar existencia del cliente
     client = db.query(Client).filter(Client.id == client_id).first()
@@ -149,7 +170,7 @@ async def upload_client_document(
             mime_type=storage_data["mime_type"],
             version=last_v + 1,
             is_active=True,
-            created_by_id=current_user.id,
+            created_by_id=current_user.id,  # <--- Esto ya lo tenías
         )
 
         db.add(new_doc)
@@ -158,6 +179,9 @@ async def upload_client_document(
         field_name = f"{doc_type}_url"
         if hasattr(client, field_name):
             setattr(client, field_name, storage_data["url"])
+            client.updated_by_id = (
+                current_user.id
+            )  # <--- AUDITORÍA: Reflejar edición en tabla principal
 
         db.commit()
         db.refresh(new_doc)
@@ -228,6 +252,9 @@ async def delete_client_document(
 
         # 3. Borrado lógico (Soft Delete)
         doc.record_status = "E"
+        doc.updated_by_id = (
+            current_user.id
+        )  # <--- AUDITORÍA: El usuario marcó borrado esto
         if doc.is_active:
             doc.is_active = False
 

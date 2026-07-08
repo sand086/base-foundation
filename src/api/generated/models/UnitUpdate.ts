@@ -39,5 +39,7 @@ export type UnitUpdate = {
     permiso_sct_url?: (string | null);
     caat_url?: (string | null);
     tarjeta_circulacion_folio?: (string | null);
+    aseguradora_med_ambiente_id?: (number | null);
+    poliza_med_ambiente?: (string | null);
 };
 

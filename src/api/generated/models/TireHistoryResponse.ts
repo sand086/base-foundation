@@ -5,14 +5,14 @@
 import type { RecordStatus } from './RecordStatus';
 import type { TireEventType } from './TireEventType';
 export type TireHistoryResponse = {
-    fecha: string;
+    fecha?: (string | null);
     tipo: TireEventType;
     descripcion?: (string | null);
     unit_id?: (number | null);
     unidad_economico?: (string | null);
     posicion?: (number | null);
-    km?: number;
-    costo?: number;
+    km?: (number | null);
+    costo?: (number | null);
     responsable?: (string | null);
     id: number;
     tire_id: number;

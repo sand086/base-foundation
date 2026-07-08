@@ -17,17 +17,20 @@ import {
 import { Separator } from "@/components/ui/separator";
 import {
   FileText,
+  FileCode2,
   Download,
   Calendar,
   DollarSign,
   Building2,
   Receipt,
   CreditCard,
+  AlertTriangle,
+  History,
   X,
 } from "lucide-react";
 import { useEffect } from "react";
+import { toast } from "sonner";
 
-// FIX: Cambiamos a PayableInvoice (Facturas de Proveedores)
 import type { PayableInvoice } from "@/features/payables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 
@@ -36,6 +39,7 @@ interface InvoiceDetailSheetProps {
   onOpenChange: (open: boolean) => void;
   invoice: PayableInvoice | null;
   onPayClick?: (invoice: PayableInvoice) => void;
+  onPaymentSuccess?: () => void;
 }
 
 const toNumber = (v: any): number => {
@@ -68,14 +72,47 @@ export function InvoicePayablesDetailSheet({
   const folioInterno = safeStr(inv.folio_interno) || `ID-${id}`;
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
-  // FIX: Ajustamos las propiedades a Proveedor (Supplier) en lugar de Cliente
+  // 👇 EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
+  const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
+  const isCanceled = estatusStr === "CANCELADO";
+  const docHistory = Array.isArray(inv.document_history)
+    ? inv.document_history
+    : [];
+  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
+  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
+
+  // AGRUPACIÓN DEL HISTORIAL POR VERSIÓN PARA LA TABLA
+  const groupedHistory = Object.values(
+    docHistory.reduce((acc: any, doc: any) => {
+      const v = doc.version || 1;
+      if (!acc[v]) {
+        acc[v] = {
+          version: v,
+          created_at: doc.created_at,
+          is_active: doc.is_active,
+          pdf: null,
+          xml: null,
+          acuse: null,
+          filename: doc.filename
+            ? doc.filename.replace(/\.(xml|pdf)$/i, "")
+            : folioInterno,
+        };
+      }
+      if (doc.document_type === "pdf") acc[v].pdf = doc;
+      if (doc.document_type === "xml") acc[v].xml = doc;
+      if (doc.document_type === "acuse_cancelacion") acc[v].acuse = doc;
+
+      return acc;
+    }, {}),
+  ).sort((a: any, b: any) => b.version - a.version); // Orden descendente (más nuevo primero)
+  // 👆 -----------------------------------------------------
+
   const entidadNombre =
     safeStr(inv.supplier?.razon_social) ||
     safeStr(inv.supplier_razon_social) ||
     "Proveedor Desconocido";
 
   const entidadRfc = safeStr(inv.supplier?.rfc) || "RFC NO DISPONIBLE";
-
   const concepto = safeStr(inv.concepto) || "Sin descripción";
   const fechaEmision =
     safeStr(inv.fecha_emision) || safeStr(inv.fechaEmision) || "—";
@@ -84,8 +121,6 @@ export function InvoicePayablesDetailSheet({
   const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
   const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
   const moneda = safeStr(inv.moneda) || "MXN";
-  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
-  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
 
   const payments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
@@ -103,12 +138,47 @@ export function InvoicePayablesDetailSheet({
     }
   };
 
+  const handleDownloadUrl = (url: string, filename: string) => {
+    const toastId = toast.loading(`Descargando ${filename}...`);
+    try {
+      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+      const baseURL = rawBaseURL.replace(/\/$/, "");
+      const fileUrl = url.startsWith("http")
+        ? url
+        : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;
+
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.target = "_blank";
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success(`${filename} descargado.`, { id: toastId });
+    } catch {
+      toast.error(`Fallo al descargar ${filename}`, { id: toastId });
+    }
+  };
+
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
       currency: "MXN",
     });
-  const fD = (d: any) => (d ? new Date(d).toLocaleDateString("es-MX") : "—");
+  const fD = (d: any) =>
+    d && d !== "—" ? new Date(d).toLocaleDateString("es-MX") : "—";
+
+  // FORMATEADOR DE FECHA Y HORA PARA LA TABLA
+  const fDT = (d: any) => {
+    if (!d || d === "—") return "—";
+    return new Date(d).toLocaleString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   const isPaid = saldoPendiente <= 0;
 
@@ -144,6 +214,26 @@ export function InvoicePayablesDetailSheet({
         </SheetHeader>
 
         <div className="space-y-6 py-6 animate-in slide-in-from-right-4 duration-500 overflow-y-auto max-h-[calc(100vh-100px)] custom-scrollbar -mx-4 px-4">
+          {/* ALERTA DE CANCELACIÓN */}
+          {isCanceled && (
+            <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">
+                  Factura Cancelada
+                </h4>
+                <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
+                  Este comprobante fue cancelado el{" "}
+                  <strong>{fDT(inv.fecha_cancelacion)}</strong>
+                  {inv.motivo_cancelacion
+                    ? ` por el motivo "${inv.motivo_cancelacion}"`
+                    : ""}
+                  .
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* IDENTIFICACIÓN */}
           <div className="flex items-start justify-between bg-card p-5 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-brand-navy/50 group-hover:bg-brand-navy transition-colors"></div>
@@ -156,7 +246,7 @@ export function InvoicePayablesDetailSheet({
               </p>
             </div>
             <div className="flex flex-col items-end gap-2">
-              {!isPaid && onPayClick && (
+              {!isPaid && !isCanceled && onPayClick && (
                 <Button
                   size="sm"
                   onClick={() => onPayClick(invoice)}
@@ -352,30 +442,158 @@ export function InvoicePayablesDetailSheet({
 
           <Separator className="bg-border/50" />
 
-          {/* ARCHIVOS FACTURA ORIGINAL */}
-          <div className="bg-slate-900 dark:bg-slate-950 p-5 rounded-2xl text-white shadow-xl relative overflow-hidden group">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:bg-white/10 transition-all"></div>
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2 relative z-10">
-              <FileText className="h-3.5 w-3.5" /> Factura de Origen
+          {/* TABLA DE EXPEDIENTE Y VERSIONES (CORREGIDA PARA QUE SIEMPRE SEA TABLA) */}
+          <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
+              <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
+              Versiones de Factura
             </h3>
 
-            <div className="flex gap-3 relative z-10">
-              <Button
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!pdfUrl}
-                onClick={() => pdfUrl && handleDownload(pdfUrl)}
-              >
-                <Download className="h-4 w-4 text-rose-400" /> PDF
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white gap-2 font-bold tracking-wide h-10 rounded-xl backdrop-blur-sm transition-all"
-                disabled={!xmlUrl}
-                onClick={() => xmlUrl && handleDownload(xmlUrl)}
-              >
-                <Download className="h-4 w-4 text-blue-400" /> XML
-              </Button>
+            <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
+              <DataTable>
+                <DataTableHeader>
+                  <DataTableRow className="bg-slate-100/50 dark:bg-slate-800/50 border-b-slate-200 dark:border-b-border/50 hover:bg-transparent">
+                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Documento
+                    </DataTableHead>
+                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Fecha / Hora
+                    </DataTableHead>
+                    <DataTableHead className="text-center text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
+                      Descargas
+                    </DataTableHead>
+                  </DataTableRow>
+                </DataTableHeader>
+                <DataTableBody>
+                  {groupedHistory.length > 0 ? (
+                    groupedHistory.map((group: any) => (
+                      <DataTableRow
+                        key={`v-${group.version}`}
+                        className={`border-b-slate-100 dark:border-b-border/50 transition-colors ${group.is_active ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "opacity-60 grayscale hover:grayscale-0"}`}
+                      >
+                        <DataTableCell className="py-2.5">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {group.filename}
+                            </span>
+                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
+                              Versión {group.version}{" "}
+                              {group.is_active ? "(Activa)" : "(Obsoleta)"}
+                            </span>
+                          </div>
+                        </DataTableCell>
+                        <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
+                          {fDT(group.created_at)}
+                        </DataTableCell>
+                        <DataTableCell className="text-center py-2.5">
+                          <div className="flex justify-center items-center gap-1">
+                            {group.pdf && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar PDF"
+                                className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.pdf.file_url,
+                                    group.pdf.filename,
+                                  )
+                                }
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {group.xml && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar XML"
+                                className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.xml.file_url,
+                                    group.xml.filename,
+                                  )
+                                }
+                              >
+                                <FileCode2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {group.acuse && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Descargar Acuse de Cancelación"
+                                className="h-7 w-7 rounded text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                                onClick={() =>
+                                  handleDownloadUrl(
+                                    group.acuse.file_url,
+                                    group.acuse.filename,
+                                  )
+                                }
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </DataTableCell>
+                      </DataTableRow>
+                    ))
+                  ) : pdfUrl || xmlUrl ? (
+                    // 👈 FALLBACK INTEGRADO DENTRO DE LA TABLA
+                    <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <DataTableCell className="py-2.5">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {folioInterno || "Factura"}
+                          </span>
+                          <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
+                            Versión Única (Activa)
+                          </span>
+                        </div>
+                      </DataTableCell>
+                      <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
+                        {fDT(inv.fecha_emision) || "—"}
+                      </DataTableCell>
+                      <DataTableCell className="text-center py-2.5">
+                        <div className="flex justify-center items-center gap-1">
+                          {pdfUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Descargar PDF"
+                              className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                              onClick={() => handleDownload(pdfUrl)}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {xmlUrl && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Descargar XML"
+                              className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
+                              onClick={() => handleDownload(xmlUrl)}
+                            >
+                              <FileCode2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </DataTableCell>
+                    </DataTableRow>
+                  ) : (
+                    <DataTableRow>
+                      <DataTableCell
+                        colSpan={3}
+                        className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs font-medium"
+                      >
+                        No hay documentos ni versiones registradas.
+                      </DataTableCell>
+                    </DataTableRow>
+                  )}
+                </DataTableBody>
+              </DataTable>
             </div>
           </div>
         </div>

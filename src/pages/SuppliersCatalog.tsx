@@ -1,3 +1,4 @@
+// src/features/cxp/SuppliersCatalog.tsx
 import { useMemo, useState } from "react";
 import {
   Search,
@@ -7,11 +8,12 @@ import {
   MoreHorizontal,
   Trash2,
   AlertTriangle,
+  Filter,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/page-header";
-import { ActionButton } from "@/components/ui/action-button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Badge } from "@/components/ui/badge";
 import {
   DataTable,
   DataTableHeader,
@@ -40,21 +42,45 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { SupplierModal } from "@/features/suppliers/components/SupplierModal";
 import { SupplierDetailSheet } from "@/features/suppliers/components/SupplierDetailSheet";
 import { useSuppliers } from "@/features/suppliers/hooks/useSuppliers";
 import { Supplier } from "@/features/suppliers/types";
 import { useSystemConfig } from "@/features/settings/hooks/useSystemConfig";
+import { useCostCenters } from "@/features/costCenters/hooks/useCostCenters";
 import { cn } from "@/lib/utils";
 
 const safeLower = (v: unknown) =>
   typeof v === "string" ? v.toLowerCase() : "";
 
+// FUNCIÓN AUXILIAR PARA MAPEAR EL COLOR SEGÚN EL CÓDIGO DEL CECO
+const getCecoBadgeVariant = (codigo?: string) => {
+  if (!codigo) return "neutral";
+
+  const code = codigo.toUpperCase();
+
+  if (["ADMIN", "COMBAN"].includes(code)) return "info";
+  if (["MTTO", "LLANTAS", "ADQ"].includes(code)) return "warning";
+  if (["DIESEL", "CASETAS"].includes(code)) return "neutral";
+  if (["PERSONAL", "SEG", "SEGUROS"].includes(code)) return "success";
+
+  return "default";
+};
+
 export default function SuppliersCatalog() {
   const { valueAsNumber: defaultCredito } = useSystemConfig(
     "dias_credito_default",
   );
+
+  const { costCenters } = useCostCenters();
 
   const {
     suppliers,
@@ -65,6 +91,8 @@ export default function SuppliersCatalog() {
   } = useSuppliers();
 
   const [searchCatalog, setSearchCatalog] = useState("");
+  const [filterEstatus, setFilterEstatus] = useState<string>("ALL");
+  const [filterCeco, setFilterCeco] = useState<string>("ALL");
 
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [isSupplierDetailOpen, setIsSupplierDetailOpen] = useState(false);
@@ -80,11 +108,23 @@ export default function SuppliersCatalog() {
 
   const filteredSuppliers = useMemo(() => {
     const q = safeLower(searchCatalog);
-    return suppliers.filter(
-      (s) =>
-        safeLower(s.razon_social).includes(q) || safeLower(s.rfc).includes(q),
-    );
-  }, [suppliers, searchCatalog]);
+
+    return suppliers.filter((s) => {
+      const matchGlobal =
+        safeLower(s.razon_social).includes(q) || safeLower(s.rfc).includes(q);
+
+      const matchEstatus =
+        filterEstatus === "ALL" || s.estatus === filterEstatus;
+
+      const matchCeco =
+        filterCeco === "ALL" ||
+        (filterCeco === "UNASSIGNED"
+          ? !s.cost_center
+          : s.cost_center?.codigo === filterCeco);
+
+      return matchGlobal && matchEstatus && matchCeco;
+    });
+  }, [suppliers, searchCatalog, filterEstatus, filterCeco]);
 
   const handleConfirmDeleteSupplier = async () => {
     if (!supplierToDelete) return;
@@ -102,30 +142,108 @@ export default function SuppliersCatalog() {
         description="Directorio centralizado de proveedores de servicios y refacciones."
       />
 
-      {/* TOOLBAR TAHOE */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-white/60 pointer-events-none" />
-          <Input
-            placeholder="Buscar por razón social o RFC..."
-            value={searchCatalog}
-            onChange={(e) => setSearchCatalog(e.target.value)}
-            className="pl-10 h-11 border-slate-200 dark:border-white/10 shadow-sm focus:ring-brand-red/20 bg-card"
-          />
+      <div className="flex flex-col gap-4 p-4 rounded-2xl bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/60 dark:border-white/5 shadow-inner mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500 dark:text-white/60 pointer-events-none" />
+            <Input
+              placeholder="Buscar por razón social o RFC..."
+              value={searchCatalog}
+              onChange={(e) => setSearchCatalog(e.target.value)}
+              className="pl-10 h-11 border-slate-200 dark:border-white/10 shadow-sm focus:ring-brand-red/20 bg-card"
+            />
+          </div>
+          <Button
+            variant="default"
+            onClick={() => {
+              setEditingSupplier(null);
+              setIsSupplierModalOpen(true);
+            }}
+            className="bg-brand-red hover:bg-brand-red/90 text-white shadow-lg shadow-brand-red/20 border-none haptic-press font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl w-full sm:w-auto"
+          >
+            <Plus className="h-4 w-4 mr-2" /> Nuevo Proveedor
+          </Button>
         </div>
-        <Button
-          variant="default"
-          onClick={() => {
-            setEditingSupplier(null);
-            setIsSupplierModalOpen(true);
-          }}
-          className="bg-brand-red hover:bg-brand-red/90 text-white shadow-lg shadow-brand-red/20 border-none haptic-press font-black uppercase tracking-widest text-[10px] sm:text-xs h-11 px-6 rounded-xl w-full sm:w-auto"
-        >
-          <Plus className="h-4 w-4 mr-2" /> Nuevo Proveedor
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200/60 dark:border-white/5">
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+            <Filter className="h-4 w-4" />
+            <span className="text-[10px] font-black uppercase tracking-widest">
+              Filtros:
+            </span>
+          </div>
+
+          <Select value={filterEstatus} onValueChange={setFilterEstatus}>
+            <SelectTrigger className="w-[160px] h-9 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-card border-slate-200 dark:border-white/10">
+              <SelectValue placeholder="Estatus" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL" className="text-xs font-bold uppercase">
+                Todos los estatus
+              </SelectItem>
+              <SelectItem
+                value="activo"
+                className="text-xs font-bold uppercase"
+              >
+                Activos
+              </SelectItem>
+              <SelectItem
+                value="inactivo"
+                className="text-xs font-bold uppercase"
+              >
+                Inactivos
+              </SelectItem>
+              <SelectItem
+                value="suspendido"
+                className="text-xs font-bold uppercase text-rose-500"
+              >
+                Suspendidos
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filterCeco} onValueChange={setFilterCeco}>
+            <SelectTrigger className="w-[180px] h-9 text-[10px] sm:text-xs font-bold uppercase tracking-wider bg-card border-slate-200 dark:border-white/10">
+              <SelectValue placeholder="CECO" />
+            </SelectTrigger>
+            <SelectContent className="max-h-60">
+              <SelectItem value="ALL" className="text-xs font-bold uppercase">
+                Todos los CECO
+              </SelectItem>
+              <SelectItem
+                value="UNASSIGNED"
+                className="text-xs font-bold uppercase text-slate-400"
+              >
+                Sin Asignar
+              </SelectItem>
+              {costCenters.map((ceco) => (
+                <SelectItem
+                  key={ceco.id}
+                  value={ceco.codigo}
+                  className="text-xs font-bold uppercase"
+                >
+                  {ceco.codigo} - {ceco.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {(filterEstatus !== "ALL" || filterCeco !== "ALL") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterEstatus("ALL");
+                setFilterCeco("ALL");
+              }}
+              className="h-9 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+            >
+              Limpiar Filtros
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* CASCARÓN DE LA TABLA (Liquid Glass) */}
       <Card className="shadow-2xl border-slate-200/50 dark:border-white/10 overflow-hidden bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           {isLoadingSuppliers ? (
@@ -135,11 +253,13 @@ export default function SuppliersCatalog() {
           ) : (
             <div className="overflow-x-auto custom-scrollbar">
               <DataTable className="w-full caption-bottom text-sm border-collapse table-staggered">
-                <DataTableHeader className="bg-brand-navy/95 dark:bg-black/60 backdrop-blur-md sticky top-0 border-b border-white/10">
+                <DataTableHeader className="bg-brand-navy/95 dark:bg-black/60 backdrop-blur-md sticky top-0 border-b border-white/10 z-10">
                   <DataTableRow className="hover:bg-transparent border-none">
                     <DataTableHead>ID</DataTableHead>
                     <DataTableHead>Razón Social</DataTableHead>
                     <DataTableHead>RFC</DataTableHead>
+                    <DataTableHead>CECO</DataTableHead>
+                    <DataTableHead>Crédito</DataTableHead>
                     <DataTableHead>Contacto</DataTableHead>
                     <DataTableHead>Teléfono</DataTableHead>
                     <DataTableHead>Estatus</DataTableHead>
@@ -152,10 +272,10 @@ export default function SuppliersCatalog() {
                   {filteredSuppliers.length === 0 ? (
                     <DataTableRow>
                       <DataTableCell
-                        colSpan={7}
+                        colSpan={9}
                         className="p-16 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500"
                       >
-                        No se encontraron proveedores.
+                        No se encontraron proveedores con los filtros actuales.
                       </DataTableCell>
                     </DataTableRow>
                   ) : (
@@ -173,6 +293,30 @@ export default function SuppliersCatalog() {
                         <DataTableCell className="font-mono text-sm font-bold text-slate-700 dark:text-slate-300 uppercase">
                           {supplier.rfc}
                         </DataTableCell>
+
+                        <DataTableCell>
+                          {supplier.cost_center ? (
+                            <Badge
+                              variant={getCecoBadgeVariant(
+                                supplier.cost_center.codigo,
+                              )}
+                              title={`Código: ${supplier.cost_center.codigo}`}
+                            >
+                              {supplier.cost_center.nombre}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] uppercase tracking-[0.2em] opacity-40 font-bold italic">
+                              Sin Asignar
+                            </span>
+                          )}
+                        </DataTableCell>
+
+                        <DataTableCell className="text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight">
+                          {supplier.dias_credito
+                            ? `${supplier.dias_credito} Días`
+                            : "Contado"}
+                        </DataTableCell>
+
                         <DataTableCell className="text-[13px] font-medium text-slate-700 dark:text-white/70 tracking-tight">
                           {supplier.contacto_principal || "—"}
                         </DataTableCell>
@@ -185,12 +329,16 @@ export default function SuppliersCatalog() {
                               status={
                                 supplier.estatus === "activo"
                                   ? "success"
-                                  : "warning"
+                                  : supplier.estatus === "suspendido"
+                                    ? "danger"
+                                    : "warning"
                               }
                             >
                               {supplier.estatus === "activo"
                                 ? "Activo"
-                                : "Inactivo"}
+                                : supplier.estatus === "suspendido"
+                                  ? "Suspendido"
+                                  : "Inactivo"}
                             </StatusBadge>
                           </div>
                         </DataTableCell>
@@ -253,12 +401,12 @@ export default function SuppliersCatalog() {
         </CardContent>
       </Card>
 
-      {/* MODALES */}
       <SupplierModal
         open={isSupplierModalOpen}
         onOpenChange={setIsSupplierModalOpen}
         supplier={editingSupplier}
         defaultCredito={!editingSupplier ? defaultCredito : undefined}
+        costCenters={costCenters}
         onSubmit={async (payload) => {
           if (editingSupplier) {
             await updateSupplier(editingSupplier.id, payload);
@@ -274,7 +422,6 @@ export default function SuppliersCatalog() {
         supplier={selectedSupplier}
       />
 
-      {/* ALERT DIALOG - ELIMINAR PROVEEDOR */}
       <AlertDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
