@@ -255,6 +255,8 @@ def generar_carta_porte_nominal(
                 "xml_url": getattr(factura, "xml_url", None),
             },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
@@ -314,6 +316,8 @@ def generar_carta_porte_one_shot(
                 "xml_url": getattr(factura, "xml_url", None),
             },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)
@@ -387,6 +391,8 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
             "message": "Factura Real generada exitosamente y previa cancelada.",
             "data": {"factura_id": factura_final.id, "uuid": factura_final.uuid},
         }
+    except HTTPException:
+        raise
     except Exception as e:
         # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
         print("\n" + "🚨" * 20)
@@ -443,6 +449,8 @@ def generar_factura_final(
                 "xml_url": getattr(factura_final, "xml_url", None),
             },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
         print("\n" + "🚨" * 20)
@@ -752,6 +760,50 @@ def retry_pending_cancellations(db: Session = Depends(get_db)):
     return resultado
 
 
+@router.get("/retry-queue", summary="Consultar cola de reintentos SAT")
+def get_sat_retry_queue(
+    status_filter: str = "PENDIENTE",
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.SatRetryQueue)
+    if status_filter:
+        query = query.filter(models.SatRetryQueue.status == status_filter)
+
+    rows = (
+        query.order_by(
+            models.SatRetryQueue.next_attempt_at.asc().nullsfirst(),
+            models.SatRetryQueue.created_at.asc(),
+        )
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": row.id,
+            "invoice_id": row.invoice_id,
+            "viaje_id": row.viaje_id,
+            "operation_type": row.operation_type,
+            "source_service": row.source_service,
+            "status": row.status,
+            "folio_interno": row.folio_interno,
+            "uuid": row.uuid,
+            "attempts": row.attempts,
+            "max_attempts": row.max_attempts,
+            "next_attempt_at": row.next_attempt_at,
+            "last_error": row.last_error,
+        }
+        for row in rows
+    ]
+
+
+@router.post("/retry-queue/process", summary="Procesar cola de reintentos SAT")
+def process_sat_retry_queue(limit: int = 10, db: Session = Depends(get_db)):
+    service = BillingService(db)
+    return service.procesar_sat_retry_queue(limit=limit)
+
+
 # Importa Optional si no lo tienes arriba
 from typing import Optional
 
@@ -780,6 +832,8 @@ def cancel_invoice_in_sat(
             uuid_sustituto=payload.uuid_sustituto,
         )
         return resultado
+    except HTTPException:
+        raise
     except Exception as e:
         custom_error = parse_sat_error(e)
         raise HTTPException(status_code=400, detail=custom_error)

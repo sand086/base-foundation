@@ -1649,6 +1649,45 @@ class ReceivableInvoice(AuditMixin, Base):
     )
 
 
+class SatRetryQueue(AuditMixin, Base):
+    __tablename__ = "sat_retry_queue"
+    __table_args__ = (
+        Index("ix_sat_retry_queue_status_next_attempt", "status", "next_attempt_at"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(
+        Integer,
+        ForeignKey("receivable_invoices.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    viaje_id = Column(Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True)
+
+    operation_type = Column(String(30), nullable=False)  # timbrado, cancelacion
+    document_type = Column(String(30), nullable=False, default="cfdi")
+    source_service = Column(String(80), nullable=True)
+    status = Column(String(30), nullable=False, default="PENDIENTE")
+
+    idempotency_key = Column(String(160), nullable=False, unique=True, index=True)
+    folio_interno = Column(String(50), nullable=True)
+    uuid = Column(String(36), nullable=True)
+
+    request_payload = Column(JSONB, default=dict, server_default="{}")
+    last_error = Column(Text, nullable=True)
+    last_http_status = Column(Integer, nullable=True)
+
+    attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    max_attempts = Column(Integer, nullable=False, default=5, server_default="5")
+    next_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+    invoice = relationship("ReceivableInvoice")
+    trip = relationship("Trip")
+
+
 class ReceivableInvoicePayment(AuditMixin, Base):
     __tablename__ = "receivable_invoice_payments"
 

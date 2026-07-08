@@ -16,6 +16,7 @@ from zeep.plugins import HistoryPlugin
 from lxml import etree
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional
@@ -29,6 +30,8 @@ from cryptography.hazmat.backends import default_backend
 import qrcode
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
+from app.integrations.sat.retry_queue import register_sat_retry
+from app.integrations.sat.soap_client import create_pac_client, is_pac_timeout_error
 
 try:
     from num2words import num2words
@@ -51,6 +54,7 @@ from app.models.models import (
     SystemConfig,
     SatLocationCode,
     SatProduct,
+    SatRetryQueue,
     ReceivableInvoicePayment,
     BankAccount,
 )
@@ -398,6 +402,43 @@ class BillingService:
     def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
+
+    def _marcar_timbrado_pendiente(
+        self,
+        factura: ReceivableInvoice,
+        error: Exception,
+        payload: dict | None = None,
+        relacion_uuid: str | None = None,
+    ):
+        factura.status_sat = "PENDIENTE_TIMBRADO"
+        factura.detalle_sat = (
+            "Timeout esperando respuesta del PAC. El CFDI puede haber sido recibido; "
+            "requiere conciliación/reintento antes de generar otro timbre."
+        )
+        register_sat_retry(
+            self.db,
+            invoice=factura,
+            operation_type="timbrado",
+            source_service=self.__class__.__name__,
+            error=error,
+            payload={
+                "sat_payload": payload or {},
+                "relacion_uuid": relacion_uuid,
+                "invoice_id": factura.id,
+                "viaje_id": factura.viaje_id,
+                "folio_interno": factura.folio_interno,
+                "is_nominal": factura.is_nominal,
+                "status_sat": factura.status_sat,
+            },
+            http_status=202,
+        )
+        self.db.commit()
+        logger.warning(
+            "Timbrado pendiente por timeout. factura_id=%s folio=%s error=%s",
+            getattr(factura, "id", None),
+            getattr(factura, "folio_interno", None),
+            error,
+        )
 
     def _obtener_datos_completos(self, viaje_id: int, usar_tramo_final: bool = False):
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
@@ -781,7 +822,7 @@ class BillingService:
         )
 
         try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
@@ -1021,6 +1062,26 @@ class BillingService:
             folio_forzado=getattr(invoice_data, "folio_forzado", None),
         )
 
+        factura_pendiente = (
+            self.db.query(ReceivableInvoice)
+            .filter(
+                ReceivableInvoice.viaje_id == viaje.id,
+                ReceivableInvoice.is_nominal == True,
+                ReceivableInvoice.status_sat == "PENDIENTE_TIMBRADO",
+                ReceivableInvoice.record_status != "E",
+            )
+            .order_by(ReceivableInvoice.id.desc())
+            .first()
+        )
+        if factura_pendiente:
+            raise HTTPException(
+                status_code=202,
+                detail=(
+                    f"La factura {factura_pendiente.folio_interno} sigue en PENDIENTE_TIMBRADO. "
+                    "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                ),
+            )
+
         try:
             validador = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validador.model_dump()}
@@ -1074,6 +1135,15 @@ class BillingService:
             self.db.refresh(nueva_factura)
             return nueva_factura
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(nueva_factura, e, data)
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO "
+                        "para conciliación/reintento; no se marcó como error definitivo."
+                    ),
+                )
             nueva_factura.status_sat = "ERROR_SAT"
             self.db.commit()
             raise HTTPException(
@@ -1123,6 +1193,14 @@ class BillingService:
         )
 
         if factura:
+            if factura.status_sat == "PENDIENTE_TIMBRADO":
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        f"La factura {factura.folio_interno} sigue en PENDIENTE_TIMBRADO. "
+                        "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                    ),
+                )
             factura.status_sat = "PROCESANDO"
             factura.concepto = data["descripcion_concepto"]
             factura.monto_total = monto_total
@@ -1172,6 +1250,15 @@ class BillingService:
             self.db.refresh(factura)
             return factura
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(factura, e, data)
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO "
+                        "para conciliación/reintento; no se marcó como error definitivo."
+                    ),
+                )
             factura.status_sat = "ERROR_SAT"
             self.db.commit()
             raise HTTPException(
@@ -1237,6 +1324,14 @@ class BillingService:
         )
 
         if factura:
+            if factura.status_sat == "PENDIENTE_TIMBRADO":
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        f"La factura {factura.folio_interno} sigue en PENDIENTE_TIMBRADO. "
+                        "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                    ),
+                )
             factura.status_sat = "PROCESANDO"
             factura.uuid_relacionado = uuid_relacionado_real
             factura.concepto = data["descripcion_concepto"]
@@ -1290,6 +1385,17 @@ class BillingService:
             self.db.refresh(factura)
             return factura
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(
+                    factura, e, data, uuid_relacionado_real
+                )
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO "
+                        "para conciliación/reintento; no se marcó como error definitivo."
+                    ),
+                )
             factura.status_sat = "ERROR_SAT"
             self.db.commit()
             raise HTTPException(
@@ -1375,7 +1481,7 @@ class BillingService:
         )
 
         try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
 
             # 1. Leer los archivos del CSD en bytes puros
             with open(self.path_cer, "rb") as f_cer:
@@ -1460,6 +1566,35 @@ class BillingService:
             # 🔄 REGLA INTELIGENTE 3: MANEJO ESTRICTO DE ERRORES Y ROLLBACK
             # =========================================================================
 
+            if is_pac_timeout_error(e):
+                factura.status_sat = "PENDIENTE_CANCELAR_SAT"
+                factura.estatus = "pendiente"
+                factura.saldo_pendiente = factura.monto_total
+                factura.detalle_sat = (
+                    "Timeout esperando respuesta del PAC. La cancelación quedó pendiente de reintento/verificación."
+                )
+                factura.motivo_cancelacion = motivo_final
+                factura.intentos_cancelacion += 1
+                register_sat_retry(
+                    self.db,
+                    invoice=factura,
+                    operation_type="cancelacion",
+                    source_service=self.__class__.__name__,
+                    error=e,
+                    payload={
+                        "invoice_id": factura.id,
+                        "uuid": factura.uuid,
+                        "motivo": motivo_final,
+                        "uuid_sustituto": uuid_sustituto_final,
+                    },
+                    http_status=202,
+                )
+                self.db.commit()
+                raise HTTPException(
+                    status_code=202,
+                    detail="El PAC tardó en responder. La cancelación quedó pendiente y será reintentada.",
+                )
+
             if (
                 "previamente cancelado" in error_msg
                 or "ya se encuentra cancelado" in error_msg
@@ -1480,14 +1615,29 @@ class BillingService:
 
             # Si es Error 500 (Timeout / Flojera del SAT)
             elif "500" in error_msg or "tardado demasiado" in error_msg:
-                factura.status_sat = "TIMBRADA"
+                factura.status_sat = "PENDIENTE_CANCELAR_SAT"
                 factura.estatus = "pendiente"  # Rollback
                 factura.saldo_pendiente = factura.monto_total  # Rollback
-                factura.detalle_sat = "Error 500: El SAT tardó demasiado en responder. Reintente más tarde."
+                factura.detalle_sat = "Error 500/timeout: cancelación pendiente de reintento/verificación."
                 factura.intentos_cancelacion += 1
+                register_sat_retry(
+                    self.db,
+                    invoice=factura,
+                    operation_type="cancelacion",
+                    source_service=self.__class__.__name__,
+                    error=e,
+                    payload={
+                        "invoice_id": factura.id,
+                        "uuid": factura.uuid,
+                        "motivo": motivo_final,
+                        "uuid_sustituto": uuid_sustituto_final,
+                    },
+                    http_status=202,
+                )
                 self.db.commit()
-                raise Exception(
-                    "El servidor del SAT está saturado (Error 500). La factura sigue vigente. Por favor, reintente en 5 minutos."
+                raise HTTPException(
+                    status_code=202,
+                    detail="El servidor del SAT/PAC tardó demasiado. La cancelación quedó pendiente y será reintentada.",
                 )
 
             # Si es Error de Criptografía/Sellos (Error 305)
@@ -1553,6 +1703,118 @@ class BillingService:
             "procesadas": len(facturas_pendientes),
             "resultados": resultados,
         }
+
+    def procesar_sat_retry_queue(self, limit: int = 10):
+        now = datetime.utcnow()
+        pendientes = (
+            self.db.query(SatRetryQueue)
+            .filter(
+                SatRetryQueue.status == "PENDIENTE",
+                SatRetryQueue.attempts < SatRetryQueue.max_attempts,
+                or_(
+                    SatRetryQueue.next_attempt_at.is_(None),
+                    SatRetryQueue.next_attempt_at <= now,
+                ),
+            )
+            .order_by(SatRetryQueue.next_attempt_at.asc().nullsfirst())
+            .limit(limit)
+            .all()
+        )
+
+        resultados = []
+        for item in pendientes:
+            item.status = "REINTENTANDO"
+            item.locked_at = now
+            item.last_attempt_at = now
+            self.db.commit()
+
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.id == item.invoice_id)
+                .first()
+            )
+
+            if not factura:
+                item.status = "ERROR"
+                item.last_error = "Factura ya no existe."
+                item.resolved_at = datetime.utcnow()
+                self.db.commit()
+                resultados.append({"id": item.id, "status": item.status})
+                continue
+
+            try:
+                if item.operation_type == "cancelacion":
+                    payload = item.request_payload or {}
+                    self.cancelar_factura_sat(
+                        invoice_id=factura.id,
+                        motivo=payload.get("motivo") or factura.motivo_cancelacion or "02",
+                        uuid_sustituto=payload.get("uuid_sustituto"),
+                    )
+                    self.db.refresh(factura)
+
+                elif item.operation_type == "timbrado":
+                    payload = item.request_payload or {}
+                    sat_payload = payload.get("sat_payload") or {}
+                    if not sat_payload:
+                        raise ValueError(
+                            "No hay sat_payload guardado para reintentar timbrado."
+                        )
+
+                    resultado_pac = self._importar_comprobante_ws(
+                        sat_payload, relacion_uuid=payload.get("relacion_uuid")
+                    )
+                    uuid_generado = getattr(resultado_pac, "uuid", None)
+
+                    factura.uuid = uuid_generado
+                    factura.status_sat = "TIMBRADA"
+                    factura.detalle_sat = None
+                    if uuid_generado:
+                        factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
+                        factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
+                        if factura.trip:
+                            factura.trip.uuid_fiscal = uuid_generado
+                            factura.trip.estatus = "facturado"
+                    self.db.commit()
+
+                else:
+                    raise ValueError(
+                        f"Tipo de operación no soportado: {item.operation_type}"
+                    )
+
+                item.status = "RESUELTO"
+                item.resolved_at = datetime.utcnow()
+                item.locked_at = None
+                item.last_error = None
+                self.db.commit()
+                resultados.append(
+                    {
+                        "id": item.id,
+                        "invoice_id": item.invoice_id,
+                        "operation_type": item.operation_type,
+                        "status": item.status,
+                    }
+                )
+
+            except Exception as e:
+                item.status = "PENDIENTE" if item.attempts < item.max_attempts else "ERROR"
+                item.attempts = (item.attempts or 0) + 1
+                item.locked_at = None
+                item.last_error = str(e)[:4000]
+                item.next_attempt_at = datetime.utcnow() + timedelta(
+                    minutes=min(60, 5 * max(item.attempts, 1))
+                )
+                self.db.commit()
+                resultados.append(
+                    {
+                        "id": item.id,
+                        "invoice_id": item.invoice_id,
+                        "operation_type": item.operation_type,
+                        "status": item.status,
+                        "error": item.last_error,
+                    }
+                )
+
+        return {"procesadas": len(pendientes), "resultados": resultados}
 
     # =========================================================================
     # LÓGICA FACTURA LIBRE (FINANZAS)
@@ -1745,7 +2007,7 @@ class BillingService:
         )
 
         try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
@@ -1935,7 +2197,7 @@ class BillingService:
         )
 
         try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
