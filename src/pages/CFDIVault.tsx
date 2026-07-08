@@ -13,6 +13,8 @@ import {
   MoreHorizontal,
   FileSignature,
   AlertTriangle,
+  Clock, // <-- Añadido para el Timeline
+  Network, // <-- Añadido para la jerarquía visual
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
@@ -65,6 +67,7 @@ import { cn } from "@/lib/utils";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
+import { CFDITimelineDrawer } from "@/features/finance/components/CFDITimelineDrawer"; // <-- ¡IMPORTADO CON ÉXITO!
 
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
@@ -80,6 +83,11 @@ export default function CFDIVault() {
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+
+  // Estados para controlar el Cajón de la Línea de Tiempo SAT
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [selectedTimelineRecord, setSelectedTimelineRecord] =
+    useState<any>(null);
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
@@ -307,8 +315,6 @@ export default function CFDIVault() {
         client: { razon_social: row.cliente_proveedor_nombre },
         viaje_id: row.viaje_id,
         saldo_pendiente: row.estatus === "TIMBRADA" ? row.monto_total : 0,
-
-        // 👇 NUEVOS CAMPOS PASADOS AL DETALLE 👇
         status_sat: row.status_sat || row.estatus,
         intentos_cancelacion: row.intentos_cancelacion || 0,
         detalle_sat: row.detalle_sat,
@@ -340,10 +346,14 @@ export default function CFDIVault() {
             const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
             displayFolio = cleanFolio ? `COM-${cleanFolio}` : "N/A";
           }
-          return <span className="font-mono bold">{displayFolio}</span>;
+          return <span className="font-mono font-bold">{displayFolio}</span>;
         },
       });
-      cols.push({ key: "uuid", header: "UUID" });
+      cols.push({
+        key: "uuid",
+        header: "UUID",
+        width: "max-w-[140px] truncate font-mono text-xs",
+      });
       cols.push({
         key: "folio_relacionado",
         header: "Origen (CP/F)",
@@ -354,8 +364,60 @@ export default function CFDIVault() {
         ),
       });
     } else {
-      cols.push({ key: "folio", header: "Folio" });
-      cols.push({ key: "uuid", header: "UUID" });
+      // 🚀 MODIFICADO: Muestra la jerarquía de folios Padre/Hija directamente en la celda
+      cols.push({
+        key: "folio",
+        header: "Folio",
+        render: (val, row: any) => {
+          const isNominal = row.is_nominal;
+          return (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 font-bold font-mono text-slate-900 dark:text-slate-100">
+                {val || "S/F"}
+                {isNominal && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200 font-sans font-black"
+                  >
+                    $1 Prov
+                  </Badge>
+                )}
+              </div>
+              {row.factura_padre && (
+                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 flex items-center gap-1 font-semibold pl-1.5 border-l-2 border-indigo-300 dark:border-indigo-800">
+                  ↳ Hija de:{" "}
+                  <strong className="font-mono font-bold">
+                    {row.factura_padre.folio}
+                  </strong>
+                </span>
+              )}
+              {row.cartas_porte_hijas && row.cartas_porte_hijas.length > 0 && (
+                <div className="flex items-center gap-1 pl-1.5 border-l-2 border-slate-200 dark:border-slate-800">
+                  <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider">
+                    Hijas:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {row.cartas_porte_hijas.map((h: any) => (
+                      <Badge
+                        key={h.id}
+                        variant="outline"
+                        className="text-[9px] px-1 py-0 font-mono font-bold bg-slate-50 text-slate-600 border-slate-200"
+                      >
+                        {h.folio}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        },
+      });
+      cols.push({
+        key: "uuid",
+        header: "UUID",
+        width: "max-w-[140px] truncate font-mono text-xs",
+      });
       cols.push({
         key: "viaje_id",
         header: "Viaje",
@@ -363,7 +425,7 @@ export default function CFDIVault() {
           val ? (
             <Badge
               variant="outline"
-              className="bg-blue-50 text-blue-700 border-blue-200 font-mono"
+              className="bg-blue-50 text-blue-700 border-blue-200 font-mono text-xs font-bold"
             >
               #{val}
             </Badge>
@@ -377,7 +439,7 @@ export default function CFDIVault() {
       {
         key: "cliente_proveedor_nombre",
         header: "Entidad",
-        width: "max-w-[250px] truncate",
+        width: "max-w-[220px] truncate",
       },
       {
         key: "fecha_emision",
@@ -413,7 +475,6 @@ export default function CFDIVault() {
             badgeClass =
               "bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-black";
 
-          // 🚨 ALERTA VISUAL DE ERRORES DEL SAT 🚨
           const statusSatReal = (row.status_sat || s).toUpperCase();
           const hasError =
             row.intentos_cancelacion > 0 &&
@@ -540,8 +601,19 @@ export default function CFDIVault() {
                   onClick={() => handleOpenDetail(row)}
                   className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
                 >
-                  <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle /
-                  Historial
+                  <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle / Bóveda
+                </DropdownMenuItem>
+
+                {/* 🚀 MODIFICADO: Acción directa para abrir el historial/timeline SOAP sin pasar por la sábana */}
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedTimelineRecord(row);
+                    setTimelineOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
+                >
+                  <Clock className="h-4 w-4 text-indigo-500" /> Ver Línea de
+                  Tiempo SAT
                 </DropdownMenuItem>
 
                 {hasPdf && (
@@ -657,7 +729,6 @@ export default function CFDIVault() {
         }}
       />
 
-      {/* DETALLE FACTURAS CLIENTES Y COMPLEMENTOS 👇 CONECTADO A FASE 2 Y 3 */}
       <InvoiceDetailSheet
         open={detailDrawerOpen}
         onOpenChange={(isOpen) => {
@@ -737,6 +808,16 @@ export default function CFDIVault() {
           if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
         }}
         invoice={selectedInvoice}
+      />
+
+      {/* 🚀 MODIFICADO: Renderizado e inyección del CFDITimelineDrawer conectado a la tabla */}
+      <CFDITimelineDrawer
+        isOpen={timelineOpen}
+        onClose={() => {
+          setTimelineOpen(false);
+          setSelectedTimelineRecord(null);
+        }}
+        record={selectedTimelineRecord}
       />
     </div>
   );
