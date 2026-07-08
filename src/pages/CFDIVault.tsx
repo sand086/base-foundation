@@ -13,8 +13,9 @@ import {
   MoreHorizontal,
   FileSignature,
   AlertTriangle,
-  Clock, // <-- Añadido para el Timeline
-  Network, // <-- Añadido para la jerarquía visual
+  Clock,
+  Network,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
@@ -67,7 +68,7 @@ import { cn } from "@/lib/utils";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
-import { CFDITimelineDrawer } from "@/features/finance/components/CFDITimelineDrawer"; // <-- ¡IMPORTADO CON ÉXITO!
+import { CFDITimelineDrawer } from "@/features/finance/components/CFDITimelineDrawer";
 
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
@@ -84,10 +85,16 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // Estados para controlar el Cajón de la Línea de Tiempo SAT
+  // Estado de control para abrir la línea de tiempo SOAP del SAT
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [selectedTimelineRecord, setSelectedTimelineRecord] =
     useState<any>(null);
+
+  // 🚀 NUEVOS ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
+  const [expandedParents, setExpandedParents] = useState<
+    Record<number, boolean>
+  >({});
+  const [blinkQuery, setBlinkQuery] = useState<string>("");
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
@@ -142,15 +149,78 @@ export default function CFDIVault() {
     });
   }, [cleanRecords, selectedEntity, selectedStatus, dateRange]);
 
+  // 🚀 SNAPSHOT DEL ÁRBOL EN MEMORIA: Inyecta dinámicamente las filas hijas debajo de su padre correspondiente
+  const hierarchicalRecords = useMemo(() => {
+    const result: any[] = [];
+    filteredRecords.forEach((parent) => {
+      result.push(parent);
+
+      const hasChildren =
+        parent.cartas_porte_hijas && parent.cartas_porte_hijas.length > 0;
+      if (hasChildren && !!expandedParents[parent.id]) {
+        parent.cartas_porte_hijas.forEach((child: any) => {
+          result.push({
+            ...child,
+            id: child.id,
+            isVirtualChild: true,
+            parentFolio: parent.folio || parent.folio_interno,
+            cliente_proveedor_nombre: parent.cliente_proveedor_nombre,
+            cliente_proveedor_rfc: parent.cliente_proveedor_rfc,
+            fecha_emision: child.fecha_emision || parent.fecha_emision,
+            monto_total: child.monto_total || 0,
+            estatus: child.status_sat || child.estatus || "TIMBRADA",
+            status_sat: child.status_sat || child.estatus || "TIMBRADA",
+            versiones_archivos: child.versiones_archivos || [],
+            viaje_id: child.viaje_id || parent.viaje_id,
+            pdf_url: child.pdf_url,
+            xml_url: child.xml_url,
+          });
+        });
+      }
+    });
+    return result;
+  }, [filteredRecords, expandedParents]);
+
+  // Helper de validación de parpadeo en tiempo real
+  const checkShouldBlink = (row: any) => {
+    if (!blinkQuery || blinkQuery.trim().length < 3) return false;
+    const query = blinkQuery.toLowerCase().trim(); // 💡 CAMBIADO DE .strip() A .trim()
+    const folioTarget = String(
+      row.folio || row.folio_interno || "",
+    ).toLowerCase();
+    const uuidTarget = String(row.uuid || "").toLowerCase();
+    return folioTarget.includes(query) || uuidTarget.includes(query);
+  };
+
   const customFiltersUI = (
     <>
+      {/* ⚡ REAL-TIME BLINKING LOCALIZER (El buscador que hace parpadear las filas) */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 w-4 h-4 text-amber-500 z-10 animate-pulse" />
+        <input
+          type="text"
+          placeholder="⚡ Localizar y hacer parpadear..."
+          value={blinkQuery}
+          onChange={(e) => setBlinkQuery(e.target.value)}
+          className="w-[240px] h-11 pl-9 pr-8 text-xs bg-amber-50/40 dark:bg-slate-900 border border-amber-200 dark:border-slate-800 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 font-bold text-slate-800 dark:text-slate-100 transition-all shadow-sm"
+        />
+        {blinkQuery && (
+          <button
+            onClick={() => setBlinkQuery("")}
+            className="absolute right-3 text-slate-400 hover:text-slate-600 text-xs font-black"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       <Popover open={entityComboOpen} onOpenChange={setEntityOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={entityComboOpen}
-            className="w-[280px] justify-between h-11 bg-white dark:bg-slate-900 border-slate-200"
+            className="w-[240px] justify-between h-11 bg-white dark:bg-slate-900 border-slate-200"
           >
             <span className="truncate">
               {selectedEntity === "all"
@@ -210,7 +280,7 @@ export default function CFDIVault() {
       </Popover>
 
       <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-        <SelectTrigger className="w-[180px] h-11 bg-white dark:bg-slate-900 border-slate-200">
+        <SelectTrigger className="w-[160px] h-11 bg-white dark:bg-slate-900 border-slate-200">
           <SelectValue placeholder="Estatus" />
         </SelectTrigger>
         <SelectContent>
@@ -228,7 +298,7 @@ export default function CFDIVault() {
           <Button
             variant="outline"
             className={cn(
-              "w-[260px] justify-start text-left font-normal h-11 bg-white dark:bg-slate-900 border-slate-200",
+              "w-[240px] justify-start text-left font-normal h-11 bg-white dark:bg-slate-900 border-slate-200",
               !dateRange.from && "text-muted-foreground",
             )}
           >
@@ -346,13 +416,33 @@ export default function CFDIVault() {
             const cleanFolio = rawFolio.replace(/^(PAGO|COM)-?/i, "");
             displayFolio = cleanFolio ? `COM-${cleanFolio}` : "N/A";
           }
-          return <span className="font-mono font-bold">{displayFolio}</span>;
+          const isBlinking = checkShouldBlink(row);
+          return (
+            <div
+              className={cn(
+                "py-1",
+                isBlinking &&
+                  "animate-row-blink border-l-4 border-yellow-400 pl-2 rounded",
+              )}
+            >
+              <span className="font-mono font-bold">{displayFolio}</span>
+            </div>
+          );
         },
       });
       cols.push({
         key: "uuid",
         header: "UUID",
-        width: "max-w-[140px] truncate font-mono text-xs",
+        render: (val, row) => (
+          <div
+            className={cn(
+              checkShouldBlink(row) &&
+                "animate-row-blink font-black text-slate-950 dark:text-white",
+            )}
+          >
+            <span className="font-mono text-xs">{val || "—"}</span>
+          </div>
+        ),
       });
       cols.push({
         key: "folio_relacionado",
@@ -364,50 +454,86 @@ export default function CFDIVault() {
         ),
       });
     } else {
-      // 🚀 MODIFICADO: Muestra la jerarquía de folios Padre/Hija directamente en la celda
+      // 🚀 MOTOR CORREGIDO: Renderizado de Filas Hijas del Viaje e Indentación Visual Directa
       cols.push({
         key: "folio",
         header: "Folio",
         render: (val, row: any) => {
           const isNominal = row.is_nominal;
-          return (
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5 font-bold font-mono text-slate-900 dark:text-slate-100">
-                {val || "S/F"}
-                {isNominal && (
-                  <Badge
-                    variant="outline"
-                    className="text-[9px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200 font-sans font-black"
-                  >
-                    $1 Prov
-                  </Badge>
+          const hasChildren =
+            row.cartas_porte_hijas && row.cartas_porte_hijas.length > 0;
+          const isExpanded = !!expandedParents[row.id];
+          const isBlinking = checkShouldBlink(row);
+
+          if (row.isVirtualChild) {
+            return (
+              <div
+                className={cn(
+                  "flex items-center gap-2 pl-6 py-1 bg-indigo-50/40 dark:bg-indigo-950/10 rounded-xl border-l-4 border-indigo-500 ml-4 relative shadow-sm",
+                  isBlinking && "animate-row-blink border-l-yellow-400",
                 )}
-              </div>
-              {row.factura_padre && (
-                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 flex items-center gap-1 font-semibold pl-1.5 border-l-2 border-indigo-300 dark:border-indigo-800">
-                  ↳ Hija de:{" "}
-                  <strong className="font-mono font-bold">
-                    {row.factura_padre.folio}
-                  </strong>
+              >
+                <div className="absolute w-3 h-4 border-l-2 border-b-2 border-slate-300 dark:border-slate-700 -left-4 -top-2 rounded-bl-md" />
+                <Network className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span className="font-mono text-xs font-black text-slate-700 dark:text-slate-300">
+                  {row.folio || "S/F"}
                 </span>
+                <Badge
+                  variant="outline"
+                  className="text-[8px] h-4 px-1.5 font-black uppercase tracking-wider bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400"
+                >
+                  Hija
+                </Badge>
+              </div>
+            );
+          }
+
+          return (
+            <div
+              className={cn(
+                "flex items-center gap-2 py-1",
+                isBlinking &&
+                  "animate-row-blink bg-yellow-400/20 p-1 rounded border border-yellow-300",
               )}
-              {row.cartas_porte_hijas && row.cartas_porte_hijas.length > 0 && (
-                <div className="flex items-center gap-1 pl-1.5 border-l-2 border-slate-200 dark:border-slate-800">
-                  <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider">
-                    Hijas:
+            >
+              {hasChildren && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 rounded-lg p-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-400"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedParents((prev) => ({
+                      ...prev,
+                      [row.id]: !prev[row.id],
+                    }));
+                  }}
+                >
+                  <span
+                    className="text-[10px] transition-transform duration-200 inline-block font-black"
+                    style={{
+                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                    }}
+                  >
+                    ▶
                   </span>
-                  <div className="flex flex-wrap gap-1">
-                    {row.cartas_porte_hijas.map((h: any) => (
-                      <Badge
-                        key={h.id}
-                        variant="outline"
-                        className="text-[9px] px-1 py-0 font-mono font-bold bg-slate-50 text-slate-600 border-slate-200"
-                      >
-                        {h.folio}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
+                </Button>
+              )}
+              <span className="font-mono font-black text-slate-900 dark:text-slate-100">
+                {val || "S/F"}
+              </span>
+              {isNominal && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] h-4 px-1.5 bg-amber-50 text-amber-700 border-amber-200 font-sans font-black"
+                >
+                  $1 Prov
+                </Badge>
+              )}
+              {hasChildren && (
+                <Badge className="text-[9px] h-4 bg-indigo-600 text-white font-sans font-black shadow-sm">
+                  {row.cartas_porte_hijas.length} Hijas
+                </Badge>
               )}
             </div>
           );
@@ -416,7 +542,17 @@ export default function CFDIVault() {
       cols.push({
         key: "uuid",
         header: "UUID",
-        width: "max-w-[140px] truncate font-mono text-xs",
+        render: (val, row) => (
+          <div
+            className={cn(
+              "font-mono text-xs truncate max-w-[140px]",
+              checkShouldBlink(row) &&
+                "animate-row-blink font-black text-slate-950 dark:text-white bg-yellow-300/10",
+            )}
+          >
+            {val || "—"}
+          </div>
+        ),
       });
       cols.push({
         key: "viaje_id",
@@ -440,6 +576,17 @@ export default function CFDIVault() {
         key: "cliente_proveedor_nombre",
         header: "Entidad",
         width: "max-w-[220px] truncate",
+        render: (val, row) => (
+          <span
+            className={cn(
+              "text-xs font-bold",
+              checkShouldBlink(row) &&
+                "animate-row-blink text-slate-950 dark:text-white",
+            )}
+          >
+            {val}
+          </span>
+        ),
       },
       {
         key: "fecha_emision",
@@ -604,7 +751,7 @@ export default function CFDIVault() {
                   <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle / Bóveda
                 </DropdownMenuItem>
 
-                {/* 🚀 MODIFICADO: Acción directa para abrir el historial/timeline SOAP sin pasar por la sábana */}
+                {/* 🚀 HISTORIAL SOAP DIRECTO: Abre el TimelineDrawer con un clic */}
                 <DropdownMenuItem
                   onClick={() => {
                     setSelectedTimelineRecord(row);
@@ -668,7 +815,7 @@ export default function CFDIVault() {
     );
 
     return cols;
-  }, [activeTab]);
+  }, [activeTab, blinkQuery, expandedParents]);
 
   const excelExportName =
     activeTab === "PAGO_CLIENTE"
@@ -677,6 +824,18 @@ export default function CFDIVault() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Estilos CSS Inyectados para la Animación de Parpadeo de Filas Localizadas */}
+      <style>{`
+        @keyframes rowBlink {
+          0%, 100% { background-color: transparent; }
+          50% { background-color: rgba(245, 158, 11, 0.25); }
+        }
+        .animate-row-blink {
+          animation: rowBlink 1.5s infinite ease-in-out;
+          border-radius: 6px;
+        }
+      `}</style>
+
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
           Bóveda Digital CFDI
@@ -691,7 +850,10 @@ export default function CFDIVault() {
         <CardHeader className="pb-3">
           <Tabs
             value={activeTab}
-            onValueChange={setActiveTab}
+            onValueChange={(val) => {
+              setActiveTab(val);
+              setExpandedParents({});
+            }}
             className="w-full"
           >
             <TabsList className="grid w-full md:w-[600px] grid-cols-3">
@@ -706,10 +868,10 @@ export default function CFDIVault() {
 
         <CardContent>
           <EnhancedDataTable
-            data={filteredRecords}
+            data={hierarchicalRecords}
             columns={columns}
             isLoading={isLoading}
-            searchPlaceholder="Búsqueda rápida (Folio, UUID)..."
+            searchPlaceholder="Filtrar por términos generales..."
             exportFileName={excelExportName}
             initialSort={{ key: "fecha_emision", direction: "desc" }}
             customFilters={customFiltersUI}
@@ -810,7 +972,7 @@ export default function CFDIVault() {
         invoice={selectedInvoice}
       />
 
-      {/* 🚀 MODIFICADO: Renderizado e inyección del CFDITimelineDrawer conectado a la tabla */}
+      {/* RENDERIZADO DEL DRAWER DEL HISTORIAL DE EVENTOS SOAP */}
       <CFDITimelineDrawer
         isOpen={timelineOpen}
         onClose={() => {

@@ -18,16 +18,52 @@ export interface CFDIHistoryRecord {
   id: number;
   tipo_documento: string;
   folio: string | null;
+  folio_interno?: string | null; // 💡 AGREGADO AQUÍ PARA SOLUCIONAR ts(2339) en la raíz
   uuid: string | null;
   fecha_emision: string | null;
   estatus: string;
   cliente_proveedor_nombre: string;
+  cliente_proveedor_rfc?: string | null; // Guardado preventivo para mapeos locales
   viaje_id?: number | null;
   pdf_url?: string | null;
+  xml_url?: string | null;
   monto_total: number | null;
   fecha_cancelacion: string | null;
   motivo_cancelacion: string | null;
   versiones_archivos: DocumentVersion[];
+
+  // 👇 PROPIEDADES INYECTADAS DINÁMICAMENTE PARA FILAS VIRTUALES HIJAS 👇
+  isVirtualChild?: boolean;
+  parentFolio?: string | null;
+
+  // 👇 CAMPOS DE TRAZABILIDAD DEL SAT Y JERARQUÍAS DEL CORE BÓVEDA 👇
+  status_sat?: string | null;
+  intentos_cancelacion?: number;
+  detalle_sat?: string | null;
+  factura_padre_id?: number | null;
+  factura_padre?: {
+    id: number;
+    folio: string | null;
+    folio_interno?: string | null;
+    monto_total?: number;
+  } | null;
+  cartas_porte_hijas?:
+    | {
+        id: number;
+        folio: string | null;
+        folio_interno?: string | null;
+        status_sat?: string;
+        estatus?: string;
+        uuid?: string | null;
+        fecha_emision?: string | null;
+        monto_total?: number | null;
+        versiones_archivos?: DocumentVersion[];
+        viaje_id?: number | null;
+        pdf_url?: string | null;
+        xml_url?: string | null;
+      }[]
+    | null;
+  is_nominal?: boolean;
 }
 
 export interface CFDIActivityTimeline {
@@ -58,7 +94,7 @@ export const useCfdiVault = (
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
 
-      // Usamos el endpoint que creamos en el backend
+      // Consumimos el endpoint unificado del módulo de finanzas
       const { data } = await axiosClient.get<CFDIHistoryResponse>(
         `/api/finance/cfdi-vault?${params.toString()}`,
       );
@@ -93,7 +129,7 @@ export const useCfdiTimeline = (
       );
       return data;
     },
-    // Solo dispara la petición a BD cuando el usuario abre el Drawer
+    // Solo dispara la petición a la BD cuando el usuario abre el Drawer desde la tabla
     enabled: !!documentId && !!tipoDocumento,
   });
 
