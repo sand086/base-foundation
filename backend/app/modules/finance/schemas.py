@@ -165,10 +165,12 @@ class PayableInvoiceBase(BaseModel):
     pdf_url: Optional[str] = None
     xml_url: Optional[str] = None
 
-    # NUEVO: CAMPOS DE CANCELACIÓN
+    # CAMPOS DE CANCELACIÓN
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
+
+    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
 
@@ -230,11 +232,13 @@ class InvoicePaymentBase(BaseModel):
     complemento_uuid: Optional[str] = None
     comprobante_url: Optional[str] = None
 
-    # NUEVO: CAMPOS DE ESTATUS Y CANCELACIÓN
+    # CAMPOS DE ESTATUS Y CANCELACIÓN
     estatus: str = "ACTIVO"
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
+
+    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
 
@@ -392,14 +396,13 @@ class CFDIHistoryRecord(BaseModel):
     fecha_cancelacion: Optional[datetime] = None
     motivo_cancelacion: Optional[str] = None
 
-    # 👇 NUEVOS CAMPOS (FASE 1 Y 4): TRAZABILIDAD Y JERARQUÍA 👇
+    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
     factura_padre_id: Optional[int] = None
     factura_padre: Optional[Any] = None
     cartas_porte_hijas: Optional[List[Any]] = Field(default_factory=list)
     is_nominal: Optional[bool] = False
-    # 👆 -------------------------------------------------- 👆
 
     # Lista anidada de versiones de archivos (PDF/XML) y línea de tiempo
     versiones_archivos: List[DocumentHistoryResponse] = Field(default_factory=list)
