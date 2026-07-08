@@ -1625,11 +1625,17 @@ def get_cfdi_vault_records(
                     "detalle_sat": getattr(r, "detalle_sat", None),
                     "factura_padre_id": getattr(r, "factura_padre_id", None),
                     "factura_padre": (
-                        r.factura_padre if hasattr(r, "factura_padre") else None
+                        {
+                            "id": r.factura_padre.id,
+                            "folio": r.factura_padre.folio_interno,
+                        }
+                        if getattr(r, "factura_padre", None)
+                        else None
                     ),
-                    "cartas_porte_hijas": (
-                        r.cartas_porte_hijas if hasattr(r, "cartas_porte_hijas") else []
-                    ),
+                    "cartas_porte_hijas": [
+                        {"id": h.id, "folio": h.folio_interno}
+                        for h in getattr(r, "cartas_porte_hijas", [])
+                    ],
                     "is_nominal": getattr(r, "is_nominal", False),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
