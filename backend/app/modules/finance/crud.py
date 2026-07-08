@@ -1621,6 +1621,16 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
+                    "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
+                    "detalle_sat": getattr(r, "detalle_sat", None),
+                    "factura_padre_id": getattr(r, "factura_padre_id", None),
+                    "factura_padre": (
+                        r.factura_padre if hasattr(r, "factura_padre") else None
+                    ),
+                    "cartas_porte_hijas": (
+                        r.cartas_porte_hijas if hasattr(r, "cartas_porte_hijas") else []
+                    ),
+                    "is_nominal": getattr(r, "is_nominal", False),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
                     ),  # <--- MAPEADO REAL
@@ -1705,6 +1715,8 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
+                    "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
+                    "detalle_sat": getattr(r, "detalle_sat", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
                     ),  # <--- MAPEADO REAL
@@ -1799,6 +1811,8 @@ def get_cfdi_vault_records(
                     "monto_total": r.monto_total,
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
+                    "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
+                    "detalle_sat": getattr(r, "detalle_sat", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
                     ),  # <--- MAPEADO REAL
@@ -1940,6 +1954,8 @@ def get_cfdi_vault_records(
                     "monto_total": getattr(r, "monto", 0),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
+                    "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
+                    "detalle_sat": getattr(r, "detalle_sat", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
                     ),  # <--- HISTORIAL VINCULADO AL PAGO
