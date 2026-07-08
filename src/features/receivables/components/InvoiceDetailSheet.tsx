@@ -40,6 +40,7 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Network,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -55,6 +56,8 @@ interface InvoiceDetailSheetProps {
   onPayClick?: (invoice: ReceivableInvoice) => void;
   onStampPayment?: (paymentId: number) => Promise<void>;
   onCancelPayments?: (paymentIds: number[]) => Promise<void>;
+  onVerifySat?: (id: number) => Promise<void>;
+  onRetryCancel?: (id: number, motivo: string) => Promise<void>;
 }
 
 const toNumber = (v: any): number => {
@@ -72,10 +75,13 @@ export function InvoiceDetailSheet({
   onPayClick,
   onStampPayment,
   onCancelPayments,
+  onVerifySat,
+  onRetryCancel,
 }: InvoiceDetailSheetProps) {
   const [stampingId, setStampingId] = useState<number | null>(null);
   const [cancelingId, setCancelingId] = useState<number | null>(null);
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState<boolean>(false);
 
   useEffect(() => {
     if (invoice && open) {
@@ -95,6 +101,9 @@ export function InvoiceDetailSheet({
 
   const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
+  const inProcess = inv.status_sat === "PROCESO_CANCELACION";
+  const hasSatError = inv.intentos_cancelacion > 0 && !isCanceled && !inProcess;
+
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
     : [];
@@ -177,7 +186,6 @@ export function InvoiceDetailSheet({
     const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
     const baseURL = rawBaseURL.replace(/\/$/, "");
 
-    // 👇 FIX: Añadimos un timestamp para evitar la caché del navegador
     const timestamp = new Date().getTime();
     window.open(
       `${baseURL}/api/sat/invoice/${targetUuid}/${type}?t=${timestamp}`,
@@ -261,6 +269,13 @@ export function InvoiceDetailSheet({
     }
   };
 
+  const handleVerify = async () => {
+    if (!onVerifySat) return;
+    setIsVerifying(true);
+    await onVerifySat(inv.id);
+    setIsVerifying(false);
+  };
+
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
@@ -327,6 +342,7 @@ export function InvoiceDetailSheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+          {/* 🚨 ZONA DE ALERTAS INTELIGENTES (FASE 4) 🚨 */}
           {isCanceled && (
             <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
@@ -335,14 +351,117 @@ export function InvoiceDetailSheet({
                   Factura Cancelada
                 </h4>
                 <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
-                  Este comprobante fue cancelado el{" "}
-                  <strong>{fDT(inv.fecha_cancelacion)}</strong>
-                  {inv.motivo_cancelacion
-                    ? ` por el motivo "${inv.motivo_cancelacion}"`
-                    : ""}
-                  .
+                  Cancelada el <strong>{fDT(inv.fecha_cancelacion)}</strong>.
+                  Detalle SAT:{" "}
+                  {inv.detalle_sat ||
+                    (inv.motivo_cancelacion
+                      ? `por el motivo "${inv.motivo_cancelacion}"`
+                      : "Sin detalle.")}
                 </p>
               </div>
+            </div>
+          )}
+
+          {inProcess && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
+                  En Proceso de Cancelación
+                </h4>
+                <p className="text-sm font-medium text-amber-700/80 dark:text-amber-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "Esperando aprobación del Receptor en el Buzón Tributario."}
+                </p>
+                {onVerifySat && (
+                  <Button
+                    onClick={handleVerify}
+                    disabled={isVerifying}
+                    size="sm"
+                    className="mt-3 bg-amber-600 hover:bg-amber-700 text-white text-xs h-8"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "w-3 h-3 mr-2",
+                        isVerifying && "animate-spin",
+                      )}
+                    />
+                    Consultar SAT ahora
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {hasSatError && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-red-800 dark:text-red-400 uppercase tracking-widest">
+                  Rechazo de Cancelación (Intento {inv.intentos_cancelacion})
+                </h4>
+                <p className="text-sm font-medium text-red-700/80 dark:text-red-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "El SAT o el Receptor rechazaron la solicitud de cancelación."}
+                </p>
+                <div className="flex gap-2 mt-3">
+                  {onRetryCancel && (
+                    <Button
+                      onClick={() => onRetryCancel(inv.id, "02")}
+                      size="sm"
+                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar Forzado
+                      (02)
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 🌳 JERARQUÍA DEL VIAJE (PADRE / HIJOS) 🌳 */}
+          {(inv.factura_padre ||
+            (inv.cartas_porte_hijas && inv.cartas_porte_hijas.length > 0)) && (
+            <div className="bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-2xl">
+              <h4 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2 mb-3">
+                <Network className="w-4 h-4" /> Árbol de Documentos del Viaje
+              </h4>
+
+              {inv.factura_padre && (
+                <div className="flex items-center gap-2 mb-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <Badge className="bg-indigo-100 text-indigo-700">
+                    PADRE (Ingreso)
+                  </Badge>
+                  <span className="font-mono text-sm font-bold">
+                    {inv.factura_padre.folio_interno}
+                  </span>
+                  <span className="text-xs text-slate-500 ml-auto">
+                    {fC(inv.factura_padre.monto_total)}
+                  </span>
+                </div>
+              )}
+
+              {inv.cartas_porte_hijas?.map((hija: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 mt-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4"
+                >
+                  <div className="w-3 h-3 border-l-2 border-b-2 border-slate-300 rounded-bl-sm -ml-6 mr-2"></div>
+                  <Badge variant="outline" className="text-slate-600">
+                    HIJA (C. Porte)
+                  </Badge>
+                  <span className="font-mono text-sm font-bold">
+                    {hija.folio_interno}
+                  </span>
+                  <StatusBadge
+                    status={getInvoiceStatusInfo(hija).status}
+                    className="ml-auto text-[10px]"
+                  >
+                    {hija.status_sat}
+                  </StatusBadge>
+                </div>
+              ))}
             </div>
           )}
 

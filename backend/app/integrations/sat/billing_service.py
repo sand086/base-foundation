@@ -1300,7 +1300,8 @@ class BillingService:
         self, invoice_id: int, motivo: str = "02", uuid_sustituto: str = None
     ):
         """
-        Método real que se comunica con el PAC para cancelar un CFDI 4.0 en el SAT.
+        Método inteligente para cancelar un CFDI en el SAT.
+        Incluye validación Multi-CP, Anti-Error 621 (Solución Factible) y protección de Rollback.
         """
         from app.models.models import ReceivableInvoice, AuditLog
         from datetime import datetime
@@ -1314,8 +1315,63 @@ class BillingService:
         if not factura or not factura.uuid:
             raise ValueError("Factura no encontrada o no tiene UUID timbrado.")
 
+        # =========================================================================
+        # 🧠 REGLA INTELIGENTE 1: VALIDACIÓN MULTI-CP Y ANTI-ERROR 621
+        # =========================================================================
+        motivo_final = motivo
+        uuid_sustituto_final = uuid_sustituto
+
+        # Solo evaluamos la regla si es Carta Porte (is_nominal=True) y tiene viaje
+        if factura.is_nominal and factura.viaje_id:
+            conteo_cps = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.viaje_id == factura.viaje_id,
+                    ReceivableInvoice.is_nominal == True,
+                    ReceivableInvoice.record_status == "A",
+                )
+                .count()
+            )
+
+            if conteo_cps > 1:
+                logger.warning(
+                    f"[AUTO-CORRECCIÓN] Viaje {factura.viaje_id} tiene {conteo_cps} CPs. Forzando Motivo 02 para evitar bloqueo SAT."
+                )
+                motivo_final = "02"
+                uuid_sustituto_final = None
+            else:
+                # Regla Anti-621: Si vamos a usar Motivo 01, asegurarnos de que la factura real exista
+                if motivo == "01" and not uuid_sustituto_final:
+                    # Si no nos pasaron el UUID, lo buscamos en la BD
+                    padre = (
+                        self.db.query(ReceivableInvoice)
+                        .filter(
+                            ReceivableInvoice.viaje_id == factura.viaje_id,
+                            ReceivableInvoice.is_nominal == False,
+                            ReceivableInvoice.status_sat == "TIMBRADA",
+                        )
+                        .first()
+                    )
+
+                    if padre and padre.uuid:
+                        uuid_sustituto_final = padre.uuid
+                    else:
+                        logger.warning(
+                            f"[AUTO-CORRECCIÓN] No hay Factura Real vigente para CP {factura.folio_interno}. Forzando Motivo 02 para evitar Error 621."
+                        )
+                        motivo_final = "02"
+                        uuid_sustituto_final = None
+
+        # Si es factura libre (is_nominal=False), aplicamos validación Anti-621 estándar
+        elif motivo == "01" and not uuid_sustituto_final:
+            logger.warning(
+                f"[AUTO-CORRECCIÓN] Factura {factura.folio_interno} pidió Motivo 01 sin UUID sustituto. Forzando Motivo 02."
+            )
+            motivo_final = "02"
+            uuid_sustituto_final = None
+
         logger.info(
-            f"Iniciando CANCELACIÓN SAT del UUID: {factura.uuid} con Motivo: {motivo}"
+            f"Iniciando CANCELACIÓN SAT del UUID: {factura.uuid} con Motivo: {motivo_final}"
         )
 
         try:
@@ -1329,9 +1385,10 @@ class BillingService:
 
             # 2. 🚨 FORMATO DE TUBERÍA REQUERIDO POR SOLUCIÓN FACTIBLE 4.0 🚨
             # El formato exacto debe ser: "UUID|Motivo|UuidSustitucion"
-            sustituto_str = uuid_sustituto if uuid_sustituto else ""
-            uuid_formateado_sat = f"{factura.uuid.strip()}|{motivo}|{sustituto_str}"
-
+            sustituto_str = uuid_sustituto_final if uuid_sustituto_final else ""
+            uuid_formateado_sat = (
+                f"{factura.uuid.strip()}|{motivo_final}|{sustituto_str}"
+            )
             uuids_array = [uuid_formateado_sat]
 
             # 3. Llamada al PAC con las firmas correctas
@@ -1344,56 +1401,118 @@ class BillingService:
                 contrasenaCSD=self.key_password,
             )
 
-            # 4. Validar la respuesta del PAC
+            # 4. Validar la respuesta a nivel general del PAC
             if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
                 raise Exception(f"Rechazo del PAC: {resultado.mensaje}")
 
+            # Extraemos la respuesta específica del folio mandado
             res_sat = resultado.resultados[0]
             codigo_sat = int(getattr(res_sat, "status", 0))
             mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
 
-            # =========================================================
-            # 🚨 ## NUEVO CANDADO: DESTRUIR FALSOS POSITIVOS
-            # =========================================================
+            # =========================================================================
+            # 🛡️ REGLA INTELIGENTE 2: EL CANDADO DE LA VERDAD
+            # =========================================================================
             # Si el SAT responde algo distinto a 201 (En proceso) o 202 (Previamente cancelado)
             if codigo_sat not in [201, 202] and "proceso" not in mensaje_sat:
-                # Forzamos a que Python truene y salte al bloque "except Exception"
+                # Disparamos un error intencional para forzar el Rollback en el bloque Except
                 raise Exception(f"Rechazo del SAT ({codigo_sat}): {res_sat.mensaje}")
-            # =========================================================
 
-            # 5. ÉXITO: Actualizar BD localmente evaluando el estado Asíncrono
+            # =========================================================================
+            # 5. ÉXITO (O EN PROCESO): Actualizamos la BD
+            # =========================================================================
             if codigo_sat == 201 or "proceso" in mensaje_sat:
                 factura.status_sat = "PROCESO_CANCELACION"
-                # OJO: No cambiamos estatus a "cancelado" aún, sigue pendiente en nuestro ERP
+                factura.detalle_sat = (
+                    "Esperando validación del SAT o aceptación del Receptor."
+                )
             else:
+                # Código 202 o Confirmación Inmediata
                 factura.status_sat = "CANCELADO"
-                factura.estatus = "cancelado"  # Liberamos la deuda en el ERP
+                factura.estatus = "cancelado"
+                factura.saldo_pendiente = 0.0
+                factura.detalle_sat = "Cancelación aprobada por el SAT."
 
-            factura.motivo_cancelacion = motivo
+            factura.motivo_cancelacion = motivo_final
             factura.fecha_cancelacion = datetime.utcnow()
+            factura.intentos_cancelacion += 1  # Sumamos un intento exitoso
 
             log = AuditLog(
                 user_id=None,
                 accion=f"Factura {factura.folio_interno} enviada a cancelar al SAT. Estado: {factura.status_sat}",
                 tipo_accion="CANCELACION_SAT",
                 modulo="CUENTAS_POR_COBRAR",
-                detalles=f'{{"uuid": "{factura.uuid}", "motivo": "{motivo}", "pac_msg": "{resultado.mensaje}"}}',
+                detalles=f'{{"uuid": "{factura.uuid}", "motivo_aplicado": "{motivo_final}", "sustituto": "{uuid_sustituto_final}", "pac_msg": "{resultado.mensaje}"}}',
             )
             self.db.add(log)
             self.db.commit()
 
             return {
                 "status": "success",
-                "message": f"Cancelada. Mensaje: {resultado.mensaje}",
+                "message": f"Operación exitosa: {res_sat.mensaje}",
                 "uuid": factura.uuid,
             }
 
         except Exception as e:
-            # En caso de fallar, mantenemos la etiqueta para que reintente en el bucle
-            factura.status_sat = "PENDIENTE_CANCELAR_SAT"
-            factura.motivo_cancelacion = motivo
-            self.db.commit()
-            raise Exception(f"{str(e)}")
+            error_msg = str(e).lower()
+
+            # =========================================================================
+            # 🔄 REGLA INTELIGENTE 3: MANEJO ESTRICTO DE ERRORES Y ROLLBACK
+            # =========================================================================
+
+            if (
+                "previamente cancelado" in error_msg
+                or "ya se encuentra cancelado" in error_msg
+            ):
+                # El SAT dice que ya la había matado, lo tomamos como éxito y salvamos la BD.
+                factura.status_sat = "CANCELADO"
+                factura.estatus = "cancelado"
+                factura.saldo_pendiente = 0.0
+                factura.detalle_sat = (
+                    "El SAT confirmó que la factura ya estaba previamente cancelada."
+                )
+                self.db.commit()
+                return {
+                    "status": "success",
+                    "message": "Previamente cancelada en el SAT.",
+                    "uuid": factura.uuid,
+                }
+
+            # Si es Error 500 (Timeout / Flojera del SAT)
+            elif "500" in error_msg or "tardado demasiado" in error_msg:
+                factura.status_sat = "TIMBRADA"
+                factura.estatus = "pendiente"  # Rollback
+                factura.saldo_pendiente = factura.monto_total  # Rollback
+                factura.detalle_sat = "Error 500: El SAT tardó demasiado en responder. Reintente más tarde."
+                factura.intentos_cancelacion += 1
+                self.db.commit()
+                raise Exception(
+                    "El servidor del SAT está saturado (Error 500). La factura sigue vigente. Por favor, reintente en 5 minutos."
+                )
+
+            # Si es Error de Criptografía/Sellos (Error 305)
+            elif "305" in error_msg or "validez del certificado" in error_msg:
+                factura.status_sat = "TIMBRADA"
+                factura.estatus = "pendiente"
+                factura.saldo_pendiente = factura.monto_total
+                factura.detalle_sat = "Error 305: Problema criptográfico. El certificado no coincide con la fecha del comprobante."
+                factura.intentos_cancelacion += 1
+                self.db.commit()
+                raise Exception(
+                    "El SAT bloqueó la cancelación por un problema de fechas en el certificado (Error 305). Debe cancelar manualmente en el portal del SAT."
+                )
+
+            # Cualquier otro error operativo (Ej. Receptor Rechazó)
+            else:
+                factura.status_sat = "TIMBRADA"
+                factura.estatus = "pendiente"
+                factura.saldo_pendiente = factura.monto_total
+                factura.detalle_sat = f"Rechazo: {str(e)}"
+                factura.intentos_cancelacion += 1
+                self.db.commit()
+                raise Exception(
+                    f"Cancelación rechazada por el SAT o el Proveedor: {str(e)}"
+                )
 
     def procesar_cancelaciones_pendientes(self):
         facturas_pendientes = (

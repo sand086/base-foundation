@@ -98,6 +98,15 @@ export const useReceivables = () => {
     },
   });
 
+  // 7.5 Consultar estatus actual en el SAT bajo demanda
+  const verifySatStatusMut = useMutation({
+    mutationFn: (id: number) =>
+      axiosClient.get(`/api/finance/receivables/${id}/verify-sat`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
+    },
+  });
+
   // 8. 👇 NUEVO: MUTACIÓN DE PLANCHADO/SINCRONIZACIÓN DE CANCELADAS 👇
   const syncCancelledMut = useMutation({
     mutationFn: () => axiosClient.post(`/api/finance/sync-cancelled-invoices`),
@@ -249,6 +258,28 @@ export const useReceivables = () => {
           description: getErrorMessage(
             error,
             "El SAT no pudo procesar la cancelación.",
+          ),
+        });
+        return false;
+      }
+    },
+
+    //  Verificar en tiempo real
+    verifySatStatus: async (id: number) => {
+      const toastId = toast.loading("Consultando estatus real en el SAT...");
+      try {
+        await verifySatStatusMut.mutateAsync(id);
+        toast.success("Estatus Actualizado", {
+          id: toastId,
+          description: "La información del SAT se ha sincronizado.",
+        });
+        return true;
+      } catch (error: any) {
+        toast.error("Error al consultar al SAT", {
+          id: toastId,
+          description: getErrorMessage(
+            error,
+            "No se pudo conectar con el SAT.",
           ),
         });
         return false;

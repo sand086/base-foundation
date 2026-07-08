@@ -12,6 +12,7 @@ import {
   Eye,
   MoreHorizontal,
   FileSignature,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
@@ -306,6 +307,14 @@ export default function CFDIVault() {
         client: { razon_social: row.cliente_proveedor_nombre },
         viaje_id: row.viaje_id,
         saldo_pendiente: row.estatus === "TIMBRADA" ? row.monto_total : 0,
+
+        // 👇 NUEVOS CAMPOS PASADOS AL DETALLE 👇
+        status_sat: row.status_sat || row.estatus,
+        intentos_cancelacion: row.intentos_cancelacion || 0,
+        detalle_sat: row.detalle_sat,
+        factura_padre: row.factura_padre,
+        cartas_porte_hijas: row.cartas_porte_hijas,
+        is_nominal: row.is_nominal,
       });
       setDetailDrawerOpen(true);
     }
@@ -384,9 +393,10 @@ export default function CFDIVault() {
       {
         key: "estatus",
         header: "Estatus",
-        render: (val) => {
+        render: (val, row) => {
           const s = (val || "").toUpperCase();
           let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
+
           if (s === "TIMBRADA" || s === "TIMBRADO")
             badgeClass =
               "bg-green-100 text-green-800 hover:bg-green-200 border-green-300";
@@ -399,14 +409,31 @@ export default function CFDIVault() {
           if (s === "RECIBO INTERNO")
             badgeClass =
               "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
-
           if (s === "PROCESO_CANCELACION")
             badgeClass =
               "bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-black";
+
+          // 🚨 ALERTA VISUAL DE ERRORES DEL SAT 🚨
+          const statusSatReal = (row.status_sat || s).toUpperCase();
+          const hasError =
+            row.intentos_cancelacion > 0 &&
+            statusSatReal !== "CANCELADO" &&
+            statusSatReal !== "PROCESO_CANCELACION";
+
           return (
-            <Badge variant="outline" className={badgeClass}>
-              {s}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={badgeClass}>
+                {s}
+              </Badge>
+              {hasError && (
+                <div
+                  title={`Error en SAT: ${row.detalle_sat || "Rechazo"}`}
+                  className="p-1 bg-rose-100 rounded-full cursor-help animate-pulse"
+                >
+                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                </div>
+              )}
+            </div>
           );
         },
       },
@@ -583,8 +610,8 @@ export default function CFDIVault() {
           Bóveda Digital CFDI
         </h1>
         <p className="text-muted-foreground">
-          Historial de comprobantes limpios y cancelados (Excluye rechazos del
-          SAT).
+          Historial de comprobantes limpios, cancelados y seguimiento de alertas
+          fiscales (SAT).
         </p>
       </div>
 
@@ -638,10 +665,44 @@ export default function CFDIVault() {
           if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
         }}
         invoice={selectedInvoice}
+        onVerifySat={async (id) => {
+          try {
+            const toastId = toast.loading(
+              "Consultando estatus real en el SAT...",
+            );
+            await axiosClient.get(`/api/finance/receivables/${id}/verify-sat`);
+            toast.success("Estatus Actualizado", {
+              id: toastId,
+              description: "La información del SAT se ha sincronizado.",
+            });
+            if (refetch) refetch();
+          } catch (error: any) {
+            toast.error(
+              error.response?.data?.detail || "No se pudo conectar con el SAT.",
+            );
+          }
+        }}
+        onRetryCancel={async (id, motivo) => {
+          try {
+            const toastId = toast.loading(
+              "Reintentando cancelación en el SAT...",
+            );
+            await axiosClient.post(
+              `/api/finance/receivables/${id}/cancel-sat`,
+              { motivo },
+            );
+            toast.success("Solicitud enviada al SAT", { id: toastId });
+            if (refetch) refetch();
+          } catch (error: any) {
+            toast.error(
+              error.response?.data?.detail || "Error al cancelar la factura.",
+            );
+          }
+        }}
         onStampPayment={async (paymentId) => {
           try {
             await axiosClient.post(
-              `/finance/receivables/payments/${paymentId}/stamp`,
+              `/api/finance/receivables/payments/${paymentId}/stamp`,
             );
             toast.success("Complemento timbrado en el SAT con éxito");
             if (refetch) refetch();

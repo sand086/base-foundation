@@ -1576,6 +1576,13 @@ class ReceivableInvoice(AuditMixin, Base):
         Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
     )
 
+    # 🚨 NUEVO FASE 1: Jerarquía Padre-Hijo (Factura Real -> Cartas Porte)
+    factura_padre_id = Column(
+        Integer,
+        ForeignKey("receivable_invoices.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     uuid = Column(String(36), unique=True, nullable=True)
     folio_interno = Column(String(50))
     is_nominal = Column(Boolean, default=False)
@@ -1603,6 +1610,14 @@ class ReceivableInvoice(AuditMixin, Base):
     acuse_cancelacion_url = Column(String(500), nullable=True)
     fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
 
+    # 🚨 NUEVO FASE 1: Trazabilidad y Memoria de Errores
+    intentos_cancelacion = Column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    detalle_sat = Column(
+        Text, nullable=True
+    )  # Aquí guardaremos "Rechazo del receptor" o "Error 305"
+
     pdf_url = Column(String(500))
     xml_url = Column(String(500))
 
@@ -1610,6 +1625,7 @@ class ReceivableInvoice(AuditMixin, Base):
     forma_pago = Column(String(5), nullable=True)  # 01, 03, 99...
     tipo_comprobante = Column(String(5), nullable=True)  # I, E, P
 
+    # RELACIONES
     sub_client = relationship("SubClient")
     trip = relationship("Trip", back_populates="receivable_invoices")
     payments = relationship(
@@ -1622,6 +1638,14 @@ class ReceivableInvoice(AuditMixin, Base):
         "ReceivableInvoiceDocumentHistory",
         back_populates="invoice",
         cascade="all, delete-orphan",
+    )
+
+    # 🚨 NUEVO FASE 1: Relaciones recursivas para encontrar hijos y al padre fácilmente en Python
+    factura_padre = relationship(
+        "ReceivableInvoice", remote_side=[id], back_populates="cartas_porte_hijas"
+    )
+    cartas_porte_hijas = relationship(
+        "ReceivableInvoice", back_populates="factura_padre"
     )
 
 
@@ -1659,6 +1683,10 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     motivo_cancelacion = Column(String(5), nullable=True)
     acuse_cancelacion_url = Column(String(500), nullable=True)
     fecha_cancelacion = Column(DateTime(timezone=True), nullable=True)
+    intentos_cancelacion = Column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+    detalle_sat = Column(Text, nullable=True)
 
     # NUEVO: Relación de historial documental
     document_history = relationship(

@@ -1,15 +1,21 @@
 #!/bin/bash
 
 # =====================================================================
-# ADMINISTRADOR DE TAREAS CRON - MÓDULO FINANZAS
+# ADMINISTRADOR DE TAREAS CRON - EL VIGILANTE ASÍNCRONO DEL SAT
 # =====================================================================
 
-# Carpeta de logs dentro del proyecto
-LOG_FILE="/home/desarrolloas/base-foundation/scripts/finance_cron.log"
+# Configura las rutas (ajusta los paths si es necesario según tu servidor)
+PROJECT_DIR="/home/desarrolloas/base-foundation/backend"
+PYTHON_ENV="/home/desarrolloas/base-foundation/backend/venv/bin/python"
+LOG_FILE="/home/desarrolloas/base-foundation/backend/scripts/finance_cron.log"
 
-echo "[$(date)] Iniciando sincronización automática de cancelaciones SAT..." >> "$LOG_FILE"
+echo "[$(date)] 🤖 Despertando al Vigilante Asíncrono del SAT..." >> "$LOG_FILE"
 
-# Ejecutar el endpoint de FastAPI (Ajusta el puerto 8000 si tu backend corre en otro)
-curl -X GET http://localhost:8000/api/finance/receivables/payments/sync-cancellation-status >> "$LOG_FILE" 2>&1
+# Nos movemos a la carpeta del backend para evitar problemas de imports
+cd $PROJECT_DIR
 
-echo -e "\n[$(date)] Sincronización terminada.\n------------------------------------------------" >> "$LOG_FILE"
+# Ejecutamos el Robot Poller guardando la salida en el log
+$PYTHON_ENV sincronizar_realidad_sat.py >> "$LOG_FILE" 2>&1
+
+echo "[$(date)] 😴 Vigilante terminó su ronda y volvió a dormir." >> "$LOG_FILE"
+echo "----------------------------------------------------------------" >> "$LOG_FILE"
