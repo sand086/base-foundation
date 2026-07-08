@@ -19,6 +19,11 @@ export type ReceivableInvoiceLite = {
     motivo_cancelacion?: (string | null);
     acuse_cancelacion_url?: (string | null);
     fecha_cancelacion?: (string | null);
+    intentos_cancelacion?: (number | null);
+    detalle_sat?: (string | null);
+    factura_padre_id?: (number | null);
+    factura_padre?: null;
+    cartas_porte_hijas?: null;
     document_history?: Array<DocumentHistoryResponse>;
 };
 

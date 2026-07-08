@@ -21,6 +21,12 @@ export type CFDIHistoryRecord = {
     modificado_por_nombre?: (string | null);
     fecha_cancelacion?: (string | null);
     motivo_cancelacion?: (string | null);
+    intentos_cancelacion?: (number | null);
+    detalle_sat?: (string | null);
+    factura_padre_id?: (number | null);
+    factura_padre?: null;
+    cartas_porte_hijas?: null;
+    is_nominal?: (boolean | null);
     versiones_archivos?: Array<DocumentHistoryResponse>;
     viaje_id?: (number | null);
     pdf_url?: (string | null);

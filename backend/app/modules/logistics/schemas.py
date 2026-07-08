@@ -502,12 +502,20 @@ class ReceivableInvoiceLite(ORMBase):
     pdf_url: Optional[str] = None
     xml_url: Optional[str] = None
 
-    # NUEVO: CAMPOS DE CANCELACIÓN
+    # CAMPOS DE CANCELACIÓN
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
 
-    # NUEVO: HISTORIAL DE DOCUMENTOS ANIDADO
+    # 👇 NUEVOS CAMPOS (FASE 1 Y 4): TRAZABILIDAD Y JERARQUÍA 👇
+    intentos_cancelacion: Optional[int] = 0
+    detalle_sat: Optional[str] = None
+    factura_padre_id: Optional[int] = None
+    factura_padre: Optional[Any] = None
+    cartas_porte_hijas: Optional[List[Any]] = Field(default_factory=list)
+    # 👆 -------------------------------------------------- 👆
+
+    # HISTORIAL DE DOCUMENTOS ANIDADO
     document_history: List[DocumentHistoryResponse] = Field(default_factory=list)
 
 

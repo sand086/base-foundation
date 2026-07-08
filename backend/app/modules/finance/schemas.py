@@ -169,6 +169,8 @@ class PayableInvoiceBase(BaseModel):
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
+    intentos_cancelacion: Optional[int] = 0
+    detalle_sat: Optional[str] = None
 
 
 # ==========================================
@@ -233,6 +235,8 @@ class InvoicePaymentBase(BaseModel):
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
+    intentos_cancelacion: Optional[int] = 0
+    detalle_sat: Optional[str] = None
 
 
 class InvoicePaymentCreate(InvoicePaymentBase):
@@ -387,6 +391,15 @@ class CFDIHistoryRecord(BaseModel):
     modificado_por_nombre: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
     motivo_cancelacion: Optional[str] = None
+
+    # 👇 NUEVOS CAMPOS (FASE 1 Y 4): TRAZABILIDAD Y JERARQUÍA 👇
+    intentos_cancelacion: Optional[int] = 0
+    detalle_sat: Optional[str] = None
+    factura_padre_id: Optional[int] = None
+    factura_padre: Optional[Any] = None
+    cartas_porte_hijas: Optional[List[Any]] = Field(default_factory=list)
+    is_nominal: Optional[bool] = False
+    # 👆 -------------------------------------------------- 👆
 
     # Lista anidada de versiones de archivos (PDF/XML) y línea de tiempo
     versiones_archivos: List[DocumentHistoryResponse] = Field(default_factory=list)

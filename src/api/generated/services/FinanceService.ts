@@ -655,4 +655,61 @@ export class FinanceService {
             },
         });
     }
+    /**
+     * Export Client Statement Excel
+     * @param clientId
+     * @param startDate
+     * @param endDate
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportClientStatementExcelApiFinanceExportStatementClientClientIdGet(
+        clientId: number,
+        startDate?: (string | null),
+        endDate?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/export/statement/client/{client_id}',
+            path: {
+                'client_id': clientId,
+            },
+            query: {
+                'start_date': startDate,
+                'end_date': endDate,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Export Supplier Statement Excel
+     * Exporta el Estado de Cuenta detallado de un Proveedor (Cuentas por Pagar).
+     * @param supplierId
+     * @param startDate
+     * @param endDate
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static exportSupplierStatementExcelApiFinanceExportStatementSupplierSupplierIdGet(
+        supplierId: number,
+        startDate?: (string | null),
+        endDate?: (string | null),
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/export/statement/supplier/{supplier_id}',
+            path: {
+                'supplier_id': supplierId,
+            },
+            query: {
+                'start_date': startDate,
+                'end_date': endDate,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
 }
