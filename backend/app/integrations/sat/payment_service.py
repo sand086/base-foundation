@@ -23,6 +23,7 @@ from cryptography.hazmat.backends import default_backend
 import qrcode
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
+from app.integrations.sat.soap_client import create_pac_client
 
 try:
     from num2words import num2words
@@ -407,7 +408,7 @@ class PaymentComplementService:
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
         try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
@@ -803,7 +804,7 @@ class PaymentComplementService:
                 f"{pago.complemento_uuid.strip()}|{motivo}|{sustituto_str}"
             )
 
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
 
             resultado = client_zeep.service.cancelar(
                 usuario=self.pac_user,
@@ -995,7 +996,7 @@ class PaymentComplementService:
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
-        client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+        client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
         result = client_zeep.service.timbrar(
             self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
         )

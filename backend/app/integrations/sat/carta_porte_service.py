@@ -29,6 +29,8 @@ from cryptography.hazmat.backends import default_backend
 import qrcode
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
+from app.integrations.sat.retry_queue import register_sat_retry
+from app.integrations.sat.soap_client import create_pac_client, is_pac_timeout_error
 
 try:
     from num2words import num2words
@@ -699,7 +701,7 @@ class CartaPorteService:
         )
 
         try:
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
@@ -806,6 +808,43 @@ class CartaPorteService:
                 status_code=500,
                 detail=f"Error interno del servidor al almacenar el archivo XML: {str(e)}",
             )
+
+    def _marcar_timbrado_pendiente(
+        self,
+        factura: ReceivableInvoice,
+        error: Exception,
+        payload: dict | None = None,
+        relacion_uuid: str | None = None,
+    ):
+        factura.status_sat = "PENDIENTE_TIMBRADO"
+        factura.detalle_sat = (
+            "Timeout esperando respuesta del PAC. El CFDI puede haber sido recibido; "
+            "requiere conciliación/reintento antes de generar otro timbre."
+        )
+        register_sat_retry(
+            self.db,
+            invoice=factura,
+            operation_type="timbrado",
+            source_service=self.__class__.__name__,
+            error=error,
+            payload={
+                "sat_payload": payload or {},
+                "relacion_uuid": relacion_uuid,
+                "invoice_id": factura.id,
+                "viaje_id": factura.viaje_id,
+                "folio_interno": factura.folio_interno,
+                "is_nominal": factura.is_nominal,
+                "status_sat": factura.status_sat,
+            },
+            http_status=202,
+        )
+        self.db.commit()
+        logger.warning(
+            "Timbrado pendiente por timeout. factura_id=%s folio=%s error=%s",
+            getattr(factura, "id", None),
+            getattr(factura, "folio_interno", None),
+            error,
+        )
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
         desc_concepto_xml = html.escape(
@@ -1036,6 +1075,26 @@ class CartaPorteService:
             folio_forzado=getattr(invoice_data, "folio_forzado", None),
         )
 
+        factura_pendiente = (
+            self.db.query(ReceivableInvoice)
+            .filter(
+                ReceivableInvoice.viaje_id == viaje.id,
+                ReceivableInvoice.is_nominal == True,
+                ReceivableInvoice.status_sat == "PENDIENTE_TIMBRADO",
+                ReceivableInvoice.record_status != "E",
+            )
+            .order_by(ReceivableInvoice.id.desc())
+            .first()
+        )
+        if factura_pendiente:
+            raise HTTPException(
+                status_code=202,
+                detail=(
+                    f"La factura {factura_pendiente.folio_interno} sigue en PENDIENTE_TIMBRADO. "
+                    "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                ),
+            )
+
         logger.error(
             f"🚑 DEBUG DATOS SEGURO -> Aseguradora: '{raw_data.get('aseguradora_med_ambiente')}' | Póliza: '{raw_data.get('poliza_med_ambiente')}'"
         )
@@ -1095,6 +1154,15 @@ class CartaPorteService:
             return nueva_factura
 
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(nueva_factura, e, data)
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO "
+                        "para conciliación/reintento; no se marcó como error definitivo."
+                    ),
+                )
             nueva_factura.status_sat = "ERROR_SAT"
             self.db.commit()
             raise HTTPException(
@@ -1147,6 +1215,14 @@ class CartaPorteService:
         )
 
         if factura:
+            if factura.status_sat == "PENDIENTE_TIMBRADO":
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        f"La factura {factura.folio_interno} sigue en PENDIENTE_TIMBRADO. "
+                        "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                    ),
+                )
             factura.status_sat = "PROCESANDO"
             factura.concepto = data["descripcion_concepto"]
             factura.monto_total = monto_total
@@ -1207,6 +1283,15 @@ class CartaPorteService:
             return factura
 
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(factura, e, data, uuid_frontend)
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO "
+                        "para conciliación/reintento; no se marcó como error definitivo."
+                    ),
+                )
             factura.status_sat = "ERROR_SAT"
             self.db.commit()
             logger.error(f"Error timbrando factura ID {factura.id}: {str(e)}")
@@ -1218,7 +1303,7 @@ class CartaPorteService:
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         carta_porte = (
             self.db.query(ReceivableInvoice)
@@ -1272,6 +1357,14 @@ class CartaPorteService:
         )
 
         if factura:
+            if factura.status_sat == "PENDIENTE_TIMBRADO":
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        f"La factura {factura.folio_interno} sigue en PENDIENTE_TIMBRADO. "
+                        "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                    ),
+                )
             factura.status_sat = "PROCESANDO"
             factura.uuid_relacionado = uuid_relacionado_real
             factura.concepto = data["descripcion_concepto"]
@@ -1327,6 +1420,17 @@ class CartaPorteService:
             return factura
 
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(
+                    factura, e, data, uuid_relacionado_real
+                )
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO "
+                        "para conciliación/reintento; no se marcó como error definitivo."
+                    ),
+                )
             factura.status_sat = "ERROR_SAT"
             self.db.commit()
             raise HTTPException(
@@ -1358,7 +1462,7 @@ class CartaPorteService:
             sustituto_str = uuid_sustituto if uuid_sustituto else ""
             uuid_formateado_sat = f"{factura.uuid.strip()}|{motivo}|{sustituto_str}"
 
-            client_zeep = zeep.Client(self.wsdl_timbrado, plugins=[self.history])
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
 
             resultado = client_zeep.service.cancelar(
                 usuario=self.pac_user,
@@ -1389,6 +1493,30 @@ class CartaPorteService:
 
         except Exception as e:
             logger.error(f"Error al cancelar UUID {factura.uuid}: {e}")
+            if is_pac_timeout_error(e):
+                factura.status_sat = "PENDIENTE_CANCELAR_SAT"
+                factura.detalle_sat = (
+                    "Timeout esperando respuesta del PAC. La cancelación quedó pendiente de reintento/verificación."
+                )
+                register_sat_retry(
+                    self.db,
+                    invoice=factura,
+                    operation_type="cancelacion",
+                    source_service=self.__class__.__name__,
+                    error=e,
+                    payload={
+                        "invoice_id": factura.id,
+                        "uuid": factura.uuid,
+                        "motivo": motivo,
+                        "uuid_sustituto": uuid_sustituto,
+                    },
+                    http_status=202,
+                )
+                self.db.commit()
+                raise HTTPException(
+                    status_code=202,
+                    detail="El PAC tardó en responder. La cancelación quedó pendiente y será reintentada.",
+                )
             factura.status_sat = "ERROR_SAT"
             factura.motivo_cancelacion = str(e)[:5]
             self.db.commit()

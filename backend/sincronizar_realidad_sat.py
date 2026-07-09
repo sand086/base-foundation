@@ -20,6 +20,10 @@ def auto_vigilante_sat():
     )
     print("=" * 80)
 
+    print("📬 Procesando cola SAT de reintentos técnicos...")
+    resultado_cola = service.procesar_sat_retry_queue(limit=10)
+    print(f"   Procesadas en cola: {resultado_cola.get('procesadas', 0)}")
+
     # 1. Buscamos SOLAMENTE facturas (Ingreso y CPs) que estén atrapadas en "En Proceso"
     facturas_en_proceso = (
         db.query(ReceivableInvoice)

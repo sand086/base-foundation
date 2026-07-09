@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import type { ReactNode } from "react";
 
 // 1. IMPORTACIÓN DEL PROVEEDOR DE RECAPTCHA
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
@@ -51,12 +52,22 @@ import CFDIVault from "./pages/CFDIVault";
 import { DispatchWizard } from "@/features/trips/components/DispatchWizard";
 
 const queryClient = new QueryClient();
+const recaptchaSiteKey = import.meta.env.VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY;
+
+const AppProviders = ({ children }: { children: ReactNode }) => {
+  if (!recaptchaSiteKey) {
+    return <>{children}</>;
+  }
+
+  return (
+    <GoogleReCaptchaProvider reCaptchaKey={recaptchaSiteKey}>
+      {children}
+    </GoogleReCaptchaProvider>
+  );
+};
 
 const App = () => (
-  // 2. ENVOLVEMOS LA APP CON EL PROVEEDOR DE RECAPTCHA PASANDO LA VARIABLE DE ENTORNO
-  <GoogleReCaptchaProvider
-    reCaptchaKey={import.meta.env.VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY}
-  >
+  <AppProviders>
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
@@ -217,7 +228,7 @@ const App = () => (
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
-  </GoogleReCaptchaProvider>
+  </AppProviders>
 );
 
 export default App;

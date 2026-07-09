@@ -40,3 +40,11 @@ backend/.env.*
 /vendor
 backend/venv/
 /backend/app/certs/
+
+# Docker local/dev
+.dockerignore
+Dockerfile
+backend/Dockerfile
+docker-compose*.yml
+docker-compose*.yaml
+docker/
