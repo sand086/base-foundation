@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional, TYPE_CHECKING, Any
 
 from pydantic import (
