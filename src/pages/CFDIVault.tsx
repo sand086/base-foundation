@@ -100,9 +100,23 @@ export default function CFDIVault() {
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
   const cleanRecords = useMemo(() => {
+    // 1. PREVENCIÓN DE DUPLICADOS: Recopilamos los IDs de todas las facturas hijas
+    const childIds = new Set();
+    records.forEach((r) => {
+      if (r.cartas_porte_hijas && Array.isArray(r.cartas_porte_hijas)) {
+        r.cartas_porte_hijas.forEach((child: any) => {
+          if (child.id) childIds.add(child.id);
+        });
+      }
+    });
+
+    // 2. Filtramos los errores Y excluimos a las hijas para que no salgan como fila principal
     return records.filter((r) => {
       const statusStr = r.estatus?.toLowerCase() || "";
-      return statusStr !== "error_sat" && statusStr !== "error";
+      const isError = statusStr === "error_sat" || statusStr === "error";
+      const isChild = childIds.has(r.id);
+
+      return !isError && !isChild;
     });
   }, [records]);
 
@@ -463,7 +477,7 @@ export default function CFDIVault() {
                   variant="outline"
                   className="text-[8px] h-4 px-1.5 font-black uppercase tracking-wider bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400"
                 >
-                  Hija
+                  CPT
                 </Badge>
               </div>
             );
