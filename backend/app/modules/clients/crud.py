@@ -1,5 +1,6 @@
-# --- Fuente: crud_clients.py ---
-from sqlalchemy.orm import Session, joinedload
+# --- Archivo: app/modules/clients/crud.py ---
+
+from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models import models
 from app.models.models import RecordStatus
 from . import schemas
@@ -12,11 +13,12 @@ def get_clients(db: Session, skip: int = 0, limit: int = 100):
         db.query(models.Client)
         .filter(models.Client.record_status != RecordStatus.ELIMINADO)
         .options(
-            joinedload(
+            # 🚀 FIX: Cambiado a selectinload para evitar Explosión Cartesiana
+            selectinload(
                 models.Client.sub_clients.and_(
                     models.SubClient.record_status != RecordStatus.ELIMINADO
                 )
-            ).joinedload(
+            ).selectinload(
                 models.SubClient.tariffs.and_(
                     models.Tariff.record_status != RecordStatus.ELIMINADO
                 )
@@ -38,11 +40,12 @@ def get_client(db: Session, client_id: int):
             models.Client.record_status != RecordStatus.ELIMINADO,
         )
         .options(
-            joinedload(
+            # 🚀 FIX: Mismo blindaje para la carga individual
+            selectinload(
                 models.Client.sub_clients.and_(
                     models.SubClient.record_status != RecordStatus.ELIMINADO
                 )
-            ).joinedload(
+            ).selectinload(
                 models.SubClient.tariffs.and_(
                     models.Tariff.record_status != RecordStatus.ELIMINADO
                 )
