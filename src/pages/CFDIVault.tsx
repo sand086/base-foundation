@@ -15,6 +15,8 @@ import {
   Network,
   Search,
   ChevronRight,
+  Trash2, // AÑADIDO
+  Loader2, // AÑADIDO
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
@@ -80,11 +82,15 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
+  // ESTADOS INTELIGENTES DE CONTROL: Jerarquía, Localizador por Parpadeo y Selección Masiva
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
   >({});
   const [blinkQuery, setBlinkQuery] = useState<string>("");
+
+  // 🚀 NUEVOS ESTADOS PARA CANCELACIÓN MASIVA
+  const [selectedInvoices, setSelectedInvoices] = useState<any[]>([]);
+  const [isMassCanceling, setIsMassCanceling] = useState(false);
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
@@ -141,7 +147,6 @@ export default function CFDIVault() {
   // 4. Aplicamos los filtros del usuario y Ocultamos las Hijas Sueltas
   const filteredRecords = useMemo(() => {
     return cleanRecords.filter((r) => {
-      // 🚀 EVITA LA DUPLICIDAD: Si es hija de alguien más, NO la muestres en la raíz
       if (childIds.has(r.id) || childFolios.has(r.folio)) return false;
 
       if (
@@ -180,12 +185,12 @@ export default function CFDIVault() {
     dateRange,
   ]);
 
-  // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla (que destruye la jerarquía)
+  // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla
   const sortedFilteredRecords = useMemo(() => {
     return [...filteredRecords].sort((a, b) => {
       const timeA = a.fecha_emision ? new Date(a.fecha_emision).getTime() : 0;
       const timeB = b.fecha_emision ? new Date(b.fecha_emision).getTime() : 0;
-      return timeB - timeA; // Más recientes primero
+      return timeB - timeA;
     });
   }, [filteredRecords]);
 
@@ -205,7 +210,6 @@ export default function CFDIVault() {
 
       if (hasChildren && isExpanded) {
         parent.cartas_porte_hijas.forEach((childRef: any) => {
-          // 🚀 AQUÍ OCURRE LA MAGIA: Obtenemos el registro real completo (UUID, XML, Montos verdaderos)
           const realChild =
             recordsById.get(childRef.id) ||
             recordsByFolio.get(childRef.folio) ||
@@ -213,14 +217,13 @@ export default function CFDIVault() {
 
           result.push({
             ...childRef,
-            ...realChild, // INFO REAL SOBREESCRIBE A LA REFERENCIA VACÍA
+            ...realChild,
             id:
               realChild.id ||
               childRef.id ||
               `virtual-${childRef.folio || Math.random()}`,
             isVirtualChild: true,
             parentId: parent.id,
-            // Aseguramos de que estos campos vitales se pinten
             folio: realChild.folio || childRef.folio || "S/F",
             monto_total:
               realChild.monto_total !== undefined
@@ -243,7 +246,6 @@ export default function CFDIVault() {
     return result;
   }, [sortedFilteredRecords, lookupDicts, expandedParents, blinkQuery]);
 
-  // Helper de validación de parpadeo en tiempo real
   const checkShouldBlink = (row: any) => {
     if (!blinkQuery || blinkQuery.trim().length < 3) return false;
     const query = blinkQuery.toLowerCase().trim();
@@ -252,6 +254,71 @@ export default function CFDIVault() {
     ).toLowerCase();
     const uuidTarget = String(row.uuid || "").toLowerCase();
     return folioTarget.includes(query) || uuidTarget.includes(query);
+  };
+
+  // 🚀 FUNCIÓN DE CANCELACIÓN MASIVA
+  const handleMassCancel = async () => {
+    if (
+      !window.confirm(
+        `¿Seguro que deseas cancelar ${selectedInvoices.length} documentos?`,
+      )
+    )
+      return;
+
+    setIsMassCanceling(true);
+    const toastId = toast.loading(
+      `Procesando cancelación de ${selectedInvoices.length} documentos...`,
+    );
+
+    try {
+      if (activeTab === "PAGO_CLIENTE") {
+        const paymentIds = selectedInvoices.map((inv) => inv.id);
+        await axiosClient.post("/api/finance/receivables/payments/cancel", {
+          payment_ids: paymentIds,
+          motivo: "02", // Cancelación con error, no relacionado
+        });
+        toast.success("Pagos cancelados correctamente y saldo restaurado.", {
+          id: toastId,
+        });
+      } else {
+        let successCount = 0;
+        let errorCount = 0;
+
+        // En facturas procesamos una por una según el endpoint actual
+        for (const inv of selectedInvoices) {
+          try {
+            await axiosClient.post(
+              `/api/finance/receivables/${inv.id}/cancel-sat`,
+              { motivo: "02" },
+            );
+            successCount++;
+          } catch (error) {
+            console.error(`Error al cancelar ${inv.folio}:`, error);
+            errorCount++;
+          }
+        }
+
+        if (errorCount === 0) {
+          toast.success(
+            `Se enviaron a cancelar ${successCount} facturas con éxito.`,
+            { id: toastId },
+          );
+        } else {
+          toast.warning(
+            `Se enviaron a cancelar ${successCount}, pero hubo ${errorCount} rechazos/errores.`,
+            { id: toastId },
+          );
+        }
+      }
+    } catch (err) {
+      toast.error("Ocurrió un error general durante la cancelación masiva.", {
+        id: toastId,
+      });
+    } finally {
+      setSelectedInvoices([]);
+      setIsMassCanceling(false);
+      if (refetch) refetch();
+    }
   };
 
   const customFiltersUI = (
@@ -389,10 +456,44 @@ export default function CFDIVault() {
           <X className="h-4 w-4 mr-1" /> Limpiar
         </Button>
       )}
+
+      {/* 🚀 BOTÓN DINÁMICO DE CANCELACIÓN MASIVA */}
+      {selectedInvoices.length > 0 && (
+        <Button
+          variant="destructive"
+          onClick={handleMassCancel}
+          disabled={isMassCanceling}
+          className="h-11 ml-2 font-bold animate-in fade-in zoom-in duration-200"
+        >
+          {isMassCanceling ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4 mr-2" />
+          )}
+          Cancelar {selectedInvoices.length}{" "}
+          {selectedInvoices.length === 1 ? "Seleccionada" : "Seleccionadas"}
+        </Button>
+      )}
     </>
   );
 
   const handleOpenDetail = (row: any) => {
+    // 🚀 MAGIA: Rellenamos la información completa del padre y las hijas usando el diccionario
+    const hydratedPadre = row.factura_padre
+      ? lookupDicts.recordsById.get(row.factura_padre.id) ||
+        lookupDicts.recordsByFolio.get(row.factura_padre.folio_interno) ||
+        row.factura_padre
+      : null;
+
+    const hydratedHijas =
+      row.cartas_porte_hijas?.map((hija: any) => {
+        return (
+          lookupDicts.recordsById.get(hija.id) ||
+          lookupDicts.recordsByFolio.get(hija.folio) ||
+          hija
+        );
+      }) || [];
+
     if (activeTab === "FACTURA_PROVEEDOR") {
       setSelectedInvoice({
         id: row.id,
@@ -409,6 +510,7 @@ export default function CFDIVault() {
         supplier: { razon_social: row.cliente_proveedor_nombre },
         viaje_id: row.viaje_id,
         saldo_pendiente: row.estatus === "TIMBRADO" ? row.monto_total : 0,
+        cliente_proveedor_rfc: row.cliente_proveedor_rfc, // Pasamos el RFC
       });
       setPayableDetailDrawerOpen(true);
     } else {
@@ -425,13 +527,14 @@ export default function CFDIVault() {
         xml_url: row.xml_url,
         document_history: row.versiones_archivos || [],
         client: { razon_social: row.cliente_proveedor_nombre },
+        cliente_proveedor_rfc: row.cliente_proveedor_rfc, // Pasamos el RFC
         viaje_id: row.viaje_id,
         saldo_pendiente: row.estatus === "TIMBRADA" ? row.monto_total : 0,
         status_sat: row.status_sat || row.estatus,
         intentos_cancelacion: row.intentos_cancelacion || 0,
         detalle_sat: row.detalle_sat,
-        factura_padre: row.factura_padre,
-        cartas_porte_hijas: row.cartas_porte_hijas,
+        factura_padre: hydratedPadre, // Enviamos el Padre 100% completo
+        cartas_porte_hijas: hydratedHijas, // Enviamos las Hijas 100% completas
         is_nominal: row.is_nominal,
       });
       setDetailDrawerOpen(true);
@@ -871,6 +974,8 @@ export default function CFDIVault() {
             onValueChange={(val) => {
               setActiveTab(val);
               setExpandedParents({});
+              // 🚀 LIMPIAMOS LA SELECCIÓN AL CAMBIAR DE PESTAÑA
+              setSelectedInvoices([]);
             }}
             className="w-full"
           >
@@ -891,9 +996,19 @@ export default function CFDIVault() {
             isLoading={isLoading}
             searchPlaceholder="Buscar por uuid, folio..."
             exportFileName={excelExportName}
-            // 🚀 ELIMINAMOS initialSort PARA QUE LA TABLA NO DESTRUYA EL ORDEN JERÁRQUICO AL CARGAR
             customFilters={customFiltersUI}
             onGlobalSearchChange={(value) => setBlinkQuery(value)}
+            // 🚀 ENCENDEMOS LAS CASILLAS PARA SELECCIÓN MASIVA
+            enableRowSelection={true}
+            selectedRows={selectedInvoices}
+            onSelectedRowsChange={setSelectedInvoices}
+            rowKey="id"
+            // Deshabilitamos la selección si ya está cancelada o en proceso
+            isRowSelectable={(row) =>
+              row.estatus !== "CANCELADO" &&
+              row.status_sat !== "CANCELADO" &&
+              row.status_sat !== "PROCESO_CANCELACION"
+            }
           />
         </CardContent>
       </Card>

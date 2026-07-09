@@ -40,7 +40,9 @@ import {
   Loader2,
   Trash2,
   RefreshCw,
+  Check,
   Network,
+  ExternalLink,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -131,7 +133,7 @@ export function InvoiceDetailSheet({
     }, {}),
   ).sort((a: any, b: any) => b.version - a.version);
 
-  // 🚀 EXTRAEMOS LA INFO DEL CLIENTE/PROVEEDOR BUSCANDO EN TODAS LAS VARIANTES POSIBLES
+  // 🚀 EXTRACCIÓN ROBUSTA DE NOMBRE Y RFC
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
     safeStr(inv.supplier?.razon_social) ||
@@ -140,10 +142,12 @@ export function InvoiceDetailSheet({
     "Público en General / No Identificado";
 
   const entidadRfc =
-    safeStr(inv.client?.rfc) ||
-    safeStr(inv.supplier?.rfc) ||
     safeStr(inv.cliente_proveedor_rfc) ||
     safeStr(inv.rfc_cliente) ||
+    safeStr(inv.receptor_rfc) ||
+    safeStr(inv.emisor_rfc) ||
+    safeStr(inv.client?.rfc) ||
+    safeStr(inv.supplier?.rfc) ||
     "RFC NO DISPONIBLE";
 
   const concepto = safeStr(inv.concepto) || "Sin descripción";
@@ -433,7 +437,7 @@ export function InvoiceDetailSheet({
               </h4>
 
               {inv.factura_padre && (
-                <div className="flex flex-col gap-1 mb-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                <div className="flex flex-col gap-1 mb-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex items-center gap-2">
                     <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300">
                       PADRE (Ingreso)
@@ -444,16 +448,16 @@ export function InvoiceDetailSheet({
                         "S/F"}
                     </span>
                     <span className="text-xs font-black text-slate-700 dark:text-slate-300 ml-auto">
-                      {fC(inv.factura_padre.monto_total)}
+                      {inv.factura_padre.monto_total !== undefined
+                        ? fC(inv.factura_padre.monto_total)
+                        : "Monto no disponible"}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
-                    <span>
-                      UUID: {inv.factura_padre.uuid || "No disponible"}
-                    </span>
+                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-500 mt-1">
+                    <span>UUID: {inv.factura_padre.uuid || "NO TIMBRADA"}</span>
                     <StatusBadge
                       status={getInvoiceStatusInfo(inv.factura_padre).status}
-                      className="text-[9px] py-0 px-1"
+                      className="text-[9px] py-0 px-2 h-5"
                     >
                       {inv.factura_padre.status_sat ||
                         inv.factura_padre.estatus ||
@@ -464,9 +468,8 @@ export function InvoiceDetailSheet({
                   {(inv.factura_padre.estatus === "CANCELADO" ||
                     inv.factura_padre.status_sat === "CANCELADO") &&
                     inv.factura_padre.motivo_cancelacion && (
-                      <div className="mt-1 text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded">
-                        Motivo de Cancelación:{" "}
-                        {inv.factura_padre.motivo_cancelacion}
+                      <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-1.5 rounded-md w-fit border border-rose-100 dark:border-rose-900/50">
+                        Motivo SAT: {inv.factura_padre.motivo_cancelacion}
                       </div>
                     )}
                 </div>
@@ -475,7 +478,7 @@ export function InvoiceDetailSheet({
               {inv.cartas_porte_hijas?.map((hija: any, idx: number) => (
                 <div
                   key={idx}
-                  className="flex flex-col gap-1 mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4 relative"
+                  className="flex flex-col gap-1 mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4 relative shadow-sm"
                 >
                   <div className="absolute w-4 h-6 border-l-2 border-b-2 border-slate-300 dark:border-slate-700 rounded-bl-lg -left-4 top-0"></div>
                   <div className="flex items-center gap-2">
@@ -490,13 +493,13 @@ export function InvoiceDetailSheet({
                     </span>
                     <StatusBadge
                       status={getInvoiceStatusInfo(hija).status}
-                      className="ml-auto text-[10px] px-2 py-0.5"
+                      className="ml-auto text-[9px] px-2 py-0.5 h-5"
                     >
                       {hija.status_sat || hija.estatus || "TIMBRADA"}
                     </StatusBadge>
                   </div>
-                  <div className="flex justify-between items-center pl-1 text-[10px] font-mono text-slate-500">
-                    <span>UUID: {hija.uuid || "No disponible"}</span>
+                  <div className="flex justify-between items-center pl-1 text-[10px] font-mono text-slate-500 mt-1">
+                    <span>UUID: {hija.uuid || "NO TIMBRADA"}</span>
                     {hija.monto_total !== undefined && (
                       <span className="font-bold text-slate-700 dark:text-slate-300">
                         {fC(hija.monto_total)}
@@ -507,8 +510,8 @@ export function InvoiceDetailSheet({
                   {(hija.estatus === "CANCELADO" ||
                     hija.status_sat === "CANCELADO") &&
                     hija.motivo_cancelacion && (
-                      <div className="mt-1 text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded w-fit">
-                        Motivo de Cancelación: {hija.motivo_cancelacion}
+                      <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-1.5 rounded-md w-fit border border-rose-100 dark:border-rose-900/50">
+                        Motivo SAT: {hija.motivo_cancelacion}
                       </div>
                     )}
                 </div>
@@ -522,9 +525,26 @@ export function InvoiceDetailSheet({
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
                 <Hash className="w-3.5 h-3.5 text-blue-500" /> Comprobante
               </p>
-              <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
-                {displayFolio}
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
+                  {displayFolio}
+                </p>
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT */}
+                {uuid && uuid !== "NO TIMBRADO" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
+                    onClick={() => {
+                      const satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
+                      window.open(satUrl, "_blank");
+                    }}
+                    title="Abre el validador oficial del SAT con este UUID"
+                  >
+                    <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
+                  </Button>
+                )}
+              </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
