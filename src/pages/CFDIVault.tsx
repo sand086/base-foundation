@@ -80,7 +80,7 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // ESTADOS INTELIGENTES DE CONTROL
+  // ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
   >({});
@@ -88,7 +88,7 @@ export default function CFDIVault() {
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
-  // 1. Limpiamos los registros de errores como siempre
+  // 1. Limpiamos los registros de errores
   const cleanRecords = useMemo(() => {
     return records.filter((r) => {
       const statusStr = r.estatus?.toLowerCase() || "";
@@ -97,7 +97,7 @@ export default function CFDIVault() {
   }, [records]);
 
   // 2. Diccionarios de acceso rápido a la data REAL (para recuperar montos, UUID, y archivos de las hijas)
-  const { recordsById, recordsByFolio } = useMemo(() => {
+  const lookupDicts = useMemo(() => {
     const byId = new Map();
     const byFolio = new Map();
     cleanRecords.forEach((r) => {
@@ -107,7 +107,7 @@ export default function CFDIVault() {
     return { recordsById: byId, recordsByFolio: byFolio };
   }, [cleanRecords]);
 
-  // 3. Identificamos qué registros son "Hijas" para NO mostrarlos duplicados y sueltos en el inicio de la tabla
+  // 3. Identificamos qué registros son "Hijas" para NO mostrarlos duplicados en el listado raíz
   const { childIds, childFolios } = useMemo(() => {
     const ids = new Set<number>();
     const folios = new Set<string>();
@@ -180,39 +180,47 @@ export default function CFDIVault() {
     dateRange,
   ]);
 
-  // 5. MOTOR JERÁRQUICO: Inyecta dinámicamente las hijas debajo de su padre pero usando los datos REALES
+  // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla (que destruye la jerarquía)
+  const sortedFilteredRecords = useMemo(() => {
+    return [...filteredRecords].sort((a, b) => {
+      const timeA = a.fecha_emision ? new Date(a.fecha_emision).getTime() : 0;
+      const timeB = b.fecha_emision ? new Date(b.fecha_emision).getTime() : 0;
+      return timeB - timeA; // Más recientes primero
+    });
+  }, [filteredRecords]);
+
+  // 6. MOTOR JERÁRQUICO: Inyecta las hijas debajo de su padre usando los datos 100% REALES
   const hierarchicalRecords = useMemo(() => {
     const result: any[] = [];
+    const { recordsById, recordsByFolio } = lookupDicts;
 
-    filteredRecords.forEach((parent) => {
+    sortedFilteredRecords.forEach((parent) => {
       result.push(parent);
 
       const hasChildren =
         parent.cartas_porte_hijas && parent.cartas_porte_hijas.length > 0;
-
-      // Auto-expandir si el usuario busca algo, de lo contrario obedece al clic de la flecha
       const isExpanded =
         !!expandedParents[parent.id] ||
         (blinkQuery && blinkQuery.trim().length >= 3);
 
       if (hasChildren && isExpanded) {
         parent.cartas_porte_hijas.forEach((childRef: any) => {
-          // 🚀 AQUÍ OCURRE LA MAGIA: Obtenemos el registro real 100% completo (UUID, XML, Montos verdaderos)
+          // 🚀 AQUÍ OCURRE LA MAGIA: Obtenemos el registro real completo (UUID, XML, Montos verdaderos)
           const realChild =
             recordsById.get(childRef.id) ||
             recordsByFolio.get(childRef.folio) ||
             {};
 
           result.push({
-            ...childRef, // Info original de referencia
-            ...realChild, // 🚀 INFO REAL SOBREESCRIBE LA DE REFERENCIA (corrige montos en 0, UUID faltantes)
+            ...childRef,
+            ...realChild, // INFO REAL SOBREESCRIBE A LA REFERENCIA VACÍA
             id:
               realChild.id ||
               childRef.id ||
               `virtual-${childRef.folio || Math.random()}`,
             isVirtualChild: true,
             parentId: parent.id,
-            // Aseguramos de que estos campos vitales no se queden en blanco
+            // Aseguramos de que estos campos vitales se pinten
             folio: realChild.folio || childRef.folio || "S/F",
             monto_total:
               realChild.monto_total !== undefined
@@ -223,19 +231,17 @@ export default function CFDIVault() {
               parent.cliente_proveedor_nombre,
             viaje_id: realChild.viaje_id || parent.viaje_id,
             estatus: realChild.estatus || childRef.estatus || "TIMBRADA",
+            fecha_emision:
+              realChild.fecha_emision ||
+              childRef.fecha_emision ||
+              parent.fecha_emision,
           });
         });
       }
     });
 
     return result;
-  }, [
-    filteredRecords,
-    recordsById,
-    recordsByFolio,
-    expandedParents,
-    blinkQuery,
-  ]);
+  }, [sortedFilteredRecords, lookupDicts, expandedParents, blinkQuery]);
 
   // Helper de validación de parpadeo en tiempo real
   const checkShouldBlink = (row: any) => {
@@ -885,7 +891,7 @@ export default function CFDIVault() {
             isLoading={isLoading}
             searchPlaceholder="Buscar por uuid, folio..."
             exportFileName={excelExportName}
-            initialSort={{ key: "fecha_emision", direction: "desc" }}
+            // 🚀 ELIMINAMOS initialSort PARA QUE LA TABLA NO DESTRUYA EL ORDEN JERÁRQUICO AL CARGAR
             customFilters={customFiltersUI}
             onGlobalSearchChange={(value) => setBlinkQuery(value)}
           />
