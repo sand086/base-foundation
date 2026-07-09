@@ -1395,4 +1395,4 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
     db.commit()
     db.refresh(leg)
 
-    return lega
+    return leg
