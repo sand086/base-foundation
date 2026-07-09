@@ -227,13 +227,68 @@ class PaymentComplementService:
         user_id: int = 1,
     ):
         logger.info(
-            f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO (SERVICIO AISLADO) ---"
+            f"--- INICIANDO TIMBRADO DE COMPLEMENTO DE PAGO (SERVICIO BLINDADO) ---"
         )
         cliente = self.db.query(ClientModel).filter(ClientModel.id == client_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
+        # =========================================================================
+        #  CANDADO 1: BLOQUEO DE DOBLE CLIC 
+        # =========================================================================
+        for pago in pagos_data:
+            invoice_id = pago.get("invoice_id")
+            pago_pendiente = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(
+                    ReceivableInvoicePayment.invoice_id == invoice_id,
+                    ReceivableInvoicePayment.complemento_uuid == "PENDIENTE_SAT",
+                )
+                .first()
+            )
+            if pago_pendiente:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ya existe un proceso de pago en curso para la factura ID {invoice_id}. Por favor espere a que el SAT responda para evitar cobros dobles.",
+                )
+
+        # =========================================================================
+        #  CANDADO 2: RESOLVER CUENTA BANCARIA TEMPRANO (Fallback a Caja General)
+        # =========================================================================
+        bank_account_id = cuenta_deposito
+        if not bank_account_id:
+            caja_general = (
+                self.db.query(BankAccount)
+                .filter(
+                    BankAccount.alias == "Caja General Virtual",
+                    BankAccount.record_status != RecordStatus.ELIMINADO,
+                )
+                .first()
+            )
+            if not caja_general:
+                caja_general = BankAccount(
+                    banco="Efectivo / Virtual",
+                    numero_cuenta="0000000000",
+                    alias="Caja General Virtual",
+                    tipo_cuenta="virtual",
+                    saldo=0.0,
+                    created_by_id=user_id,
+                )
+                self.db.add(caja_general)
+                self.db.flush()
+            bank_account_id = caja_general.id
+
+        fecha_pago_clean = str(fecha_pago).replace("Z", "").split("T")[0]
+        try:
+            fecha_pago_date = datetime.strptime(fecha_pago_clean, "%Y-%m-%d").date()
+        except Exception:
+            fecha_pago_date = datetime.now().date()
+
+        # =========================================================================
+        #  PREPARACIÓN Y MATEMÁTICAS FISCALES
+        # =========================================================================
         facturas_afectadas = []
+        original_balances = {}  # Backup en memoria para rollback manual si falla negocio
         total_recibido = Decimal("0.0")
         total_retenciones_iva = Decimal("0.0")
         total_traslados_base_iva16 = Decimal("0.0")
@@ -244,7 +299,6 @@ class PaymentComplementService:
             invoice_id = pago.get("invoice_id")
             monto_abono = Decimal(str(pago.get("monto_pagado", 0)))
 
-            # FILTRO CRÍTICO: SOLO FACTURAS ACTIVAS Y NO NOMINALES
             factura = (
                 self.db.query(ReceivableInvoice)
                 .filter(
@@ -272,6 +326,9 @@ class PaymentComplementService:
                     status_code=400,
                     detail=f"Monto inválido o supera el saldo restante para la factura {factura.folio_interno}.",
                 )
+            
+            # Guardar backup de saldos
+            original_balances[factura.id] = (factura.saldo_pendiente, factura.estatus)
 
             moneda_str = "MXN"
             inv_subtotal = (
@@ -342,14 +399,10 @@ class PaymentComplementService:
             facturas_afectadas.append(factura)
             self.db.add(factura)
 
-        banco_info = None
-        if cuenta_deposito:
-            banco_info = (
-                self.db.query(BankAccount)
-                .filter(BankAccount.id == int(cuenta_deposito))
-                .first()
-            )
-
+        # Configurar datos del complemento
+        banco_info = (
+            self.db.query(BankAccount).filter(BankAccount.id == bank_account_id).first()
+        )
         cuenta_benef = banco_info.numero_cuenta if banco_info else ""
         banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
 
@@ -361,9 +414,7 @@ class PaymentComplementService:
             getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
             .upper()
             .replace(" S.A. DE C.V.", "")
-            .replace(
-                " SA DE CV", ""
-            )  # Opcional: También es buena idea agregar esta variante sin puntos
+            .replace(" SA DE CV", "")
             .strip()
         )
 
@@ -386,13 +437,41 @@ class PaymentComplementService:
             "total_retenciones_iva": f"{total_retenciones_iva.quantize(Decimal('0.00')):.2f}",
             "total_traslados_base_iva16": f"{total_traslados_base_iva16.quantize(Decimal('0.00')):.2f}",
             "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16.quantize(Decimal('0.00')):.2f}",
-            "cuenta_deposito": cuenta_deposito,
+            "cuenta_deposito": bank_account_id,
             "cuenta_beneficiario": cuenta_benef,
             "banco_beneficiario": banco_benef,
             "banco_ordenante": banco_ordenante,
             "cuenta_ordenante": cuenta_ordenante,
         }
 
+        # =========================================================================
+        #  CANDADO 3: CREAR PAGOS "PENDIENTES" EN BD (Evitar rollback destructivo)
+        # =========================================================================
+        pagos_pendientes = []
+        for factura in facturas_afectadas:
+            doc_rel = next((d for d in doctos_relacionados if d["uuid"] == factura.uuid), None)
+            if doc_rel:
+                nuevo_pago = ReceivableInvoicePayment(
+                    invoice_id=factura.id,
+                    bank_account_id=int(bank_account_id),
+                    fecha_pago=fecha_pago_date,
+                    monto=float(doc_rel["monto_pagado"]),
+                    metodo_pago=str(forma_pago),
+                    referencia=str(referencia) if referencia else "",
+                    cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
+                    complemento_uuid="PENDIENTE_SAT", # <- MARCADOR CLAVE
+                    parcialidad=int(doc_rel["parcialidad"]),
+                    saldo_anterior=float(doc_rel["saldo_anterior"]),
+                    saldo_insoluto=float(doc_rel["saldo_insoluto"]),
+                    comprobante_url="",
+                )
+                self.db.add(nuevo_pago)
+                pagos_pendientes.append(nuevo_pago)
+
+        self.db.flush()
+        self.db.commit() # Guardamos la transacción local temporalmente
+
+        # Sellado de XML
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data, default_backend())
@@ -407,6 +486,9 @@ class PaymentComplementService:
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
+        # =========================================================================
+        #  LLAMADA AL PAC AISLADA
+        # =========================================================================
         try:
             client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
             result = client_zeep.service.timbrar(
@@ -414,16 +496,12 @@ class PaymentComplementService:
             )
 
             if int(getattr(result, "status", 0)) != 200:
-                raise HTTPException(
-                    status_code=400, detail=f"Error PAC: {result.mensaje}"
-                )
+                raise ValueError(f"Error PAC: {result.mensaje}")
 
             res_sat = result.resultados[0]
 
             if int(getattr(res_sat, "status", 0)) != 200:
-                raise HTTPException(
-                    status_code=400, detail=f"Error SAT: {res_sat.mensaje}"
-                )
+                raise ValueError(f"Error SAT: {res_sat.mensaje}")
 
             complemento_uuid = res_sat.uuid
             raw_cfdi = res_sat.cfdiTimbrado
@@ -439,6 +517,7 @@ class PaymentComplementService:
 
             self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
 
+            # Matemáticas de Letras y QR
             root = etree.fromstring(cfdi_bytes)
             ns = {
                 "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -493,116 +572,79 @@ class PaymentComplementService:
             )
 
         except Exception as e:
-            self.db.rollback()
-            raise HTTPException(
-                status_code=500, detail=f"Error al timbrar el pago: {str(e)}"
-            )
-
-        # =========================================================================
-        #   FIX TESORERÍA BLINDADO: GUARDAR PAGOS Y MOVIMIENTO BANCARIO (1 a 1)
-        # =========================================================================
-        try:
-            # 1. GARANTIZAMOS QUE SIEMPRE HAYA UNA CUENTA BANCARIA (Fallback a Caja General)
-            bank_account_id = cuenta_deposito
-            if not bank_account_id:
-                caja_general = (
-                    self.db.query(BankAccount)
-                    .filter(
-                        BankAccount.alias == "Caja General Virtual",
-                        BankAccount.record_status != RecordStatus.ELIMINADO,
-                    )
-                    .first()
+            error_msg = str(e).lower()
+            # =========================================================================
+            #  MANEJO INTELIGENTE DE TIMEOUTS Y 500s
+            # =========================================================================
+            if any(term in error_msg for term in ["timeout", "time out", "500", "502", "503", "504", "readtimeout"]):
+                logger.warning(f"Intermitencia SAT detectada. Pagos PENDIENTES se envían a cola de reintentos.")
+                try:
+                    from app.integrations.sat.retry_queue import add_to_retry_queue
+                    for pp in pagos_pendientes:
+                        add_to_retry_queue(self.db, entity_type="payment", entity_id=pp.id, xml_data=xml_sellado)
+                except ImportError:
+                    logger.error("Módulo retry_queue no encontrado o import fallido.")
+                
+                # Dejamos la base de datos intacta (Pagos en PENDIENTE_SAT)
+                raise HTTPException(
+                    status_code=202,
+                    detail="El SAT está tardando en responder. El pago se guardó de forma segura y se timbrará en automático. Por favor NO lo intente de nuevo."
                 )
-                if not caja_general:
-                    caja_general = BankAccount(
-                        banco="Efectivo / Virtual",
-                        numero_cuenta="0000000000",
-                        alias="Caja General Virtual",
-                        tipo_cuenta="virtual",
-                        saldo=0.0,
-                        created_by_id=user_id,
-                    )
-                    self.db.add(caja_general)
-                    self.db.flush()
-                bank_account_id = caja_general.id
+            else:
+                # Error de Negocio (ej. RFC inválido): ROLLBACK MANUAL DE SALDOS
+                logger.error(f"Error de negocio PAC/SAT: {e}")
+                for f in facturas_afectadas:
+                    f.saldo_pendiente = original_balances[f.id][0]
+                    f.estatus = original_balances[f.id][1]
+                    self.db.add(f)
 
-            # Parseo súper seguro para que no truene si la fecha viene mal
-            fecha_pago_clean = str(fecha_pago).replace("Z", "").split("T")[0]
+                for pp in pagos_pendientes:
+                    self.db.delete(pp)
+
+                self.db.commit()
+                raise HTTPException(
+                    status_code=400, detail=f"Error al timbrar el pago ante el SAT: {str(e)}"
+                )
+
+        # =========================================================================
+        #  ÉXITO: CONFIRMAR PAGOS Y CREAR MOVIMIENTOS EN BODEGA BANCARIA
+        # =========================================================================
+        from app.models.models import ReceivablePaymentDocumentHistory
+
+        for pp in pagos_pendientes:
+            pp.complemento_uuid = complemento_uuid
+            pp.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+            self.db.add(pp)
+
+            hist_xml = ReceivablePaymentDocumentHistory(
+                payment_id=pp.id,
+                document_type="xml",
+                filename=f"{complemento_uuid}.xml",
+                file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
+                is_active=True,
+            )
+            hist_pdf = ReceivablePaymentDocumentHistory(
+                payment_id=pp.id,
+                document_type="pdf",
+                filename=f"{complemento_uuid}.pdf",
+                file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
+                is_active=True,
+            )
+            self.db.add_all([hist_xml, hist_pdf])
+
             try:
-                fecha_pago_date = datetime.strptime(fecha_pago_clean, "%Y-%m-%d").date()
-            except Exception:
-                fecha_pago_date = datetime.now().date()
-
-            # 2. GUARDAMOS EL HISTORIAL DE PAGOS Y CREAMOS EL MOVIMIENTO BANCARIO POR CADA FACTURA
-            for factura in facturas_afectadas:
-
-                # Buscamos en los doctos_relacionados la info que mandamos al SAT
-                doc_rel = next(
-                    (d for d in doctos_relacionados if d["uuid"] == factura.uuid), None
+                mov_schema = finance_schemas.BankMovementCreate(
+                    bank_account_id=int(bank_account_id),
+                    tipo="ingreso",
+                    monto=pp.monto,
+                    concepto=f"Cobro Fra. (REP)",
+                    referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
+                    origen_modulo="CxC",
                 )
+                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+            except Exception as bank_e:
+                logger.error(f"Movimiento bancario fallido para pago {pp.id}: {bank_e}")
 
-                if doc_rel:
-                    # A) Registro en CxC (INYECCIÓN DE CAMPOS FALTANTES )
-                    nuevo_pago = ReceivableInvoicePayment(
-                        invoice_id=factura.id,
-                        bank_account_id=int(bank_account_id),
-                        fecha_pago=fecha_pago_date,
-                        monto=float(doc_rel["monto_pagado"]),
-                        metodo_pago=str(forma_pago),
-                        referencia=str(referencia) if referencia else "",
-                        cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
-                        complemento_uuid=str(complemento_uuid),
-                        #  INYECCIÓN DE LOS DATOS CRÍTICOS AL MODELO
-                        parcialidad=int(doc_rel["parcialidad"]),
-                        saldo_anterior=float(doc_rel["saldo_anterior"]),
-                        saldo_insoluto=float(doc_rel["saldo_insoluto"]),
-                        comprobante_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
-                    )
-                    self.db.add(nuevo_pago)
-
-                    self.db.flush()  # <- Necesitamos el flush para obtener el ID de nuevo_pago
-
-                    # ==========================================================
-                    # NUEVO: GUARDAR XML Y PDF EN EL HISTORIAL DOCUMENTAL
-                    # ==========================================================
-                    from app.models.models import ReceivablePaymentDocumentHistory
-
-                    hist_xml = ReceivablePaymentDocumentHistory(
-                        payment_id=nuevo_pago.id,
-                        document_type="xml",
-                        filename=f"{complemento_uuid}.xml",
-                        file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
-                        is_active=True,
-                    )
-                    hist_pdf = ReceivablePaymentDocumentHistory(
-                        payment_id=nuevo_pago.id,
-                        document_type="pdf",
-                        filename=f"{complemento_uuid}.pdf",
-                        file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
-                        is_active=True,
-                    )
-                    self.db.add_all([hist_xml, hist_pdf])
-                    # ==========================================================
-
-                    # B) Registro individual en Bancos (Tesorería 1 a 1)
-                    mov_schema = finance_schemas.BankMovementCreate(
-                        bank_account_id=int(bank_account_id),
-                        tipo="ingreso",
-                        monto=float(doc_rel["monto_pagado"]),
-                        concepto=f"Cobro Fra. {factura.folio_interno or factura.id} (REP)",
-                        referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
-                        origen_modulo="CxC",  #  FIX CRÍTICO: ORIGEN MODULO AÑADIDO
-                    )
-                    create_bank_movement(self.db, mov_schema, current_user_id=user_id)
-
-        except Exception as e:
-            # Si el banco truena, NO hacemos rollback porque el SAT ya hizo el timbre.
-            # Solo avisamos a consola, pero aseguramos que las facturas queden pagadas.
-            logger.error(
-                f"Error crítico al guardar movimientos bancarios del REP {complemento_uuid}: {str(e)}"
-            )
-
-        # Aplicamos todos los cambios finales a las facturas y al banco
         self.db.commit()
 
         return {
@@ -647,8 +689,6 @@ class PaymentComplementService:
         if retenciones_p_xml or traslados_p_xml:
             impuestos_p_xml = f"<pago20:ImpuestosP>{retenciones_p_xml}{traslados_p_xml}</pago20:ImpuestosP>"
 
-        # pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
-        # pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}"'
         pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
 
         if d.get("banco_ordenante"):
@@ -865,7 +905,7 @@ class PaymentComplementService:
         )
         if not pago:
             raise ValueError("Pago no encontrado.")
-        if pago.complemento_uuid:
+        if pago.complemento_uuid and pago.complemento_uuid != "PENDIENTE_SAT":
             raise ValueError(
                 "Operación rechazada: Este pago ya cuenta con un UUID timbrado."
             )
@@ -996,112 +1036,138 @@ class PaymentComplementService:
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
-        client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
-        result = client_zeep.service.timbrar(
-            self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
-        )
-
-        if int(getattr(result, "status", 0)) != 200:
-            raise ValueError(f"Error PAC: {result.mensaje}")
-
-        res_sat = result.resultados[0]
-        if int(getattr(res_sat, "status", 0)) != 200:
-            raise ValueError(f"Error SAT: {res_sat.mensaje}")
-
-        complemento_uuid = res_sat.uuid
-        raw_cfdi = res_sat.cfdiTimbrado
-        cfdi_bytes = (
-            (
-                raw_cfdi.encode("utf-8")
-                if "<cfdi:Comprobante" in raw_cfdi
-                else base64.b64decode(raw_cfdi)
+        # =========================================================================
+        #  LLAMADA AL PAC AISLADA TAMBIÉN EN EL DIFERIDO
+        # =========================================================================
+        try:
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
+            result = client_zeep.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
-            if isinstance(raw_cfdi, str)
-            else raw_cfdi
-        )
 
-        # 5. Guardar Archivos
-        self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
+            if int(getattr(result, "status", 0)) != 200:
+                raise ValueError(f"Error PAC: {result.mensaje}")
 
-        # 6. Generar el PDF y QRs (reutilizamos tu lógica exacta)
-        root = etree.fromstring(cfdi_bytes)
-        ns = {
-            "cfdi": "http://www.sat.gob.mx/cfd/4",
-            "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
-        }
-        tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
-        s_sat = tfd_node.get("SelloSAT", "0000")
-        c_sat = tfd_node.get("NoCertificadoSAT", "0000")
-        s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-        fecha_certificacion = tfd_node.get("FechaTimbrado", "")
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) != 200:
+                raise ValueError(f"Error SAT: {res_sat.mensaje}")
 
-        cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+            complemento_uuid = res_sat.uuid
+            raw_cfdi = res_sat.cfdiTimbrado
+            cfdi_bytes = (
+                (
+                    raw_cfdi.encode("utf-8")
+                    if "<cfdi:Comprobante" in raw_cfdi
+                    else base64.b64decode(raw_cfdi)
+                )
+                if isinstance(raw_cfdi, str)
+                else raw_cfdi
+            )
 
-        total_float = float(monto_abono)
-        if HAS_NUM2WORDS:
-            entero = int(total_float)
-            decimales = int(round((total_float - entero) * 100))
-            texto = num2words(entero, lang="es").upper().replace("UNO", "UN")
-            importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
-        else:
-            importe_letra = f"(*** {total_float:,.2f} MXN ***)"
+            # 5. Guardar Archivos
+            self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
 
-        qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={complemento_uuid}&re={self.emisor_rfc}&rr={datos_pago['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
-        qr = qrcode.QRCode(version=1, box_size=10, border=2)
-        qr.add_data(qr_string)
-        qr.make(fit=True)
-        buffer = BytesIO()
-        qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
-
-        datos_pago.update(
-            {
-                "subtotal": "0.00",
-                "iva": "0.00",
-                "retenciones": "0.00",
-                "total": datos_pago["monto_total"],
-                "descripcion_concepto": "COMPLEMENTO DE RECEPCIÓN DE PAGOS",
+            # 6. Generar el PDF y QRs (reutilizamos tu lógica exacta)
+            root = etree.fromstring(cfdi_bytes)
+            ns = {
+                "cfdi": "http://www.sat.gob.mx/cfd/4",
+                "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
             }
-        )
+            tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+            s_sat = tfd_node.get("SelloSAT", "0000")
+            c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+            s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+            fecha_certificacion = tfd_node.get("FechaTimbrado", "")
 
-        self._generar_pdf_pago(
-            datos_pago,
-            complemento_uuid,
-            buffer.getvalue(),
-            s_sat,
-            s_emi,
-            c_sat,
-            cadena_original_tfd,
-            importe_letra,
-            fecha_certificacion,
-        )
+            cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
-        # 7. Actualizar el pago en la BD con su nuevo UUID y guardar en historial documental
-        pago.complemento_uuid = str(complemento_uuid)
-        pago.folio_complemento = f"COM-{folio_corto}"
-        pago.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+            total_float = float(monto_abono)
+            if HAS_NUM2WORDS:
+                entero = int(total_float)
+                decimales = int(round((total_float - entero) * 100))
+                texto = num2words(entero, lang="es").upper().replace("UNO", "UN")
+                importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
+            else:
+                importe_letra = f"(*** {total_float:,.2f} MXN ***)"
 
-        from app.models.models import ReceivablePaymentDocumentHistory
+            qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={complemento_uuid}&re={self.emisor_rfc}&rr={datos_pago['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+            qr = qrcode.QRCode(version=1, box_size=10, border=2)
+            qr.add_data(qr_string)
+            qr.make(fit=True)
+            buffer = BytesIO()
+            qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
 
-        hist_xml = ReceivablePaymentDocumentHistory(
-            payment_id=pago.id,
-            document_type="xml",
-            filename=f"{complemento_uuid}.xml",
-            file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
-            is_active=True,
-        )
-        hist_pdf = ReceivablePaymentDocumentHistory(
-            payment_id=pago.id,
-            document_type="pdf",
-            filename=f"{complemento_uuid}.pdf",
-            file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
-            is_active=True,
-        )
-        self.db.add_all([hist_xml, hist_pdf])
+            datos_pago.update(
+                {
+                    "subtotal": "0.00",
+                    "iva": "0.00",
+                    "retenciones": "0.00",
+                    "total": datos_pago["monto_total"],
+                    "descripcion_concepto": "COMPLEMENTO DE RECEPCIÓN DE PAGOS",
+                }
+            )
 
-        self.db.commit()
+            self._generar_pdf_pago(
+                datos_pago,
+                complemento_uuid,
+                buffer.getvalue(),
+                s_sat,
+                s_emi,
+                c_sat,
+                cadena_original_tfd,
+                importe_letra,
+                fecha_certificacion,
+            )
 
-        return {
-            "status": "success",
-            "message": "Complemento de pago generado exitosamente.",
-            "uuid": complemento_uuid,
-        }
+            # 7. Actualizar el pago en la BD con su nuevo UUID y guardar en historial documental
+            pago.complemento_uuid = str(complemento_uuid)
+            pago.folio_complemento = f"COM-{folio_corto}"
+            pago.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+
+            from app.models.models import ReceivablePaymentDocumentHistory
+
+            hist_xml = ReceivablePaymentDocumentHistory(
+                payment_id=pago.id,
+                document_type="xml",
+                filename=f"{complemento_uuid}.xml",
+                file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
+                is_active=True,
+            )
+            hist_pdf = ReceivablePaymentDocumentHistory(
+                payment_id=pago.id,
+                document_type="pdf",
+                filename=f"{complemento_uuid}.pdf",
+                file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
+                is_active=True,
+            )
+            self.db.add_all([hist_xml, hist_pdf])
+
+            self.db.commit()
+
+            return {
+                "status": "success",
+                "message": "Complemento de pago generado exitosamente.",
+                "uuid": complemento_uuid,
+            }
+
+        except Exception as e:
+            error_msg = str(e).lower()
+            if any(term in error_msg for term in ["timeout", "time out", "500", "502", "503", "504", "readtimeout"]):
+                logger.warning(f"Intermitencia SAT al timbrar diferido. Enviando a cola.")
+                try:
+                    from app.integrations.sat.retry_queue import add_to_retry_queue
+                    add_to_retry_queue(self.db, entity_type="payment", entity_id=pago.id, xml_data=xml_sellado)
+                except ImportError:
+                    pass
+                
+                pago.complemento_uuid = "PENDIENTE_SAT"
+                self.db.commit()
+                
+                # Lanzamos una 202 para que el Front-end sepa que no falló, sino que está encolado.
+                raise HTTPException(
+                    status_code=202,
+                    detail="El SAT está intermitente. El proceso continuará automáticamente en segundo plano. NO presione generar nuevamente."
+                )
+            else:
+                # Error real de negocio
+                raise ValueError(f"Fallo de negocio o validación SAT: {e}")

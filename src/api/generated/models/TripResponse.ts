@@ -41,21 +41,9 @@ export type TripResponse = {
     embalaje?: (string | null);
     clase_imo?: (string | null);
     mercancia_clave_stcc?: (string | null);
-    /**
-     * ¿Remolque 1 es refrigerado?
-     */
     is_refrigerated_1?: (boolean | null);
-    /**
-     * ID del motogenerador 1
-     */
     motogenerator_1_id?: (number | null);
-    /**
-     * ¿Remolque 2 es refrigerado?
-     */
     is_refrigerated_2?: (boolean | null);
-    /**
-     * ID del motogenerador 2
-     */
     motogenerator_2_id?: (number | null);
     status?: TripStatus;
     tarifa_base: number;

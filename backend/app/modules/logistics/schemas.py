@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional, TYPE_CHECKING, Any
 
 from pydantic import (
@@ -8,7 +8,6 @@ from pydantic import (
     Field,
     field_validator,
     validator,
-    field_validator,
     ValidationInfo,
     model_validator,
 )
@@ -53,7 +52,6 @@ class FuelLogLite(ORMBase):
 
 # =========================================================
 # CASETAS (toll_booths)
-# Model: TollBooth(AuditMixin, Base)
 # =========================================================
 
 
@@ -69,21 +67,16 @@ class TollBoothBase(ORMBase):
     costo_9_ejes_sencillo: float = 0.0
     costo_9_ejes_full: float = 0.0
 
-    # Model: forma_pago = Column(String(20), default="ambos")
     forma_pago: PaymentMethod = Field(default=PaymentMethod.AMBOS)
 
     @field_validator("forma_pago", mode="before")
     @classmethod
     def validate_forma_pago(cls, v):
-        # 1. Si viene vacío, por defecto es AMBOS
         if not v:
             return PaymentMethod.AMBOS
 
-        # 2. Convertimos lo que sea (texto o el objeto Enum) a string mayúsculas.
-        # Si es Enum, vv será "PAYMENTMETHOD.AMBOS". Si es Frontend, será "AMBOS".
         vv = str(v).upper()
 
-        # 3. Usamos 'in' en lugar de '==' para atrapar la coincidencia dentro del texto
         if "AMBOS" in vv:
             return PaymentMethod.AMBOS
         elif "TAG" in vv:
@@ -117,8 +110,6 @@ class TollBoothUpdate(ORMBase):
 
 class TollBoothResponse(TollBoothBase):
     id: int
-
-    # AuditMixin (según tu modelo)
     record_status: RecordStatus
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -128,12 +119,11 @@ class TollBoothResponse(TollBoothBase):
 
 # =========================================================
 # SEGMENTOS DE RUTA (rate_template_segments)
-# Model: RateSegment(Base)  <-- NO AuditMixin
 # =========================================================
 
 
 class RateSegmentBase(ORMBase):
-    rate_template_id: Optional[int] = None  # útil en create/update si lo manejas así
+    rate_template_id: Optional[int] = None
 
     nombre_segmento: str = Field(..., max_length=255)
     estado: Optional[str] = Field(default=None, max_length=50)
@@ -172,14 +162,11 @@ class RateSegmentUpdate(ORMBase):
 
 class RateSegmentResponse(RateSegmentBase):
     id: int
-
-    # Helpers UI (NO existen como columnas, se llenan en tu service si quieres)
     toll_nombre: Optional[str] = None
 
 
 # =========================================================
 # PLANTILLAS DE RUTA (rate_templates)
-# Model: RateTemplate(AuditMixin, Base)
 # =========================================================
 
 
@@ -188,12 +175,6 @@ class RateTemplateBase(ORMBase):
 
     origen: str | None = Field(default=None, max_length=150)
     destino: str | None = Field(default=None, max_length=150)
-    # IMPORTANTÍSIMO:
-    # En tu MODELO actual RateTemplate.tipo_unidad es Column(String(20), nullable=False)
-    # (en algún punto lo cambiaste a TollUnitType, pero en el models pegado aquí es string).
-    #
-    # Para que NO truene aunque aún sea string en BD, lo dejamos como TollUnitType PERO
-    # aceptamos string y lo normalizamos a TollUnitType.
 
     tipo_unidad: TollUnitType
 
@@ -205,11 +186,6 @@ class RateTemplateBase(ORMBase):
     @field_validator("tipo_unidad", mode="before")
     @classmethod
     def normalize_tipo_unidad(cls, v):
-        """
-        Permite recibir:
-        - '5ejes' / '9ejes' (string)
-        - TollUnitType.EJES_5 / EJES_9
-        """
         if isinstance(v, TollUnitType):
             return v
         if v is None:
@@ -226,7 +202,6 @@ class RateTemplateBase(ORMBase):
 
 class RateTemplateCreate(RateTemplateBase):
     segments: List[RateSegmentCreate] = Field(default_factory=list)
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -240,9 +215,7 @@ class RateTemplateUpdate(ORMBase):
     distancia_total_km: Optional[float] = None
     tiempo_total_minutos: Optional[int] = None
 
-    # si quieres permitir update nested:
     segments: Optional[List[RateSegmentUpdate]] = None
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -251,27 +224,11 @@ class RateTemplateResponse(RateTemplateBase):
     segments: List[RateSegmentResponse] = Field(default_factory=list)
     client: Optional[ClientLite] = None
 
-    # AuditMixin
     record_status: RecordStatus
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-    model_config = ConfigDict(from_attributes=True)
-
-
-# --- Fuente: schemas_trips.py ---
-
-from datetime import datetime, date
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field, computed_field, validator
-
-from app.models.models import RecordStatus, TripStatus, TripLegType
-from app.modules.clients.schemas import ClientResponse
-from app.modules.fleet.schemas import UnitResponse, OperatorResponse
-
-
-class ORMBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -325,6 +282,8 @@ class TripTimelineEventResponse(TripTimelineEventBase):
 # TRIP LEGS (Tramos)
 # =========================================================
 
+from app.models.models import TripStatus, TripLegType
+from app.modules.fleet.schemas import UnitResponse, OperatorResponse
 
 class TripLegBase(ORMBase):
     leg_type: TripLegType
@@ -351,8 +310,6 @@ class TripLegBase(ORMBase):
 
 
 class TripLegCreate(TripLegBase):
-    """Schema para crear un tramo, generalmente desde la creación del Viaje o después."""
-
     pass
 
 
@@ -371,7 +328,6 @@ class TripLegResponse(TripLegBase):
     updated_at: Optional[datetime] = None
     fuel_logs: List[FuelLogLite] = Field(default_factory=list)
 
-    @computed_field
     @property
     def total_anticipos(self) -> float:
         return (
@@ -407,7 +363,6 @@ class TripBase(ORMBase):
     )
     peso_toneladas: Optional[float] = Field(default=0.0, ge=0.0)
 
-    # --- INICIO NUEVOS CAMPOS MATERIAL PELIGROSO Y CFDI ---
     sat_clave_servicio: Optional[str] = Field(
         default="78101802", max_length=20, description="Clave SAT Servicio de Flete"
     )
@@ -425,19 +380,11 @@ class TripBase(ORMBase):
     clase_imo: Optional[str] = Field(default=None, max_length=50)
     mercancia_clave_stcc: Optional[str] = Field(default=None, max_length=20)
 
-    is_refrigerated_1: Optional[bool] = Field(
-        default=False, description="¿Remolque 1 es refrigerado?"
-    )
-    motogenerator_1_id: Optional[int] = Field(
-        default=None, description="ID del motogenerador 1"
-    )
+    is_refrigerated_1: Optional[bool] = Field(default=False)
+    motogenerator_1_id: Optional[int] = Field(default=None)
 
-    is_refrigerated_2: Optional[bool] = Field(
-        default=False, description="¿Remolque 2 es refrigerado?"
-    )
-    motogenerator_2_id: Optional[int] = Field(
-        default=None, description="ID del motogenerador 2"
-    )
+    is_refrigerated_2: Optional[bool] = Field(default=False)
+    motogenerator_2_id: Optional[int] = Field(default=None)
 
     status: TripStatus = TripStatus.CREADO
 
@@ -450,19 +397,11 @@ class TripBase(ORMBase):
 
 
 class TripCreate(TripBase):
-    """
-    Cuando se crea un viaje, obligatoriamente se debe crear su primer tramo (Fase 1).
-    El Frontend enviará 'initial_leg' con el camión y chofer asignados.
-    """
-
     initial_leg: Optional[TripLegCreate] = None
-
-    #   NUEVOS CAMPOS DEL MOTOR DUAL
     final_leg: Optional[TripLegCreate] = None
     conoce_ruta_completa: Optional[bool] = False
     ocultar_montos_pdf: Optional[bool] = False
     is_dummy_stamping: Optional[bool] = False
-
     model_config = ConfigDict(extra="ignore")
 
 
@@ -472,7 +411,7 @@ class TariffBasicInfo(ORMBase):
 
 
 # ==========================================
-# DOCUMENT HISTORY SCHEMAS (NUEVO)
+# DOCUMENT HISTORY & INVOICE LITE
 # ==========================================
 class DocumentHistoryResponse(BaseModel):
     id: int
@@ -486,6 +425,17 @@ class DocumentHistoryResponse(BaseModel):
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+# 🚀 NUEVO: MODELO REFERENCIAL LIGERO PARA ROMPER LA RECURSIÓN 500 ERROR 🚀
+class ReceivableInvoiceRef(ORMBase):
+    id: int
+    folio_interno: Optional[str] = None
+    uuid: Optional[str] = None
+    monto_total: float = 0.0
+    status_sat: Optional[str] = None
+    estatus: Optional[str] = None
+    motivo_cancelacion: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
 
 
 class ReceivableInvoiceLite(ORMBase):
@@ -507,24 +457,26 @@ class ReceivableInvoiceLite(ORMBase):
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
 
-    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
     factura_padre_id: Optional[int] = None
-    factura_padre: Optional[Any] = None
-    cartas_porte_hijas: Optional[List[Any]] = Field(default_factory=list)
+    
+    # 🚀 FIX APLICADO: Utilizar la referencia ligera en lugar de "Any"
+    factura_padre: Optional[ReceivableInvoiceRef] = None
+    cartas_porte_hijas: List[ReceivableInvoiceRef] = Field(default_factory=list)
 
-    # NUEVO: HISTORIAL DE DOCUMENTOS ANIDADO
     document_history: List[DocumentHistoryResponse] = Field(default_factory=list)
 
+
+from app.modules.clients.schemas import ClientResponse
 
 class TripResponse(TripBase):
     id: int
     public_id: Optional[str] = None
     uuid_fiscal: Optional[str] = None
 
-    client: Optional["ClientResponse"] = None
-    tariff: Optional["TariffBasicInfo"] = None
+    client: Optional[ClientResponse] = None
+    tariff: Optional[TariffBasicInfo] = None
     remolque_1: Optional[UnitResponse] = None
     dolly: Optional[UnitResponse] = None
     remolque_2: Optional[UnitResponse] = None
@@ -565,7 +517,6 @@ class TripUpdate(ORMBase):
     terminal_entrega_vacio: Optional[str] = None
     peso_toneladas: Optional[float] = None
 
-    # --- INICIO NUEVOS CAMPOS MATERIAL PELIGROSO Y CFDI ---
     sat_clave_servicio: Optional[str] = Field(default=None, max_length=20)
     sat_clave_producto: Optional[str] = Field(default=None, max_length=20)
     sat_clave_unidad: Optional[str] = Field(default=None, max_length=10)
@@ -583,14 +534,10 @@ class TripUpdate(ORMBase):
     start_date: Optional[datetime] = None
     closed_at: Optional[datetime] = None
     is_refrigerated_1: Optional[bool] = None
-    motogenerator_1_id: Optional[int] = Field(
-        default=None, description="ID del motogenerador 1"
-    )
+    motogenerator_1_id: Optional[int] = Field(default=None)
 
     is_refrigerated_2: Optional[bool] = None
-    motogenerator_2: Optional[int] = Field(
-        default=None, description="ID del motogenerador 2"
-    )
+    motogenerator_2: Optional[int] = Field(default=None)
 
     unit_id: Optional[int] = None
     operator_id: Optional[int] = None
@@ -606,14 +553,14 @@ class TripUpdate(ORMBase):
 
 
 # =========================================================
-# LIQUIDACIONES (Settlement)
+# LIQUIDACIONES Y PRE-LIQUIDACIÓN
 # =========================================================
 
 
 class ConceptoPago(BaseModel):
     id: str
-    tipo: str  # "ingreso" o "deduccion"
-    categoria: str  # "tarifa", "bono", "anticipo", "combustible"
+    tipo: str  
+    categoria: str 
     descripcion: str
     monto: float
     referencia: Optional[str] = None
@@ -650,9 +597,6 @@ class CloseSettlementPayload(BaseModel):
     odometro_final: Optional[int] = None
 
 
-# ==========================================
-# SCHEMAS PARA PRE-LIQUIDACIÓN POR LOTE
-# ==========================================
 class BatchSettlementPreviewRequest(BaseModel):
     leg_ids: List[int]
 
@@ -668,7 +612,6 @@ class BatchSettlementPreviewResponse(BaseModel):
     legs_sin_ticket: List[int] = []
 
 
-#  NUEVO: EL PAYLOAD ROBUSTO PARA GUARDAR EL DESGLOSE DE NÓMINA EN LOTE
 class BatchSettlementPayload(BaseModel):
     leg_ids: List[int]
     monto_sueldo: float = 0.0
@@ -683,27 +626,16 @@ class BatchSettlementPayload(BaseModel):
 # FACTURACIÓN Y RELACIONES SAT
 # =========================================================
 
-
 class ReceivableInvoiceCreate(BaseModel):
-    """Schema para solicitar la creación de una Factura / Carta Porte"""
-
     viaje_id: int
-    is_nominal: bool = Field(
-        default=False,
-        description="Si es True, genera factura por $1 Peso para Bypass Aduanal",
-    )
+    is_nominal: bool = Field(default=False)
     folio_forzado: Optional[int] = None
 
-    #   NUEVOS CAMPOS DEL MOTOR DUAL
     use_dummy: Optional[bool] = False
     ocultar_montos: Optional[bool] = False
 
-    tipo_relacion: Optional[str] = Field(
-        default=None, description="Ej: 04 - Sustitución de CFDI previos"
-    )
-    uuid_relacionado: Optional[str] = Field(
-        default=None, description="UUID de la factura nominal a cancelar"
-    )
+    tipo_relacion: Optional[str] = Field(default=None)
+    uuid_relacionado: Optional[str] = Field(default=None)
 
     metodo_pago: str = Field(default="PUE", pattern="^(PUE|PPD)$")
     forma_pago: str = Field(default="03")
@@ -723,11 +655,6 @@ class ReceivableInvoiceCreate(BaseModel):
 
 
 class SatCfdiPayload(BaseModel):
-    """
-    Esquema estricto para validar los datos antes de armar el XML del SAT (CFDI 4.0 + Carta Porte 3.1).
-    Aplica reglas de negocio y valores por defecto tolerantes según configuración.
-    """
-
     fecha: str = Field(default="")
     serie: Optional[str] = None
     folio: Optional[str] = None
@@ -737,19 +664,17 @@ class SatCfdiPayload(BaseModel):
     retenciones: str = Field(default="0.00")
     total: str = Field(default="0.00")
     id_ccp: Optional[str] = None
-    # 1. Datos del CFDI (Factura)
+    
     forma_pago: str = Field(default="99")
     metodo_pago: str = Field(default="PPD")
     uso_cfdi: str = Field(default="G03")
     moneda: str = Field(default="MXN")
 
-    # 2. Entidades
     rfc_cliente: str = Field(default="XAXX010101000")
     rfc_operador: str = Field(default="XAXX010101000")
     cp_cliente: str
     cp_destino: str
 
-    # 3. Operación y Carta Porte
     peso_bruto: float
     distancia_total: int
 
@@ -761,7 +686,6 @@ class SatCfdiPayload(BaseModel):
     aseguradora: str = Field(default="POR DEFINIR")
     poliza: str = Field(default="00000000")
 
-    # 4. MATERIALES PELIGROSOS
     sat_clave_producto: str = Field(default="01010101")
     es_material_peligroso: bool = Field(default=False)
     flag_peligroso_catalogo: Optional[str] = "0,1"
@@ -782,8 +706,6 @@ class SatCfdiPayload(BaseModel):
     info_material_peligroso: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
-
-    # --- VALIDADORES INDIVIDUALES ---
 
     @field_validator("rfc_cliente", "rfc_operador", mode="before")
     @classmethod
@@ -863,20 +785,8 @@ class SatCfdiPayload(BaseModel):
             return True
         return False
 
-    # --- VALIDADOR CRUZADO (MATERIAL PELIGROSO) ---
-
     @model_validator(mode="after")
     def validate_material_peligroso(self) -> "SatCfdiPayload":
-        # 1. Imprimir lo que estamos mandando antes de la validación para verlo en consola
-        print("=" * 50)
-        print("DEBUG - Validando Material Peligroso en SatCfdiPayload")
-        print(f"es_material_peligroso: {self.es_material_peligroso}")
-        print(f"cve_material_peligroso: '{self.cve_material_peligroso}'")
-        print(f"embalaje: '{self.embalaje}'")
-        print(f"aseguradora_med_ambiente: '{self.aseguradora_med_ambiente}'")
-        print(f"poliza_med_ambiente: '{self.poliza_med_ambiente}'")
-        print("=" * 50)
-
         if self.es_material_peligroso:
             if not self.cve_material_peligroso or str(
                 self.cve_material_peligroso
@@ -901,9 +811,5 @@ class SatCfdiPayload(BaseModel):
                     f"Material peligroso: El camión DEBE tener registrada una Póliza de Medio Ambiente. Valor recibido: '{self.poliza_med_ambiente}'"
                 )
         return self
-
-
-from app.modules.clients.schemas import ClientResponse
-from app.modules.fleet.schemas import UnitResponse
 
 TripResponse.model_rebuild()

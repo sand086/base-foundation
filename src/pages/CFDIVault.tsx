@@ -11,19 +11,17 @@ import {
   RefreshCw,
   Eye,
   MoreHorizontal,
-  FileSignature,
   AlertTriangle,
-  Clock,
   Network,
   Search,
+  ChevronRight,
+  Trash2, // AÑADIDO
+  Loader2, // AÑADIDO
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
 
-import {
-  useCfdiVault,
-  CFDIHistoryRecord,
-} from "@/features/finance/hooks/useCfdiVault";
+import { useCfdiVault } from "@/features/finance/hooks/useCfdiVault";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -68,7 +66,6 @@ import { cn } from "@/lib/utils";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
-import { CFDITimelineDrawer } from "@/features/finance/components/CFDITimelineDrawer";
 
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
@@ -85,25 +82,54 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // Estado de control para abrir la línea de tiempo SOAP del SAT
-  const [timelineOpen, setTimelineOpen] = useState(false);
-  const [selectedTimelineRecord, setSelectedTimelineRecord] =
-    useState<any>(null);
-
-  // 🚀 NUEVOS ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
+  // ESTADOS INTELIGENTES DE CONTROL: Jerarquía, Localizador por Parpadeo y Selección Masiva
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
   >({});
   const [blinkQuery, setBlinkQuery] = useState<string>("");
 
+  // 🚀 NUEVOS ESTADOS PARA CANCELACIÓN MASIVA
+  const [selectedInvoices, setSelectedInvoices] = useState<any[]>([]);
+  const [isMassCanceling, setIsMassCanceling] = useState(false);
+
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
+  // 1. Limpiamos los registros de errores
   const cleanRecords = useMemo(() => {
     return records.filter((r) => {
       const statusStr = r.estatus?.toLowerCase() || "";
       return statusStr !== "error_sat" && statusStr !== "error";
     });
   }, [records]);
+
+  // 2. Diccionarios de acceso rápido a la data REAL (para recuperar montos, UUID, y archivos de las hijas)
+  const lookupDicts = useMemo(() => {
+    const byId = new Map();
+    const byFolio = new Map();
+    cleanRecords.forEach((r) => {
+      if (r.id) byId.set(r.id, r);
+      if (r.folio) byFolio.set(r.folio, r);
+    });
+    return { recordsById: byId, recordsByFolio: byFolio };
+  }, [cleanRecords]);
+
+  // 3. Identificamos qué registros son "Hijas" para NO mostrarlos duplicados en el listado raíz
+  const { childIds, childFolios } = useMemo(() => {
+    const ids = new Set<number>();
+    const folios = new Set<string>();
+    cleanRecords.forEach((parent) => {
+      if (
+        parent.cartas_porte_hijas &&
+        Array.isArray(parent.cartas_porte_hijas)
+      ) {
+        parent.cartas_porte_hijas.forEach((child: any) => {
+          if (child.id) ids.add(child.id);
+          if (child.folio) folios.add(child.folio);
+        });
+      }
+    });
+    return { childIds: ids, childFolios: folios };
+  }, [cleanRecords]);
 
   const uniqueStatuses = useMemo(
     () =>
@@ -118,8 +144,11 @@ export default function CFDIVault() {
     [cleanRecords],
   );
 
+  // 4. Aplicamos los filtros del usuario y Ocultamos las Hijas Sueltas
   const filteredRecords = useMemo(() => {
     return cleanRecords.filter((r) => {
+      if (childIds.has(r.id) || childFolios.has(r.folio)) return false;
+
       if (
         selectedEntity !== "all" &&
         r.cliente_proveedor_nombre !== selectedEntity
@@ -147,44 +176,79 @@ export default function CFDIVault() {
       }
       return true;
     });
-  }, [cleanRecords, selectedEntity, selectedStatus, dateRange]);
+  }, [
+    cleanRecords,
+    childIds,
+    childFolios,
+    selectedEntity,
+    selectedStatus,
+    dateRange,
+  ]);
 
-  // 🚀 SNAPSHOT DEL ÁRBOL EN MEMORIA: Inyecta dinámicamente las filas hijas debajo de su padre correspondiente
+  // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla
+  const sortedFilteredRecords = useMemo(() => {
+    return [...filteredRecords].sort((a, b) => {
+      const timeA = a.fecha_emision ? new Date(a.fecha_emision).getTime() : 0;
+      const timeB = b.fecha_emision ? new Date(b.fecha_emision).getTime() : 0;
+      return timeB - timeA;
+    });
+  }, [filteredRecords]);
+
+  // 6. MOTOR JERÁRQUICO: Inyecta las hijas debajo de su padre usando los datos 100% REALES
   const hierarchicalRecords = useMemo(() => {
     const result: any[] = [];
-    filteredRecords.forEach((parent) => {
+    const { recordsById, recordsByFolio } = lookupDicts;
+
+    sortedFilteredRecords.forEach((parent) => {
       result.push(parent);
 
       const hasChildren =
         parent.cartas_porte_hijas && parent.cartas_porte_hijas.length > 0;
-      if (hasChildren && !!expandedParents[parent.id]) {
-        parent.cartas_porte_hijas.forEach((child: any) => {
+      const isExpanded =
+        !!expandedParents[parent.id] ||
+        (blinkQuery && blinkQuery.trim().length >= 3);
+
+      if (hasChildren && isExpanded) {
+        parent.cartas_porte_hijas.forEach((childRef: any) => {
+          const realChild =
+            recordsById.get(childRef.id) ||
+            recordsByFolio.get(childRef.folio) ||
+            {};
+
           result.push({
-            ...child,
-            id: child.id,
+            ...childRef,
+            ...realChild,
+            id:
+              realChild.id ||
+              childRef.id ||
+              `virtual-${childRef.folio || Math.random()}`,
             isVirtualChild: true,
-            parentFolio: parent.folio || parent.folio_interno,
-            cliente_proveedor_nombre: parent.cliente_proveedor_nombre,
-            cliente_proveedor_rfc: parent.cliente_proveedor_rfc,
-            fecha_emision: child.fecha_emision || parent.fecha_emision,
-            monto_total: child.monto_total || 0,
-            estatus: child.status_sat || child.estatus || "TIMBRADA",
-            status_sat: child.status_sat || child.estatus || "TIMBRADA",
-            versiones_archivos: child.versiones_archivos || [],
-            viaje_id: child.viaje_id || parent.viaje_id,
-            pdf_url: child.pdf_url,
-            xml_url: child.xml_url,
+            parentId: parent.id,
+            folio: realChild.folio || childRef.folio || "S/F",
+            monto_total:
+              realChild.monto_total !== undefined
+                ? realChild.monto_total
+                : childRef.monto_total || 0,
+            cliente_proveedor_nombre:
+              realChild.cliente_proveedor_nombre ||
+              parent.cliente_proveedor_nombre,
+            viaje_id: realChild.viaje_id || parent.viaje_id,
+            estatus: realChild.estatus || childRef.estatus || "TIMBRADA",
+            fecha_emision:
+              realChild.fecha_emision ||
+              childRef.fecha_emision ||
+              parent.fecha_emision,
           });
         });
       }
     });
-    return result;
-  }, [filteredRecords, expandedParents]);
 
-  // Helper de validación de parpadeo en tiempo real
+    return result;
+  }, [sortedFilteredRecords, lookupDicts, expandedParents, blinkQuery]);
+
   const checkShouldBlink = (row: any) => {
     if (!blinkQuery || blinkQuery.trim().length < 3) return false;
-    const query = blinkQuery.toLowerCase().trim(); // 💡 CAMBIADO DE .strip() A .trim()
+    const query = blinkQuery.toLowerCase().trim();
     const folioTarget = String(
       row.folio || row.folio_interno || "",
     ).toLowerCase();
@@ -192,28 +256,73 @@ export default function CFDIVault() {
     return folioTarget.includes(query) || uuidTarget.includes(query);
   };
 
+  // 🚀 FUNCIÓN DE CANCELACIÓN MASIVA
+  const handleMassCancel = async () => {
+    if (
+      !window.confirm(
+        `¿Seguro que deseas cancelar ${selectedInvoices.length} documentos?`,
+      )
+    )
+      return;
+
+    setIsMassCanceling(true);
+    const toastId = toast.loading(
+      `Procesando cancelación de ${selectedInvoices.length} documentos...`,
+    );
+
+    try {
+      if (activeTab === "PAGO_CLIENTE") {
+        const paymentIds = selectedInvoices.map((inv) => inv.id);
+        await axiosClient.post("/api/finance/receivables/payments/cancel", {
+          payment_ids: paymentIds,
+          motivo: "02", // Cancelación con error, no relacionado
+        });
+        toast.success("Pagos cancelados correctamente y saldo restaurado.", {
+          id: toastId,
+        });
+      } else {
+        let successCount = 0;
+        let errorCount = 0;
+
+        // En facturas procesamos una por una según el endpoint actual
+        for (const inv of selectedInvoices) {
+          try {
+            await axiosClient.post(
+              `/api/finance/receivables/${inv.id}/cancel-sat`,
+              { motivo: "02" },
+            );
+            successCount++;
+          } catch (error) {
+            console.error(`Error al cancelar ${inv.folio}:`, error);
+            errorCount++;
+          }
+        }
+
+        if (errorCount === 0) {
+          toast.success(
+            `Se enviaron a cancelar ${successCount} facturas con éxito.`,
+            { id: toastId },
+          );
+        } else {
+          toast.warning(
+            `Se enviaron a cancelar ${successCount}, pero hubo ${errorCount} rechazos/errores.`,
+            { id: toastId },
+          );
+        }
+      }
+    } catch (err) {
+      toast.error("Ocurrió un error general durante la cancelación masiva.", {
+        id: toastId,
+      });
+    } finally {
+      setSelectedInvoices([]);
+      setIsMassCanceling(false);
+      if (refetch) refetch();
+    }
+  };
+
   const customFiltersUI = (
     <>
-      {/* ⚡ REAL-TIME BLINKING LOCALIZER (El buscador que hace parpadear las filas) */}
-      <div className="relative flex items-center">
-        <Search className="absolute left-3 w-4 h-4 text-amber-500 z-10 animate-pulse" />
-        <input
-          type="text"
-          placeholder="⚡ Localizar y hacer parpadear..."
-          value={blinkQuery}
-          onChange={(e) => setBlinkQuery(e.target.value)}
-          className="w-[240px] h-11 pl-9 pr-8 text-xs bg-amber-50/40 dark:bg-slate-900 border border-amber-200 dark:border-slate-800 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 font-bold text-slate-800 dark:text-slate-100 transition-all shadow-sm"
-        />
-        {blinkQuery && (
-          <button
-            onClick={() => setBlinkQuery("")}
-            className="absolute right-3 text-slate-400 hover:text-slate-600 text-xs font-black"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-
       <Popover open={entityComboOpen} onOpenChange={setEntityOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -347,10 +456,44 @@ export default function CFDIVault() {
           <X className="h-4 w-4 mr-1" /> Limpiar
         </Button>
       )}
+
+      {/* 🚀 BOTÓN DINÁMICO DE CANCELACIÓN MASIVA */}
+      {selectedInvoices.length > 0 && (
+        <Button
+          variant="destructive"
+          onClick={handleMassCancel}
+          disabled={isMassCanceling}
+          className="h-11 ml-2 font-bold animate-in fade-in zoom-in duration-200"
+        >
+          {isMassCanceling ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4 mr-2" />
+          )}
+          Cancelar {selectedInvoices.length}{" "}
+          {selectedInvoices.length === 1 ? "Seleccionada" : "Seleccionadas"}
+        </Button>
+      )}
     </>
   );
 
   const handleOpenDetail = (row: any) => {
+    // 🚀 MAGIA: Rellenamos la información completa del padre y las hijas usando el diccionario
+    const hydratedPadre = row.factura_padre
+      ? lookupDicts.recordsById.get(row.factura_padre.id) ||
+        lookupDicts.recordsByFolio.get(row.factura_padre.folio_interno) ||
+        row.factura_padre
+      : null;
+
+    const hydratedHijas =
+      row.cartas_porte_hijas?.map((hija: any) => {
+        return (
+          lookupDicts.recordsById.get(hija.id) ||
+          lookupDicts.recordsByFolio.get(hija.folio) ||
+          hija
+        );
+      }) || [];
+
     if (activeTab === "FACTURA_PROVEEDOR") {
       setSelectedInvoice({
         id: row.id,
@@ -367,6 +510,7 @@ export default function CFDIVault() {
         supplier: { razon_social: row.cliente_proveedor_nombre },
         viaje_id: row.viaje_id,
         saldo_pendiente: row.estatus === "TIMBRADO" ? row.monto_total : 0,
+        cliente_proveedor_rfc: row.cliente_proveedor_rfc, // Pasamos el RFC
       });
       setPayableDetailDrawerOpen(true);
     } else {
@@ -383,13 +527,14 @@ export default function CFDIVault() {
         xml_url: row.xml_url,
         document_history: row.versiones_archivos || [],
         client: { razon_social: row.cliente_proveedor_nombre },
+        cliente_proveedor_rfc: row.cliente_proveedor_rfc, // Pasamos el RFC
         viaje_id: row.viaje_id,
         saldo_pendiente: row.estatus === "TIMBRADA" ? row.monto_total : 0,
         status_sat: row.status_sat || row.estatus,
         intentos_cancelacion: row.intentos_cancelacion || 0,
         detalle_sat: row.detalle_sat,
-        factura_padre: row.factura_padre,
-        cartas_porte_hijas: row.cartas_porte_hijas,
+        factura_padre: hydratedPadre, // Enviamos el Padre 100% completo
+        cartas_porte_hijas: hydratedHijas, // Enviamos las Hijas 100% completas
         is_nominal: row.is_nominal,
       });
       setDetailDrawerOpen(true);
@@ -454,12 +599,10 @@ export default function CFDIVault() {
         ),
       });
     } else {
-      // 🚀 MOTOR CORREGIDO: Renderizado de Filas Hijas del Viaje e Indentación Visual Directa
       cols.push({
         key: "folio",
         header: "Folio",
         render: (val, row: any) => {
-          const isNominal = row.is_nominal;
           const hasChildren =
             row.cartas_porte_hijas && row.cartas_porte_hijas.length > 0;
           const isExpanded = !!expandedParents[row.id];
@@ -482,7 +625,7 @@ export default function CFDIVault() {
                   variant="outline"
                   className="text-[8px] h-4 px-1.5 font-black uppercase tracking-wider bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-400"
                 >
-                  Hija
+                  CPT
                 </Badge>
               </div>
             );
@@ -509,30 +652,21 @@ export default function CFDIVault() {
                     }));
                   }}
                 >
-                  <span
-                    className="text-[10px] transition-transform duration-200 inline-block font-black"
-                    style={{
-                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                    }}
-                  >
-                    ▶
-                  </span>
+                  <ChevronRight
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      isExpanded ? "rotate-90" : "rotate-0",
+                    )}
+                  />
                 </Button>
               )}
               <span className="font-mono font-black text-slate-900 dark:text-slate-100">
                 {val || "S/F"}
               </span>
-              {isNominal && (
-                <Badge
-                  variant="outline"
-                  className="text-[9px] h-4 px-1.5 bg-amber-50 text-amber-700 border-amber-200 font-sans font-black"
-                >
-                  $1 Prov
-                </Badge>
-              )}
+
               {hasChildren && (
                 <Badge className="text-[9px] h-4 bg-indigo-600 text-white font-sans font-black shadow-sm">
-                  {row.cartas_porte_hijas.length} Hijas
+                  {row.cartas_porte_hijas.length}
                 </Badge>
               )}
             </div>
@@ -751,18 +885,6 @@ export default function CFDIVault() {
                   <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle / Bóveda
                 </DropdownMenuItem>
 
-                {/* 🚀 HISTORIAL SOAP DIRECTO: Abre el TimelineDrawer con un clic */}
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSelectedTimelineRecord(row);
-                    setTimelineOpen(true);
-                  }}
-                  className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
-                >
-                  <Clock className="h-4 w-4 text-indigo-500" /> Ver Línea de
-                  Tiempo SAT
-                </DropdownMenuItem>
-
                 {hasPdf && (
                   <DropdownMenuItem
                     onClick={() => downloadFile("pdf")}
@@ -824,7 +946,6 @@ export default function CFDIVault() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Estilos CSS Inyectados para la Animación de Parpadeo de Filas Localizadas */}
       <style>{`
         @keyframes rowBlink {
           0%, 100% { background-color: transparent; }
@@ -853,6 +974,8 @@ export default function CFDIVault() {
             onValueChange={(val) => {
               setActiveTab(val);
               setExpandedParents({});
+              // 🚀 LIMPIAMOS LA SELECCIÓN AL CAMBIAR DE PESTAÑA
+              setSelectedInvoices([]);
             }}
             className="w-full"
           >
@@ -871,10 +994,21 @@ export default function CFDIVault() {
             data={hierarchicalRecords}
             columns={columns}
             isLoading={isLoading}
-            searchPlaceholder="Filtrar por términos generales..."
+            searchPlaceholder="Buscar por uuid, folio..."
             exportFileName={excelExportName}
-            initialSort={{ key: "fecha_emision", direction: "desc" }}
             customFilters={customFiltersUI}
+            onGlobalSearchChange={(value) => setBlinkQuery(value)}
+            // 🚀 ENCENDEMOS LAS CASILLAS PARA SELECCIÓN MASIVA
+            enableRowSelection={true}
+            selectedRows={selectedInvoices}
+            onSelectedRowsChange={setSelectedInvoices}
+            rowKey="id"
+            // Deshabilitamos la selección si ya está cancelada o en proceso
+            isRowSelectable={(row) =>
+              row.estatus !== "CANCELADO" &&
+              row.status_sat !== "CANCELADO" &&
+              row.status_sat !== "PROCESO_CANCELACION"
+            }
           />
         </CardContent>
       </Card>
@@ -970,16 +1104,6 @@ export default function CFDIVault() {
           if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
         }}
         invoice={selectedInvoice}
-      />
-
-      {/* RENDERIZADO DEL DRAWER DEL HISTORIAL DE EVENTOS SOAP */}
-      <CFDITimelineDrawer
-        isOpen={timelineOpen}
-        onClose={() => {
-          setTimelineOpen(false);
-          setSelectedTimelineRecord(null);
-        }}
-        record={selectedTimelineRecord}
       />
     </div>
   );

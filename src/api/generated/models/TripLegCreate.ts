@@ -4,9 +4,6 @@
 /* eslint-disable */
 import type { TripLegType } from './TripLegType';
 import type { TripStatus } from './TripStatus';
-/**
- * Schema para crear un tramo, generalmente desde la creación del Viaje o después.
- */
 export type TripLegCreate = {
     leg_type: TripLegType;
     status?: TripStatus;
