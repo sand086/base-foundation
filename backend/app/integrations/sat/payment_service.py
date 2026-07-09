@@ -460,6 +460,7 @@ class PaymentComplementService:
                     referencia=str(referencia) if referencia else "",
                     cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
                     complemento_uuid="PENDIENTE_SAT", # <- MARCADOR CLAVE
+                    folio_complemento=f"COM-{folio_corto}",
                     parcialidad=int(doc_rel["parcialidad"]),
                     saldo_anterior=float(doc_rel["saldo_anterior"]),
                     saldo_insoluto=float(doc_rel["saldo_insoluto"]),

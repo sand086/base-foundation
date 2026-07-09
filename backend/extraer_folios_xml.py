@@ -1,64 +1,72 @@
 import os
-import xml.etree.ElementTree as ET
+import sys
+from pathlib import Path
+from lxml import etree
+
+# Configurar path para importar la app
+sys.path.append(str(Path(__file__).resolve().parent))
 from app.db.database import SessionLocal
 from app.models.models import ReceivableInvoicePayment
 
-
-def procesar_xmls():
+def rescatar_folios_desde_xml():
     db = SessionLocal()
-    # Traemos todos los pagos que ya tienen un UUID de complemento timbrado
-    pagos = (
-        db.query(ReceivableInvoicePayment)
-        .filter(ReceivableInvoicePayment.complemento_uuid.isnot(None))
-        .all()
-    )
+    
+    # 1. Buscar pagos que ya están timbrados
+    pagos = db.query(ReceivableInvoicePayment).filter(
+        ReceivableInvoicePayment.complemento_uuid.isnot(None),
+        ReceivableInvoicePayment.complemento_uuid != "PENDIENTE_SAT"
+    ).all()
 
-    corregidos = 0
+    # 2. Definir dónde están guardados los XML
+    base_path = Path(__file__).resolve().parent
+    storage_dir = base_path / "storage" / "xml_timbrados"
 
-    print("🔍 Escaneando archivos XML en el disco...")
+    actualizados = 0
+    ya_estaban_bien = 0
+    errores = 0
+
+    print("=" * 80)
+    print(f"🔍 INICIANDO RESCATE: Se encontraron {len(pagos)} pagos timbrados.")
+    print("=" * 80)
+
     for pago in pagos:
-        uuid = pago.complemento_uuid
-
-        # Buscamos el XML en tus carpetas
-        rutas_posibles = [
-            os.path.join("storage", "xml_timbrados", f"{uuid}.xml"),
-            os.path.join("app", "storage", "xml_timbrados", f"{uuid}.xml"),
-            os.path.join(
-                "/home/desarrolloas/base-foundation/backend/storage/xml_timbrados",
-                f"{uuid}.xml",
-            ),
-        ]
-
-        xml_path = next((ruta for ruta in rutas_posibles if os.path.exists(ruta)), None)
-
-        if xml_path:
+        xml_path = storage_dir / f"{pago.complemento_uuid}.xml"
+        
+        if xml_path.exists():
             try:
-                # Usamos el parser XML real de Python (Es 100% seguro y no se confunde)
-                tree = ET.parse(xml_path)
+                # Parsear el XML
+                tree = etree.parse(str(xml_path))
                 root = tree.getroot()
-
-                # Vamos directo a extraer el atributo Folio del nodo principal (cfdi:Comprobante)
-                folio_real = root.attrib.get("Folio")
-
-                if folio_real:
-                    pago.folio_complemento = f"COM-{folio_real}"
-                    db.add(pago)
-                    print(
-                        f"✅ Pago ID {pago.id} -> Se le asignó {pago.folio_complemento}"
-                    )
-                    corregidos += 1
-                else:
-                    print(f"⚠️ XML de {uuid} no tiene atributo Folio en la cabecera.")
-
+                
+                # Extraer el Folio del nodo principal <cfdi:Comprobante>
+                folio_xml = root.get("Folio")
+                
+                if folio_xml:
+                    folio_completo = f"COM-{folio_xml}"
+                    
+                    if pago.folio_complemento != folio_completo:
+                        pago.folio_complemento = folio_completo
+                        actualizados += 1
+                        print(f" ✅ Pago ID {pago.id}: Folio actualizado a {folio_completo}")
+                    else:
+                        ya_estaban_bien += 1
             except Exception as e:
-                print(f"❌ Error al leer el XML de {uuid}: {e}")
+                print(f" ❌ Error leyendo XML {pago.complemento_uuid}: {e}")
+                errores += 1
         else:
-            print(f"❌ No se encontró el XML físico para el UUID: {uuid}")
+            print(f" ⚠️ XML físico NO encontrado para UUID: {pago.complemento_uuid}")
+            errores += 1
 
+    # Guardar cambios en la base de datos
     db.commit()
     db.close()
-    print(f"\n🚀 Proceso terminado. {corregidos} folios guardados en la Base de Datos.")
-
+    
+    print("\n" + "=" * 80)
+    print("🏁 RESUMEN DEL RESCATE:")
+    print(f"   - Folios extraídos y actualizados: {actualizados}")
+    print(f"   - Folios que ya estaban correctos: {ya_estaban_bien}")
+    print(f"   - Errores o XML no encontrados: {errores}")
+    print("=" * 80)
 
 if __name__ == "__main__":
-    procesar_xmls()
+    rescatar_folios_desde_xml()
