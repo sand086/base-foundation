@@ -80,7 +80,7 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
+  // ESTADOS INTELIGENTES DE CONTROL
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
   >({});
@@ -88,7 +88,7 @@ export default function CFDIVault() {
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
-  // 1. Limpiamos los registros de errores
+  // 1. Limpiamos los registros de errores como siempre
   const cleanRecords = useMemo(() => {
     return records.filter((r) => {
       const statusStr = r.estatus?.toLowerCase() || "";
@@ -96,17 +96,33 @@ export default function CFDIVault() {
     });
   }, [records]);
 
-  // 2. Extraemos todos los IDs de las cartas porte hijas para identificarlas
-  const childIds = useMemo(() => {
-    const ids = new Set<number>();
+  // 2. Diccionarios de acceso rápido a la data REAL (para recuperar montos, UUID, y archivos de las hijas)
+  const { recordsById, recordsByFolio } = useMemo(() => {
+    const byId = new Map();
+    const byFolio = new Map();
     cleanRecords.forEach((r) => {
-      if (r.cartas_porte_hijas && Array.isArray(r.cartas_porte_hijas)) {
-        r.cartas_porte_hijas.forEach((child: any) => {
+      if (r.id) byId.set(r.id, r);
+      if (r.folio) byFolio.set(r.folio, r);
+    });
+    return { recordsById: byId, recordsByFolio: byFolio };
+  }, [cleanRecords]);
+
+  // 3. Identificamos qué registros son "Hijas" para NO mostrarlos duplicados y sueltos en el inicio de la tabla
+  const { childIds, childFolios } = useMemo(() => {
+    const ids = new Set<number>();
+    const folios = new Set<string>();
+    cleanRecords.forEach((parent) => {
+      if (
+        parent.cartas_porte_hijas &&
+        Array.isArray(parent.cartas_porte_hijas)
+      ) {
+        parent.cartas_porte_hijas.forEach((child: any) => {
           if (child.id) ids.add(child.id);
+          if (child.folio) folios.add(child.folio);
         });
       }
     });
-    return ids;
+    return { childIds: ids, childFolios: folios };
   }, [cleanRecords]);
 
   const uniqueStatuses = useMemo(
@@ -122,10 +138,11 @@ export default function CFDIVault() {
     [cleanRecords],
   );
 
+  // 4. Aplicamos los filtros del usuario y Ocultamos las Hijas Sueltas
   const filteredRecords = useMemo(() => {
     return cleanRecords.filter((r) => {
-      // PREVENCIÓN: No mostramos las hijas como registros independientes en el nivel superior
-      if (childIds.has(r.id)) return false;
+      // 🚀 EVITA LA DUPLICIDAD: Si es hija de alguien más, NO la muestres en la raíz
+      if (childIds.has(r.id) || childFolios.has(r.folio)) return false;
 
       if (
         selectedEntity !== "all" &&
@@ -154,13 +171,18 @@ export default function CFDIVault() {
       }
       return true;
     });
-  }, [cleanRecords, childIds, selectedEntity, selectedStatus, dateRange]);
+  }, [
+    cleanRecords,
+    childIds,
+    childFolios,
+    selectedEntity,
+    selectedStatus,
+    dateRange,
+  ]);
 
-  // SNAPSHOT DEL ÁRBOL EN MEMORIA: Inyecta dinámicamente las filas hijas debajo de su padre correspondiente
+  // 5. MOTOR JERÁRQUICO: Inyecta dinámicamente las hijas debajo de su padre pero usando los datos REALES
   const hierarchicalRecords = useMemo(() => {
     const result: any[] = [];
-    // Diccionario para buscar la información 100% REAL de la hija en base a su ID
-    const recordsById = new Map(cleanRecords.map((r) => [r.id, r]));
 
     filteredRecords.forEach((parent) => {
       result.push(parent);
@@ -168,27 +190,52 @@ export default function CFDIVault() {
       const hasChildren =
         parent.cartas_porte_hijas && parent.cartas_porte_hijas.length > 0;
 
-      if (hasChildren && !!expandedParents[parent.id]) {
+      // Auto-expandir si el usuario busca algo, de lo contrario obedece al clic de la flecha
+      const isExpanded =
+        !!expandedParents[parent.id] ||
+        (blinkQuery && blinkQuery.trim().length >= 3);
+
+      if (hasChildren && isExpanded) {
         parent.cartas_porte_hijas.forEach((childRef: any) => {
-          // Buscamos el registro completo real para tener el UUID, Monto y Archivos correctos
-          const fullChild = recordsById.get(childRef.id) || childRef;
+          // 🚀 AQUÍ OCURRE LA MAGIA: Obtenemos el registro real 100% completo (UUID, XML, Montos verdaderos)
+          const realChild =
+            recordsById.get(childRef.id) ||
+            recordsByFolio.get(childRef.folio) ||
+            {};
 
           result.push({
-            ...fullChild, // Al hacer spread del registro real recuperamos todos sus datos correctos
+            ...childRef, // Info original de referencia
+            ...realChild, // 🚀 INFO REAL SOBREESCRIBE LA DE REFERENCIA (corrige montos en 0, UUID faltantes)
+            id:
+              realChild.id ||
+              childRef.id ||
+              `virtual-${childRef.folio || Math.random()}`,
             isVirtualChild: true,
-            parentFolio: parent.folio || parent.folio_interno,
+            parentId: parent.id,
+            // Aseguramos de que estos campos vitales no se queden en blanco
+            folio: realChild.folio || childRef.folio || "S/F",
+            monto_total:
+              realChild.monto_total !== undefined
+                ? realChild.monto_total
+                : childRef.monto_total || 0,
             cliente_proveedor_nombre:
-              fullChild.cliente_proveedor_nombre ||
+              realChild.cliente_proveedor_nombre ||
               parent.cliente_proveedor_nombre,
-            cliente_proveedor_rfc:
-              fullChild.cliente_proveedor_rfc || parent.cliente_proveedor_rfc,
-            viaje_id: fullChild.viaje_id || parent.viaje_id,
+            viaje_id: realChild.viaje_id || parent.viaje_id,
+            estatus: realChild.estatus || childRef.estatus || "TIMBRADA",
           });
         });
       }
     });
+
     return result;
-  }, [filteredRecords, cleanRecords, expandedParents]);
+  }, [
+    filteredRecords,
+    recordsById,
+    recordsByFolio,
+    expandedParents,
+    blinkQuery,
+  ]);
 
   // Helper de validación de parpadeo en tiempo real
   const checkShouldBlink = (row: any) => {
@@ -447,7 +494,6 @@ export default function CFDIVault() {
         key: "folio",
         header: "Folio",
         render: (val, row: any) => {
-          const isNominal = row.is_nominal;
           const hasChildren =
             row.cartas_porte_hijas && row.cartas_porte_hijas.length > 0;
           const isExpanded = !!expandedParents[row.id];
