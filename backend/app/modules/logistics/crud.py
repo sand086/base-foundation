@@ -39,7 +39,6 @@ logger = logging.getLogger("logistics.crud")
 # FUNCIONES HELPER
 # =====================================================================
 
-
 def get_osrm_distance(origen: str, destino: str) -> float:
     """
     Calcula la distancia real en carretera usando la API gratuita de OpenStreetMap / OSRM.
@@ -78,7 +77,6 @@ def get_osrm_distance(origen: str, destino: str) -> float:
 # CRUD TRIPS (GET, CREATE, UPDATE, DELETE)
 # =====================================================================
 
-
 def get_trips(db: Session, skip: int = 0, limit: int = 100):
     return (
         db.query(models.Trip)
@@ -95,6 +93,10 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
+            # 🚀 PREVENCIÓN DE TIMEOUT EN CARGA MASIVA (N+1 Query fix) 🚀
+            selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.document_history),
+            selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.cartas_porte_hijas),
+            selectinload(models.Trip.receivable_invoices).joinedload(models.ReceivableInvoice.factura_padre),
         )
         .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
         .order_by(models.Trip.id.desc())
@@ -117,7 +119,7 @@ def get_trip(db: Session, trip_id: str):
             joinedload(models.Trip.tariff),
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
-            joinedload(models.Trip.remolque_2),  # <-- Agregado por si acaso
+            joinedload(models.Trip.remolque_2),
             # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
             joinedload(models.Trip.motogenerator_1_unit),
             joinedload(models.Trip.motogenerator_2_unit),
@@ -126,6 +128,10 @@ def get_trip(db: Session, trip_id: str):
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
             selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
+            # 🚀 PREVENCIÓN DE TIMEOUT EN CARGA MASIVA (N+1 Query fix) 🚀
+            selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.document_history),
+            selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.cartas_porte_hijas),
+            selectinload(models.Trip.receivable_invoices).joinedload(models.ReceivableInvoice.factura_padre),
         )
         .filter(
             models.Trip.id == tid,
@@ -441,7 +447,6 @@ def add_timeline_event(
 #  LA VERDADERA MAGIA: LIQUIDACIÓN POR LOTE BLINDADA Y CON RASTREO
 # =====================================================================
 
-
 def settle_trip_legs_batch(
     db: Session, payload: schemas.BatchSettlementPayload, user_id: int
 ):  # <--- AUDITORÍA PARAM
@@ -644,9 +649,8 @@ def settle_trip_legs_batch(
 
 
 # =====================================================================
-# RESTO DE TUS FUNCIONES (get_trip_settlement, close_trip_settlement, etc.)
+# RESTO DE FUNCIONES
 # =====================================================================
-
 
 def get_trip_settlement(db: Session, trip_leg_id: int):
     import uuid
@@ -655,7 +659,6 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
     from app.models.models import RecordStatus
     from . import schemas
 
-    # 1. Cargar el tramo con todas sus relaciones
     leg = (
         db.query(models.TripLeg)
         .options(
@@ -744,7 +747,6 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             )
         )
 
-    # --- MODIFICACIÓN FASE 3: Jalar ambos vales (Tracto y Moto) en la Liquidación ---
     vales_diesel_tracto = [
         f
         for f in fuel_logs
@@ -767,7 +769,6 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         (kms_recorridos / rendimiento_esperado) if kms_recorridos > 0 else 0.0
     )
 
-    # Para el motogenerador, el consumo esperado viene de la conciliación manual (litros_sm)
     consumo_esperado_moto = sum(
         getattr(f, "litros_sm", getattr(f, "litros", 0)) or getattr(f, "litros", 0)
         for f in vales_diesel_moto
@@ -780,13 +781,11 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
             getattr(f, "precio_por_litro", 0) for f in todos_los_vales
         ) / len(todos_los_vales)
 
-    # Solo calculamos diferencia matemática base sobre el tracto
     diferencia_cruda_tracto = consumo_real_tracto - consumo_esperado_tracto
     diferencia_litros_tracto = (
         diferencia_cruda_tracto if diferencia_cruda_tracto > 0 else 0.0
     )
 
-    # Priorizamos si ya se hizo la conciliación formal en la BD
     diff_db_tracto = sum(
         getattr(f, "diferencia_litros", 0) or 0.0 for f in vales_diesel_tracto
     )
@@ -798,7 +797,6 @@ def get_trip_settlement(db: Session, trip_leg_id: int):
         diferencia_litros_tracto = diff_db_tracto
 
     diferencia_litros = diferencia_litros_tracto + diff_db_moto
-    # ----------------------------------------------------------------------------------
 
     deduccion_combustible = float(getattr(leg, "monto_penalizaciones", 0.0) or 0.0)
 
@@ -1027,7 +1025,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         rendimiento = float(rend_ecm or 3.2)
         total_consumo_esperado += (distancia / rendimiento) if distancia > 0 else 0.0
 
-        # --- MODIFICACIÓN FASE 3: Sumar todos los vales (Tracto y Moto) ---
         fuel_logs_activos = [
             f
             for f in leg.fuel_logs
@@ -1042,7 +1039,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
             precio = float(f.precio_por_litro or 24.50)
             total_real_liters += lts
             total_fuel_cost += lts * precio
-        # --------------------------------------------------------------
 
     precio_promedio = (
         (total_fuel_cost / total_real_liters) if total_real_liters > 0 else 24.50
@@ -1056,7 +1052,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
         if penalizacion and float(penalizacion) > 0:
             deduccion_combustible += float(penalizacion)
 
-        # --- MODIFICACIÓN FASE 3: Diferencia de litros sumada de todos ---
         vales_todos = [
             f
             for f in leg.fuel_logs
@@ -1068,7 +1063,6 @@ def preview_batch_settlement(db: Session, leg_ids: list[int]):
 
             if is_conciliated and diferencia and float(diferencia) > 0:
                 diferencia_litros_total += float(diferencia)
-        # -------------------------------------------------------------
 
     sueldo_operador_pactado = 0.0
     if legs and legs[0].trip:
@@ -1364,8 +1358,6 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
     leg.monto_sueldo = 0.0
     leg.monto_bonos = 0.0
     leg.monto_maniobras = 0.0
-    # Nota: No ponemos monto_penalizaciones a 0, porque podría venir de la auditoría de Diésel.
-    # El usuario lo sobrescribirá en el próximo intento de liquidar.
     leg.saldo_operador = 0.0
     leg.monto_neto_pagado = 0.0
     leg.desglose_conceptos = []  # Borramos el recibo
@@ -1388,7 +1380,7 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
     )
     db.add(event)
 
-    # 6. LIMPIEZA DE SNAPSHOTS FINANCIEROS (Por si en el futuro los usas)
+    # 6. LIMPIEZA DE SNAPSHOTS FINANCIEROS
     settlements = (
         db.query(models.OperatorSettlement)
         .filter(models.OperatorSettlement.trip_leg_id == leg.id)
@@ -1403,4 +1395,4 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
     db.commit()
     db.refresh(leg)
 
-    return leg
+    return lega
