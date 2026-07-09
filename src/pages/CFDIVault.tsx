@@ -11,20 +11,15 @@ import {
   RefreshCw,
   Eye,
   MoreHorizontal,
-  FileSignature,
   AlertTriangle,
-  Clock,
   Network,
   Search,
-  ChevronRight, // Ícono agregado para reemplazar el emoji ▶
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
 
-import {
-  useCfdiVault,
-  CFDIHistoryRecord,
-} from "@/features/finance/hooks/useCfdiVault";
+import { useCfdiVault } from "@/features/finance/hooks/useCfdiVault";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -69,7 +64,6 @@ import { cn } from "@/lib/utils";
 import { CreateInvoiceModal } from "@/features/receivables/components/CreateInvoiceModal";
 import { InvoiceDetailSheet } from "@/features/receivables/components/InvoiceDetailSheet";
 import { InvoicePayablesDetailSheet } from "@/features/payables/components/InvoicePayablesDetailSheet";
-import { CFDITimelineDrawer } from "@/features/finance/components/CFDITimelineDrawer";
 
 export default function CFDIVault() {
   const [activeTab, setActiveTab] = useState("FACTURA_CLIENTE");
@@ -86,12 +80,7 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // Estado de control para abrir la línea de tiempo SOAP del SAT
-  const [timelineOpen, setTimelineOpen] = useState(false);
-  const [selectedTimelineRecord, setSelectedTimelineRecord] =
-    useState<any>(null);
-
-  // NUEVOS ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
+  // ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
   >({});
@@ -99,26 +88,26 @@ export default function CFDIVault() {
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
 
+  // 1. Limpiamos los registros de errores
   const cleanRecords = useMemo(() => {
-    // 1. PREVENCIÓN DE DUPLICADOS: Recopilamos los IDs de todas las facturas hijas
-    const childIds = new Set();
-    records.forEach((r) => {
+    return records.filter((r) => {
+      const statusStr = r.estatus?.toLowerCase() || "";
+      return statusStr !== "error_sat" && statusStr !== "error";
+    });
+  }, [records]);
+
+  // 2. Extraemos todos los IDs de las cartas porte hijas para identificarlas
+  const childIds = useMemo(() => {
+    const ids = new Set<number>();
+    cleanRecords.forEach((r) => {
       if (r.cartas_porte_hijas && Array.isArray(r.cartas_porte_hijas)) {
         r.cartas_porte_hijas.forEach((child: any) => {
-          if (child.id) childIds.add(child.id);
+          if (child.id) ids.add(child.id);
         });
       }
     });
-
-    // 2. Filtramos los errores Y excluimos a las hijas para que no salgan como fila principal
-    return records.filter((r) => {
-      const statusStr = r.estatus?.toLowerCase() || "";
-      const isError = statusStr === "error_sat" || statusStr === "error";
-      const isChild = childIds.has(r.id);
-
-      return !isError && !isChild;
-    });
-  }, [records]);
+    return ids;
+  }, [cleanRecords]);
 
   const uniqueStatuses = useMemo(
     () =>
@@ -135,6 +124,9 @@ export default function CFDIVault() {
 
   const filteredRecords = useMemo(() => {
     return cleanRecords.filter((r) => {
+      // PREVENCIÓN: No mostramos las hijas como registros independientes en el nivel superior
+      if (childIds.has(r.id)) return false;
+
       if (
         selectedEntity !== "all" &&
         r.cliente_proveedor_nombre !== selectedEntity
@@ -162,39 +154,41 @@ export default function CFDIVault() {
       }
       return true;
     });
-  }, [cleanRecords, selectedEntity, selectedStatus, dateRange]);
+  }, [cleanRecords, childIds, selectedEntity, selectedStatus, dateRange]);
 
   // SNAPSHOT DEL ÁRBOL EN MEMORIA: Inyecta dinámicamente las filas hijas debajo de su padre correspondiente
   const hierarchicalRecords = useMemo(() => {
     const result: any[] = [];
+    // Diccionario para buscar la información 100% REAL de la hija en base a su ID
+    const recordsById = new Map(cleanRecords.map((r) => [r.id, r]));
+
     filteredRecords.forEach((parent) => {
       result.push(parent);
 
       const hasChildren =
         parent.cartas_porte_hijas && parent.cartas_porte_hijas.length > 0;
+
       if (hasChildren && !!expandedParents[parent.id]) {
-        parent.cartas_porte_hijas.forEach((child: any) => {
+        parent.cartas_porte_hijas.forEach((childRef: any) => {
+          // Buscamos el registro completo real para tener el UUID, Monto y Archivos correctos
+          const fullChild = recordsById.get(childRef.id) || childRef;
+
           result.push({
-            ...child,
-            id: child.id,
+            ...fullChild, // Al hacer spread del registro real recuperamos todos sus datos correctos
             isVirtualChild: true,
             parentFolio: parent.folio || parent.folio_interno,
-            cliente_proveedor_nombre: parent.cliente_proveedor_nombre,
-            cliente_proveedor_rfc: parent.cliente_proveedor_rfc,
-            fecha_emision: child.fecha_emision || parent.fecha_emision,
-            monto_total: child.monto_total || 0,
-            estatus: child.status_sat || child.estatus || "TIMBRADA",
-            status_sat: child.status_sat || child.estatus || "TIMBRADA",
-            versiones_archivos: child.versiones_archivos || [],
-            viaje_id: child.viaje_id || parent.viaje_id,
-            pdf_url: child.pdf_url,
-            xml_url: child.xml_url,
+            cliente_proveedor_nombre:
+              fullChild.cliente_proveedor_nombre ||
+              parent.cliente_proveedor_nombre,
+            cliente_proveedor_rfc:
+              fullChild.cliente_proveedor_rfc || parent.cliente_proveedor_rfc,
+            viaje_id: fullChild.viaje_id || parent.viaje_id,
           });
         });
       }
     });
     return result;
-  }, [filteredRecords, expandedParents]);
+  }, [filteredRecords, cleanRecords, expandedParents]);
 
   // Helper de validación de parpadeo en tiempo real
   const checkShouldBlink = (row: any) => {
@@ -449,7 +443,6 @@ export default function CFDIVault() {
         ),
       });
     } else {
-      // MOTOR CORREGIDO: Renderizado de Filas Hijas del Viaje e Indentación Visual Directa
       cols.push({
         key: "folio",
         header: "Folio",
@@ -737,17 +730,6 @@ export default function CFDIVault() {
                   <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle / Bóveda
                 </DropdownMenuItem>
 
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSelectedTimelineRecord(row);
-                    setTimelineOpen(true);
-                  }}
-                  className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
-                >
-                  <Clock className="h-4 w-4 text-indigo-500" /> Ver Línea de
-                  Tiempo SAT
-                </DropdownMenuItem>
-
                 {hasPdf && (
                   <DropdownMenuItem
                     onClick={() => downloadFile("pdf")}
@@ -809,7 +791,6 @@ export default function CFDIVault() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Estilos CSS Inyectados para la Animación de Parpadeo de Filas Localizadas */}
       <style>{`
         @keyframes rowBlink {
           0%, 100% { background-color: transparent; }
@@ -956,16 +937,6 @@ export default function CFDIVault() {
           if (!isOpen) setTimeout(() => setSelectedInvoice(null), 300);
         }}
         invoice={selectedInvoice}
-      />
-
-      {/* RENDERIZADO DEL DRAWER DEL HISTORIAL DE EVENTOS SOAP */}
-      <CFDITimelineDrawer
-        isOpen={timelineOpen}
-        onClose={() => {
-          setTimelineOpen(false);
-          setSelectedTimelineRecord(null);
-        }}
-        record={selectedTimelineRecord}
       />
     </div>
   );
