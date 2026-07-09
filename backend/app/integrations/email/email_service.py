@@ -34,7 +34,7 @@ class EmailService:
         Envía un correo con diseño SaaS/Bento UI usando el LOGO OFICIAL de la BD.
         Usa CCO para enviar copia oculta y deduplica correos repetidos (TO > CC > BCC).
         """
-        # 1. Definir Destinatario Principal (El Cliente) y Ocultos
+        # 1. Definir Destinatario Principal (El Cliente recibe su tracking normal)
         correo_cliente = (
             trip.client.email
             if trip.client and trip.client.email
@@ -238,7 +238,7 @@ class EmailService:
     ):
         """
         Envía Facturas o Complementos de Pago al cliente con sus adjuntos (XML y PDF).
-        CANDADO APLICADO: Evita enviar el mismo UUID dos veces.
+        CANDADO CRÍTICO INTERCEPTOR: Desvía el correo del cliente a desarrollo interno.
         """
         if not uuid or uuid == "PENDIENTE_SAT":
             logger.warning(f"Abortando envío: El documento {folio_interno} no tiene un UUID válido.")
@@ -247,7 +247,6 @@ class EmailService:
         # =========================================================================
         #  CANDADO BÓVEDA: VERIFICACIÓN DE UUID YA ENVIADO
         # =========================================================================
-        # Ruta dinámica asegurando que esté en la raíz del proyecto (donde se ejecuta)
         base_path = Path(os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[3]))
         lock_file = base_path / "storage" / "correos_enviados_uuid.log"
         
@@ -267,17 +266,19 @@ class EmailService:
         except Exception as e:
             logger.error(f"Error al verificar el candado de correos: {e}")
 
-        if not correo_cliente:
-            logger.warning("No hay correo de cliente para enviar el CFDI.")
-            return False
+        # =========================================================================
+        #  CANDADO DESVÍO DE SEGURIDAD (CLIENTE BLOQUEADO 100% PARA FACTURAS/PAGOS)
+        # =========================================================================
+        logger.info(f"🛡️ DESVÍO ACTIVO: Bloqueando envío de {tipo_documento} destinado a {correo_cliente}. Redireccionando a desarrollo.")
+        correo_cliente = "desarrolloSoft@asicomsystems.com.mx"
 
         # =========================================================================
-        #  PREPARACIÓN Y ENVÍO DEL CORREO DE FACTURACIÓN
+        #  PREPARACIÓN Y ENVÍO DEL CORREO DE FACTURACIÓN (HACIA TU CUENTA)
         # =========================================================================
         msg = MIMEMultipart("mixed")
         msg["From"] = f"Rápidos 3T | Facturación <{self.from_email}>"
         msg["To"] = correo_cliente
-        msg["Subject"] = f"Rápidos 3T - Su {tipo_documento} {folio_interno} ha sido generado"
+        msg["Subject"] = f"Rápidos 3T [AUDITORÍA INTERNA] - {tipo_documento} {folio_interno} generado"
 
         # Cuerpo del correo
         html_content = f"""
@@ -286,21 +287,21 @@ class EmailService:
         <head><meta charset="utf-8"></head>
         <body style="font-family: 'Segoe UI', Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px;">
             <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden;">
-                <div style="background-color: #0f172a; padding: 20px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; letter-spacing: 2px;">RÁPIDOS 3T</h1>
-                    <p style="color: #94a3b8; font-size: 11px; margin-top: 5px;">DEPARTAMENTO DE FACTURACIÓN Y COBRANZA</p>
+                <div style="background-color: #be0811; padding: 20px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 20px; letter-spacing: 2px;">RÁPIDOS 3T [AUDITORÍA INTERNA]</h1>
+                    <p style="color: #f8fafc; font-size: 11px; margin-top: 5px;">ESTE DOCUMENTO NO FUE ENVIADO AL CLIENTE POR REGLA DE NEGOCIO</p>
                 </div>
                 <div style="padding: 30px;">
-                    <h2 style="color: #0f172a; font-size: 20px; margin-bottom: 15px;">Estimado(a) {cliente_nombre},</h2>
+                    <h2 style="color: #0f172a; font-size: 20px; margin-bottom: 15px;">Registro de Documento para {cliente_nombre},</h2>
                     <p style="color: #475569; font-size: 15px; line-height: 1.6;">
-                        Adjunto a este correo encontrará los archivos XML y PDF correspondientes a su <strong>{tipo_documento}</strong> con el folio interno <strong>{folio_interno}</strong>.
+                        Se han generado exitosamente los archivos XML y PDF correspondientes al <strong>{tipo_documento}</strong> con el folio interno <strong>{folio_interno}</strong>.
                     </p>
-                    <div style="background-color: #f1f5f9; border-left: 4px solid #be0811; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                    <div style="background-color: #f1f5f9; border-left: 4px solid #0f172a; padding: 15px; margin: 20px 0; border-radius: 0 8px 8px 0;">
                         <span style="display: block; color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: bold;">Folio Fiscal (UUID)</span>
                         <span style="color: #0f172a; font-size: 14px; font-weight: 600;">{uuid}</span>
                     </div>
                     <p style="color: #475569; font-size: 14px; margin-top: 30px;">
-                        Agradecemos su preferencia y nos reiteramos a sus apreciables órdenes.<br>
+                        Copia de resguardo del ERP.<br>
                         <strong>El Equipo de Rápidos 3T</strong>
                     </p>
                 </div>
@@ -331,7 +332,7 @@ class EmailService:
         else:
             logger.warning(f"No se encontró el archivo PDF en la ruta: {pdf_path}")
 
-        # Ejecución del envío
+        # Ejecución del envío (Hacia tu buzón de desarrollo)
         try:
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
             server.starttls()
@@ -339,16 +340,13 @@ class EmailService:
             server.send_message(msg, from_addr=self.from_email, to_addrs=[correo_cliente])
             server.quit()
             
-            # =========================================================================
-            #  REGISTRAR UUID COMO ENVIADO EXITOSAMENTE
-            # =========================================================================
             try:
                 with open(lock_file, "a") as f:
                     f.write(f"{uuid}\n")
             except Exception as file_e:
                 logger.error(f"Fallo al escribir en el log de correos enviados: {file_e}")
 
-            logger.info(f"✅ Correo de {tipo_documento} enviado exitosamente a {correo_cliente} (UUID: {uuid})")
+            logger.info(f"✅ CFDI desviado a desarrollo exitosamente. Cliente protegido. (UUID: {uuid})")
             return True
         except Exception as e:
             logger.error(f"❌ Error enviando correo de CFDI: {str(e)}")
