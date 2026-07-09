@@ -16,6 +16,7 @@ import {
   Clock,
   Network,
   Search,
+  ChevronRight, // Ícono agregado para reemplazar el emoji ▶
 } from "lucide-react";
 import { toast } from "sonner";
 import axiosClient from "@/api/axiosClient";
@@ -90,7 +91,7 @@ export default function CFDIVault() {
   const [selectedTimelineRecord, setSelectedTimelineRecord] =
     useState<any>(null);
 
-  // 🚀 NUEVOS ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
+  // NUEVOS ESTADOS INTELIGENTES DE CONTROL: Jerarquía y Localizador por Parpadeo
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
   >({});
@@ -149,7 +150,7 @@ export default function CFDIVault() {
     });
   }, [cleanRecords, selectedEntity, selectedStatus, dateRange]);
 
-  // 🚀 SNAPSHOT DEL ÁRBOL EN MEMORIA: Inyecta dinámicamente las filas hijas debajo de su padre correspondiente
+  // SNAPSHOT DEL ÁRBOL EN MEMORIA: Inyecta dinámicamente las filas hijas debajo de su padre correspondiente
   const hierarchicalRecords = useMemo(() => {
     const result: any[] = [];
     filteredRecords.forEach((parent) => {
@@ -184,7 +185,7 @@ export default function CFDIVault() {
   // Helper de validación de parpadeo en tiempo real
   const checkShouldBlink = (row: any) => {
     if (!blinkQuery || blinkQuery.trim().length < 3) return false;
-    const query = blinkQuery.toLowerCase().trim(); // 💡 CAMBIADO DE .strip() A .trim()
+    const query = blinkQuery.toLowerCase().trim();
     const folioTarget = String(
       row.folio || row.folio_interno || "",
     ).toLowerCase();
@@ -194,26 +195,6 @@ export default function CFDIVault() {
 
   const customFiltersUI = (
     <>
-      {/* ⚡ REAL-TIME BLINKING LOCALIZER (El buscador que hace parpadear las filas) */}
-      <div className="relative flex items-center">
-        <Search className="absolute left-3 w-4 h-4 text-amber-500 z-10 animate-pulse" />
-        <input
-          type="text"
-          placeholder="⚡ Localizar y hacer parpadear..."
-          value={blinkQuery}
-          onChange={(e) => setBlinkQuery(e.target.value)}
-          className="w-[240px] h-11 pl-9 pr-8 text-xs bg-amber-50/40 dark:bg-slate-900 border border-amber-200 dark:border-slate-800 rounded-xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-400 font-bold text-slate-800 dark:text-slate-100 transition-all shadow-sm"
-        />
-        {blinkQuery && (
-          <button
-            onClick={() => setBlinkQuery("")}
-            className="absolute right-3 text-slate-400 hover:text-slate-600 text-xs font-black"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-
       <Popover open={entityComboOpen} onOpenChange={setEntityOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -454,7 +435,7 @@ export default function CFDIVault() {
         ),
       });
     } else {
-      // 🚀 MOTOR CORREGIDO: Renderizado de Filas Hijas del Viaje e Indentación Visual Directa
+      // MOTOR CORREGIDO: Renderizado de Filas Hijas del Viaje e Indentación Visual Directa
       cols.push({
         key: "folio",
         header: "Folio",
@@ -509,30 +490,21 @@ export default function CFDIVault() {
                     }));
                   }}
                 >
-                  <span
-                    className="text-[10px] transition-transform duration-200 inline-block font-black"
-                    style={{
-                      transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
-                    }}
-                  >
-                    ▶
-                  </span>
+                  <ChevronRight
+                    className={cn(
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      isExpanded ? "rotate-90" : "rotate-0",
+                    )}
+                  />
                 </Button>
               )}
               <span className="font-mono font-black text-slate-900 dark:text-slate-100">
                 {val || "S/F"}
               </span>
-              {isNominal && (
-                <Badge
-                  variant="outline"
-                  className="text-[9px] h-4 px-1.5 bg-amber-50 text-amber-700 border-amber-200 font-sans font-black"
-                >
-                  $1 Prov
-                </Badge>
-              )}
+
               {hasChildren && (
                 <Badge className="text-[9px] h-4 bg-indigo-600 text-white font-sans font-black shadow-sm">
-                  {row.cartas_porte_hijas.length} Hijas
+                  {row.cartas_porte_hijas.length}
                 </Badge>
               )}
             </div>
@@ -751,7 +723,6 @@ export default function CFDIVault() {
                   <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle / Bóveda
                 </DropdownMenuItem>
 
-                {/* 🚀 HISTORIAL SOAP DIRECTO: Abre el TimelineDrawer con un clic */}
                 <DropdownMenuItem
                   onClick={() => {
                     setSelectedTimelineRecord(row);
@@ -871,10 +842,11 @@ export default function CFDIVault() {
             data={hierarchicalRecords}
             columns={columns}
             isLoading={isLoading}
-            searchPlaceholder="Filtrar por términos generales..."
+            searchPlaceholder="Buscar por uuid, folio..."
             exportFileName={excelExportName}
             initialSort={{ key: "fecha_emision", direction: "desc" }}
             customFilters={customFiltersUI}
+            onGlobalSearchChange={(value) => setBlinkQuery(value)}
           />
         </CardContent>
       </Card>

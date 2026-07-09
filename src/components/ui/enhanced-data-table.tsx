@@ -81,6 +81,7 @@ interface EnhancedDataTableProps<T> {
   initialSort?: SortConfig;
   hideGlobalSearch?: boolean; // <-- NUEVA
   hideInternalFilters?: boolean; // <-- NUEVO: Para ocultar buscador global sin romper otros componentes
+  onGlobalSearchChange?: (value: string) => void; // <-- AÑADIDO: Prop para emitir la búsqueda
 }
 
 interface DateRange {
@@ -132,6 +133,7 @@ export function EnhancedDataTable<T extends Record<string, any>>({
   initialSort,
   hideGlobalSearch = false, // <-- NUEVO: Por defecto es falso para no afectar a otros
   hideInternalFilters = false, // <-- NUEVO: Para ocultar filtros internos sin romper otros componentes
+  onGlobalSearchChange, // <-- AÑADIDO: Recibimos la prop aquí
 }: EnhancedDataTableProps<T>) {
   const [globalSearch, setGlobalSearch] = useState("");
   //  INICIALIZA EL ORDEN CON LO QUE LE MANDEMOS DESDE EL PADRE
@@ -350,8 +352,13 @@ export function EnhancedDataTable<T extends Record<string, any>>({
                 placeholder={searchPlaceholder}
                 value={globalSearch}
                 onChange={(e) => {
-                  setGlobalSearch(e.target.value);
+                  const val = e.target.value;
+                  setGlobalSearch(val);
                   setCurrentPage(1);
+                  // <-- AQUÍ DISPARAMOS EL EVENTO AL COMPONENTE PADRE -->
+                  if (onGlobalSearchChange) {
+                    onGlobalSearchChange(val);
+                  }
                 }}
                 className="pl-10 h-11 bg-white dark:bg-slate-900 border-none shadow-sm text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/30 focus:ring-2 focus:ring-brand-red/20 transition-all rounded-xl"
               />
