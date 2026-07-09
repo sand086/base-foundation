@@ -3,7 +3,7 @@
 import traceback
 from datetime import datetime, timedelta, date
 from fastapi import HTTPException
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.exc import IntegrityError
 
 from app.models import models
@@ -23,7 +23,8 @@ def get_suppliers(db: Session, skip: int = 0, limit: int = 100):
         db.query(models.Supplier)
         .options(
             joinedload(models.Supplier.cost_center),
-            joinedload(models.Supplier.invoices).joinedload(
+            # 🚀 FIX 1: selectinload evita la explosión cartesiana en memoria
+            selectinload(models.Supplier.invoices).selectinload(
                 models.PayableInvoice.payments
             ),
         )
@@ -43,7 +44,8 @@ def get_supplier(db: Session, supplier_id: int):
         db.query(models.Supplier)
         .options(
             joinedload(models.Supplier.cost_center),
-            joinedload(models.Supplier.invoices).joinedload(
+            # 🚀 FIX 2: Mismo blindaje para la consulta individual
+            selectinload(models.Supplier.invoices).selectinload(
                 models.PayableInvoice.payments
             ),
         )
@@ -144,7 +146,8 @@ def get_invoices(db: Session, skip: int = 0, limit: int = 5000):
         db.query(models.PayableInvoice)
         .options(
             joinedload(models.PayableInvoice.supplier),
-            joinedload(models.PayableInvoice.payments),
+            # 🚀 FIX 3: selectinload para pagos porque es lista (1:N)
+            selectinload(models.PayableInvoice.payments),
         )
         .filter(models.PayableInvoice.record_status != RecordStatus.ELIMINADO)
         .order_by(models.PayableInvoice.fecha_vencimiento.asc())
@@ -163,7 +166,8 @@ def get_invoice(db: Session, invoice_id: int):
         db.query(models.PayableInvoice)
         .options(
             joinedload(models.PayableInvoice.supplier),
-            joinedload(models.PayableInvoice.payments),
+            # 🚀 FIX 4: selectinload para pagos
+            selectinload(models.PayableInvoice.payments),
         )
         .filter(
             models.PayableInvoice.id == invoice_id,
@@ -444,7 +448,8 @@ def register_payment(
 
         # Confirmamos todos los cambios juntos (Atomicidad)
         db.commit()
-        return get_invoice(db, invoice_id)
+        db.refresh(invoice)
+        return invoice
 
     except ValueError as ve:
         db.rollback()

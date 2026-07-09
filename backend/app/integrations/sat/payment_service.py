@@ -418,8 +418,26 @@ class PaymentComplementService:
             .strip()
         )
 
-        pagos_existentes = self.db.query(ReceivableInvoicePayment).count()
-        folio_corto = str(2560 + pagos_existentes)
+        # =========================================================================
+        # NUEVA LÓGICA DE FOLIOS PERFECTOS: Buscar el último COM- y sumar 1
+        # =========================================================================
+        ultimo_pago = (
+            self.db.query(ReceivableInvoicePayment)
+            .filter(ReceivableInvoicePayment.folio_complemento.like("COM-%"))
+            .order_by(ReceivableInvoicePayment.id.desc())
+            .first()
+        )
+
+        if ultimo_pago and ultimo_pago.folio_complemento:
+            try:
+                # Extraemos el número, ej: "COM-2628" -> "2628" -> 2629
+                ultimo_folio_numero = int(ultimo_pago.folio_complemento.replace("COM-", ""))
+                folio_corto = str(ultimo_folio_numero + 1)
+            except ValueError:
+                folio_corto = "2560" # Fallback por si hay basura en la BD
+        else:
+            folio_corto = "2560" # Número inicial base si la tabla es nueva
+        # =========================================================================
 
         datos_pago = {
             "serie": "COM",
@@ -996,8 +1014,27 @@ class PaymentComplementService:
             .strip()
         )
 
-        # Generar un folio interno para este complemento (COM-XXX)
-        folio_corto = str(pago.id + 5000)  # Un offset seguro para que no choque
+        # =========================================================================
+        # REUTILIZAR O GENERAR FOLIO INTELIGENTE
+        # =========================================================================
+        if pago.folio_complemento and pago.folio_complemento.startswith("COM-"):
+            folio_corto = pago.folio_complemento.replace("COM-", "")
+        else:
+            ultimo_pago = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(ReceivableInvoicePayment.folio_complemento.like("COM-%"))
+                .order_by(ReceivableInvoicePayment.id.desc())
+                .first()
+            )
+            if ultimo_pago and ultimo_pago.folio_complemento:
+                try:
+                    ultimo_folio_numero = int(ultimo_pago.folio_complemento.replace("COM-", ""))
+                    folio_corto = str(ultimo_folio_numero + 1)
+                except ValueError:
+                    folio_corto = "2560"
+            else:
+                folio_corto = "2560"
+        # =========================================================================
 
         datos_pago = {
             "serie": "COM",

@@ -1,16 +1,13 @@
-# --- Fuente: crud_maintenance.py ---
-
 import os
 import shutil
 import time
-from datetime import datetime, timezone, timedelta, date
+from datetime import datetime, timezone, date
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy.orm import Session, joinedload, lazyload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models import models
-
 from . import schemas
 
 # -----------------------------
@@ -310,7 +307,10 @@ def list_work_orders(
         .options(
             joinedload(models.WorkOrder.unit),
             joinedload(models.WorkOrder.mechanic),
-            joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
+            # 🚀 FIX: Filtrar eliminados desde SQL, NO en Python
+            selectinload(
+                models.WorkOrder.parts.and_(models.WorkOrderPart.record_status != models.RecordStatus.ELIMINADO)
+            ).joinedload(models.WorkOrderPart.item),
             joinedload(models.WorkOrder.created_by),  # <-- AUDITORÍA: Cargar creador
             joinedload(models.WorkOrder.updated_by),  # <-- AUDITORÍA: Cargar editor
         )
@@ -342,14 +342,7 @@ def list_work_orders(
         else:
             o.editado_por = "Sin ediciones"
 
-        # --- FIX: Filtrar las partes eliminadas para que no lleguen al Frontend ---
-        partes_activas = [
-            p
-            for p in o.parts
-            if getattr(p, "record_status", "A") != models.RecordStatus.ELIMINADO
-        ]
-        o.parts = partes_activas  # Reemplazamos la lista con las puras activas
-
+        # (Ya no hace falta la mutación manual de Python, SQL trae solo las activas)
         for p in o.parts:
             if p.item:
                 p.item_sku = p.item.sku
@@ -367,7 +360,10 @@ def get_work_order(db: Session, order_id: int):
         .options(
             joinedload(models.WorkOrder.unit),
             joinedload(models.WorkOrder.mechanic),
-            joinedload(models.WorkOrder.parts).joinedload(models.WorkOrderPart.item),
+            # 🚀 FIX: Filtrar eliminados desde SQL, NO en Python
+            selectinload(
+                models.WorkOrder.parts.and_(models.WorkOrderPart.record_status != models.RecordStatus.ELIMINADO)
+            ).joinedload(models.WorkOrderPart.item),
             joinedload(models.WorkOrder.created_by),  # <-- AUDITORÍA: Cargar creador
             joinedload(models.WorkOrder.updated_by),  # <-- AUDITORÍA: Cargar editor
         )
@@ -398,14 +394,7 @@ def get_work_order(db: Session, order_id: int):
     else:
         order.editado_por = "Sin ediciones"
 
-    # --- FIX: Filtrar las partes eliminadas ---
-    partes_activas = [
-        p
-        for p in order.parts
-        if getattr(p, "record_status", "A") != models.RecordStatus.ELIMINADO
-    ]
-    order.parts = partes_activas
-
+    # (Ya no hace falta la mutación manual de Python, SQL trae solo las activas)
     for p in order.parts:
         if p.item:
             p.item_sku = p.item.sku
