@@ -86,14 +86,14 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
             joinedload(models.Trip.remolque_2),
-            # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
             joinedload(models.Trip.motogenerator_1_unit),
             joinedload(models.Trip.motogenerator_2_unit),
-            # ---------------------------------------------------
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
             selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
-            # 🚀 PREVENCIÓN DE TIMEOUT EN CARGA MASIVA (N+1 Query fix) 🚀
+            # 🚀 PREVENCIÓN DE TIMEOUT: SE CARGA LA BITÁCORA EN BLOQUE 🚀
+            selectinload(models.Trip.legs).selectinload(models.TripLeg.timeline_events),
+            # 🚀 PREVENCIÓN DE TIMEOUT EN CARGA MASIVA DE FACTURACIÓN 🚀
             selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.document_history),
             selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.cartas_porte_hijas),
             selectinload(models.Trip.receivable_invoices).joinedload(models.ReceivableInvoice.factura_padre),
@@ -120,15 +120,13 @@ def get_trip(db: Session, trip_id: str):
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
             joinedload(models.Trip.remolque_2),
-            # --- FASE 2: TRAER RELACIONES DE MOTOGENERADORES ---
             joinedload(models.Trip.motogenerator_1_unit),
             joinedload(models.Trip.motogenerator_2_unit),
-            # ---------------------------------------------------
             selectinload(models.Trip.legs).joinedload(models.TripLeg.unit),
             selectinload(models.Trip.legs).joinedload(models.TripLeg.operator),
-            selectinload(models.Trip.legs).joinedload(models.TripLeg.timeline_events),
+            selectinload(models.Trip.legs).selectinload(models.TripLeg.timeline_events),
             selectinload(models.Trip.legs).selectinload(models.TripLeg.fuel_logs),
-            # 🚀 PREVENCIÓN DE TIMEOUT EN CARGA MASIVA (N+1 Query fix) 🚀
+            # 🚀 PREVENCIÓN DE TIMEOUT EN CARGA MASIVA DE FACTURACIÓN 🚀
             selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.document_history),
             selectinload(models.Trip.receivable_invoices).selectinload(models.ReceivableInvoice.cartas_porte_hijas),
             selectinload(models.Trip.receivable_invoices).joinedload(models.ReceivableInvoice.factura_padre),
@@ -1193,7 +1191,6 @@ def undo_last_leg(db: Session, trip_id: str, user_id: int):  # <--- AUDITORÍA P
             trip.status = models.TripStatus.CREADO
             trip.closed_at = None
             trip.updated_by_id = user_id  # <--- AUDITORÍA
-            # No agregamos bitácora porque ya no existen fases a donde amarrarla.
 
     db.commit()
     db.refresh(trip)
@@ -1283,9 +1280,6 @@ def unhook_in_yard(db: Session, trip_id: str, user_id: int):  # <--- AUDITORÍA 
 
 
 def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA PARAM
-    """
-    Revierte la liquidación de un tramo, sus saldos, y anula la CxC si es posible.
-    """
     # 1. Buscar el tramo
     leg = (
         db.query(models.TripLeg)
@@ -1307,7 +1301,6 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
     trip = leg.trip
 
     # 2. VALIDACIÓN DE CXC (Cuenta Por Cobrar)
-    # Buscamos la CXC provisional/definitiva que se haya generado para este viaje
     cxc_list = (
         db.query(models.ReceivableInvoice)
         .filter(
@@ -1320,7 +1313,6 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
     )
 
     for cxc in cxc_list:
-        # Si la cuenta ya tiene algún pago, BLOQUEAMOS la operación
         if cxc.estatus in [
             models.InvoiceStatus.PAGADO,
             models.InvoiceStatus.PAGO_PARCIAL,
@@ -1330,15 +1322,10 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
                 "ya tiene pagos o abonos registrados en Tesorería."
             )
 
-        # Si no tiene pagos, aplicamos ELIMINADO LÓGICO para que el sistema
-        # genere una nueva limpia al volver a liquidar.
         cxc.record_status = RecordStatus.ELIMINADO
         cxc.updated_by_id = user_id  # <--- AUDITORÍA
         db.add(cxc)
 
-        # =================================================================
-        # NUEVO: REGISTRO EN BITÁCORA DE AUDITORÍA (ELIMINACIÓN LÓGICA)
-        # =================================================================
         from app.models.models import AuditLog
 
         log = AuditLog(
@@ -1349,7 +1336,6 @@ def reopen_trip_leg(db: Session, leg_id: int, user_id: int):  # <--- AUDITORÍA 
             detalles=f'{{"viaje_id": {trip.id}, "leg_id": {leg_id}}}',
         )
         db.add(log)
-        # =================================================================
 
     # 3. REVERSIÓN DE SALDOS DEL TRAMO
     leg.status = (
