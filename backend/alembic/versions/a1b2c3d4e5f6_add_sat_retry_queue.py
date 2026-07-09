@@ -23,6 +23,7 @@ def upgrade() -> None:
         "sat_retry_queue",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("invoice_id", sa.Integer(), nullable=False),
+        sa.Column("payment_id", sa.Integer(), nullable=True),
         sa.Column("viaje_id", sa.Integer(), nullable=True),
         sa.Column("operation_type", sa.String(length=30), nullable=False),
         sa.Column("document_type", sa.String(length=30), nullable=False),
@@ -77,12 +78,16 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["invoice_id"], ["receivable_invoices.id"], ondelete="CASCADE"
         ),
+        sa.ForeignKeyConstraint(
+            ["payment_id"], ["receivable_invoice_payments.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["updated_by_id"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["viaje_id"], ["trips.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("idempotency_key"),
     )
     op.create_index("ix_sat_retry_queue_id", "sat_retry_queue", ["id"])
+    op.create_index("ix_sat_retry_queue_payment_id", "sat_retry_queue", ["payment_id"])
     op.create_index(
         "ix_sat_retry_queue_idempotency_key",
         "sat_retry_queue",
@@ -100,6 +105,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_sat_retry_queue_status_next_attempt", table_name="sat_retry_queue")
     op.drop_index("ix_sat_retry_queue_invoice_id", table_name="sat_retry_queue")
+    op.drop_index("ix_sat_retry_queue_payment_id", table_name="sat_retry_queue")
     op.drop_index("ix_sat_retry_queue_idempotency_key", table_name="sat_retry_queue")
     op.drop_index("ix_sat_retry_queue_id", table_name="sat_retry_queue")
     op.drop_table("sat_retry_queue")

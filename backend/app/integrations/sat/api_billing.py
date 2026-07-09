@@ -783,8 +783,10 @@ def get_sat_retry_queue(
         {
             "id": row.id,
             "invoice_id": row.invoice_id,
+            "payment_id": row.payment_id,
             "viaje_id": row.viaje_id,
             "operation_type": row.operation_type,
+            "document_type": row.document_type,
             "source_service": row.source_service,
             "status": row.status,
             "folio_interno": row.folio_interno,

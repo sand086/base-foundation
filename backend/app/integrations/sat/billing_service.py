@@ -1743,7 +1743,31 @@ class BillingService:
                 continue
 
             try:
-                if item.operation_type == "cancelacion":
+                if item.document_type == "rep":
+                    from app.integrations.sat.payment_service import (
+                        PaymentComplementService,
+                    )
+
+                    payload = item.request_payload or {}
+                    payment_id = item.payment_id or payload.get("payment_id")
+                    if not payment_id:
+                        raise ValueError("No hay payment_id para reintentar REP.")
+
+                    payment_service = PaymentComplementService(self.db)
+                    if item.operation_type == "timbrado_pago":
+                        payment_service.timbrar_pago_existente(payment_id)
+                    elif item.operation_type == "cancelacion_pago":
+                        payment_service.cancelar_pago_sat(
+                            payment_id=payment_id,
+                            motivo=payload.get("motivo") or "02",
+                            uuid_sustituto=payload.get("uuid_sustituto"),
+                        )
+                    else:
+                        raise ValueError(
+                            f"Tipo de operación REP no soportado: {item.operation_type}"
+                        )
+
+                elif item.operation_type == "cancelacion":
                     payload = item.request_payload or {}
                     self.cancelar_factura_sat(
                         invoice_id=factura.id,
@@ -1790,6 +1814,8 @@ class BillingService:
                     {
                         "id": item.id,
                         "invoice_id": item.invoice_id,
+                        "payment_id": item.payment_id,
+                        "document_type": item.document_type,
                         "operation_type": item.operation_type,
                         "status": item.status,
                     }
@@ -1808,6 +1834,8 @@ class BillingService:
                     {
                         "id": item.id,
                         "invoice_id": item.invoice_id,
+                        "payment_id": item.payment_id,
+                        "document_type": item.document_type,
                         "operation_type": item.operation_type,
                         "status": item.status,
                         "error": item.last_error,

@@ -23,7 +23,8 @@ from cryptography.hazmat.backends import default_backend
 import qrcode
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
-from app.integrations.sat.soap_client import create_pac_client
+from app.integrations.sat.retry_queue import register_sat_payment_retry
+from app.integrations.sat.soap_client import create_pac_client, is_pac_timeout_error
 
 try:
     from num2words import num2words
@@ -576,14 +577,29 @@ class PaymentComplementService:
             # =========================================================================
             #  MANEJO INTELIGENTE DE TIMEOUTS Y 500s
             # =========================================================================
-            if any(term in error_msg for term in ["timeout", "time out", "500", "502", "503", "504", "readtimeout"]):
-                logger.warning(f"Intermitencia SAT detectada. Pagos PENDIENTES se envían a cola de reintentos.")
-                try:
-                    from app.integrations.sat.retry_queue import add_to_retry_queue
-                    for pp in pagos_pendientes:
-                        add_to_retry_queue(self.db, entity_type="payment", entity_id=pp.id, xml_data=xml_sellado)
-                except ImportError:
-                    logger.error("Módulo retry_queue no encontrado o import fallido.")
+            if is_pac_timeout_error(e) or any(term in error_msg for term in ["500", "502", "503", "504"]):
+                logger.warning(
+                    "Intermitencia SAT detectada. Pagos PENDIENTES se envían a cola de reintentos."
+                )
+                for pp in pagos_pendientes:
+                    pp.detalle_sat = (
+                        "Timeout/intermitencia esperando respuesta del PAC. "
+                        "El REP quedó pendiente de reintento automático."
+                    )
+                    register_sat_payment_retry(
+                        self.db,
+                        payment=pp,
+                        operation_type="timbrado_pago",
+                        source_service=self.__class__.__name__,
+                        error=e,
+                        payload={
+                            "payment_id": pp.id,
+                            "invoice_id": pp.invoice_id,
+                            "xml_sellado": xml_sellado,
+                        },
+                        http_status=202,
+                    )
+                self.db.commit()
                 
                 # Dejamos la base de datos intacta (Pagos en PENDIENTE_SAT)
                 raise HTTPException(
@@ -885,6 +901,42 @@ class PaymentComplementService:
             }
 
         except Exception as e:
+            if is_pac_timeout_error(e):
+                self.db.rollback()
+                pago = (
+                    self.db.query(ReceivableInvoicePayment)
+                    .filter(ReceivableInvoicePayment.id == payment_id)
+                    .first()
+                )
+                if pago:
+                    pago.estatus = "PENDIENTE_CANCELAR_SAT"
+                    pago.motivo_cancelacion = motivo
+                    pago.detalle_sat = (
+                        "Timeout esperando respuesta del PAC. La cancelación del REP "
+                        "quedó pendiente de reintento/verificación."
+                    )
+                    pago.intentos_cancelacion = (pago.intentos_cancelacion or 0) + 1
+                    register_sat_payment_retry(
+                        self.db,
+                        payment=pago,
+                        operation_type="cancelacion_pago",
+                        source_service=self.__class__.__name__,
+                        error=e,
+                        payload={
+                            "payment_id": pago.id,
+                            "invoice_id": pago.invoice_id,
+                            "uuid": pago.complemento_uuid,
+                            "motivo": motivo,
+                            "uuid_sustituto": uuid_sustituto,
+                        },
+                        http_status=202,
+                    )
+                    self.db.commit()
+                raise HTTPException(
+                    status_code=202,
+                    detail="El PAC tardó en responder. La cancelación del REP quedó pendiente y será reintentada.",
+                )
+
             logger.error(f"Error cancelando REP {pago.complemento_uuid}: {e}")
             self.db.rollback()
             raise ValueError(f"Fallo en PAC al cancelar REP: {str(e)}")
@@ -1152,15 +1204,26 @@ class PaymentComplementService:
 
         except Exception as e:
             error_msg = str(e).lower()
-            if any(term in error_msg for term in ["timeout", "time out", "500", "502", "503", "504", "readtimeout"]):
-                logger.warning(f"Intermitencia SAT al timbrar diferido. Enviando a cola.")
-                try:
-                    from app.integrations.sat.retry_queue import add_to_retry_queue
-                    add_to_retry_queue(self.db, entity_type="payment", entity_id=pago.id, xml_data=xml_sellado)
-                except ImportError:
-                    pass
-                
+            if is_pac_timeout_error(e) or any(term in error_msg for term in ["500", "502", "503", "504"]):
+                logger.warning("Intermitencia SAT al timbrar diferido. Enviando a cola.")
                 pago.complemento_uuid = "PENDIENTE_SAT"
+                pago.detalle_sat = (
+                    "Timeout/intermitencia esperando respuesta del PAC. "
+                    "El REP quedó pendiente de reintento automático."
+                )
+                register_sat_payment_retry(
+                    self.db,
+                    payment=pago,
+                    operation_type="timbrado_pago",
+                    source_service=self.__class__.__name__,
+                    error=e,
+                    payload={
+                        "payment_id": pago.id,
+                        "invoice_id": pago.invoice_id,
+                        "xml_sellado": xml_sellado,
+                    },
+                    http_status=202,
+                )
                 self.db.commit()
                 
                 # Lanzamos una 202 para que el Front-end sepa que no falló, sino que está encolado.

@@ -1662,6 +1662,12 @@ class SatRetryQueue(AuditMixin, Base):
         nullable=False,
         index=True,
     )
+    payment_id = Column(
+        Integer,
+        ForeignKey("receivable_invoice_payments.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     viaje_id = Column(Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True)
 
     operation_type = Column(String(30), nullable=False)  # timbrado, cancelacion
@@ -1685,6 +1691,7 @@ class SatRetryQueue(AuditMixin, Base):
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 
     invoice = relationship("ReceivableInvoice")
+    payment = relationship("ReceivableInvoicePayment")
     trip = relationship("Trip")
 
 
