@@ -458,8 +458,7 @@ export function InvoiceDetailSheet({
                       size="sm"
                       className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
                     >
-                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar Forzado
-                      (02)
+                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar (01)
                     </Button>
                   )}
                 </div>
