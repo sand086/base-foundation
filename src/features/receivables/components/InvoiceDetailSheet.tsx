@@ -147,9 +147,9 @@ export function InvoiceDetailSheet({
     safeStr(inv.emisor_rfc) ||
     safeStr(inv.client?.rfc) ||
     safeStr(inv.supplier?.rfc) ||
-    "RFC_NO_DISPONIBLE";
+    "RFC NO DISPONIBLE";
 
-  const conceito = safeStr(inv.concepto) || "Sin descrição";
+  const concepto = safeStr(inv.concepto) || "Sin descripción";
   const fechaEmision =
     safeStr(inv.fecha_emision) || safeStr(inv.fechaEmision) || "—";
   const fechaVencimiento =
@@ -163,13 +163,12 @@ export function InvoiceDetailSheet({
   const moneda = safeStr(inv.moneda) || "MXN";
 
   const referenciaOperativa = safeStr(inv.referencia);
-  const origen = safeStr(inv.trip_info?.origen) || "Não especificado";
-  const destino = safeStr(inv.trip_info?.destino) || "Não especificado";
+  const origen = safeStr(inv.trip_info?.origen) || "No especificado";
+  const destino = safeStr(inv.trip_info?.destino) || "No especificado";
   const pesoTon = toNumber(inv.trip_info?.peso_toneladas);
   const contenedores =
-    safeStr(inv.trip_info?.contenedores) || "Sem contentores registados";
-  const productoSat =
-    safeStr(inv.trip_info?.producto_sat) || "Não especificado";
+    safeStr(inv.trip_info?.contenedores) || "Sin contenedores registrados";
+  const productoSat = safeStr(inv.trip_info?.producto_sat) || "No especificado";
 
   const rawPayments: Array<any> = Array.isArray(inv.payments)
     ? inv.payments
@@ -184,7 +183,7 @@ export function InvoiceDetailSheet({
   );
 
   // ============================================================================
-  // 🚀 LÓGICA PADRONIZADA DE DOWNLOADS (Folio_RFC_UUID.ext)
+  // 🚀 LÓGICA ESTANDARIZADA DE DESCARGAS (Folio_RFC_UUID.ext)
   // ============================================================================
   const getStandardFilename = (
     folio: string,
@@ -202,10 +201,10 @@ export function InvoiceDetailSheet({
   };
 
   const forceDownload = async (fileUrl: string, customName: string) => {
-    const toastId = toast.loading(`A preparar ficheiro: ${customName}...`);
+    const toastId = toast.loading(`Preparando archivo: ${customName}...`);
     try {
       const response = await fetch(fileUrl);
-      if (!response.ok) throw new Error("Não foi possível obter o ficheiro");
+      if (!response.ok) throw new Error("No se pudo obtener el archivo");
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -217,10 +216,10 @@ export function InvoiceDetailSheet({
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      toast.success(`Transferência concluída`, { id: toastId });
+      toast.success(`Descarga completada`, { id: toastId });
     } catch (error) {
       console.error(
-        "Falha na transferência, a abrir num novo separador...",
+        "Falló la descarga forzada, abriendo en nueva pestaña...",
         error,
       );
       window.open(fileUrl, "_blank");
@@ -234,7 +233,7 @@ export function InvoiceDetailSheet({
     customFolio: string,
   ) => {
     if (!targetUuid || targetUuid === "NO TIMBRADO") {
-      toast.error("Não existe um UUID válido para transferir do SAT.");
+      toast.error("No hay un UUID válido para descargar del SAT.");
       return;
     }
     const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -269,7 +268,7 @@ export function InvoiceDetailSheet({
     try {
       await onStampPayment(paymentId);
     } catch (error) {
-      console.error("Erro ao emitir selo (timbrar):", error);
+      console.error("Error al timbrar:", error);
     } finally {
       setStampingId(null);
     }
@@ -279,7 +278,7 @@ export function InvoiceDetailSheet({
     if (!onCancelPayments) return;
     if (
       !window.confirm(
-        "Tem a certeza que deseja anular este pagamento? O valor será devolvido à fatura e o cancelamento será enviado para o SAT.",
+        "¿Seguro que deseas anular este pago? Se devolverá la deuda a la factura y se enviará la cancelación al SAT.",
       )
     )
       return;
@@ -288,7 +287,7 @@ export function InvoiceDetailSheet({
     try {
       await onCancelPayments([paymentId]);
     } catch (error) {
-      console.error("Erro ao cancelar o pagamento:", error);
+      console.error("Error al cancelar pago:", error);
     } finally {
       setCancelingId(null);
     }
@@ -296,7 +295,7 @@ export function InvoiceDetailSheet({
 
   const handleRebuildPdf = async () => {
     if (!inv.id) return;
-    const toastId = toast.loading("A regenerar o design do PDF...");
+    const toastId = toast.loading("Regenerando diseño del PDF...");
     setIsRebuilding(true);
 
     try {
@@ -305,16 +304,13 @@ export function InvoiceDetailSheet({
 
       const res = await fetch(`${baseURL}/api/sat/rebuild-pdf/${inv.id}`);
 
-      if (!res.ok) throw new Error("Erro no servidor ao regenerar");
+      if (!res.ok) throw new Error("Error en servidor al regenerar");
 
-      toast.success(
-        "PDF regenerado com sucesso. Pode transferi-lo novamente.",
-        {
-          id: toastId,
-        },
-      );
+      toast.success("PDF regenerado correctamente. Descárgalo de nuevo.", {
+        id: toastId,
+      });
     } catch (error) {
-      toast.error("Ocorreu um erro ao regenerar o PDF", { id: toastId });
+      toast.error("Hubo un error al regenerar el PDF", { id: toastId });
     } finally {
       setIsRebuilding(false);
     }
@@ -370,7 +366,7 @@ export function InvoiceDetailSheet({
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800/50">
               <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Detalhe de Comprovativo
+            Detalle de Comprobante
           </SheetTitle>
 
           <div className="flex items-center gap-3 mt-0">
@@ -399,15 +395,15 @@ export function InvoiceDetailSheet({
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">
-                  Fatura Cancelada
+                  Factura Cancelada
                 </h4>
                 <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
-                  Cancelada a <strong>{fDT(inv.fecha_cancelacion)}</strong>.
-                  Detalhe SAT:{" "}
+                  Cancelada el <strong>{fDT(inv.fecha_cancelacion)}</strong>.
+                  Detalle SAT:{" "}
                   {inv.detalle_sat ||
                     (inv.motivo_cancelacion
-                      ? `pelo motivo "${inv.motivo_cancelacion}"`
-                      : "Sem detalhe.")}
+                      ? `por el motivo "${inv.motivo_cancelacion}"`
+                      : "Sin detalle.")}
                 </p>
               </div>
             </div>
@@ -418,11 +414,11 @@ export function InvoiceDetailSheet({
               <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />
               <div className="flex-1">
                 <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
-                  Em Processo de Cancelamento
+                  En Proceso de Cancelación
                 </h4>
                 <p className="text-sm font-medium text-amber-700/80 dark:text-amber-400/80 mt-1">
                   {inv.detalle_sat ||
-                    "Aguardar aprovação do Recetor na Caixa Tributária (Buzón Tributario)."}
+                    "Esperando aprobación del Receptor en el Buzón Tributario."}
                 </p>
                 {onVerifySat && (
                   <Button
@@ -437,7 +433,7 @@ export function InvoiceDetailSheet({
                         isVerifying && "animate-spin",
                       )}
                     />
-                    Consultar SAT agora
+                    Consultar SAT ahora
                   </Button>
                 )}
               </div>
@@ -449,12 +445,11 @@ export function InvoiceDetailSheet({
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <h4 className="text-[11px] font-black text-red-800 dark:text-red-400 uppercase tracking-widest">
-                  Rejeição do Cancelamento (Tentativa {inv.intentos_cancelacion}
-                  )
+                  Rechazo de Cancelación (Intento {inv.intentos_cancelacion})
                 </h4>
                 <p className="text-sm font-medium text-red-700/80 dark:text-red-400/80 mt-1">
                   {inv.detalle_sat ||
-                    "O SAT ou o Recetor rejeitaram o pedido de cancelamento."}
+                    "El SAT o el Receptor rechazaron la solicitud de cancelación."}
                 </p>
                 <div className="flex gap-2 mt-3">
                   {onRetryCancel && (
@@ -463,8 +458,8 @@ export function InvoiceDetailSheet({
                       size="sm"
                       className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
                     >
-                      <RefreshCw className="w-3 h-3 mr-2" /> Tentar Novamente
-                      Forçado (02)
+                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar Forzado
+                      (02)
                     </Button>
                   )}
                 </div>
@@ -472,19 +467,19 @@ export function InvoiceDetailSheet({
             </div>
           )}
 
-          {/* 🌳 HIERARQUIA DA VIAGEM (PAI / FILHAS) CON INFORMAÇÃO DETALHADA 🌳 */}
+          {/* 🌳 JERARQUÍA DEL VIAJE (PADRE / HIJOS) CON INFO DETALLADA 🌳 */}
           {(inv.factura_padre ||
             (inv.cartas_porte_hijas && inv.cartas_porte_hijas.length > 0)) && (
             <div className="bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-2xl">
               <h4 className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2 mb-3">
-                <Network className="w-4 h-4" /> Árvore de Documentos da Viagem
+                <Network className="w-4 h-4" /> Árbol de Documentos del Viaje
               </h4>
 
               {inv.factura_padre && (
                 <div className="flex flex-col gap-1 mb-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex items-center gap-2">
                     <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300">
-                      PAI (Ingresso)
+                      PADRE (Ingreso)
                     </Badge>
                     <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">
                       {inv.factura_padre.folio_interno ||
@@ -494,13 +489,11 @@ export function InvoiceDetailSheet({
                     <span className="text-xs font-black text-slate-700 dark:text-slate-300 ml-auto">
                       {inv.factura_padre.monto_total !== undefined
                         ? fC(inv.factura_padre.monto_total)
-                        : "Montante não disponível"}
+                        : "Monto no disponible"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-[10px] font-mono text-slate-500 mt-1">
-                    <span>
-                      UUID: {inv.factura_padre.uuid || "NÃO TIMBRADA"}
-                    </span>
+                    <span>UUID: {inv.factura_padre.uuid || "NO TIMBRADA"}</span>
                     <StatusBadge
                       status={getInvoiceStatusInfo(inv.factura_padre).status}
                       className="text-[9px] py-0 px-2 h-5"
@@ -510,7 +503,7 @@ export function InvoiceDetailSheet({
                         "TIMBRADA"}
                     </StatusBadge>
                   </div>
-                  {/* Motivo Cancelamento Pai */}
+                  {/* Motivo Cancelación de Padre */}
                   {(inv.factura_padre.estatus === "CANCELADO" ||
                     inv.factura_padre.status_sat === "CANCELADO") &&
                     inv.factura_padre.motivo_cancelacion && (
@@ -532,7 +525,7 @@ export function InvoiceDetailSheet({
                       variant="outline"
                       className="text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50"
                     >
-                      FILHA (C. Porte)
+                      HIJA (C. Porte)
                     </Badge>
                     <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">
                       {hija.folio_interno || hija.folio || "S/F"}
@@ -545,14 +538,14 @@ export function InvoiceDetailSheet({
                     </StatusBadge>
                   </div>
                   <div className="flex justify-between items-center pl-1 text-[10px] font-mono text-slate-500 mt-1">
-                    <span>UUID: {hija.uuid || "NÃO TIMBRADA"}</span>
+                    <span>UUID: {hija.uuid || "NO TIMBRADA"}</span>
                     {hija.monto_total !== undefined && (
                       <span className="font-bold text-slate-700 dark:text-slate-300">
                         {fC(hija.monto_total)}
                       </span>
                     )}
                   </div>
-                  {/* Motivo Cancelamento Filha */}
+                  {/* Motivo Cancelación de Hija */}
                   {(hija.estatus === "CANCELADO" ||
                     hija.status_sat === "CANCELADO") &&
                     hija.motivo_cancelacion && (
@@ -569,13 +562,13 @@ export function InvoiceDetailSheet({
             <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-navy group-hover:bg-blue-600 transition-colors"></div>
             <div className="flex-1 pl-2">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
-                <Hash className="w-3.5 h-3.5 text-blue-500" /> Comprovativo
+                <Hash className="w-3.5 h-3.5 text-blue-500" /> Comprobante
               </p>
               <div className="flex items-center gap-3">
                 <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
                   {displayFolio}
                 </p>
-                {/* 🚀 BOTÃO OFICIAL DE VALIDAÇÃO SAT ATUALIZADO */}
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT ATUALIZADO */}
                 {uuid && uuid !== "NO TIMBRADO" && (
                   <Button
                     variant="outline"
@@ -585,7 +578,7 @@ export function InvoiceDetailSheet({
                       const isProveedor =
                         inv.tipo_documento === "FACTURA_PROVEEDOR";
 
-                      // Extrair os valores, cruzando os dados disponíveis da fatura
+                      // Extraer los valores, cruzando los datos disponibles de la factura
                       const re =
                         inv.emisor_rfc ||
                         inv.rfc_emisor ||
@@ -597,12 +590,12 @@ export function InvoiceDetailSheet({
                       const tt =
                         montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
 
-                      // Os últimos 8 caracteres da Assinatura Digital do SAT
+                      // Los últimos 8 caracteres del Sello Digital del SAT
                       const sello =
                         inv.sello_cfdi || inv.sello_sat || inv.sello || "";
                       const fe = sello ? sello.slice(-8) : inv.fe || "";
 
-                      // Concatenar os parâmetros corretamente (encodeURIComponent protege os + e / do base64)
+                      // Concatenar los parámetros correctamente (encodeURIComponent protege los + y / del base64)
                       let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
                       if (re) satUrl += `&re=${re}`;
                       if (rr) satUrl += `&rr=${rr}`;
@@ -611,9 +604,9 @@ export function InvoiceDetailSheet({
 
                       window.open(satUrl, "_blank");
                     }}
-                    title="Abre o validador oficial do SAT preenchido com todos os dados da fatura"
+                    title="Abre el validador oficial del SAT con todos los datos de esta factura"
                   >
-                    <Check className="w-3 h-3 mr-1" /> Validar Estado SAT
+                    <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
                   </Button>
                 )}
               </div>
@@ -633,7 +626,9 @@ export function InvoiceDetailSheet({
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
                     <LinkIcon className="w-3.5 h-3.5 text-indigo-500" />
                     <span className="text-[10px] font-bold text-indigo-600/70 dark:text-indigo-400/70 uppercase">
-                      {inv.is_nominal ? "CP Relacionada:" : "Substitui o CFDI:"}
+                      {inv.is_nominal
+                        ? "CP Relacionada:"
+                        : "Sustituye al CFDI:"}
                     </span>
                     <span className="font-mono text-[10px] font-black text-indigo-700 dark:text-indigo-300 break-all">
                       {uuidRelacionado}
@@ -674,7 +669,7 @@ export function InvoiceDetailSheet({
                   <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
                 </div>
                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                  Entidade
+                  Entidad
                 </span>
               </div>
               <p className="font-black text-foreground text-base leading-tight mb-3 break-words">
@@ -689,14 +684,14 @@ export function InvoiceDetailSheet({
 
             <div className="md:col-span-3 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" /> Conceito
+                <FileText className="w-3.5 h-3.5" /> Concepto
               </p>
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed flex-1 break-words whitespace-pre-wrap">
-                {conceito}
+                {concepto}
               </p>
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end items-center">
                 <span className="font-mono text-xs font-black text-brand-navy dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded border border-blue-100 dark:border-blue-800/50">
-                  Moeda: {moneda}
+                  Moneda: {moneda}
                 </span>
               </div>
             </div>
@@ -725,7 +720,7 @@ export function InvoiceDetailSheet({
                       isPaid ? "text-emerald-600/70" : "text-amber-600/70",
                     )}
                   >
-                    Saldo Pendente
+                    Saldo Pendiente
                   </p>
                 </div>
                 <p
@@ -744,7 +739,7 @@ export function InvoiceDetailSheet({
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Calendar className="h-3.5 w-3.5 text-slate-400" />
                   <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">
-                    Emissão
+                    Emisión
                   </span>
                 </div>
                 <span className="font-bold text-sm text-foreground">
@@ -777,7 +772,7 @@ export function InvoiceDetailSheet({
                         : "text-muted-foreground",
                     )}
                   >
-                    Vencimento
+                    Vencimiento
                   </span>
                 </div>
                 <span
@@ -795,8 +790,8 @@ export function InvoiceDetailSheet({
 
             <div className="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner flex flex-col justify-center">
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-1.5">
-                <DollarSign className="w-4 h-4 text-slate-400" /> Resumo
-                Financeiro
+                <DollarSign className="w-4 h-4 text-slate-400" /> Resumen
+                Financiero
               </p>
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm">
@@ -812,14 +807,14 @@ export function InvoiceDetailSheet({
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-sm pb-3 border-b border-slate-200 dark:border-slate-800">
-                  <span className="font-bold text-slate-500">Retenções:</span>
+                  <span className="font-bold text-slate-500">Retenciones:</span>
                   <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
                     -{fC(retenciones)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center pt-1">
                   <span className="font-black text-sm text-brand-navy dark:text-white uppercase tracking-wider">
-                    Total Faturado:
+                    Total Facturado:
                   </span>
                   <span className="font-mono text-xl font-black text-brand-navy dark:text-white">
                     {fC(montoTotal)}
@@ -829,20 +824,19 @@ export function InvoiceDetailSheet({
             </div>
           </div>
 
-          {(origen !== "Não especificado" ||
-            destino !== "Não especificado") && (
+          {(origen !== "No especificado" || destino !== "No especificado") && (
             <>
               <Separator className="bg-slate-200 dark:bg-border/50" />
               <div className="space-y-4">
                 <p className="text-sm font-black text-foreground uppercase tracking-tight flex items-center gap-2">
-                  <Truck className="w-5 h-5 text-blue-500" /> Detalhes da
-                  Operação
+                  <Truck className="w-5 h-5 text-blue-500" /> Detalles de
+                  Operación
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col">
                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Rota da
-                      Viagem
+                      <MapPin className="w-3.5 h-3.5 text-slate-400" /> Ruta del
+                      Viaje
                     </span>
                     <div className="flex-1 flex flex-col justify-center space-y-2">
                       <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight">
@@ -860,8 +854,8 @@ export function InvoiceDetailSheet({
                   <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-4">
                     <div>
                       <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                        <Tag className="w-3.5 h-3.5 text-slate-400" /> Produto
-                        (Chave SAT)
+                        <Tag className="w-3.5 h-3.5 text-slate-400" /> Producto
+                        (Clave SAT)
                       </span>
                       <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal leading-tight block">
                         {productoSat}
@@ -875,12 +869,13 @@ export function InvoiceDetailSheet({
                         <span className="font-bold text-slate-700 dark:text-slate-300 text-sm">
                           {pesoTon > 0
                             ? `${pesoTon} Toneladas`
-                            : "Não registado"}
+                            : "No registrado"}
                         </span>
                       </div>
                       <div>
                         <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1">
-                          <Box className="w-3 h-3 text-slate-400" /> Contentores
+                          <Box className="w-3 h-3 text-slate-400" />{" "}
+                          Contenedores
                         </span>
                         <span className="font-bold text-slate-700 dark:text-slate-300 text-sm break-words whitespace-normal block">
                           {contenedores}
@@ -902,7 +897,7 @@ export function InvoiceDetailSheet({
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
                   <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                 </div>
-                Histórico de Pagamentos e REP
+                Historial de Pagos y REP
                 <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black">
                   {payments.length}
                 </span>
@@ -913,7 +908,7 @@ export function InvoiceDetailSheet({
               <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800">
                 <History className="h-10 w-10 text-slate-300 mx-auto mb-3" />
                 <p className="text-sm font-bold text-slate-500">
-                  Não existem pagamentos nem complementos registados.
+                  No hay cobros ni complementos registrados.
                 </p>
               </div>
             ) : (
@@ -922,16 +917,16 @@ export function InvoiceDetailSheet({
                   <DataTableHeader>
                     <DataTableRow className="bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
                       <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 px-4">
-                        Data
+                        Fecha
                       </DataTableHead>
                       <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10">
                         Folio REP
                       </DataTableHead>
                       <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 text-right">
-                        Montante
+                        Monto
                       </DataTableHead>
                       <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 text-right px-4">
-                        Ações
+                        Acciones
                       </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>
@@ -984,7 +979,7 @@ export function InvoiceDetailSheet({
                             <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               {hasRep ? (
                                 <>
-                                  {/* 🚀 NOVA DESCARGA BLINDADA REP */}
+                                  {/* 🚀 NUEVA DESCARGA BLINDADA REP */}
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -992,7 +987,7 @@ export function InvoiceDetailSheet({
                                       downloadSatFile("pdf", p.uuid, payFolio)
                                     }
                                     className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                                    title="Transferir REP PDF"
+                                    title="Descargar REP PDF"
                                   >
                                     <FileText className="w-4 h-4" />
                                   </Button>
@@ -1003,7 +998,7 @@ export function InvoiceDetailSheet({
                                       downloadSatFile("xml", p.uuid, payFolio)
                                     }
                                     className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                                    title="Transferir REP XML"
+                                    title="Descargar REP XML"
                                   >
                                     <FileCode2 className="w-4 h-4" />
                                   </Button>
@@ -1032,7 +1027,7 @@ export function InvoiceDetailSheet({
                                   onClick={() => handleCancelIndividual(p.id)}
                                   disabled={isCanceling}
                                   className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg ml-1"
-                                  title="Anular pagamento e cancelar REP"
+                                  title="Anular pago y cancelar REP"
                                 >
                                   {isCanceling ? (
                                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1052,7 +1047,7 @@ export function InvoiceDetailSheet({
             )}
           </div>
 
-          {/* HISTÓRICO DE FICHEIROS E VERSÕES */}
+          {/* HISTORIAL DE ARCHIVOS Y VERSIONES */}
           {groupedHistory.length > 0 && (
             <>
               <Separator className="bg-slate-200 dark:bg-border/50" />
@@ -1062,7 +1057,7 @@ export function InvoiceDetailSheet({
                     <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
                       <History className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                     </div>
-                    Ficheiros e Versões
+                    Archivos y Versiones
                   </h3>
 
                   {hasFallbackPdf && !isCanceled && (
@@ -1118,7 +1113,7 @@ export function InvoiceDetailSheet({
                         </div>
 
                         <div className="flex items-center gap-2 self-end sm:self-auto">
-                          {/* 🚀 NOVA TRANSFERÊNCIA BLINDADA DE HISTÓRICOS */}
+                          {/* 🚀 NUEVA DESCARGA BLINDADA DE HISTÓRICOS */}
 
                           {isLatest && !ver.pdf && hasFallbackPdf && (
                             <Button
