@@ -131,15 +131,19 @@ export function InvoiceDetailSheet({
     }, {}),
   ).sort((a: any, b: any) => b.version - a.version);
 
+  // 🚀 EXTRAEMOS LA INFO DEL CLIENTE/PROVEEDOR BUSCANDO EN TODAS LAS VARIANTES POSIBLES
   const entidadNombre =
     safeStr(inv.client?.razon_social) ||
     safeStr(inv.supplier?.razon_social) ||
+    safeStr(inv.cliente_proveedor_nombre) ||
     safeStr(inv.cliente) ||
     "Público en General / No Identificado";
 
   const entidadRfc =
     safeStr(inv.client?.rfc) ||
     safeStr(inv.supplier?.rfc) ||
+    safeStr(inv.cliente_proveedor_rfc) ||
+    safeStr(inv.rfc_cliente) ||
     "RFC NO DISPONIBLE";
 
   const concepto = safeStr(inv.concepto) || "Sin descripción";
@@ -342,7 +346,7 @@ export function InvoiceDetailSheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
-          {/* 🚨 ZONA DE ALERTAS INTELIGENTES (FASE 4) 🚨 */}
+          {/* 🚨 ZONA DE ALERTAS INTELIGENTES */}
           {isCanceled && (
             <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
@@ -420,7 +424,7 @@ export function InvoiceDetailSheet({
             </div>
           )}
 
-          {/* 🌳 JERARQUÍA DEL VIAJE (PADRE / HIJOS) 🌳 */}
+          {/* 🌳 JERARQUÍA DEL VIAJE (PADRE / HIJOS) CON INFO DETALLADA 🌳 */}
           {(inv.factura_padre ||
             (inv.cartas_porte_hijas && inv.cartas_porte_hijas.length > 0)) && (
             <div className="bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/30 p-4 rounded-2xl">
@@ -429,37 +433,84 @@ export function InvoiceDetailSheet({
               </h4>
 
               {inv.factura_padre && (
-                <div className="flex items-center gap-2 mb-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
-                  <Badge className="bg-indigo-100 text-indigo-700">
-                    PADRE (Ingreso)
-                  </Badge>
-                  <span className="font-mono text-sm font-bold">
-                    {inv.factura_padre.folio_interno}
-                  </span>
-                  <span className="text-xs text-slate-500 ml-auto">
-                    {fC(inv.factura_padre.monto_total)}
-                  </span>
+                <div className="flex flex-col gap-1 mb-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300">
+                      PADRE (Ingreso)
+                    </Badge>
+                    <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">
+                      {inv.factura_padre.folio_interno ||
+                        inv.factura_padre.folio ||
+                        "S/F"}
+                    </span>
+                    <span className="text-xs font-black text-slate-700 dark:text-slate-300 ml-auto">
+                      {fC(inv.factura_padre.monto_total)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] font-mono text-slate-500">
+                    <span>
+                      UUID: {inv.factura_padre.uuid || "No disponible"}
+                    </span>
+                    <StatusBadge
+                      status={getInvoiceStatusInfo(inv.factura_padre).status}
+                      className="text-[9px] py-0 px-1"
+                    >
+                      {inv.factura_padre.status_sat ||
+                        inv.factura_padre.estatus ||
+                        "TIMBRADA"}
+                    </StatusBadge>
+                  </div>
+                  {/* Motivo Cancelación de Padre */}
+                  {(inv.factura_padre.estatus === "CANCELADO" ||
+                    inv.factura_padre.status_sat === "CANCELADO") &&
+                    inv.factura_padre.motivo_cancelacion && (
+                      <div className="mt-1 text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded">
+                        Motivo de Cancelación:{" "}
+                        {inv.factura_padre.motivo_cancelacion}
+                      </div>
+                    )}
                 </div>
               )}
 
               {inv.cartas_porte_hijas?.map((hija: any, idx: number) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 mt-2 p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4"
+                  className="flex flex-col gap-1 mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4 relative"
                 >
-                  <div className="w-3 h-3 border-l-2 border-b-2 border-slate-300 rounded-bl-sm -ml-6 mr-2"></div>
-                  <Badge variant="outline" className="text-slate-600">
-                    HIJA (C. Porte)
-                  </Badge>
-                  <span className="font-mono text-sm font-bold">
-                    {hija.folio_interno}
-                  </span>
-                  <StatusBadge
-                    status={getInvoiceStatusInfo(hija).status}
-                    className="ml-auto text-[10px]"
-                  >
-                    {hija.status_sat}
-                  </StatusBadge>
+                  <div className="absolute w-4 h-6 border-l-2 border-b-2 border-slate-300 dark:border-slate-700 rounded-bl-lg -left-4 top-0"></div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className="text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50"
+                    >
+                      HIJA (C. Porte)
+                    </Badge>
+                    <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">
+                      {hija.folio_interno || hija.folio || "S/F"}
+                    </span>
+                    <StatusBadge
+                      status={getInvoiceStatusInfo(hija).status}
+                      className="ml-auto text-[10px] px-2 py-0.5"
+                    >
+                      {hija.status_sat || hija.estatus || "TIMBRADA"}
+                    </StatusBadge>
+                  </div>
+                  <div className="flex justify-between items-center pl-1 text-[10px] font-mono text-slate-500">
+                    <span>UUID: {hija.uuid || "No disponible"}</span>
+                    {hija.monto_total !== undefined && (
+                      <span className="font-bold text-slate-700 dark:text-slate-300">
+                        {fC(hija.monto_total)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Motivo Cancelación de Hija */}
+                  {(hija.estatus === "CANCELADO" ||
+                    hija.status_sat === "CANCELADO") &&
+                    hija.motivo_cancelacion && (
+                      <div className="mt-1 text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/30 px-2 py-1 rounded w-fit">
+                        Motivo de Cancelación: {hija.motivo_cancelacion}
+                      </div>
+                    )}
                 </div>
               ))}
             </div>
@@ -762,139 +813,140 @@ export function InvoiceDetailSheet({
                   <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                 </div>
                 Historial de Pagos y REP
-                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black ml-1">
+                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black">
                   {payments.length}
                 </span>
               </h3>
             </div>
 
             {payments.length === 0 ? (
-              <div className="p-8 text-center bg-white dark:bg-card rounded-2xl border-2 border-dashed border-slate-200 dark:border-border flex flex-col items-center justify-center gap-2">
-                <Receipt className="h-8 w-8 text-slate-300 dark:text-slate-700" />
+              <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <History className="h-10 w-10 text-slate-300 mx-auto mb-3" />
                 <p className="text-sm font-bold text-slate-500">
-                  No hay pagos registrados
+                  No hay cobros ni complementos registrados.
                 </p>
               </div>
             ) : (
-              <div className="border border-slate-200 dark:border-border/50 rounded-2xl overflow-hidden bg-white dark:bg-card shadow-sm">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-card">
                 <DataTable>
                   <DataTableHeader>
-                    <DataTableRow className="bg-slate-50 dark:bg-slate-900/50 border-b-slate-200 dark:border-b-border/50 hover:bg-transparent">
-                      <DataTableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
+                    <DataTableRow className="bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
+                      <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 px-4">
                         Fecha
                       </DataTableHead>
-                      <DataTableHead className="text-right text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
+                      <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10">
+                        Folio REP
+                      </DataTableHead>
+                      <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 text-right">
                         Monto
                       </DataTableHead>
-                      <DataTableHead className="text-center text-[10px] font-black text-muted-foreground uppercase tracking-widest py-3">
-                        Archivos SAT / Acción
+                      <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 text-right px-4">
+                        Acciones
                       </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>
                   <DataTableBody>
-                    {payments.map((p: any) => {
-                      const fecha = safeStr(p.fecha_pago ?? p.fecha);
-                      const monto = toNumber(p.monto);
-                      const complementoUuid = safeStr(
-                        p.complemento_uuid ?? p.complementoUuid,
-                      );
-                      const isCancelandoSAT =
-                        p.estatus === "PROCESO_CANCELACION";
+                    {payments.map((p, i) => {
+                      const payDate = p.fecha_pago || p.created_at;
+                      const hasRep = !!p.uuid && p.uuid !== "NO TIMBRADO";
+                      const payFolio = p.numero_complemento
+                        ? `COM-${p.numero_complemento}`
+                        : `INT-${p.id}`;
+                      const isStamping = stampingId === p.id;
+                      const isCanceling = cancelingId === p.id;
+                      const canCancel = p.estatus !== "CANCELADO";
 
                       return (
-                        <DataTableRow
-                          key={safeStr(p.id)}
-                          className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-800/50"
-                        >
-                          <DataTableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            {fD(fecha)}
-                          </DataTableCell>
-                          <DataTableCell className="text-right">
-                            <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded border border-emerald-100 dark:border-emerald-900/50">
-                              {fC(monto)}
+                        <DataTableRow key={i} className="group transition-all">
+                          <DataTableCell className="py-2.5 px-4">
+                            <span className="font-bold text-xs text-slate-700 dark:text-slate-300">
+                              {fD(payDate)}
                             </span>
-                            {isCancelandoSAT && (
-                              <Badge className="block mt-2 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 text-[8px] uppercase tracking-widest border border-amber-200 dark:border-amber-800 text-center">
-                                <Loader2 className="h-2 w-2 mr-1 animate-spin inline-block" />{" "}
-                                En Proceso SAT
-                              </Badge>
-                            )}
                           </DataTableCell>
-
-                          <DataTableCell className="text-center">
-                            <div className="flex justify-center items-center gap-1.5">
-                              {complementoUuid ? (
+                          <DataTableCell className="py-2.5">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-mono text-xs font-black text-brand-navy dark:text-blue-400">
+                                {payFolio}
+                              </span>
+                              {hasRep ? (
+                                <Badge
+                                  variant="outline"
+                                  className="w-fit text-[9px] bg-green-50 text-green-700 border-green-200"
+                                >
+                                  TIMBRADO
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="w-fit text-[9px] bg-slate-100 text-slate-500 border-slate-200"
+                                >
+                                  INTERNO
+                                </Badge>
+                              )}
+                            </div>
+                          </DataTableCell>
+                          <DataTableCell className="text-right py-2.5">
+                            <span className="font-black text-sm text-foreground">
+                              {fC(p.monto)}
+                            </span>
+                          </DataTableCell>
+                          <DataTableCell className="text-right py-2.5 px-4">
+                            <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                              {hasRep ? (
                                 <>
                                   <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     size="icon"
-                                    title="Descargar PDF"
-                                    disabled={isCancelandoSAT}
-                                    className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all"
                                     onClick={() =>
-                                      handleDownloadFromBackend(
-                                        "pdf",
-                                        complementoUuid,
-                                      )
+                                      handleDownloadFromBackend("pdf", p.uuid)
                                     }
+                                    className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                                    title="Descargar REP PDF"
                                   >
-                                    <FileText className="h-4 w-4" />
+                                    <FileText className="w-4 h-4" />
                                   </Button>
                                   <Button
-                                    variant="outline"
+                                    variant="ghost"
                                     size="icon"
-                                    title="Descargar XML"
-                                    disabled={isCancelandoSAT}
-                                    className="h-8 w-8 rounded text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-950/30 dark:border-blue-900/50 transition-all"
                                     onClick={() =>
-                                      handleDownloadFromBackend(
-                                        "xml",
-                                        complementoUuid,
-                                      )
+                                      handleDownloadFromBackend("xml", p.uuid)
                                     }
+                                    className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                                    title="Descargar REP XML"
                                   >
-                                    <FileCode2 className="h-4 w-4" />
+                                    <FileCode2 className="w-4 h-4" />
                                   </Button>
                                 </>
                               ) : (
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 text-[10px] font-black uppercase tracking-widest text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-900/50 transition-all"
-                                  disabled={
-                                    stampingId === p.id || isCancelandoSAT
-                                  }
                                   onClick={() => handleStamp(p.id)}
+                                  disabled={isStamping}
+                                  className="h-8 px-3 text-[10px] font-bold tracking-widest uppercase bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                                 >
-                                  {stampingId === p.id ? (
-                                    <>
-                                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                      Timbrando...
-                                    </>
+                                  {isStamping ? (
+                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                                   ) : (
-                                    <>
-                                      <FileCode2 className="h-3.5 w-3.5 mr-1.5" />
-                                      Timbrar SAT
-                                    </>
+                                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                                   )}
+                                  Timbrar
                                 </Button>
                               )}
 
-                              {onCancelPayments && !isCancelandoSAT && (
+                              {canCancel && onCancelPayments && (
                                 <Button
-                                  variant="outline"
+                                  variant="ghost"
                                   size="icon"
-                                  title="Anular este pago"
-                                  disabled={
-                                    cancelingId === p.id || stampingId === p.id
-                                  }
                                   onClick={() => handleCancelIndividual(p.id)}
-                                  className="h-8 w-8 rounded text-rose-600 border-rose-200 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 dark:bg-rose-950/30 dark:border-rose-900/50 transition-all ml-1"
+                                  disabled={isCanceling}
+                                  className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg ml-1"
+                                  title="Anular pago y cancelar REP"
                                 >
-                                  {cancelingId === p.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  {isCanceling ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
                                   ) : (
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="w-4 h-4" />
                                   )}
                                 </Button>
                               )}
@@ -909,201 +961,160 @@ export function InvoiceDetailSheet({
             )}
           </div>
 
-          <Separator className="bg-slate-200 dark:bg-border/50" />
+          {/* HISTORIAL DE ARCHIVOS Y VERSIONES */}
+          {groupedHistory.length > 0 && (
+            <>
+              <Separator className="bg-slate-200 dark:bg-border/50" />
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
+                    <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
+                      <History className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+                    </div>
+                    Archivos y Versiones
+                  </h3>
 
-          {/* TABLA DE VERSIONES DE ARCHIVO SAT */}
-          <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
-            <div className="flex justify-between items-center mb-4 relative z-10">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 flex items-center gap-2 m-0">
-                <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
-                Versiones (Historial)
-              </h3>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-3 text-[10px] font-black tracking-widest uppercase border-blue-200 text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 transition-colors"
-                onClick={handleRebuildPdf}
-                disabled={isRebuilding || !inv.uuid}
-                title="Regenera el diseño del PDF leyendo los datos originales del XML"
-              >
-                {isRebuilding ? (
-                  <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3 mr-1.5" />
-                )}
-                Regenerar PDF
-              </Button>
-            </div>
-
-            <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
-              <DataTable>
-                <DataTableHeader>
-                  <DataTableRow className="bg-slate-100/50 dark:bg-slate-800/50 border-b-slate-200 dark:border-b-border/50 hover:bg-transparent">
-                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
-                      Documento
-                    </DataTableHead>
-                    <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
-                      Fecha / Hora
-                    </DataTableHead>
-                    <DataTableHead className="text-center text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
-                      Descargas
-                    </DataTableHead>
-                  </DataTableRow>
-                </DataTableHeader>
-                <DataTableBody>
-                  {groupedHistory.length > 0 ? (
-                    groupedHistory.map((group: any) => (
-                      <DataTableRow
-                        key={`v-${group.version}`}
-                        className={`border-b-slate-100 dark:border-b-border/50 transition-colors ${group.is_active ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "opacity-60 grayscale hover:grayscale-0"}`}
-                      >
-                        <DataTableCell className="py-2.5">
-                          <div className="flex flex-col">
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                              {group.filename}
-                            </span>
-                            <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
-                              Versión {group.version}{" "}
-                              {group.is_active ? "(Activa)" : "(Obsoleta)"}
-                            </span>
-                          </div>
-                        </DataTableCell>
-                        <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
-                          {fDT(group.created_at)}
-                        </DataTableCell>
-                        <DataTableCell className="text-center py-2.5">
-                          <div className="flex justify-center items-center gap-1">
-                            {group.pdf && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Descargar PDF"
-                                className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
-                                onClick={() =>
-                                  group.is_active && inv.uuid
-                                    ? handleDownloadFromBackend("pdf", inv.uuid)
-                                    : handleDownloadUrl(
-                                        group.pdf.file_url,
-                                        group.pdf.filename,
-                                      )
-                                }
-                              >
-                                <FileText className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {group.xml && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Descargar XML"
-                                className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
-                                onClick={() =>
-                                  group.is_active && inv.uuid
-                                    ? handleDownloadFromBackend("xml", inv.uuid)
-                                    : handleDownloadUrl(
-                                        group.xml.file_url,
-                                        group.xml.filename,
-                                      )
-                                }
-                              >
-                                <FileCode2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {group.acuse && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Descargar Acuse de Cancelación"
-                                className="h-7 w-7 rounded text-amber-600 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-950/50"
-                                onClick={() =>
-                                  handleDownloadUrl(
-                                    group.acuse.file_url,
-                                    group.acuse.filename,
-                                  )
-                                }
-                              >
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </DataTableCell>
-                      </DataTableRow>
-                    ))
-                  ) : hasFallbackPdf || hasFallbackXml ? (
-                    <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <DataTableCell className="py-2.5">
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            {displayFolio || "Comprobante"}
-                          </span>
-                          <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
-                            Versión Única (Activa)
-                          </span>
-                        </div>
-                      </DataTableCell>
-                      <DataTableCell className="text-[11px] font-medium text-slate-600 dark:text-slate-400 py-2.5">
-                        {fDT(inv.fecha_emision) || "—"}
-                      </DataTableCell>
-                      <DataTableCell className="text-center py-2.5">
-                        <div className="flex justify-center items-center gap-1">
-                          {hasFallbackPdf && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title="Descargar PDF"
-                              className="h-7 w-7 rounded text-rose-600 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-950/50"
-                              onClick={() => {
-                                if (inv.uuid) {
-                                  handleDownloadFromBackend("pdf", inv.uuid);
-                                } else {
-                                  handleDownloadUrl(
-                                    pdfUrl,
-                                    `Comprobante_${displayFolio}.pdf`,
-                                  );
-                                }
-                              }}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {hasFallbackXml && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title="Descargar XML"
-                              className="h-7 w-7 rounded text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-950/50"
-                              onClick={() => {
-                                if (inv.uuid) {
-                                  handleDownloadFromBackend("xml", inv.uuid);
-                                } else {
-                                  handleDownloadUrl(
-                                    xmlUrl,
-                                    `Comprobante_${displayFolio}.xml`,
-                                  );
-                                }
-                              }}
-                            >
-                              <FileCode2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </DataTableCell>
-                    </DataTableRow>
-                  ) : (
-                    <DataTableRow>
-                      <DataTableCell
-                        colSpan={3}
-                        className="text-center py-6 text-slate-500 dark:text-slate-400 text-xs font-medium"
-                      >
-                        No hay documentos ni versiones registradas.
-                      </DataTableCell>
-                    </DataTableRow>
+                  {hasFallbackPdf && !isCanceled && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRebuildPdf}
+                      disabled={isRebuilding}
+                      className="h-8 px-3 text-[10px] font-bold tracking-widest uppercase bg-slate-50 text-slate-600 hover:text-brand-navy border-slate-200"
+                    >
+                      {isRebuilding ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                      )}
+                      Regenerar PDF
+                    </Button>
                   )}
-                </DataTableBody>
-              </DataTable>
-            </div>
-          </div>
+                </div>
+
+                <div className="space-y-3">
+                  {groupedHistory.map((ver: any, i: number) => {
+                    const isLatest = i === 0;
+                    return (
+                      <div
+                        key={ver.version}
+                        className={cn(
+                          "p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all",
+                          isLatest
+                            ? "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm"
+                            : "bg-slate-50/50 dark:bg-slate-900/30 border-slate-100 dark:border-slate-800/50 opacity-75 hover:opacity-100",
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0",
+                              isLatest
+                                ? "bg-brand-navy text-white"
+                                : "bg-slate-200 dark:bg-slate-800 text-slate-500",
+                            )}
+                          >
+                            v{ver.version}
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-slate-700 dark:text-slate-300">
+                              {ver.filename}
+                            </p>
+                            <p className="text-[10px] font-mono text-slate-500 mt-0.5">
+                              {fDT(ver.created_at)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          {isLatest && !ver.pdf && hasFallbackPdf && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100"
+                              onClick={() =>
+                                handleDownloadFromBackend(
+                                  "pdf",
+                                  inv.uuid || "NO_TIMBRADO",
+                                )
+                              }
+                            >
+                              <FileText className="w-3.5 h-3.5 mr-1.5" /> PDF
+                            </Button>
+                          )}
+
+                          {isLatest && !ver.xml && hasFallbackXml && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100"
+                              onClick={() =>
+                                handleDownloadFromBackend(
+                                  "xml",
+                                  inv.uuid || "NO_TIMBRADO",
+                                )
+                              }
+                            >
+                              <FileCode2 className="w-3.5 h-3.5 mr-1.5" /> XML
+                            </Button>
+                          )}
+
+                          {ver.pdf && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100"
+                              onClick={() =>
+                                handleDownloadUrl(
+                                  ver.pdf.file_url,
+                                  ver.pdf.filename,
+                                )
+                              }
+                            >
+                              <FileText className="w-3.5 h-3.5 mr-1.5" /> PDF
+                            </Button>
+                          )}
+
+                          {ver.xml && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100"
+                              onClick={() =>
+                                handleDownloadUrl(
+                                  ver.xml.file_url,
+                                  ver.xml.filename,
+                                )
+                              }
+                            >
+                              <FileCode2 className="w-3.5 h-3.5 mr-1.5" /> XML
+                            </Button>
+                          )}
+
+                          {ver.acuse && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100"
+                              onClick={() =>
+                                handleDownloadUrl(
+                                  ver.acuse.file_url,
+                                  ver.acuse.filename,
+                                )
+                              }
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />{" "}
+                              Acuse
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </SheetContent>
     </Sheet>
