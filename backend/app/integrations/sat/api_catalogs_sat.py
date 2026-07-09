@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import (
-    IntegrityError,
-)  #   IMPORTANTE: Agregado para atrapar duplicados
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 from typing import List, Type, Any, Optional
 from pydantic import BaseModel
 
@@ -169,9 +168,29 @@ def create_crud_endpoints(
     tag: str,
     unique_fields: List[str] = ["clave"],
 ):
+    # 🚀 FIX APLICADO: Paginación Segura y Búsqueda Inteligente para evitar colapso de RAM
     @router.get(f"{path}", response_model=List[schema_response], tags=[tag])
-    def get_all(db: Session = Depends(get_db)):
-        return db.query(model).filter(model.activo == True).all()
+    def get_all(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(500, ge=1, le=5000),
+        search: Optional[str] = "",
+        db: Session = Depends(get_db)
+    ):
+        query = db.query(model).filter(model.activo == True)
+        
+        if search:
+            condiciones = []
+            if hasattr(model, "clave"):
+                condiciones.append(model.clave.ilike(f"%{search}%"))
+            if hasattr(model, "descripcion"):
+                condiciones.append(model.descripcion.ilike(f"%{search}%"))
+            if hasattr(model, "nombre"):
+                condiciones.append(model.nombre.ilike(f"%{search}%"))
+                
+            if condiciones:
+                query = query.filter(or_(*condiciones))
+                
+        return query.offset(skip).limit(limit).all()
 
     @router.post(
         f"{path}",
@@ -365,6 +384,7 @@ def get_location_codes(db: Session = Depends(get_db)):
     return (
         db.query(models.SatLocationCode)
         .order_by(models.SatLocationCode.codigo_postal.asc())
+        .limit(500) # También protegemos los códigos postales
         .all()
     )
 
