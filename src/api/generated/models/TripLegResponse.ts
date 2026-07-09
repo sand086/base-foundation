@@ -41,6 +41,5 @@ export type TripLegResponse = {
     created_at?: (string | null);
     updated_at?: (string | null);
     fuel_logs?: Array<FuelLogLite>;
-    readonly total_anticipos: number;
 };
 

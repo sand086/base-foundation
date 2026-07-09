@@ -965,6 +965,49 @@ export class DefaultService {
         });
     }
     /**
+     * Consultar cola de reintentos SAT
+     * @param statusFilter
+     * @param limit
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static getSatRetryQueueApiSatRetryQueueGet(
+        statusFilter: string = 'PENDIENTE',
+        limit: number = 50,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/sat/retry-queue',
+            query: {
+                'status_filter': statusFilter,
+                'limit': limit,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Procesar cola de reintentos SAT
+     * @param limit
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static processSatRetryQueueApiSatRetryQueueProcessPost(
+        limit: number = 10,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/sat/retry-queue/process',
+            query: {
+                'limit': limit,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Cancel Invoice In Sat
      * Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.
      * Aplica para Cuentas por Cobrar (Facturas Libres o Cartas Porte).

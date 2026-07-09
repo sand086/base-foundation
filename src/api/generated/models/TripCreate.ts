@@ -4,10 +4,6 @@
 /* eslint-disable */
 import type { TripLegCreate } from './TripLegCreate';
 import type { TripStatus } from './TripStatus';
-/**
- * Cuando se crea un viaje, obligatoriamente se debe crear su primer tramo (Fase 1).
- * El Frontend enviará 'initial_leg' con el camión y chofer asignados.
- */
 export type TripCreate = {
     client_id: number;
     sub_client_id: number;
@@ -40,21 +36,9 @@ export type TripCreate = {
     embalaje?: (string | null);
     clase_imo?: (string | null);
     mercancia_clave_stcc?: (string | null);
-    /**
-     * ¿Remolque 1 es refrigerado?
-     */
     is_refrigerated_1?: (boolean | null);
-    /**
-     * ID del motogenerador 1
-     */
     motogenerator_1_id?: (number | null);
-    /**
-     * ¿Remolque 2 es refrigerado?
-     */
     is_refrigerated_2?: (boolean | null);
-    /**
-     * ID del motogenerador 2
-     */
     motogenerator_2_id?: (number | null);
     status?: TripStatus;
     tarifa_base: number;

@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { DocumentHistoryResponse } from './DocumentHistoryResponse';
+import type { ReceivableInvoiceRef } from './ReceivableInvoiceRef';
 export type ReceivableInvoiceLite = {
     id: number;
     viaje_id?: (number | null);
@@ -22,8 +23,8 @@ export type ReceivableInvoiceLite = {
     intentos_cancelacion?: (number | null);
     detalle_sat?: (string | null);
     factura_padre_id?: (number | null);
-    factura_padre?: null;
-    cartas_porte_hijas?: null;
+    factura_padre?: (ReceivableInvoiceRef | null);
+    cartas_porte_hijas?: Array<ReceivableInvoiceRef>;
     document_history?: Array<DocumentHistoryResponse>;
 };
 

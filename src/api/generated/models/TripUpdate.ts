@@ -35,14 +35,8 @@ export type TripUpdate = {
     start_date?: (string | null);
     closed_at?: (string | null);
     is_refrigerated_1?: (boolean | null);
-    /**
-     * ID del motogenerador 1
-     */
     motogenerator_1_id?: (number | null);
     is_refrigerated_2?: (boolean | null);
-    /**
-     * ID del motogenerador 2
-     */
     motogenerator_2?: (number | null);
     unit_id?: (number | null);
     operator_id?: (number | null);

@@ -2,25 +2,13 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-/**
- * Schema para solicitar la creación de una Factura / Carta Porte
- */
 export type ReceivableInvoiceCreate = {
     viaje_id: number;
-    /**
-     * Si es True, genera factura por $1 Peso para Bypass Aduanal
-     */
     is_nominal?: boolean;
     folio_forzado?: (number | null);
     use_dummy?: (boolean | null);
     ocultar_montos?: (boolean | null);
-    /**
-     * Ej: 04 - Sustitución de CFDI previos
-     */
     tipo_relacion?: (string | null);
-    /**
-     * UUID de la factura nominal a cancelar
-     */
     uuid_relacionado?: (string | null);
     metodo_pago?: string;
     forma_pago?: string;
