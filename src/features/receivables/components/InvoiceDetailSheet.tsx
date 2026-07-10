@@ -42,7 +42,6 @@ import {
   RefreshCw,
   Check,
   Network,
-  ExternalLink,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -183,9 +182,55 @@ export function InvoiceDetailSheet({
     (p) => p.estatus !== "CANCELADO" && p.record_status !== "E",
   );
 
-  const handleDownloadFromBackend = (
+  // ============================================================================
+  // 🚀 LÓGICA ESTANDARIZADA DE DESCARGAS (Folio_RFC_UUID.ext)
+  // ============================================================================
+  const getStandardFilename = (
+    folio: string,
+    type: "pdf" | "xml" | "acuse",
+    targetUuid?: string,
+  ) => {
+    const safeFolio = (folio || "SF").replace(/[^a-zA-Z0-9-]/g, "_");
+    const safeRfc = entidadRfc.replace(/[^a-zA-Z0-9]/g, "");
+    const safeUuid = (targetUuid || uuid).replace(/[^a-zA-Z0-9-]/g, "");
+
+    const prefix = type === "acuse" ? "ACUSE_" : "";
+    const ext = type === "xml" ? "xml" : "pdf";
+
+    return `${prefix}${safeFolio}_${safeRfc}_${safeUuid}.${ext}`;
+  };
+
+  const forceDownload = async (fileUrl: string, customName: string) => {
+    const toastId = toast.loading(`Preparando archivo: ${customName}...`);
+    try {
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error("No se pudo obtener el archivo");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = customName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success(`Descarga completada`, { id: toastId });
+    } catch (error) {
+      console.error(
+        "Falló la descarga forzada, abriendo en nueva pestaña...",
+        error,
+      );
+      window.open(fileUrl, "_blank");
+      toast.dismiss(toastId);
+    }
+  };
+
+  const downloadSatFile = (
     type: "pdf" | "xml",
     targetUuid: string,
+    customFolio: string,
   ) => {
     if (!targetUuid || targetUuid === "NO TIMBRADO") {
       toast.error("No hay un UUID válido para descargar del SAT.");
@@ -193,35 +238,29 @@ export function InvoiceDetailSheet({
     }
     const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
     const baseURL = rawBaseURL.replace(/\/$/, "");
-
     const timestamp = new Date().getTime();
-    window.open(
-      `${baseURL}/api/sat/invoice/${targetUuid}/${type}?t=${timestamp}`,
-      "_blank",
-    );
+
+    const fileUrl = `${baseURL}/api/sat/invoice/${targetUuid}/${type}?t=${timestamp}`;
+    const fileName = getStandardFilename(customFolio, type, targetUuid);
+
+    forceDownload(fileUrl, fileName);
   };
 
-  const handleDownloadUrl = (url: string, filename: string) => {
-    const toastId = toast.loading(`Descargando ${filename}...`);
-    try {
-      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const baseURL = rawBaseURL.replace(/\/$/, "");
-      const fileUrl = url.startsWith("http")
-        ? url
-        : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;
+  const downloadHistoryFile = (
+    url: string,
+    type: "pdf" | "xml" | "acuse",
+    customFolio: string,
+  ) => {
+    const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+    const baseURL = rawBaseURL.replace(/\/$/, "");
+    const fileUrl = url.startsWith("http")
+      ? url
+      : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;
 
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.target = "_blank";
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      toast.success(`${filename} descargado.`, { id: toastId });
-    } catch {
-      toast.error(`Fallo al descargar ${filename}`, { id: toastId });
-    }
+    const fileName = getStandardFilename(customFolio, type, uuid);
+    forceDownload(fileUrl, fileName);
   };
+  // ============================================================================
 
   const handleStamp = async (paymentId: number) => {
     if (!onStampPayment) return;
@@ -419,8 +458,7 @@ export function InvoiceDetailSheet({
                       size="sm"
                       className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
                     >
-                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar Forzado
-                      (02)
+                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar (01)
                     </Button>
                   )}
                 </div>
@@ -529,17 +567,43 @@ export function InvoiceDetailSheet({
                 <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
                   {displayFolio}
                 </p>
-                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT */}
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT ATUALIZADO */}
                 {uuid && uuid !== "NO TIMBRADO" && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
                     onClick={() => {
-                      const satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
+                      const isProveedor =
+                        inv.tipo_documento === "FACTURA_PROVEEDOR";
+
+                      // Extraer los valores, cruzando los datos disponibles de la factura
+                      const re =
+                        inv.emisor_rfc ||
+                        inv.rfc_emisor ||
+                        (isProveedor ? entidadRfc : "");
+                      const rr =
+                        inv.receptor_rfc ||
+                        inv.rfc_receptor ||
+                        (!isProveedor ? entidadRfc : "");
+                      const tt =
+                        montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
+
+                      // Los últimos 8 caracteres del Sello Digital del SAT
+                      const sello =
+                        inv.sello_cfdi || inv.sello_sat || inv.sello || "";
+                      const fe = sello ? sello.slice(-8) : inv.fe || "";
+
+                      // Concatenar los parámetros correctamente (encodeURIComponent protege los + y / del base64)
+                      let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
+                      if (re) satUrl += `&re=${re}`;
+                      if (rr) satUrl += `&rr=${rr}`;
+                      satUrl += `&tt=${tt}`;
+                      if (fe) satUrl += `&fe=${encodeURIComponent(fe)}`;
+
                       window.open(satUrl, "_blank");
                     }}
-                    title="Abre el validador oficial del SAT con este UUID"
+                    title="Abre el validador oficial del SAT con todos los datos de esta factura"
                   >
                     <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
                   </Button>
@@ -914,11 +978,12 @@ export function InvoiceDetailSheet({
                             <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               {hasRep ? (
                                 <>
+                                  {/* 🚀 NUEVA DESCARGA BLINDADA REP */}
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={() =>
-                                      handleDownloadFromBackend("pdf", p.uuid)
+                                      downloadSatFile("pdf", p.uuid, payFolio)
                                     }
                                     className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
                                     title="Descargar REP PDF"
@@ -929,7 +994,7 @@ export function InvoiceDetailSheet({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() =>
-                                      handleDownloadFromBackend("xml", p.uuid)
+                                      downloadSatFile("xml", p.uuid, payFolio)
                                     }
                                     className="h-8 w-8 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                                     title="Descargar REP XML"
@@ -1047,16 +1112,15 @@ export function InvoiceDetailSheet({
                         </div>
 
                         <div className="flex items-center gap-2 self-end sm:self-auto">
+                          {/* 🚀 NUEVA DESCARGA BLINDADA DE HISTÓRICOS */}
+
                           {isLatest && !ver.pdf && hasFallbackPdf && (
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-8 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100"
                               onClick={() =>
-                                handleDownloadFromBackend(
-                                  "pdf",
-                                  inv.uuid || "NO_TIMBRADO",
-                                )
+                                downloadSatFile("pdf", inv.uuid, displayFolio)
                               }
                             >
                               <FileText className="w-3.5 h-3.5 mr-1.5" /> PDF
@@ -1069,10 +1133,7 @@ export function InvoiceDetailSheet({
                               size="sm"
                               className="h-8 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100"
                               onClick={() =>
-                                handleDownloadFromBackend(
-                                  "xml",
-                                  inv.uuid || "NO_TIMBRADO",
-                                )
+                                downloadSatFile("xml", inv.uuid, displayFolio)
                               }
                             >
                               <FileCode2 className="w-3.5 h-3.5 mr-1.5" /> XML
@@ -1085,9 +1146,10 @@ export function InvoiceDetailSheet({
                               size="sm"
                               className="h-8 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100"
                               onClick={() =>
-                                handleDownloadUrl(
+                                downloadHistoryFile(
                                   ver.pdf.file_url,
-                                  ver.pdf.filename,
+                                  "pdf",
+                                  displayFolio,
                                 )
                               }
                             >
@@ -1101,9 +1163,10 @@ export function InvoiceDetailSheet({
                               size="sm"
                               className="h-8 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100"
                               onClick={() =>
-                                handleDownloadUrl(
+                                downloadHistoryFile(
                                   ver.xml.file_url,
-                                  ver.xml.filename,
+                                  "xml",
+                                  displayFolio,
                                 )
                               }
                             >
@@ -1117,9 +1180,10 @@ export function InvoiceDetailSheet({
                               size="sm"
                               className="h-8 text-xs font-bold text-amber-600 bg-amber-50 hover:bg-amber-100"
                               onClick={() =>
-                                handleDownloadUrl(
+                                downloadHistoryFile(
                                   ver.acuse.file_url,
-                                  ver.acuse.filename,
+                                  "acuse",
+                                  displayFolio,
                                 )
                               }
                             >

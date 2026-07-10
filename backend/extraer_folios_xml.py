@@ -1,64 +1,88 @@
 import os
-import xml.etree.ElementTree as ET
+import sys
+from pathlib import Path
+from lxml import etree
+
+# Configurar path para importar la app
+base_dir = Path(__file__).resolve().parent
+sys.path.append(str(base_dir))
+
 from app.db.database import SessionLocal
 from app.models.models import ReceivableInvoicePayment
 
-
-def procesar_xmls():
+def rescatar_folios_inteligente():
     db = SessionLocal()
-    # Traemos todos los pagos que ya tienen un UUID de complemento timbrado
-    pagos = (
-        db.query(ReceivableInvoicePayment)
-        .filter(ReceivableInvoicePayment.complemento_uuid.isnot(None))
-        .all()
-    )
+    
+    # 1. Buscar todos los pagos en BD que ya tienen UUID
+    pagos = db.query(ReceivableInvoicePayment).filter(
+        ReceivableInvoicePayment.complemento_uuid.isnot(None),
+        ReceivableInvoicePayment.complemento_uuid != "PENDIENTE_SAT"
+    ).all()
 
-    corregidos = 0
+    print("=" * 80)
+    print(f"🔍 INICIANDO RESCATE: {len(pagos)} pagos timbrados encontrados en la BD.")
+    print("Mapeando todos los archivos XML en el servidor... (esto tomará unos segundos)")
+    
+    # 2. RASTREADOR: Buscar TODOS los XML en cualquier subcarpeta de 'backend'
+    xml_map = {}
+    for xml_path in base_dir.rglob("*.xml"):
+        # Guardamos el UUID (nombre del archivo sin el .xml) en mayúsculas para comparar fácil
+        uuid_key = xml_path.stem.upper()
+        xml_map[uuid_key] = xml_path
 
-    print("🔍 Escaneando archivos XML en el disco...")
+    print(f"📁 ¡Se encontraron {len(xml_map)} archivos XML físicos en tu proyecto!")
+    print("=" * 80)
+
+    actualizados = 0
+    ya_estaban_bien = 0
+    errores = 0
+
+    # 3. Emparejar BD con los XML reales
     for pago in pagos:
-        uuid = pago.complemento_uuid
-
-        # Buscamos el XML en tus carpetas
-        rutas_posibles = [
-            os.path.join("storage", "xml_timbrados", f"{uuid}.xml"),
-            os.path.join("app", "storage", "xml_timbrados", f"{uuid}.xml"),
-            os.path.join(
-                "/home/desarrolloas/base-foundation/backend/storage/xml_timbrados",
-                f"{uuid}.xml",
-            ),
-        ]
-
-        xml_path = next((ruta for ruta in rutas_posibles if os.path.exists(ruta)), None)
-
-        if xml_path:
+        uuid_pago = pago.complemento_uuid.upper().strip()
+        
+        # Si el rastreador encontró el archivo físico
+        if uuid_pago in xml_map:
+            xml_path = xml_map[uuid_pago]
             try:
-                # Usamos el parser XML real de Python (Es 100% seguro y no se confunde)
-                tree = ET.parse(xml_path)
+                # Abrimos y leemos el XML
+                tree = etree.parse(str(xml_path))
                 root = tree.getroot()
-
-                # Vamos directo a extraer el atributo Folio del nodo principal (cfdi:Comprobante)
-                folio_real = root.attrib.get("Folio")
-
-                if folio_real:
-                    pago.folio_complemento = f"COM-{folio_real}"
-                    db.add(pago)
-                    print(
-                        f"✅ Pago ID {pago.id} -> Se le asignó {pago.folio_complemento}"
-                    )
-                    corregidos += 1
+                
+                # Buscamos el atributo 'Folio' directamente de la etiqueta raíz
+                folio_xml = root.get("Folio") or root.get("folio")
+                
+                if folio_xml:
+                    folio_completo = f"COM-{folio_xml}"
+                    
+                    # Si el folio en BD está vacío o es diferente, lo reescribimos
+                    if pago.folio_complemento != folio_completo:
+                        pago.folio_complemento = folio_completo
+                        actualizados += 1
+                        print(f" ✅ [CORREGIDO] Pago ID {pago.id}: Folio asignado -> {folio_completo}")
+                    else:
+                        ya_estaban_bien += 1
                 else:
-                    print(f"⚠️ XML de {uuid} no tiene atributo Folio en la cabecera.")
-
+                    print(f" ⚠️ El XML del UUID {uuid_pago} no tiene folio interno asignado.")
+                    errores += 1
+                    
             except Exception as e:
-                print(f"❌ Error al leer el XML de {uuid}: {e}")
+                print(f" ❌ Error leyendo el contenido del XML {uuid_pago}: {e}")
+                errores += 1
         else:
-            print(f"❌ No se encontró el XML físico para el UUID: {uuid}")
+            print(f" ❌ XML FÍSICO NO ENCONTRADO EN NINGUNA CARPETA para UUID: {uuid_pago}")
+            errores += 1
 
+    # 4. Guardar los cambios exactos en la Base de Datos
     db.commit()
     db.close()
-    print(f"\n🚀 Proceso terminado. {corregidos} folios guardados en la Base de Datos.")
-
+    
+    print("\n" + "=" * 80)
+    print("🏁 RESUMEN DEL RESCATE EXACTO:")
+    print(f"   - Folios leídos del XML y guardados: {actualizados}")
+    print(f"   - Folios que ya estaban perfectos: {ya_estaban_bien}")
+    print(f"   - Errores / XMLs perdidos: {errores}")
+    print("=" * 80)
 
 if __name__ == "__main__":
-    procesar_xmls()
+    rescatar_folios_inteligente()

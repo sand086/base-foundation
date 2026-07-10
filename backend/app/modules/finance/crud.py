@@ -1,5 +1,5 @@
 import traceback
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 from typing import List, Optional
 from fastapi import HTTPException
@@ -100,7 +100,7 @@ def get_bank_movements(db: Session):
             .options(joinedload(models.BankMovement.bank_account))
             .filter(
                 models.BankMovement.record_status != RecordStatus.ELIMINADO,
-                models.BankMovement.monto > 0,  # <--- MAGIA: OCULTA TODOS LOS DE $0.00
+                models.BankMovement.monto >= 0,  # 🚀 FIX: Cambiado a >= 0 para incluir conciliaciones de $0
                 ~models.BankMovement.concepto.ilike("%Reverso de Cobro Anulado%"),
             )
             .order_by(models.BankMovement.fecha.desc())
@@ -1457,7 +1457,7 @@ from typing import Optional
 from datetime import date
 from app.models import models
 from app.models.models import AuditLog, User, RecordStatus
-from sqlalchemy.orm import Session, joinedload, lazyload
+from sqlalchemy.orm import Session, joinedload, lazyload, selectinload
 
 
 def get_cfdi_vault_records(
@@ -1518,9 +1518,10 @@ def get_cfdi_vault_records(
             db.query(models.ReceivableInvoice)
             .options(
                 joinedload(models.ReceivableInvoice.client),
-                joinedload(
-                    models.ReceivableInvoice.document_history
-                ),  # <--- CARGAMOS HISTORIAL DE ARCHIVOS
+                # 🚀 FIX: selectinload para 1:N y pre-cargar relaciones para evitar N+1
+                selectinload(models.ReceivableInvoice.document_history),
+                selectinload(models.ReceivableInvoice.cartas_porte_hijas),
+                joinedload(models.ReceivableInvoice.factura_padre)
             )
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
@@ -1654,9 +1655,8 @@ def get_cfdi_vault_records(
             db.query(models.PayableInvoice)
             .options(
                 joinedload(models.PayableInvoice.supplier),
-                joinedload(
-                    models.PayableInvoice.document_history
-                ),  # <--- CARGAMOS HISTORIAL DE ARCHIVOS
+                # 🚀 FIX: selectinload para 1:N
+                selectinload(models.PayableInvoice.document_history),
             )
             .join(
                 models.Supplier, models.PayableInvoice.supplier_id == models.Supplier.id
@@ -1742,9 +1742,8 @@ def get_cfdi_vault_records(
             db.query(models.ReceivableInvoice)
             .options(
                 joinedload(models.ReceivableInvoice.client),
-                joinedload(
-                    models.ReceivableInvoice.document_history
-                ),  # <--- CARGAMOS HISTORIAL
+                # 🚀 FIX: selectinload para 1:N
+                selectinload(models.ReceivableInvoice.document_history),
             )
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
@@ -1835,9 +1834,8 @@ def get_cfdi_vault_records(
                 joinedload(models.ReceivableInvoicePayment.invoice).joinedload(
                     models.ReceivableInvoice.client
                 ),
-                joinedload(
-                    models.ReceivableInvoicePayment.document_history
-                ),  # <--- CARGAMOS EL HISTORIAL DE ESTE PAGO
+                # 🚀 FIX: selectinload para 1:N
+                selectinload(models.ReceivableInvoicePayment.document_history),
             )
             .join(
                 models.ReceivableInvoice,
