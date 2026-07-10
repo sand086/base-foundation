@@ -598,12 +598,12 @@ class PaymentComplementService:
             # =========================================================================
             if is_pac_timeout_error(e) or any(term in error_msg for term in ["500", "502", "503", "504"]):
                 logger.warning(
-                    "Intermitencia SAT detectada. Pagos PENDIENTES se envían a cola de reintentos."
+                    "Intermitencia SAT detectada. Pagos PENDIENTES se envían a conciliación para evitar duplicidad."
                 )
                 for pp in pagos_pendientes:
                     pp.detalle_sat = (
                         "Timeout/intermitencia esperando respuesta del PAC. "
-                        "El REP quedó pendiente de reintento automático."
+                        "El REP quedó pendiente de conciliación antes de reintentar."
                     )
                     register_sat_payment_retry(
                         self.db,
@@ -623,7 +623,7 @@ class PaymentComplementService:
                 # Dejamos la base de datos intacta (Pagos en PENDIENTE_SAT)
                 raise HTTPException(
                     status_code=202,
-                    detail="El SAT está tardando en responder. El pago se guardó de forma segura y se timbrará en automático. Por favor NO lo intente de nuevo."
+                    detail="El SAT está tardando en responder. El pago se guardó de forma segura y requiere conciliación antes de reintentar. Por favor NO lo intente de nuevo."
                 )
             else:
                 # Error de Negocio (ej. RFC inválido): ROLLBACK MANUAL DE SALDOS
@@ -1243,11 +1243,13 @@ class PaymentComplementService:
         except Exception as e:
             error_msg = str(e).lower()
             if is_pac_timeout_error(e) or any(term in error_msg for term in ["500", "502", "503", "504"]):
-                logger.warning("Intermitencia SAT al timbrar diferido. Enviando a cola.")
+                logger.warning(
+                    "Intermitencia SAT al timbrar diferido. Enviando a conciliación para evitar duplicidad."
+                )
                 pago.complemento_uuid = "PENDIENTE_SAT"
                 pago.detalle_sat = (
                     "Timeout/intermitencia esperando respuesta del PAC. "
-                    "El REP quedó pendiente de reintento automático."
+                    "El REP quedó pendiente de conciliación antes de reintentar."
                 )
                 register_sat_payment_retry(
                     self.db,
@@ -1267,7 +1269,7 @@ class PaymentComplementService:
                 # Lanzamos una 202 para que el Front-end sepa que no falló, sino que está encolado.
                 raise HTTPException(
                     status_code=202,
-                    detail="El SAT está intermitente. El proceso continuará automáticamente en segundo plano. NO presione generar nuevamente."
+                    detail="El SAT está intermitente. El pago quedó pendiente de conciliación antes de reintentar. NO presione generar nuevamente."
                 )
             else:
                 # Error real de negocio

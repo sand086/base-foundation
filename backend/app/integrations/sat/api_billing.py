@@ -47,6 +47,13 @@ class RegistroPagoPayload(BaseModel):
     cuenta_deposito: Optional[str] = ""
 
 
+class SatRetryResolvePayload(BaseModel):
+    uuid: str
+    pdf_url: Optional[str] = None
+    xml_url: Optional[str] = None
+    notas: Optional[str] = None
+
+
 def parse_sat_error(e: Exception) -> str:
     import logging
 
@@ -804,6 +811,25 @@ def get_sat_retry_queue(
 def process_sat_retry_queue(limit: int = 10, db: Session = Depends(get_db)):
     service = BillingService(db)
     return service.procesar_sat_retry_queue(limit=limit)
+
+
+@router.post(
+    "/retry-queue/{retry_id}/resolve",
+    summary="Resolver timbrado conciliado con UUID generado por PAC",
+)
+def resolve_sat_retry_queue(
+    retry_id: int,
+    payload: SatRetryResolvePayload,
+    db: Session = Depends(get_db),
+):
+    service = BillingService(db)
+    return service.resolver_timbrado_conciliado(
+        retry_id=retry_id,
+        uuid=payload.uuid,
+        pdf_url=payload.pdf_url,
+        xml_url=payload.xml_url,
+        notas=payload.notas,
+    )
 
 
 # Importa Optional si no lo tienes arriba

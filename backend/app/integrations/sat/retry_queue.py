@@ -18,6 +18,11 @@ def register_sat_retry(
     retry_delay_minutes: int = 5,
 ) -> SatRetryQueue:
     error_text = str(error)
+    target_status = (
+        "CONCILIACION_REQUERIDA"
+        if operation_type in {"timbrado", "timbrado_pago"}
+        else "PENDIENTE"
+    )
     idempotency_key = (
         f"{operation_type}:invoice:{invoice.id}:"
         f"folio:{invoice.folio_interno or 'sin-folio'}:"
@@ -37,7 +42,7 @@ def register_sat_retry(
             operation_type=operation_type,
             document_type="cfdi",
             source_service=source_service,
-            status="PENDIENTE",
+            status=target_status,
             idempotency_key=idempotency_key,
             folio_interno=invoice.folio_interno,
             uuid=invoice.uuid,
@@ -45,7 +50,7 @@ def register_sat_retry(
         )
         db.add(retry)
 
-    retry.status = "PENDIENTE"
+    retry.status = target_status
     retry.source_service = source_service
     retry.folio_interno = invoice.folio_interno
     retry.uuid = invoice.uuid
@@ -54,7 +59,11 @@ def register_sat_retry(
     retry.last_http_status = http_status
     retry.attempts = (retry.attempts or 0) + 1
     retry.last_attempt_at = datetime.utcnow()
-    retry.next_attempt_at = datetime.utcnow() + timedelta(minutes=retry_delay_minutes)
+    retry.next_attempt_at = (
+        None
+        if target_status == "CONCILIACION_REQUERIDA"
+        else datetime.utcnow() + timedelta(minutes=retry_delay_minutes)
+    )
     retry.locked_at = None
     retry.resolved_at = None
 
@@ -73,6 +82,11 @@ def register_sat_payment_retry(
     retry_delay_minutes: int = 5,
 ) -> SatRetryQueue:
     error_text = str(error)
+    target_status = (
+        "CONCILIACION_REQUERIDA"
+        if operation_type in {"timbrado", "timbrado_pago"}
+        else "PENDIENTE"
+    )
     invoice = payment.invoice
     idempotency_key = (
         f"{operation_type}:payment:{payment.id}:"
@@ -94,7 +108,7 @@ def register_sat_payment_retry(
             operation_type=operation_type,
             document_type="rep",
             source_service=source_service,
-            status="PENDIENTE",
+            status=target_status,
             idempotency_key=idempotency_key,
             folio_interno=payment.folio_complemento
             or getattr(invoice, "folio_interno", None),
@@ -103,7 +117,7 @@ def register_sat_payment_retry(
         )
         db.add(retry)
 
-    retry.status = "PENDIENTE"
+    retry.status = target_status
     retry.source_service = source_service
     retry.payment_id = payment.id
     retry.invoice_id = payment.invoice_id
@@ -118,7 +132,11 @@ def register_sat_payment_retry(
     retry.last_http_status = http_status
     retry.attempts = (retry.attempts or 0) + 1
     retry.last_attempt_at = datetime.utcnow()
-    retry.next_attempt_at = datetime.utcnow() + timedelta(minutes=retry_delay_minutes)
+    retry.next_attempt_at = (
+        None
+        if target_status == "CONCILIACION_REQUERIDA"
+        else datetime.utcnow() + timedelta(minutes=retry_delay_minutes)
+    )
     retry.locked_at = None
     retry.resolved_at = None
 
