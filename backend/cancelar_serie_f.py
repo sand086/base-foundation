@@ -13,47 +13,48 @@ from app.integrations.sat.billing_service import BillingService
 # =====================================================================
 # 🚨 CONFIGURACIÓN DE SEGURIDAD CRÍTICA
 # =====================================================================
-# True  = Modo Simulación. Solo busca y te muestra la lista de la cantidad X.
-# False = MODO REAL. Envía las solicitudes de cancelación masivas reales al SAT.
+# True  = Modo Simulación. Solo busca y te muestra qué facturas cancelaría.
+# False = MODO REAL. Envía las solicitudes de cancelación reales al SAT.
 MODO_SIMULACION = False
 
-# Motivo SAT para Facturas Libres (02 = Errores sin relación)
+# Motivo SAT de Cancelación (02 = Errores sin relación)
 MOTIVO_SAT = "02"
+
+# 📋 LISTA DE UUIDs A CANCELAR
+# Agrega aquí todos los UUIDs exactos que necesites dar de baja
+LISTA_UUIDS = [
+    "FFDE385D-EBA7-490D-9458-4B7125E601E2",
+    # "OTRO-UUID-AQUI",
+]
 # =====================================================================
 
 
-def barrido_masivo_automatico_serie_f():
+def cancelar_facturas_especificas():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 80)
     if MODO_SIMULACION:
         print(
-            "🔍 [SERIE F MASIVA - SIMULACIÓN] Escaneando Base de Datos de forma segura..."
+            "🔍 [CANCELACIÓN ESPECÍFICA - SIMULACIÓN] Validando UUIDs en la Base de Datos..."
         )
     else:
         print(
-            "🚀 [SERIE F MASIVA - MODO REAL] ENVIANDO ORDEN DE CANCELACIÓN MASIVA AL SAT..."
+            "🚀 [CANCELACIÓN ESPECÍFICA - MODO REAL] ENVIANDO ORDEN DE CANCELACIÓN AL SAT..."
         )
     print("=" * 80)
 
-    # REGLA DE ORO EXTRA-SEGURA:
-    # 1. Que el folio empiece con 'F-' (Facturas libres)
-    # 2. Que tenga un UUID real timbrado en el SAT
-    # 3. Que en tu ERP el estatus de la deuda ya sea 'cancelado' (así protegemos tus facturas vivas)
-    facturas_serie_f = (
+    # REGLA DE BÚSQUEDA:
+    # Traer exactamente las facturas cuyos UUIDs coincidan con la lista proporcionada
+    facturas_especificas = (
         db.query(ReceivableInvoice)
-        .filter(
-            ReceivableInvoice.folio_interno.like("F-%"),
-            ReceivableInvoice.uuid.isnot(None),
-            ReceivableInvoice.estatus == "cancelado",
-        )
+        .filter(ReceivableInvoice.uuid.in_(LISTA_UUIDS))
         .all()
     )
 
-    total_encontradas = len(facturas_serie_f)
+    total_encontradas = len(facturas_especificas)
     print(
-        f"🎯 Se detectaron {total_encontradas} facturas Serie F marcadas como canceladas en tu ERP."
+        f"🎯 Se detectaron {total_encontradas} de {len(LISTA_UUIDS)} facturas solicitadas en tu ERP."
     )
     print(
         "--------------------------------------------------------------------------------"
@@ -61,7 +62,7 @@ def barrido_masivo_automatico_serie_f():
 
     if total_encontradas == 0:
         print(
-            "💡 Todo limpio. No hay facturas de la serie F que requieran sincronización."
+            "💡 Todo limpio. No se encontró ninguna factura en la BD con los UUIDs proporcionados."
         )
         return
 
@@ -69,54 +70,53 @@ def barrido_masivo_automatico_serie_f():
     errores = 0
     ya_canceladas_sat = 0
 
-    for fac in facturas_serie_f:
+    for fac in facturas_especificas:
         if MODO_SIMULACION:
             print(
                 f"[SIMULACIÓN] 🟢 SE ENVIARÁ AL SAT: Folio: {fac.folio_interno} | UUID: {fac.uuid}"
             )
             print(
-                f"             ↳ Estado local en BD: status_sat='{fac.status_sat}' | estatus_erp='{fac.estatus}'\n"
+                f"            ↳ Estado local en BD: status_sat='{fac.status_sat}' | estatus_erp='{fac.estatus}'\n"
             )
             procesadas += 1
         else:
             try:
                 print(
-                    f"[EJECUTANDO] ⏳ Procesando Factura Libre {fac.folio_interno} (UUID: {fac.uuid})..."
+                    f"[EJECUTANDO] ⏳ Procesando Factura {fac.folio_interno} (UUID: {fac.uuid})..."
                 )
 
-                # Enviar comando de cancelación SOAP directo al PAC (Motivo 02)
-                # El parche de seguridad del motor evitará malas escrituras si el SAT da timeout 500
+                # Enviar comando de cancelación SOAP directo al PAC
                 service.cancelar_factura_sat(
                     invoice_id=fac.id, motivo=MOTIVO_SAT, uuid_sustituto=None
                 )
                 print(
-                    f"             ✅ Solicitud de cancelación enviada/confirmada con éxito."
+                    f"            ✅ Solicitud de cancelación enviada/confirmada con éxito."
                 )
                 procesadas += 1
                 time.sleep(1.5)  # 💡 PAUSA ANTISATURACIÓN (Evita el error 500 del SAT)
 
             except Exception as e:
                 error_msg = str(e).lower()
-                # Si el SAT responde que YA estaba cancelada, actualizamos la BD local de una vez
+                # Si el SAT responde que YA estaba cancelada, actualizamos la BD local
                 if (
                     "ya se encuentra cancelado" in error_msg
                     or "comprobante cancelado" in error_msg
                 ):
                     print(
-                        f"             ℹ️ El SAT informa que este folio ya estaba cancelado en sus servidores. Sincronizando BD..."
+                        f"            ℹ️ El SAT informa que este folio ya estaba cancelado en sus servidores. Sincronizando BD..."
                     )
                     fac.status_sat = "CANCELADO"
                     db.add(fac)
                     db.commit()
                     ya_canceladas_sat += 1
                 else:
-                    print(f"             ❌ Error o Timeout del SAT/PAC: {str(e)}")
+                    print(f"            ❌ Error o Timeout del SAT/PAC: {str(e)}")
                     errores += 1
 
     print("\n" + "=" * 80)
     if MODO_SIMULACION:
         print(
-            f"🏁 SIMULACIÓN TERMINADA. Se identificó una cantidad X de {procesadas} facturas listas."
+            f"🏁 SIMULACIÓN TERMINADA. Se simularon {procesadas} facturas listas para cancelar."
         )
         print(
             "👉 Si la lista es correcta, cambia 'MODO_SIMULACION = False' para ejecutar en vivo."
@@ -134,4 +134,4 @@ def barrido_masivo_automatico_serie_f():
 
 
 if __name__ == "__main__":
-    barrido_masivo_automatico_serie_f()
+    cancelar_facturas_especificas()
