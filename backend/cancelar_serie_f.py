@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 from pathlib import Path
@@ -11,127 +10,87 @@ from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
 
 # =====================================================================
-# 🚨 CONFIGURACIÓN DE SEGURIDAD CRÍTICA
+# DATOS EXTRAÍDOS DE LA IMAGEN SAT
 # =====================================================================
-# True  = Modo Simulación. Solo busca y te muestra qué facturas cancelaría.
-# False = MODO REAL. Envía las solicitudes de cancelación reales al SAT.
-MODO_SIMULACION = False
-
-# Motivo SAT de Cancelación (02 = Errores sin relación)
-MOTIVO_SAT = "02"
-
-# 📋 LISTA DE UUIDs A CANCELAR
-# Agrega aquí todos los UUIDs exactos que necesites dar de baja
-LISTA_UUIDS = [
-    "FFDE385D-EBA7-490D-9458-4B7125E601E2",
-    # "OTRO-UUID-AQUI",
-]
+UUID_FANTASMA = "FFDE385D-EBA7-490D-9458-4B7125E601E2"
+TOTAL_FANTASMA = 3074.00
+MOTIVO_SAT = "02"  # Errores sin relación
 # =====================================================================
 
 
-def cancelar_facturas_especificas():
+def cancelar_factura_perdida():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 80)
-    if MODO_SIMULACION:
-        print(
-            "🔍 [CANCELACIÓN ESPECÍFICA - SIMULACIÓN] Validando UUIDs en la Base de Datos..."
-        )
-    else:
-        print(
-            "🚀 [CANCELACIÓN ESPECÍFICA - MODO REAL] ENVIANDO ORDEN DE CANCELACIÓN AL SAT..."
-        )
+    print(f"🚀 INICIANDO RESCATE Y CANCELACIÓN DEL UUID: {UUID_FANTASMA}")
     print("=" * 80)
 
-    # REGLA DE BÚSQUEDA:
-    # Traer exactamente las facturas cuyos UUIDs coincidan con la lista proporcionada
-    facturas_especificas = (
+    # 1. Verificamos si la factura realmente no existe
+    factura = (
         db.query(ReceivableInvoice)
-        .filter(ReceivableInvoice.uuid.in_(LISTA_UUIDS))
-        .all()
+        .filter(ReceivableInvoice.uuid == UUID_FANTASMA)
+        .first()
     )
 
-    total_encontradas = len(facturas_especificas)
-    print(
-        f"🎯 Se detectaron {total_encontradas} de {len(LISTA_UUIDS)} facturas solicitadas en tu ERP."
-    )
-    print(
-        "--------------------------------------------------------------------------------"
-    )
-
-    if total_encontradas == 0:
+    # 2. Si no existe, inyectamos un registro mínimo para que el BillingService pueda operar
+    if not factura:
         print(
-            "💡 Todo limpio. No se encontró ninguna factura en la BD con los UUIDs proporcionados."
+            "⚠️ Factura no encontrada en la BD local. Inyectando registro fantasma..."
         )
-        return
 
-    procesadas = 0
-    errores = 0
-    ya_canceladas_sat = 0
-
-    for fac in facturas_especificas:
-        if MODO_SIMULACION:
-            print(
-                f"[SIMULACIÓN] 🟢 SE ENVIARÁ AL SAT: Folio: {fac.folio_interno} | UUID: {fac.uuid}"
+        try:
+            # Creamos el registro con los datos mínimos requeridos por tu modelo
+            factura = ReceivableInvoice(
+                uuid=UUID_FANTASMA,
+                folio_interno="RESCATE-001",  # Folio temporal para identificarla
+                estatus="timbrado",  # Estatus local para que el sistema permita cancelarla
+                status_sat="VIGENTE",  # Estatus del SAT según la imagen
+                total=TOTAL_FANTASMA,  # Requerido a veces por el PAC para validar la cancelación
             )
+            db.add(factura)
+            db.commit()
+            db.refresh(factura)
             print(
-                f"            ↳ Estado local en BD: status_sat='{fac.status_sat}' | estatus_erp='{fac.estatus}'\n"
+                f"✅ Registro fantasma inyectado exitosamente con ID interno: {factura.id}"
             )
-            procesadas += 1
-        else:
-            try:
-                print(
-                    f"[EJECUTANDO] ⏳ Procesando Factura {fac.folio_interno} (UUID: {fac.uuid})..."
-                )
-
-                # Enviar comando de cancelación SOAP directo al PAC
-                service.cancelar_factura_sat(
-                    invoice_id=fac.id, motivo=MOTIVO_SAT, uuid_sustituto=None
-                )
-                print(
-                    f"            ✅ Solicitud de cancelación enviada/confirmada con éxito."
-                )
-                procesadas += 1
-                time.sleep(1.5)  # 💡 PAUSA ANTISATURACIÓN (Evita el error 500 del SAT)
-
-            except Exception as e:
-                error_msg = str(e).lower()
-                # Si el SAT responde que YA estaba cancelada, actualizamos la BD local
-                if (
-                    "ya se encuentra cancelado" in error_msg
-                    or "comprobante cancelado" in error_msg
-                ):
-                    print(
-                        f"            ℹ️ El SAT informa que este folio ya estaba cancelado en sus servidores. Sincronizando BD..."
-                    )
-                    fac.status_sat = "CANCELADO"
-                    db.add(fac)
-                    db.commit()
-                    ya_canceladas_sat += 1
-                else:
-                    print(f"            ❌ Error o Timeout del SAT/PAC: {str(e)}")
-                    errores += 1
-
-    print("\n" + "=" * 80)
-    if MODO_SIMULACION:
-        print(
-            f"🏁 SIMULACIÓN TERMINADA. Se simularon {procesadas} facturas listas para cancelar."
-        )
-        print(
-            "👉 Si la lista es correcta, cambia 'MODO_SIMULACION = False' para ejecutar en vivo."
-        )
+        except Exception as e:
+            print(f"❌ Error al intentar crear el registro en BD: {e}")
+            print(
+                "💡 Revisa si tu modelo ReceivableInvoice requiere algún otro campo obligatorio (ej. client_id, emisor_id)."
+            )
+            return
     else:
-        print(f"🏁 PROCESO REAL COMPLETADO.")
-        print(f"   - Canceladas con éxito en esta corrida: {procesadas}")
-        print(
-            f"   - Folios que el SAT confirmó que ya estaban cancelados antes: {ya_canceladas_sat}"
+        print(f"💡 La factura sí existe en la BD con el ID: {factura.id}")
+
+    # 3. Ejecutamos la cancelación nativa usando tu servicio
+    print(f"\n⏳ Enviando orden de cancelación al SAT/PAC (Motivo {MOTIVO_SAT})...")
+    try:
+        service.cancelar_factura_sat(
+            invoice_id=factura.id, motivo=MOTIVO_SAT, uuid_sustituto=None
         )
+        print("✅ ¡Orden de cancelación procesada por el PAC!")
+        print("-" * 80)
+        print("🚨 ATENCIÓN: Según el SAT, esta factura es 'Cancelable con aceptación'.")
         print(
-            f"   - Atoradas por Timeout 500 (Requieren volver a correr el script): {errores}"
+            "🚨 El receptor (HANSA MEYER GLOBAL TRANSPORT) debe autorizarla en su buzón tributario."
         )
-    print("=" * 80 + "\n")
+        print("-" * 80)
+
+    except Exception as e:
+        error_msg = str(e).lower()
+        if (
+            "ya se encuentra cancelado" in error_msg
+            or "comprobante cancelado" in error_msg
+        ):
+            print("ℹ️ El SAT informa que esta factura YA ESTABA CANCELADA previamente.")
+            factura.status_sat = "CANCELADO"
+            factura.estatus = "cancelado"
+            db.commit()
+            print("✅ Base de datos actualizada al estatus correcto.")
+        else:
+            print(f"❌ Error al contactar al SAT/PAC: {e}")
 
 
 if __name__ == "__main__":
-    cancelar_facturas_especificas()
+    cancelar_factura_perdida()
