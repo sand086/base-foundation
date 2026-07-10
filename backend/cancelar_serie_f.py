@@ -1,16 +1,22 @@
 import sys
 import time
+from datetime import date
 from pathlib import Path
 
 # Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from app.db.database import get_db
-from app.models.models import ReceivableInvoice
+from app.models.models import ReceivableInvoice, Client
 from app.integrations.sat.billing_service import BillingService
 
+# =====================================================================
+# DATOS EXTRAÍDOS DE LA IMAGEN SAT
+# =====================================================================
 UUID_FANTASMA = "FFDE385D-EBA7-490D-9458-4B7125E601E2"
+TOTAL_FANTASMA = 3074.00
 MOTIVO_SAT = "02"  # Errores sin relación
+# =====================================================================
 
 
 def cancelar_factura_perdida():
@@ -32,33 +38,27 @@ def cancelar_factura_perdida():
             "⚠️ Factura no encontrada en la BD local. Inyectando registro fantasma..."
         )
 
-        # Clonamos relaciones de una factura existente para evitar errores de llaves foráneas
-        # y permitir que el BillingService encuentre los certificados CSD del emisor.
-        factura_referencia = (
-            db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.uuid.isnot(None))
-            .first()
-        )
+        # Necesitamos un cliente real para satisfacer la llave foránea client_id
+        cliente_ref = db.query(Client).first()
+        if not cliente_ref:
+            print(
+                "❌ Error: No se encontró ningún cliente en la BD para asociar a la factura."
+            )
+            return
 
         try:
-            # Creamos el registro solo con los campos estrictamente seguros
+            # Llenamos estrictamente los campos que son nullable=False en el modelo
             factura = ReceivableInvoice(
+                client_id=cliente_ref.id,
                 uuid=UUID_FANTASMA,
                 folio_interno="RESCATE-001",
-                estatus="timbrado",
+                estatus="pendiente",  # 👈 Enum válido según InvoiceStatus
                 status_sat="VIGENTE",
+                monto_total=TOTAL_FANTASMA,  # 👈 nullable=False
+                saldo_pendiente=TOTAL_FANTASMA,  # 👈 nullable=False
+                fecha_emision=date.today(),  # 👈 nullable=False
+                fecha_vencimiento=date.today(),  # 👈 nullable=False
             )
-
-            # Heredamos IDs relacionales si existen en tu modelo
-            if factura_referencia:
-                if hasattr(factura_referencia, "client_id"):
-                    factura.client_id = factura_referencia.client_id
-                if hasattr(factura_referencia, "emisor_id"):
-                    factura.emisor_id = factura_referencia.emisor_id
-                if hasattr(factura_referencia, "company_id"):
-                    factura.company_id = factura_referencia.company_id
-                if hasattr(factura_referencia, "branch_id"):
-                    factura.branch_id = factura_referencia.branch_id
 
             db.add(factura)
             db.commit()
@@ -68,7 +68,7 @@ def cancelar_factura_perdida():
             )
 
         except Exception as e:
-            db.rollback()  # Limpiamos la transacción fallida
+            db.rollback()
             print(f"❌ Error al intentar crear el registro en BD: {e}")
             return
     else:
