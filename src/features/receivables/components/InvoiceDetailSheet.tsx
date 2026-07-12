@@ -49,6 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ReceivableInvoice } from "@/features/receivables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import axiosClient from "@/api/axiosClient";
 
 interface InvoiceDetailSheetProps {
   open: boolean;
@@ -83,6 +84,7 @@ export function InvoiceDetailSheet({
   const [cancelingId, setCancelingId] = useState<number | null>(null);
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
 
   useEffect(() => {
     if (invoice && open) {
@@ -100,7 +102,7 @@ export function InvoiceDetailSheet({
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  const estatusStr = safeStr(inv.estatus).toUpperCase(); // Ya no buscamos status_sat
+  const estatusStr = safeStr(inv.estatus).toUpperCase();
 
   const isCanceled = estatusStr === "CANCELADO";
   const inProcess = estatusStr === "PROCESO_CANCELACION";
@@ -130,6 +132,7 @@ export function InvoiceDetailSheet({
     badgeColor = "bg-rose-100 text-rose-800 border-rose-300";
     badgeLabel = "Error SAT";
   }
+
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
     : [];
@@ -348,6 +351,55 @@ export function InvoiceDetailSheet({
     setIsVerifying(false);
   };
 
+  // 🚀 LÓGICA DE CANCELACIÓN SECUENCIAL INTELIGENTE (Paso 1 y 2)
+  const handleSafeRetryCancel = async () => {
+    if (!inv.id) return;
+    setIsRetrying(true);
+    const toastId = toast.loading(
+      "Paso 1/2: Verificando estatus real en el SAT...",
+    );
+
+    try {
+      const verifyRes = await axiosClient.get(
+        `/api/finance/receivables/${inv.id}/verify-sat`,
+      );
+      const estatusSatReal = verifyRes.data?.estatus_sat_real;
+
+      if (estatusSatReal === "CANCELADO") {
+        toast.success(
+          "¡Sincronizado! El SAT ya tenía registrado este comprobante como CANCELADO.",
+          { id: toastId },
+        );
+        if (onVerifySat) await onVerifySat(inv.id);
+        setIsRetrying(false);
+        return;
+      }
+
+      toast.loading(
+        "Paso 2/2: El comprobante sigue VIGENTE. Lanzando reintento al SAT...",
+        { id: toastId },
+      );
+
+      if (onRetryCancel) {
+        await onRetryCancel(inv.id, inv.motivo_cancelacion || "02");
+      }
+
+      toast.success("Proceso de reintento ejecutado.", { id: toastId });
+    } catch (error: any) {
+      console.error("Error en flujo de reintento:", error);
+      const errorMsg =
+        error.response?.data?.detail ||
+        error.message ||
+        "Error al conectar con el servidor.";
+      toast.error(
+        `Error: ${typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg)}`,
+        { id: toastId },
+      );
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
@@ -503,15 +555,17 @@ export function InvoiceDetailSheet({
                 <div className="flex gap-2 mt-3">
                   {onRetryCancel && (
                     <Button
-                      // 🚀 CORREGIDO: Usar el motivo original que falló, o 02 por defecto
-                      onClick={() =>
-                        onRetryCancel(inv.id, inv.motivo_cancelacion || "02")
-                      }
+                      onClick={handleSafeRetryCancel}
+                      disabled={isRetrying}
                       size="sm"
-                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
+                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8 transition-all"
                     >
-                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar
-                      Cancelación
+                      {isRetrying ? (
+                        <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3 h-3 mr-2" />
+                      )}
+                      Reintentar Cancelación
                     </Button>
                   )}
                 </div>
@@ -621,36 +675,61 @@ export function InvoiceDetailSheet({
                   {displayFolio}
                 </p>
                 {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT ATUALIZADO */}
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT (RÉPLICA EXACTA DEL QR) */}
                 {uuid && uuid !== "NO TIMBRADO" && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
                     onClick={() => {
-                      // Para clientes: El Emisor somos nosotros (RAPIDOS 3T), el Receptor es el cliente (entidadRfc)
-                      const re =
-                        inv.emisor_rfc || inv.rfc_emisor || "RTX110624KP5"; // RFC de tu empresa por defecto
-                      const rr =
-                        inv.receptor_rfc || inv.rfc_receptor || entidadRfc;
-                      const tt =
-                        montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
+                      // 1. Buscamos si tu BD ya guardó la URL original del código QR
+                      const qrUrlOficial =
+                        inv.qr_url ||
+                        inv.url_qr ||
+                        inv.cadena_qr ||
+                        inv.qr_string;
 
-                      // Extraer los últimos 8 caracteres del sello digital para el parámetro 'fe'
-                      const sello =
-                        inv.sello_cfdi || inv.sello_sat || inv.sello || "";
-                      const fe = sello ? sello.slice(-8) : "";
+                      let satUrl = "";
 
-                      // Construcción de la URL oficial del SAT de Hacienda
-                      let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
-                      if (re) satUrl += `&re=${re}`;
-                      if (rr) satUrl += `&rr=${rr}`;
-                      satUrl += `&tt=${tt}`;
-                      if (fe) satUrl += `&fe=${encodeURIComponent(fe)}`;
+                      if (
+                        qrUrlOficial &&
+                        qrUrlOficial.includes("verificacfdi")
+                      ) {
+                        // Si ya tenemos el QR oficial, usamos ese enlace directo (Es el más seguro)
+                        satUrl = qrUrlOficial;
+                      } else {
+                        // 2. Si no lo tenemos, replicamos EXACTAMENTE la estructura de un escáner QR
+                        const re =
+                          inv.emisor_rfc || inv.rfc_emisor || "RTX110624KP5";
+                        const rr =
+                          inv.receptor_rfc || inv.rfc_receptor || entidadRfc;
+                        const tt =
+                          montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
 
-                      // Redirecciona de forma segura en una pestaña nueva
+                        // Extracción de los 8 caracteres del sello
+                        const sello =
+                          inv.sello_cfdi ||
+                          inv.sello_emisor ||
+                          inv.sello ||
+                          inv.cfdi_sello ||
+                          "";
+                        const fe = sello.length >= 8 ? sello.slice(-8) : "";
+
+                        satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}&re=${re}&rr=${rr}&tt=${tt}`;
+
+                        if (fe) {
+                          satUrl += `&fe=${fe}`;
+                        } else {
+                          toast.error(
+                            "Falta el Sello Digital. Hacienda podría no autollenar el formulario.",
+                          );
+                        }
+                      }
+
+                      // Abrimos la pestaña de Hacienda. Al estar la URL idéntica al QR, el SAT llenará todo.
                       window.open(satUrl, "_blank", "noopener,noreferrer");
                     }}
-                    title="Abre el validador oficial del SAT con todos los datos de esta factura"
+                    title="Abre el portal del SAT autollenando los datos desde el código QR"
                   >
                     <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
                   </Button>

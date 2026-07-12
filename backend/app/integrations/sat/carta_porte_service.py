@@ -1398,6 +1398,14 @@ class CartaPorteService:
             )
             self.db.add(factura)
 
+        # 1. Hacemos flush para que Postgres le asigne el 'id' a la nueva 'factura' (Aún no es definitivo)
+        self.db.flush()
+
+        # 2. Le inyectamos el ID de la factura recién creada a la Carta Porte
+        if carta_porte:
+            carta_porte.factura_padre_id = factura.id
+            self.db.add(carta_porte)
+
         self.db.commit()
         self.db.refresh(factura)
 
@@ -1421,9 +1429,7 @@ class CartaPorteService:
 
         except Exception as e:
             if is_pac_timeout_error(e):
-                self._marcar_timbrado_pendiente(
-                    factura, e, data, uuid_relacionado_real
-                )
+                self._marcar_timbrado_pendiente(factura, e, data, uuid_relacionado_real)
                 raise HTTPException(
                     status_code=202,
                     detail=(
@@ -1495,9 +1501,7 @@ class CartaPorteService:
             logger.error(f"Error al cancelar UUID {factura.uuid}: {e}")
             if is_pac_timeout_error(e):
                 factura.status_sat = "PENDIENTE_CANCELAR_SAT"
-                factura.detalle_sat = (
-                    "Timeout esperando respuesta del PAC. La cancelación quedó pendiente de reintento/verificación."
-                )
+                factura.detalle_sat = "Timeout esperando respuesta del PAC. La cancelación quedó pendiente de reintento/verificación."
                 register_sat_retry(
                     self.db,
                     invoice=factura,

@@ -2247,10 +2247,14 @@ def verify_receivable_invoice_sat_status(
         # Valores comunes del SAT: "VIGENTE", "CANCELADO", "NO ENCONTRADO"
         if "VIGENTE" in estado_sat:
             invoice.status_sat = "TIMBRADO"
-            # Si administrativamente no estaba pagada, se mantiene en su estado actual de saldos
         elif "CANCELADO" in estado_sat:
             invoice.status_sat = "CANCELADO"
-            invoice.estatus = "CANCELADO"  # Forzar estado administrativo a cancelado si el SAT ya lo mató
+
+            # 👇 CORRECCIÓN CRÍTICA AQUÍ: USAR EL ENUM STRICTO 👇
+            invoice.estatus = InvoiceStatus.CANCELADO
+
+            from datetime import datetime
+
             if hasattr(invoice, "fecha_cancelacion") and not invoice.fecha_cancelacion:
                 invoice.fecha_cancelacion = datetime.now()
 

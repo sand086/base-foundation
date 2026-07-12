@@ -1365,6 +1365,14 @@ class BillingService:
             )
             self.db.add(factura)
 
+        # 1. Hacemos flush para que Postgres le asigne el 'id' a la nueva 'factura' (Aún no es definitivo)
+        self.db.flush()
+
+        # 2. Le inyectamos el ID de la factura recién creada a la Carta Porte
+        if carta_porte:
+            carta_porte.factura_padre_id = factura.id
+            self.db.add(carta_porte)
+
         self.db.commit()
         self.db.refresh(factura)
 
@@ -1386,9 +1394,7 @@ class BillingService:
             return factura
         except Exception as e:
             if is_pac_timeout_error(e):
-                self._marcar_timbrado_pendiente(
-                    factura, e, data, uuid_relacionado_real
-                )
+                self._marcar_timbrado_pendiente(factura, e, data, uuid_relacionado_real)
                 raise HTTPException(
                     status_code=202,
                     detail=(
@@ -1570,9 +1576,7 @@ class BillingService:
                 factura.status_sat = "PENDIENTE_CANCELAR_SAT"
                 factura.estatus = "pendiente"
                 factura.saldo_pendiente = factura.monto_total
-                factura.detalle_sat = (
-                    "Timeout esperando respuesta del PAC. La cancelación quedó pendiente de reintento/verificación."
-                )
+                factura.detalle_sat = "Timeout esperando respuesta del PAC. La cancelación quedó pendiente de reintento/verificación."
                 factura.motivo_cancelacion = motivo_final
                 factura.intentos_cancelacion += 1
                 register_sat_retry(
@@ -1747,7 +1751,9 @@ class BillingService:
                     payload = item.request_payload or {}
                     self.cancelar_factura_sat(
                         invoice_id=factura.id,
-                        motivo=payload.get("motivo") or factura.motivo_cancelacion or "02",
+                        motivo=payload.get("motivo")
+                        or factura.motivo_cancelacion
+                        or "02",
                         uuid_sustituto=payload.get("uuid_sustituto"),
                     )
                     self.db.refresh(factura)
@@ -1796,7 +1802,9 @@ class BillingService:
                 )
 
             except Exception as e:
-                item.status = "PENDIENTE" if item.attempts < item.max_attempts else "ERROR"
+                item.status = (
+                    "PENDIENTE" if item.attempts < item.max_attempts else "ERROR"
+                )
                 item.attempts = (item.attempts or 0) + 1
                 item.locked_at = None
                 item.last_error = str(e)[:4000]
