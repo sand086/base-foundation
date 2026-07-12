@@ -2151,7 +2151,6 @@ def export_client_statement_excel(
 def verify_receivable_invoice_sat_status(
     invoice_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(RequirePermission("finance:read")),
 ):
     """
     Endpoint para consultar en TIEMPO REAL el estatus de una factura (CFDI)
