@@ -22,6 +22,7 @@ import {
   DollarSign,
   Building2,
   Receipt,
+  Check,
   CreditCard,
   Loader2,
   AlertTriangle,
