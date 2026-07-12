@@ -100,13 +100,36 @@ export function InvoiceDetailSheet({
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
+  const estatusStr = safeStr(inv.estatus).toUpperCase(); // Ya no buscamos status_sat
+
   const isCanceled = estatusStr === "CANCELADO";
-  const inProcess = inv.status_sat === "PROCESO_CANCELACION";
-  const isQueued = inv.status_sat === "PENDIENTE_CANCELAR_SAT";
+  const inProcess = estatusStr === "PROCESO_CANCELACION";
+  const isQueued = estatusStr === "PENDIENTE_CANCELAR_SAT";
   const hasSatError =
     inv.intentos_cancelacion > 0 && !isCanceled && !inProcess && !isQueued;
 
+  // Lógica de Badge independiente para garantizar homologación visual
+  let badgeColor = "bg-slate-100 text-slate-800 border-slate-200";
+  let badgeLabel = estatusStr;
+
+  if (estatusStr === "TIMBRADA" || estatusStr === "TIMBRADO") {
+    badgeColor = "bg-green-100 text-green-800 border-green-300";
+  } else if (isCanceled) {
+    badgeColor = "bg-red-100 text-red-800 border-red-300";
+  } else if (estatusStr === "PROVISIONAL") {
+    badgeColor = "bg-amber-100 text-amber-800 border-amber-300";
+  } else if (estatusStr === "RECIBO INTERNO") {
+    badgeColor = "bg-slate-100 text-slate-700 border-slate-300";
+  } else if (inProcess) {
+    badgeColor = "bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+    badgeLabel = "En Proceso SAT";
+  } else if (isQueued) {
+    badgeColor = "bg-blue-50 text-blue-700 border-blue-200 animate-pulse";
+    badgeLabel = "En Cola (Reintento)";
+  } else if (hasSatError) {
+    badgeColor = "bg-rose-100 text-rose-800 border-rose-300";
+    badgeLabel = "Error SAT";
+  }
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
     : [];
@@ -372,12 +395,12 @@ export function InvoiceDetailSheet({
           </SheetTitle>
 
           <div className="flex items-center gap-3 mt-0">
-            <StatusBadge
-              status={statusInfo.status}
-              className="shadow-sm font-black px-3 py-1"
+            <Badge
+              variant="outline"
+              className={cn("shadow-sm font-black px-3 py-1", badgeColor)}
             >
-              {statusInfo.label}
-            </StatusBadge>
+              {badgeLabel}
+            </Badge>
 
             <Button
               variant="ghost"

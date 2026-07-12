@@ -100,7 +100,8 @@ def get_bank_movements(db: Session):
             .options(joinedload(models.BankMovement.bank_account))
             .filter(
                 models.BankMovement.record_status != RecordStatus.ELIMINADO,
-                models.BankMovement.monto >= 0,  # 🚀 FIX: Cambiado a >= 0 para incluir conciliaciones de $0
+                models.BankMovement.monto
+                >= 0,  # 🚀 FIX: Cambiado a >= 0 para incluir conciliaciones de $0
                 ~models.BankMovement.concepto.ilike("%Reverso de Cobro Anulado%"),
             )
             .order_by(models.BankMovement.fecha.desc())
@@ -1521,7 +1522,7 @@ def get_cfdi_vault_records(
                 # 🚀 FIX: selectinload para 1:N y pre-cargar relaciones para evitar N+1
                 selectinload(models.ReceivableInvoice.document_history),
                 selectinload(models.ReceivableInvoice.cartas_porte_hijas),
-                joinedload(models.ReceivableInvoice.factura_padre)
+                joinedload(models.ReceivableInvoice.factura_padre),
             )
             .join(models.Client, models.ReceivableInvoice.client_id == models.Client.id)
             .outerjoin(models.Trip, models.ReceivableInvoice.viaje_id == models.Trip.id)
@@ -1620,6 +1621,34 @@ def get_cfdi_vault_records(
                         r.client.rfc if r.client else "XAXX010101000"
                     ),
                     "monto_total": r.monto_total,
+                    "subtotal": getattr(r, "subtotal", 0.0),
+                    "iva": getattr(r, "iva", 0.0),
+                    "retenciones": getattr(r, "retenciones", 0.0),
+                    "saldo_pendiente": getattr(r, "saldo_pendiente", 0.0),
+                    "moneda": getattr(r, "moneda", "MXN"),
+                    "concepto": getattr(r, "concepto", None),
+                    "fecha_vencimiento": getattr(r, "fecha_vencimiento", None),
+                    "trip_info": (
+                        {
+                            "origen": r.trip.origin if r.trip else "No especificado",
+                            "destino": (
+                                r.trip.destination if r.trip else "No especificado"
+                            ),
+                            "peso_toneladas": r.trip.peso_toneladas if r.trip else 0.0,
+                            "contenedores": (
+                                f"{r.trip.contenedor_1 or ''} {r.trip.contenedor_2 or ''}".strip()
+                                if r.trip
+                                else "Sin contenedores registrados"
+                            ),
+                            "producto_sat": (
+                                r.trip.sat_clave_producto
+                                if r.trip
+                                else "No especificado"
+                            ),
+                        }
+                        if r.trip
+                        else None
+                    ),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
@@ -1640,7 +1669,7 @@ def get_cfdi_vault_records(
                     "is_nominal": getattr(r, "is_nominal", False),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
-                    ),  # <--- MAPEADO REAL
+                    ),
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
                     "xml_url": getattr(r, "xml_url", None),
@@ -1719,13 +1748,20 @@ def get_cfdi_vault_records(
                         r.supplier.rfc if r.supplier else "XEXX010101000"
                     ),
                     "monto_total": r.monto_total,
+                    "subtotal": getattr(r, "subtotal", 0.0),
+                    "iva": getattr(r, "iva", 0.0),
+                    "retenciones": getattr(r, "retenciones", 0.0),
+                    "saldo_pendiente": getattr(r, "saldo_pendiente", 0.0),
+                    "moneda": getattr(r, "moneda", "MXN"),
+                    "concepto": getattr(r, "concepto", None),
+                    "fecha_vencimiento": getattr(r, "fecha_vencimiento", None),
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
                     "detalle_sat": getattr(r, "detalle_sat", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
-                    ),  # <--- MAPEADO REAL
+                    ),
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
                     "xml_url": getattr(r, "xml_url", None),
@@ -1814,13 +1850,19 @@ def get_cfdi_vault_records(
                         r.client.rfc if r.client else "XAXX010101000"
                     ),
                     "monto_total": r.monto_total,
+                    "subtotal": getattr(r, "monto_total", 0.0),
+                    "iva": 0.0,
+                    "retenciones": 0.0,
+                    "saldo_pendiente": 0.0,
+                    "moneda": "MXN",
+                    "concepto": "Complemento de Pago",
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),
                     "detalle_sat": getattr(r, "detalle_sat", None),
                     "versiones_archivos": (
                         r.document_history if hasattr(r, "document_history") else []
-                    ),  # <--- MAPEADO REAL
+                    ),
                     "viaje_id": r.viaje_id,
                     "pdf_url": getattr(r, "pdf_url", None),
                     "xml_url": getattr(r, "xml_url", None),
@@ -1956,6 +1998,12 @@ def get_cfdi_vault_records(
                         else "XAXX010101000"
                     ),
                     "monto_total": getattr(r, "monto", 0),
+                    "subtotal": getattr(r, "monto", 0.0),
+                    "iva": 0.0,
+                    "retenciones": 0.0,
+                    "saldo_pendiente": 0.0,
+                    "moneda": "MXN",
+                    "concepto": "Complemento de Pago",
                     "fecha_cancelacion": getattr(r, "fecha_cancelacion", None),
                     "motivo_cancelacion": getattr(r, "motivo_cancelacion", None),
                     "intentos_cancelacion": getattr(r, "intentos_cancelacion", 0),

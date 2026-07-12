@@ -396,7 +396,16 @@ class CFDIHistoryRecord(BaseModel):
     fecha_cancelacion: Optional[datetime] = None
     motivo_cancelacion: Optional[str] = None
 
-    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
+    subtotal: Optional[float] = 0.0
+    iva: Optional[float] = 0.0
+    retenciones: Optional[float] = 0.0
+    moneda: Optional[str] = "MXN"
+    concepto: Optional[str] = None
+    fecha_vencimiento: Optional[datetime] = None
+    saldo_pendiente: Optional[float] = 0.0
+    trip_info: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    payments: Optional[List[Any]] = Field(default_factory=list)
+
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
     factura_padre_id: Optional[int] = None

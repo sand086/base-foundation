@@ -746,33 +746,41 @@ export default function CFDIVault() {
         render: (val, row) => {
           const s = (val || "").toUpperCase();
           let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
+          let displayLabel = s;
 
           if (s === "TIMBRADA" || s === "TIMBRADO")
             badgeClass =
               "bg-green-100 text-green-800 hover:bg-green-200 border-green-300";
-          if (s === "CANCELADO")
+          else if (s === "CANCELADO")
             badgeClass =
               "bg-red-100 text-red-800 hover:bg-red-200 border-red-300";
-          if (s === "PROVISIONAL")
+          else if (s === "PROVISIONAL")
             badgeClass =
               "bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-300";
-          if (s === "RECIBO INTERNO")
+          else if (s === "RECIBO INTERNO")
             badgeClass =
               "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
-          if (s === "PROCESO_CANCELACION")
+          else if (s === "PROCESO_CANCELACION") {
             badgeClass =
               "bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-black";
+            displayLabel = "EN PROCESO SAT";
+          } else if (s === "PENDIENTE_CANCELAR_SAT") {
+            badgeClass =
+              "bg-blue-50 text-blue-700 border-blue-200 animate-pulse font-black";
+            displayLabel = "EN COLA (REINTENTO)";
+          }
 
-          const statusSatReal = (row.status_sat || s).toUpperCase();
+          // Solo es error si NO está cancelado, NO está en proceso, y NO está en la cola
           const hasError =
             row.intentos_cancelacion > 0 &&
-            statusSatReal !== "CANCELADO" &&
-            statusSatReal !== "PROCESO_CANCELACION";
+            s !== "CANCELADO" &&
+            s !== "PROCESO_CANCELACION" &&
+            s !== "PENDIENTE_CANCELAR_SAT";
 
           return (
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={badgeClass}>
-                {s}
+                {displayLabel}
               </Badge>
               {hasError && (
                 <div
@@ -889,7 +897,7 @@ export default function CFDIVault() {
                   onClick={() => handleOpenDetail(row)}
                   className="gap-2 font-bold text-xs cursor-pointer dark:text-slate-200 dark:focus:bg-slate-800 rounded-md"
                 >
-                  <Eye className="h-4 w-4 text-blue-500" /> Ver Detalle / Bóveda
+                  <Eye className="h-4 w-4 text-blue-500" /> Ver Detalles
                 </DropdownMenuItem>
 
                 {hasPdf && (
