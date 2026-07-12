@@ -14,13 +14,28 @@ import { request as __request } from '../core/request';
 export class SatUbicacionesService {
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatLocationResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatMunicipalitiesGet(): CancelablePromise<Array<SatLocationResponse>> {
+    public static getAllApiSatSatMunicipalitiesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatLocationResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-municipalities',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -88,13 +103,28 @@ export class SatUbicacionesService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatLocationResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatLocalitiesGet(): CancelablePromise<Array<SatLocationResponse>> {
+    public static getAllApiSatSatLocalitiesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatLocationResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-localities',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -162,13 +192,28 @@ export class SatUbicacionesService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatNeighborhoodResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatNeighborhoodsGet(): CancelablePromise<Array<SatNeighborhoodResponse>> {
+    public static getAllApiSatSatNeighborhoodsGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatNeighborhoodResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-neighborhoods',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

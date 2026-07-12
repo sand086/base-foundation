@@ -20,13 +20,28 @@ import { request as __request } from '../core/request';
 export class SatCartaPorteService {
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatGenericResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatServicesGet(): CancelablePromise<Array<SatGenericResponse>> {
+    public static getAllApiSatSatServicesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-services',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -94,13 +109,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatGenericResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatCargoTypesGet(): CancelablePromise<Array<SatGenericResponse>> {
+    public static getAllApiSatSatCargoTypesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-cargo-types',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -168,13 +198,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatGenericResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatTrailerSubtypesGet(): CancelablePromise<Array<SatGenericResponse>> {
+    public static getAllApiSatSatTrailerSubtypesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-trailer-subtypes',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -242,13 +287,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatTruckConfigResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatTruckConfigsGet(): CancelablePromise<Array<SatTruckConfigResponse>> {
+    public static getAllApiSatSatTruckConfigsGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatTruckConfigResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-truck-configs',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -316,13 +376,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatPermitTypeResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatPermitTypesGet(): CancelablePromise<Array<SatPermitTypeResponse>> {
+    public static getAllApiSatSatPermitTypesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatPermitTypeResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-permit-types',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -390,13 +465,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatGenericResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatPackagingTypesGet(): CancelablePromise<Array<SatGenericResponse>> {
+    public static getAllApiSatSatPackagingTypesGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-packaging-types',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -464,13 +554,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatHazardousMaterialResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatHazardousMaterialsGet(): CancelablePromise<Array<SatHazardousMaterialResponse>> {
+    public static getAllApiSatSatHazardousMaterialsGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatHazardousMaterialResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-hazardous-materials',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -538,13 +643,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatStationResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatStationsGet(): CancelablePromise<Array<SatStationResponse>> {
+    public static getAllApiSatSatStationsGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatStationResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-stations',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**
@@ -612,13 +732,28 @@ export class SatCartaPorteService {
     }
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatUnitWeightResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatUnitWeightsGet(): CancelablePromise<Array<SatUnitWeightResponse>> {
+    public static getAllApiSatSatUnitWeightsGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatUnitWeightResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-unit-weights',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

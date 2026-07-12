@@ -21,6 +21,15 @@ export type CFDIHistoryRecord = {
     modificado_por_nombre?: (string | null);
     fecha_cancelacion?: (string | null);
     motivo_cancelacion?: (string | null);
+    subtotal?: (number | null);
+    iva?: (number | null);
+    retenciones?: (number | null);
+    moneda?: (string | null);
+    concepto?: (string | null);
+    fecha_vencimiento?: (string | null);
+    saldo_pendiente?: (number | null);
+    trip_info?: (Record<string, any> | null);
+    payments?: null;
     intentos_cancelacion?: (number | null);
     detalle_sat?: (string | null);
     factura_padre_id?: (number | null);
