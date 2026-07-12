@@ -330,6 +330,7 @@ export function InvoicePayablesDetailSheet({
           )}
 
           {/* TARJETA PRINCIPAL: FOLIO Y BOTÓN DE PAGO */}
+          {/* TARJETA PRINCIPAL: FOLIO, VALIDACIÓN SAT Y BOTÓN DE PAGO (CxP) */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group gap-4">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-navy group-hover:bg-blue-600 transition-colors"></div>
             <div className="flex-1 pl-2">
@@ -341,6 +342,40 @@ export function InvoicePayablesDetailSheet({
                 <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
                   {folioInterno}
                 </p>
+
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT OPTIMIZADO (PROVEEDORES) */}
+                {uuid && uuid !== "NO TIMBRADO" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
+                    onClick={() => {
+                      // Para proveedores (CxP): El emisor es el proveedor externo (entidadRfc) y el receptor eres tú (RAPIDOS 3T)
+                      const re = inv.emisor_rfc || inv.rfc_emisor || entidadRfc;
+                      const rr =
+                        inv.receptor_rfc || inv.rfc_receptor || "RTX110624KP5";
+                      const tt =
+                        montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
+
+                      // Extraer los últimos 8 caracteres del Sello Digital para el parámetro 'fe'
+                      const sello =
+                        inv.sello_cfdi || inv.sello_sat || inv.sello || "";
+                      const fe = sello ? sello.slice(-8) : "";
+
+                      // Construcción de la URL oficial de Hacienda (SAT)
+                      let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
+                      if (re) satUrl += `&re=${re}`;
+                      if (rr) satUrl += `&rr=${rr}`;
+                      satUrl += `&tt=${tt}`;
+                      if (fe) satUrl += `&fe=${encodeURIComponent(fe)}`;
+
+                      window.open(satUrl, "_blank", "noopener,noreferrer");
+                    }}
+                    title="Verificar estatus fiscal del proveedor en el portal oficial del SAT"
+                  >
+                    <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
+                  </Button>
+                )}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">

@@ -627,34 +627,28 @@ export function InvoiceDetailSheet({
                     size="sm"
                     className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
                     onClick={() => {
-                      const isProveedor =
-                        inv.tipo_documento === "FACTURA_PROVEEDOR";
-
-                      // Extraer los valores, cruzando los datos disponibles de la factura
+                      // Para clientes: El Emisor somos nosotros (RAPIDOS 3T), el Receptor es el cliente (entidadRfc)
                       const re =
-                        inv.emisor_rfc ||
-                        inv.rfc_emisor ||
-                        (isProveedor ? entidadRfc : "");
+                        inv.emisor_rfc || inv.rfc_emisor || "RTX110624KP5"; // RFC de tu empresa por defecto
                       const rr =
-                        inv.receptor_rfc ||
-                        inv.rfc_receptor ||
-                        (!isProveedor ? entidadRfc : "");
+                        inv.receptor_rfc || inv.rfc_receptor || entidadRfc;
                       const tt =
                         montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
 
-                      // Los últimos 8 caracteres del Sello Digital del SAT
+                      // Extraer los últimos 8 caracteres del sello digital para el parámetro 'fe'
                       const sello =
                         inv.sello_cfdi || inv.sello_sat || inv.sello || "";
-                      const fe = sello ? sello.slice(-8) : inv.fe || "";
+                      const fe = sello ? sello.slice(-8) : "";
 
-                      // Concatenar los parámetros correctamente (encodeURIComponent protege los + y / del base64)
+                      // Construcción de la URL oficial del SAT de Hacienda
                       let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
                       if (re) satUrl += `&re=${re}`;
                       if (rr) satUrl += `&rr=${rr}`;
                       satUrl += `&tt=${tt}`;
                       if (fe) satUrl += `&fe=${encodeURIComponent(fe)}`;
 
-                      window.open(satUrl, "_blank");
+                      // Redirecciona de forma segura en una pestaña nueva
+                      window.open(satUrl, "_blank", "noopener,noreferrer");
                     }}
                     title="Abre el validador oficial del SAT con todos los datos de esta factura"
                   >
