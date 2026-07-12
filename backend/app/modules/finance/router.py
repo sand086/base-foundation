@@ -2147,16 +2147,25 @@ def export_client_statement_excel(
         raise HTTPException(status_code=500, detail=f"Error generando excel: {str(e)}")
 
 
+import requests
+import re
+import traceback
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
+from app.models import models
+from app.models.models import RecordStatus, InvoiceStatus
+from app.db.database import get_db
+
+
 @router.get("/receivables/{invoice_id}/verify-sat", response_model=dict)
 def verify_receivable_invoice_sat_status(
-    invoice_id: int,
-    db: Session = Depends(get_db),
+    invoice_id: int, db: Session = Depends(get_db)
 ):
     """
-    Endpoint para consultar en TIEMPO REAL el estatus de una factura (CFDI)
-    en los servidores del SAT y actualizar la base de datos local.
+    Consulta en TIEMPO REAL el estatus fiscal de un CFDI directamente
+    en el WebService oficial del SAT de Hacienda y actualiza la BD local.
     """
-    # 1. Buscar la factura en la base de datos
+    # 1. Obtener la factura de la base de datos con su cliente amarrado
     invoice = (
         db.query(models.ReceivableInvoice)
         .filter(
@@ -2177,37 +2186,100 @@ def verify_receivable_invoice_sat_status(
             detail="Esta factura no cuenta con un UUID (No ha sido timbrada).",
         )
 
+    # 2. Extraer parámetros fiscales requeridos por el SAT
+    # Emisor: Tu empresa RAPIDOS 3T (Usamos tu RFC por defecto si no viene en el registro)
+    rfc_emisor = getattr(invoice, "emisor_rfc", None) or "RTX110624KP5"
+    # Receptor: El RFC de tu cliente
+    rfc_receptor = invoice.client.rfc if invoice.client else "XAXX010101000"
+    total_factura = f"{float(invoice.monto_total):.2f}"
+    uuid_fiscal = invoice.uuid.strip()
+
     try:
-        # 2. Importamos tu servicio de facturación del SAT
-        from app.integrations.sat.billing_service import BillingService
+        # 3. Construir el sobre SOAP oficial para el WebService del SAT
+        url_sat = (
+            "https://consultaqr.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc"
+        )
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": "http://tempuri.org/IConsultaCFDIService/Consulta",
+        }
 
-        billing_service = BillingService(db)
+        # Expresión regular impresa estricta del SAT
+        expresion = (
+            f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total_factura}&id={uuid_fiscal}"
+        )
 
-        # 🚀 NOTA: Aquí llamamos a la lógica que consulta el webservice del SAT.
-        # Si tu BillingService ya tiene un método de consulta, úsalo aquí.
-        # Por ahora, simulamos la consulta exitosa y sincronización:
+        soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">
+           <soapenv:Header/>
+           <soapenv:Body>
+              <tem:Consulta>
+                 <tem:expresionImpresa><![CDATA[{expresion}]]></tem:expresionImpresa>
+              </tem:Consulta>
+           </soapenv:Body>
+        </soapenv:Envelope>"""
 
-        # Ejemplo de actualización si el SAT reporta cambios (ej: Cancelada en buzón):
-        # estatus_sat_real = billing_service.consultar_estatus_sat(invoice.uuid)
-        # if estatus_sat_real == "CANCELADO":
-        #     invoice.status_sat = "CANCELADO"
-        #     invoice.estatus = "CANCELADO"
-        #     db.commit()
+        # 4. Consumir el WebService de Hacienda con un timeout de 10 segundos
+        response = requests.post(
+            url_sat, data=soap_envelope, headers=headers, timeout=10
+        )
+
+        if response.status_code != 200:
+            raise ValueError(
+                f"El servidor del SAT respondió con código de error: {response.status_code}"
+            )
+
+        response_text = response.text
+
+        # 5. Parseo seguro de la respuesta utilizando expresiones regulares (Fuzzy & Lightweight)
+        estado_match = re.search(r"<.*:Estado>(.*?)</.*:Estado>", response_text)
+        codigo_match = re.search(
+            r"<.*:CodigoEstatus>(.*?)</.*:CodigoEstatus>", response_text
+        )
+        cancelable_match = re.search(
+            r"<.*:EsCancelable>(.*?)</.*:EsCancelable>", response_text
+        )
+
+        estado_sat = estado_match.group(1).upper() if estado_match else "DESCONOCIDO"
+        codigo_estatus = codigo_match.group(1) if codigo_match else "No recibido"
+        es_cancelable = cancelable_match.group(1) if cancelable_match else "No"
+
+        # 6. Sincronizar y mapear el resultado con tu Base de Datos local
+        # Valores comunes del SAT: "VIGENTE", "CANCELADO", "NO ENCONTRADO"
+        if "VIGENTE" in estado_sat:
+            invoice.status_sat = "TIMBRADO"
+            # Si administrativamente no estaba pagada, se mantiene en su estado actual de saldos
+        elif "CANCELADO" in estado_sat:
+            invoice.status_sat = "CANCELADO"
+            invoice.estatus = "CANCELADO"  # Forzar estado administrativo a cancelado si el SAT ya lo mató
+            if hasattr(invoice, "fecha_cancelacion") and not invoice.fecha_cancelacion:
+                invoice.fecha_cancelacion = datetime.now()
+
+        # Guardar los cambios de manera atómica
+        db.commit()
+        db.refresh(invoice)
 
         return {
             "status": "success",
             "invoice_id": invoice.id,
-            "uuid": invoice.uuid,
+            "uuid": uuid_fiscal,
             "folio": invoice.folio_interno,
-            "estatus_sat_local": invoice.status_sat or "TIMBRADO",
-            "message": f"Sincronización completada para la factura {invoice.folio_interno or invoice_id} contra el SAT.",
+            "estatus_sat_real": estado_sat,
+            "codigo_sat": codigo_estatus,
+            "es_cancelable": es_cancelable,
+            "base_datos_actualizada": invoice.status_sat,
+            "message": f"Sincronización exitosa. Estatus real en SAT: {estado_sat}.",
         }
 
     except Exception as e:
         db.rollback()
+        print("\n" + "=" * 60)
+        print("💥 ERROR AL CONSULTAR WEBSERVICE DEL SAT 💥")
+        traceback.print_exc()
+        print("=" * 60 + "\n")
+
         raise HTTPException(
             status_code=500,
-            detail=f"Error de conexión con el WebService del SAT: {str(e)}",
+            detail=f"Fallo la conexión o el parseo del WebService del SAT: {str(e)}",
         )
 
 
