@@ -103,7 +103,9 @@ export function InvoiceDetailSheet({
   const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
   const inProcess = inv.status_sat === "PROCESO_CANCELACION";
-  const hasSatError = inv.intentos_cancelacion > 0 && !isCanceled && !inProcess;
+  const isQueued = inv.status_sat === "PENDIENTE_CANCELAR_SAT";
+  const hasSatError =
+    inv.intentos_cancelacion > 0 && !isCanceled && !inProcess && !isQueued;
 
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
@@ -440,6 +442,30 @@ export function InvoiceDetailSheet({
             </div>
           )}
 
+          {/* 🚀 NUEVA ALERTA: Muestra que el cronjob está trabajando */}
+          {isQueued && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-blue-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
+                  En Cola de Reintentos Automática
+                </h4>
+                <p className="text-sm font-medium text-blue-700/80 dark:text-blue-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "El SAT tardó en responder. El sistema está intentando cancelar esta factura en segundo plano."}
+                </p>
+                <div className="mt-3">
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-100 text-blue-800 border-blue-300"
+                  >
+                    Intentos: {inv.intentos_cancelacion || 0}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+
           {hasSatError && (
             <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
@@ -454,11 +480,15 @@ export function InvoiceDetailSheet({
                 <div className="flex gap-2 mt-3">
                   {onRetryCancel && (
                     <Button
-                      onClick={() => onRetryCancel(inv.id, "02")}
+                      // 🚀 CORREGIDO: Usar el motivo original que falló, o 02 por defecto
+                      onClick={() =>
+                        onRetryCancel(inv.id, inv.motivo_cancelacion || "02")
+                      }
                       size="sm"
                       className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
                     >
-                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar (01)
+                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar
+                      Cancelación
                     </Button>
                   )}
                 </div>

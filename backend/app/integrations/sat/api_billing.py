@@ -804,39 +804,64 @@ def process_sat_retry_queue(limit: int = 10, db: Session = Depends(get_db)):
     return service.procesar_sat_retry_queue(limit=limit)
 
 
-# Importa Optional si no lo tienes arriba
-from typing import Optional
-
-
-class SatCancelPayload(BaseModel):
-    motivo: str = "02"  # Por defecto: Emitido con errores sin relación
+# ==============================================================
+# NUEVO: ENDPOINT PARA CANCELACIÓN MASIVA (1 o N FACTURAS)
+# ==============================================================
+class SatMassCancelPayload(BaseModel):
+    invoice_ids: List[int]
+    motivo: str = "02"
     uuid_sustituto: Optional[str] = None
 
 
-@router.post("/stamp/cancel/{invoice_id}", response_model=dict)
-def cancel_invoice_in_sat(
-    invoice_id: int,
-    payload: SatCancelPayload,
+@router.post("/stamp/cancel-mass", response_model=dict)
+def cancel_mass_invoices_in_sat(
+    payload: SatMassCancelPayload,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(RequirePermission("sat:cancel_cfdi")),
 ):
     """
-    Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.
-    Aplica para Cuentas por Cobrar (Facturas Libres o Cartas Porte).
+    Endpoint para CANCELAR 1 o N facturas en el SAT.
+    Delega al servicio inteligente. Si el PAC falla (Timeout/500),
+    el servicio lo manda automáticamente al SatRetryQueue.
     """
     service = BillingService(db)
-    try:
-        resultado = service.cancelar_factura_sat(
-            invoice_id=invoice_id,
-            motivo=payload.motivo,
-            uuid_sustituto=payload.uuid_sustituto,
-        )
-        return resultado
-    except HTTPException:
-        raise
-    except Exception as e:
-        custom_error = parse_sat_error(e)
-        raise HTTPException(status_code=400, detail=custom_error)
+    resultados = []
+    errores = 0
+
+    for inv_id in payload.invoice_ids:
+        try:
+            # Reutilizamos tu método maestro de cancelación
+            res = service.cancelar_factura_sat(
+                invoice_id=inv_id,
+                motivo=payload.motivo,
+                uuid_sustituto=payload.uuid_sustituto,
+            )
+            resultados.append({"id": inv_id, "status": "success", "detalle": res})
+
+        except HTTPException as he:
+            # Si tu servicio lanza un 202, significa que ya lo metió al RetryQueue
+            if he.status_code == 202:
+                resultados.append(
+                    {"id": inv_id, "status": "queued", "detalle": he.detail}
+                )
+            else:
+                errores += 1
+                resultados.append(
+                    {"id": inv_id, "status": "error", "detalle": he.detail}
+                )
+
+        except Exception as e:
+            errores += 1
+            custom_error = parse_sat_error(e)
+            resultados.append(
+                {"id": inv_id, "status": "error", "detalle": custom_error}
+            )
+
+    return {
+        "status": "success" if errores == 0 else "partial",
+        "message": f"Proceso finalizado. Fallos críticos: {errores}",
+        "data": resultados,
+    }
 
 
 @router.post("/stamp/payment", summary="Generar Complemento de Pago")

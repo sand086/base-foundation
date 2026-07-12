@@ -256,7 +256,7 @@ export default function CFDIVault() {
     return folioTarget.includes(query) || uuidTarget.includes(query);
   };
 
-  // 🚀 FUNCIÓN DE CANCELACIÓN MASIVA
+  // 🚀 FUNCIÓN DE CANCELACIÓN MASIVA ACTUALIZADA
   const handleMassCancel = async () => {
     if (
       !window.confirm(
@@ -281,39 +281,46 @@ export default function CFDIVault() {
           id: toastId,
         });
       } else {
-        let successCount = 0;
-        let errorCount = 0;
+        // ========================================================
+        // 🚀 NUEVA LÓGICA: ENVIAR ARREGLO DE IDs AL ENDPOINT MASIVO
+        // ========================================================
+        const invoiceIds = selectedInvoices.map((inv) => inv.id);
 
-        // En facturas procesamos una por una según el endpoint actual
-        for (const inv of selectedInvoices) {
-          try {
-            await axiosClient.post(
-              `/api/finance/receivables/${inv.id}/cancel-sat`,
-              { motivo: "02" },
-            );
-            successCount++;
-          } catch (error) {
-            console.error(`Error al cancelar ${inv.folio}:`, error);
-            errorCount++;
-          }
-        }
+        // ⚠️ IMPORTANTE: Verifica que este endpoint coincida con cómo
+        // tienes montado el router del SAT en tu main.py
+        // (Suele ser /api/sat/stamp/cancel-mass)
+        const response = await axiosClient.post(`/api/sat/stamp/cancel-mass`, {
+          invoice_ids: invoiceIds,
+          motivo: "02",
+        });
 
-        if (errorCount === 0) {
+        // Desestructuramos la respuesta del backend
+        const { data } = response.data;
+        const criticalErrors = data.filter((r: any) => r.status === "error");
+        const queued = data.filter((r: any) => r.status === "queued");
+        const success = data.filter((r: any) => r.status === "success");
+
+        if (criticalErrors.length === 0) {
           toast.success(
-            `Se enviaron a cancelar ${successCount} facturas con éxito.`,
-            { id: toastId },
+            `Proceso exitoso: ${success.length} canceladas. ${queued.length > 0 ? `(${queued.length} en cola de reintentos por lentitud del SAT)` : ""}`,
+            { id: toastId, duration: 6000 },
           );
         } else {
           toast.warning(
-            `Se enviaron a cancelar ${successCount}, pero hubo ${errorCount} rechazos/errores.`,
-            { id: toastId },
+            `Se enviaron a cancelar, pero hubo ${criticalErrors.length} errores críticos. Revisa la consola o los detalles.`,
+            { id: toastId, duration: 6000 },
           );
+          console.error("Detalle de errores en cancelación:", criticalErrors);
         }
       }
     } catch (err) {
-      toast.error("Ocurrió un error general durante la cancelación masiva.", {
-        id: toastId,
-      });
+      console.error("Error general:", err);
+      toast.error(
+        "Ocurrió un error general de conexión al intentar cancelar.",
+        {
+          id: toastId,
+        },
+      );
     } finally {
       setSelectedInvoices([]);
       setIsMassCanceling(false);
