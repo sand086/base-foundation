@@ -23,6 +23,7 @@ import {
   Building2,
   Receipt,
   CreditCard,
+  Loader2,
   AlertTriangle,
   History,
   X,
@@ -76,19 +77,29 @@ export function InvoicePayablesDetailSheet({
     safeStr(inv.folio_interno) || safeStr(inv.folio) || `ID-${id}`;
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
-  // 👇 EXTRACCIÓN SEGURA HOMOLOGADA
+  // 👇 EXTRACCIÓN SEGURA HOMOLOGADA CON CLIENTES
   const estatusStr = safeStr(inv.estatus).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
+  const inProcess = estatusStr === "PROCESO_CANCELACION";
+  const isQueued = estatusStr === "PENDIENTE_CANCELAR_SAT";
+  const hasSatError =
+    inv.intentos_cancelacion > 0 && !isCanceled && !inProcess && !isQueued;
 
   let badgeColor = "bg-slate-100 text-slate-800 border-slate-200";
-  const badgeLabel = estatusStr;
+  let badgeLabel = estatusStr;
 
-  if (estatusStr === "TIMBRADA" || estatusStr === "TIMBRADO") {
+  if (estatusStr === "TIMBRADO") {
     badgeColor = "bg-green-100 text-green-800 border-green-300";
   } else if (isCanceled) {
     badgeColor = "bg-red-100 text-red-800 border-red-300";
   } else if (estatusStr === "PROVISIONAL") {
     badgeColor = "bg-amber-100 text-amber-800 border-amber-300";
+  } else if (inProcess) {
+    badgeColor = "bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+    badgeLabel = "En Proceso SAT";
+  } else if (isQueued) {
+    badgeColor = "bg-blue-50 text-blue-700 border-blue-200 animate-pulse";
+    badgeLabel = "En Cola (Reintento)";
   }
 
   const entidadNombre =
@@ -264,6 +275,55 @@ export function InvoicePayablesDetailSheet({
                     ? ` (Motivo SAT: ${inv.motivo_cancelacion})`
                     : ""}
                   .
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 🚀 NUEVA ALERTA: EN PROCESO DE CANCELACIÓN SAT */}
+          {inProcess && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
+                  Cancelación en Proceso
+                </h4>
+                <p className="text-sm font-medium text-amber-700/80 dark:text-amber-400/80 mt-1">
+                  El proveedor solicitó la cancelación de este CFDI. Esperando
+                  validación fiscal o aceptación en el Buzón Tributario.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 🚀 NUEVA ALERTA: EN COLA DE REINTENTOS AUTOMÁTICA */}
+          {isQueued && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-blue-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
+                  Verificación de Gasto en Cola
+                </h4>
+                <p className="text-sm font-medium text-blue-700/80 dark:text-blue-400/80 mt-1">
+                  El sistema está conciliando el estatus de este gasto con el
+                  SAT en segundo plano de manera automática.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 🚀 NUEVA ALERTA: ERROR / RECHAZO SAT */}
+          {hasSatError && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-red-800 dark:text-red-400 uppercase tracking-widest">
+                  Alerta de Conciliación SAT (Intentos:{" "}
+                  {inv.intentos_cancelacion})
+                </h4>
+                <p className="text-sm font-medium text-red-700/80 dark:text-red-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "Se detectaron inconsistencias o rechazos en la validación fiscal del comprobante."}
                 </p>
               </div>
             </div>

@@ -1600,7 +1600,7 @@ def get_cfdi_vault_records(
                     status_fiscal = "CANCELADO"
                 else:
                     if rec_status == "A" or rec_status == RecordStatus.ACTIVO:
-                        status_fiscal = "TIMBRADA" if r.uuid else "PROVISIONAL"
+                        status_fiscal = "TIMBRADO" if r.uuid else "PROVISIONAL"
 
             if status_fiscal == "PROVISIONAL":
                 continue
