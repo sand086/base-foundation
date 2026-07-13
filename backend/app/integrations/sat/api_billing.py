@@ -30,6 +30,47 @@ import base64
 import traceback  # Importante para los errores
 from app.modules.auth.router import RequirePermission
 
+import time
+import threading
+
+# ==============================================================
+# ESCUDO ANTI-DOBLE CLIC (RACE CONDITIONS)
+# ==============================================================
+_timbrados_lock = {}
+_lock = threading.Lock()
+
+
+def verificar_doble_clic(llave: str, tiempo_espera: int = 30):
+    """
+    Bloquea peticiones si intentan timbrar la misma operación
+    antes de que pasen 'tiempo_espera' segundos (30 seg por defecto).
+    """
+    with _lock:
+        ahora = time.time()
+
+        # 1. Limpieza de llaves expiradas (Evita fugas de memoria)
+        llaves_a_borrar = [
+            k for k, v in _timbrados_lock.items() if (ahora - v) >= tiempo_espera
+        ]
+        for k in llaves_a_borrar:
+            del _timbrados_lock[k]
+
+        # 2. Verificación de doble clic
+        if (
+            llave in _timbrados_lock
+            and (ahora - _timbrados_lock[llave]) < tiempo_espera
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="⏳ Timbrado en proceso. Por favor NO des doble clic y espera la respuesta del SAT.",
+            )
+
+        # 3. Registrar el nuevo intento
+        _timbrados_lock[llave] = ahora
+
+
+# ==============================================================
+
 router = APIRouter()
 
 
@@ -243,6 +284,9 @@ def generar_carta_porte_nominal(
     Endpoint Fase 3 (Bypass Aduanal):
     Genera y timbra la Carta Porte 3.1 por un valor de $1.00 MXN o montos ocultos.
     """
+
+    viaje_id = getattr(invoice_data, "viaje_id", "sin_viaje")
+    verificar_doble_clic(f"nominal_viaje_{viaje_id}")
     service = CartaPorteService(db)  # CORRECTO: Servicio Operativo
     try:
         factura = service.generar_carta_porte_nominal(invoice_data)
@@ -276,6 +320,9 @@ def generar_carta_porte_one_shot(
     Genera y timbra la Carta Porte 3.1 con ruta completa (Multi-Origen / Multi-Destino)
     consumiendo solo 1 timbre.
     """
+
+    viaje_id = getattr(invoice_data, "viaje_id", "sin_viaje")
+    verificar_doble_clic(f"oneshot_viaje_{viaje_id}")
     service = CartaPorteService(db)  # CORRECTO: Servicio Operativo
     try:
         # 1. Timbrar la NUEVA factura (Carta Porte)
@@ -333,6 +380,8 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     cuando el viaje inicia su tramo de carretera. Automáticamente
     relaciona y cancela la carta porte nominal previa si existe.
     """
+
+    verificar_doble_clic(f"real_trip_{trip_id}")
     # 🟢 1. IMPRIMIR EL INICIO DEL PROCESO
     print("\n" + "=" * 50)
     print(f"📥 [STAMP REAL TRIGGER] PROCESANDO VIAJE ID: {trip_id}")
@@ -414,6 +463,8 @@ def generar_factura_final(
     2. Aplica la Relación 04 al UUID de la Carta Porte nominal.
     3. Cancela localmente la Carta Porte nominal de $1.
     """
+    viaje_id = getattr(invoice_data, "viaje_id", "sin_viaje")
+    verificar_doble_clic(f"final_viaje_{viaje_id}")
     # 🟢 1. IMPRIMIR EL REQUEST CRUZO
     print("\n" + "=" * 50)
     print("📥 [FACTURA CHIDA - FINAL] NUEVO REQUEST RECIBIDO:")
@@ -872,6 +923,9 @@ def registrar_pago_multiple(
     Endpoint Fase 3.2: Registra el pago y genera el Complemento (REP).
     (Bypass desactivado para ver el error real del SAT)
     """
+
+    factura_id = payload.pagos[0].invoice_id if payload.pagos else "vacio"
+    verificar_doble_clic(f"pago_cliente_{payload.client_id}_factura_{factura_id}")
     import uuid
     from datetime import datetime
     from fastapi import HTTPException
