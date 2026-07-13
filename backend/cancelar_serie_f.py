@@ -1,59 +1,62 @@
 import sys
+from datetime import date
 from pathlib import Path
 
 # Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
 
-# Importamos directamente el cliente del PAC y la configuración
-# NOTA: Ajusta 'PACSoapClient' y 'cancelar_cfdi' a los nombres reales que usas en tu código
-from app.integrations.sat.soap_client import PACSoapClient  #
-from app.core.config import settings  # [cite: 2]
+from app.db.database import get_db
+from app.models.models import ReceivableInvoice, Client
+from app.integrations.sat.billing_service import BillingService
 
-# =====================================================================
-# DATOS EXTRAÍDOS DE LA IMAGEN SAT
-# =====================================================================
 UUID_A_CANCELAR = "58D2B363-1721-4E5E-8105-B42D56BD5EAA"
-RFC_EMISOR = "RTX110624KP5"
-RFC_RECEPTOR = "HMG980427Q42"
 TOTAL = 44800.00
-MOTIVO_SAT = "02"  # Errores sin relación
-# =====================================================================
+MOTIVO_SAT = "02"
 
 
-def cancelar_directo_pac():
+def cancelar_factura_junta():
+    db = next(get_db())
+    service = BillingService(db)
+
     print("\n" + "=" * 80)
-    print(f"🚀 INICIANDO CANCELACIÓN DIRECTA (SIN BD) DEL UUID: {UUID_A_CANCELAR}")
+    print(f"🚀 INICIANDO CANCELACIÓN DE EMERGENCIA (MODO SEGURO Y LIMPIO)")
     print("=" * 80)
 
+    cliente_ref = db.query(Client).first()
+    if not cliente_ref:
+        print("❌ Error: No se encontró ningún cliente en la BD local.")
+        return
+
+    # 1. Creamos la factura para que el servicio oficial la encuentre
+    factura_temp = ReceivableInvoice(
+        client_id=cliente_ref.id,
+        uuid=UUID_A_CANCELAR,
+        folio_interno="TEMP-DELETE",
+        estatus="pendiente",
+        status_sat="VIGENTE",
+        monto_total=TOTAL,
+        saldo_pendiente=TOTAL,
+        fecha_emision=date.today(),
+        fecha_vencimiento=date.today(),
+    )
+
     try:
-        # 1. Instanciamos el cliente del PAC sin involucrar la base de datos local
-        # Pásale las credenciales que tu cliente necesite desde tu config.py[cite: 2]
-        pac_client = PACSoapClient(
-            usuario=settings.PAC_USER,
-            password=settings.PAC_PASSWORD,
-            entorno=settings.ENVIRONMENT,
-        )
+        # 2. La guardamos temporalmente en BD
+        db.add(factura_temp)
+        db.commit()
+        db.refresh(factura_temp)
 
-        print(f"\n⏳ Enviando orden de cancelación al SAT/PAC (Motivo {MOTIVO_SAT})...")
-
-        # 2. Ejecutamos la cancelación directa
-        # Para cancelar, el PAC siempre pide UUID, RFCs y a veces el Total
-        respuesta = pac_client.cancelar_cfdi(
-            uuid=UUID_A_CANCELAR,
-            rfc_emisor=RFC_EMISOR,
-            rfc_receptor=RFC_RECEPTOR,
-            total=TOTAL,
-            motivo=MOTIVO_SAT,
-        )
-
-        print("✅ ¡Orden de cancelación procesada por el PAC exitosamente!")
-        print(f"📄 Respuesta cruda del PAC: {respuesta}")
-        print("-" * 80)
-        print("🚨 ATENCIÓN: Según el SAT, esta factura es 'Cancelable con aceptación'.")
         print(
-            "🚨 El receptor (HANSA MEYER GLOBAL TRANSPORT) debe autorizarla en su buzón tributario."
+            f"⏳ Enviando petición de cancelación al PAC/SAT para el UUID: {UUID_A_CANCELAR} ..."
         )
-        print("-" * 80)
+
+        # 3. Disparamos tu lógica oficial
+        service.cancelar_factura_sat(
+            invoice_id=factura_temp.id, motivo=MOTIVO_SAT, uuid_sustituto=None
+        )
+
+        print("✅ ¡ÉXITO! La orden de cancelación fue aceptada por el PAC.")
+        print("🚨 Dile a tu cliente que la acepte en su Buzón Tributario.")
 
     except Exception as e:
         error_msg = str(e).lower()
@@ -63,8 +66,18 @@ def cancelar_directo_pac():
         ):
             print("ℹ️ El SAT informa que esta factura YA ESTABA CANCELADA previamente.")
         else:
-            print(f"❌ Error al contactar al SAT/PAC: {e}")
+            print(f"❌ Error devuelto por el PAC: {e}")
+
+    finally:
+        # 4. LIMPIEZA INMEDIATA: Borramos todo rastro sin importar el resultado
+        print("🧹 Limpiando base de datos local (Eliminando registro fantasma)...")
+        db.query(ReceivableInvoice).filter(
+            ReceivableInvoice.id == factura_temp.id
+        ).delete()
+        db.commit()
+        print("✨ Base de datos local intacta y sin basura. Todo listo.")
+        print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    cancelar_directo_pac()
+    cancelar_factura_junta()
