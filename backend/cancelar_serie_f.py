@@ -1,83 +1,77 @@
 import sys
-from datetime import date
 from pathlib import Path
 
 # Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from app.db.database import get_db
-from app.models.models import ReceivableInvoice, Client
+from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
 
-UUID_A_CANCELAR = "58D2B363-1721-4E5E-8105-B42D56BD5EAA"
-TOTAL = 44800.00
-MOTIVO_SAT = "02"
 
-
-def cancelar_factura_junta():
+def cancelar_solo_un_peso():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 80)
-    print(f"🚀 INICIANDO CANCELACIÓN DE EMERGENCIA (MODO SEGURO Y LIMPIO)")
+    print("🚀 INICIANDO CANCELACIÓN SEGURA: SOLO FACTURAS DE $1.12")
     print("=" * 80)
 
-    cliente_ref = db.query(Client).first()
-    if not cliente_ref:
-        print("❌ Error: No se encontró ningún cliente en la BD local.")
-        return
-
-    # 1. Creamos la factura para que el servicio oficial la encuentre
-    factura_temp = ReceivableInvoice(
-        client_id=cliente_ref.id,
-        uuid=UUID_A_CANCELAR,
-        folio_interno="TEMP-DELETE",
-        estatus="pendiente",
-        status_sat="VIGENTE",
-        monto_total=TOTAL,
-        saldo_pendiente=TOTAL,
-        fecha_emision=date.today(),
-        fecha_vencimiento=date.today(),
+    # 🔒 FILTRO 1: Buscar en BD solo facturas con monto exacto de 1.12 que sigan vigentes
+    facturas_1_peso = (
+        db.query(ReceivableInvoice)
+        .filter(
+            ReceivableInvoice.monto_total == 1.12,
+            ReceivableInvoice.status_sat != "CANCELADO",
+        )
+        .all()
     )
 
-    try:
-        # 2. La guardamos temporalmente en BD
-        db.add(factura_temp)
-        db.commit()
-        db.refresh(factura_temp)
+    if not facturas_1_peso:
+        print("✅ No se encontraron facturas de $1.12 pendientes por cancelar.")
+        return
+
+    print(f"🔍 Se encontraron {len(facturas_1_peso)} facturas de $1.12 exactos.")
+
+    for factura in facturas_1_peso:
+        # 🔒 FILTRO 2 (CANDADO DE SEGURIDAD): Doble validación antes de tocar el PAC/SAT
+        if factura.monto_total != 1.12:
+            print(
+                f"⚠️ SALTANDO FOLIO {factura.folio_interno} porque su monto NO es 1.12 (Es ${factura.monto_total})"
+            )
+            continue
 
         print(
-            f"⏳ Enviando petición de cancelación al PAC/SAT para el UUID: {UUID_A_CANCELAR} ..."
+            f"\n⏳ Cancelando Folio: {factura.folio_interno} | Monto: ${factura.monto_total} | UUID: {factura.uuid}"
         )
+        try:
+            # Disparamos la cancelación con Motivo 02 (Errores sin relación)
+            service.cancelar_factura_sat(
+                invoice_id=factura.id, motivo="02", uuid_sustituto=None
+            )
+            print(f"✅ ¡ÉXITO! Folio {factura.folio_interno} cancelado ante el SAT.")
 
-        # 3. Disparamos tu lógica oficial
-        service.cancelar_factura_sat(
-            invoice_id=factura_temp.id, motivo=MOTIVO_SAT, uuid_sustituto=None
-        )
+        except Exception as e:
+            error_msg = str(e).lower()
+            if (
+                "ya se encuentra cancelado" in error_msg
+                or "comprobante cancelado" in error_msg
+            ):
+                print(
+                    f"ℹ️ El SAT informa que el Folio {factura.folio_interno} YA ESTABA CANCELADO. Sincronizando BD..."
+                )
+                factura.status_sat = "CANCELADO"
+                factura.estatus = "cancelado"
+                db.commit()
+            else:
+                print(
+                    f"❌ Error devuelto por el PAC para el Folio {factura.folio_interno}: {e}"
+                )
 
-        print("✅ ¡ÉXITO! La orden de cancelación fue aceptada por el PAC.")
-        print("🚨 Dile a tu cliente que la acepte en su Buzón Tributario.")
-
-    except Exception as e:
-        error_msg = str(e).lower()
-        if (
-            "ya se encuentra cancelado" in error_msg
-            or "comprobante cancelado" in error_msg
-        ):
-            print("ℹ️ El SAT informa que esta factura YA ESTABA CANCELADA previamente.")
-        else:
-            print(f"❌ Error devuelto por el PAC: {e}")
-
-    finally:
-        # 4. LIMPIEZA INMEDIATA: Borramos todo rastro sin importar el resultado
-        print("🧹 Limpiando base de datos local (Eliminando registro fantasma)...")
-        db.query(ReceivableInvoice).filter(
-            ReceivableInvoice.id == factura_temp.id
-        ).delete()
-        db.commit()
-        print("✨ Base de datos local intacta y sin basura. Todo listo.")
-        print("=" * 80 + "\n")
+    print("\n" + "=" * 80)
+    print("✨ PROCESO TERMINADO. NINGUNA OTRA FACTURA FUE TOCADA. ✨")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    cancelar_factura_junta()
+    cancelar_solo_un_peso()
