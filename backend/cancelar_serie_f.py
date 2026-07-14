@@ -79,7 +79,7 @@ def cirugia_clonacion_folios():
 
         clon_nuevo = factura_96
 
-        # 4. Ocultar los originales (Soft Delete + sufijo _AUDIT en el UUID)
+        # 4. Ocultar los originales (Soft Delete con INACTIVE + sufijo _AUDIT en el UUID)
         original_96 = (
             db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.uuid == uuid_96)
@@ -87,7 +87,8 @@ def cirugia_clonacion_folios():
         )
         print(f"🙈 Ocultando registro original {folio_96} por auditoría...")
         original_96.uuid = f"{uuid_96}_AUDIT"
-        original_96.record_status = "DELETED"
+        # CORRECCIÓN: Usamos INACTIVE que es el estándar de SQL para Enums de estado
+        original_96.record_status = "INACTIVE"
         original_96.estatus = "cancelado"
 
         # Si la factura 88 existía localmente, la ocultamos también
@@ -99,7 +100,8 @@ def cirugia_clonacion_folios():
                 .first()
             )
             original_88.uuid = f"{uuid_88}_AUDIT"
-            original_88.record_status = "DELETED"
+            # CORRECCIÓN: Usamos INACTIVE
+            original_88.record_status = "INACTIVE"
             original_88.estatus = "cancelado"
 
         # 5. Insertar el nuevo clon en la base de datos
