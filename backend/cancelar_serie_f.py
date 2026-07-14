@@ -12,16 +12,16 @@ from app.models.models import ReceivableInvoice
 def cirugia_clonacion_uuids():
     db = next(get_db())
 
-    # Reemplaza aquí con los UUIDs completos
-    uuid_96 = "UUID-COMPLETO-QUE-TERMINA-EN-96"
-    uuid_88 = "UUID-COMPLETO-QUE-TERMINA-EN-88"
+    # 👇 REEMPLAZA AQUÍ CON LOS UUIDs REALES 👇
+    uuid_96 = "INSERTA-AQUI-EL-UUID-TERMINACION-96"
+    uuid_88 = "INSERTA-AQUI-EL-UUID-TERMINACION-88"
 
     print("\n" + "=" * 80)
     print("🚀 INICIANDO CIRUGÍA DE DATOS Y CLONACIÓN POR AUDITORÍA")
     print("=" * 80)
 
     try:
-        # 1. Traer ambos registros
+        # 1. Traer los registros
         factura_96 = (
             db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.uuid == uuid_96)
@@ -33,64 +33,78 @@ def cirugia_clonacion_uuids():
             .first()
         )
 
-        if not factura_96 or not factura_88:
-            print("❌ ERROR: No se encontraron ambos registros en la BD.")
+        if not factura_96:
+            print(
+                f"❌ ERROR CRÍTICO: No se encontró la factura base interna en la BD (UUID: {uuid_96})."
+            )
             return
 
-        print(f"✅ Registros encontrados.")
-        print(f"   - Origen Interno (96): ID {factura_96.id}")
-        print(f"   - Origen SAT (88): ID {factura_88.id}")
+        print(f"✅ Registro base interno (96) encontrado: ID {factura_96.id}")
+
+        if factura_88:
+            print(f"✅ Registro SAT (88) encontrado: ID {factura_88.id}")
+        else:
+            print(f"⚠️ Registro SAT (88) NO encontrado en BD (Solo existe en el SAT).")
+            print(
+                f"   => No hay problema, forzaremos la creación del clon con este UUID."
+            )
+
+        # Guardamos las URLs del PDF/XML si es que existen en la 88, si no, lo dejamos null (o hereda las de 96)
+        nuevo_xml = factura_88.xml_url if factura_88 else None
+        nuevo_pdf = factura_88.pdf_url if factura_88 else None
 
         # 2. Desvincular el objeto 96 de la sesión para poder clonarlo
         db.expunge(factura_96)
         make_transient(factura_96)
 
-        # En este punto, 'factura_96' es un objeto nuevo en memoria, sin ID.
-        # Vamos a inyectarle los datos del SAT del 88.
-        factura_96.id = None  # Para que la BD le asigne un nuevo ID
-        factura_96.uuid = factura_88.uuid
-        factura_96.xml_url = factura_88.xml_url
-        factura_96.pdf_url = factura_88.pdf_url
+        # 3. Inyectarle los datos correctos al Clon (UUID 88)
+        factura_96.id = None  # Para que PostgreSQL le asigne un nuevo ID serial
+        factura_96.uuid = uuid_88
 
-        # Asegurarnos de que el nuevo registro esté activo y visible
-        factura_96.record_status = (
-            "ACTIVE"  # Ajusta según uses is_active=True o record_status
-        )
+        if nuevo_xml:
+            factura_96.xml_url = nuevo_xml
+        if nuevo_pdf:
+            factura_96.pdf_url = nuevo_pdf
+
+        # Asegurarnos de que el nuevo registro esté activo y timbrado
+        factura_96.record_status = "ACTIVE"
+        factura_96.estatus = "timbrado"
+        factura_96.status_sat = "VIGENTE"
 
         clon_nuevo = factura_96
 
-        # 3. Volver a consultar los originales para ocultarlos (soft-delete) y cambiarles el UUID para evitar colisión
+        # 4. Volver a consultar los originales para ocultarlos (soft-delete)
         original_96 = (
             db.query(ReceivableInvoice)
             .filter(ReceivableInvoice.uuid == uuid_96)
             .first()
         )
-        original_88 = (
-            db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.uuid == uuid_88)
-            .first()
-        )
 
-        print("🙈 Ocultando registros originales por auditoría...")
-
-        # Ocultar el 96
+        print("🙈 Ocultando registro original 96 por auditoría...")
         original_96.uuid = f"{uuid_96}_AUDIT"
-        original_96.record_status = "DELETED"  # O is_active = False
+        original_96.record_status = "DELETED"
         original_96.estatus = "cancelado"
 
-        # Ocultar el 88
-        original_88.uuid = f"{uuid_88}_AUDIT"
-        original_88.record_status = "DELETED"  # O is_active = False
-        original_88.estatus = "cancelado"
+        # Si por algún milagro la 88 sí estaba, también la ocultamos
+        if factura_88:
+            print("🙈 Ocultando registro original 88 por auditoría...")
+            original_88 = (
+                db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.uuid == uuid_88)
+                .first()
+            )
+            original_88.uuid = f"{uuid_88}_AUDIT"
+            original_88.record_status = "DELETED"
+            original_88.estatus = "cancelado"
 
-        # 4. Insertar el clon en la base de datos
-        print("🧬 Inyectando el nuevo CLON con la fusión de datos...")
+        # 5. Insertar el clon en la base de datos
+        print("🧬 Inyectando el nuevo CLON en la base de datos...")
         db.add(clon_nuevo)
 
-        # 5. Guardar cambios
+        # 6. Guardar cambios
         db.commit()
         print(
-            f"✅ ¡ÉXITO! Clon creado. El sistema ahora mostrará los datos internos del 96 pero con el UUID y archivos del 88."
+            f"✅ ¡ÉXITO! Clon creado exitosamente. El sistema ahora operará con el UUID {uuid_88}."
         )
 
     except Exception as e:
