@@ -2,15 +2,17 @@ import os
 import sys
 from pathlib import Path
 
-# 🚀 JUGADA MAESTRA: Forzamos la instalación de la librería ligera en tu venv en caliente
-print("\n⏳ Asegurando librerías en tu venv (esto toma 3 segundos)...")
+# 🚀 Aseguramos la instalación de las librerías limpias en el venv en caliente
+print("\n⏳ Instalando dependencias necesarias en tu venv...")
 os.system(f"{sys.executable} -m pip install --quiet xhtml2pdf jinja2")
 
 from jinja2 import Environment, FileSystemLoader
 from xhtml2pdf import pisa
 
-# Configurar rutas del proyecto
+# Configurar las rutas del proyecto backend
 backend_dir = Path(__file__).resolve().parent
+template_dir = backend_dir / "app" / "templates"
+manual_template_path = template_dir / "complemento_pago_manual.html"
 xml_path = (
     backend_dir
     / "app"
@@ -25,6 +27,281 @@ pdf_path = (
     / "xml_timbrados"
     / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.pdf"
 )
+
+# 1. Tu plantilla HTML exacta provista por ti
+html_plantilla_usuario = """<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      {% include "assets/style.css" %}
+      .table-pago { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 7pt; }
+      .table-pago th { background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 6px; text-align: left; color: #475569; text-transform: uppercase; font-weight: bold; }
+      .table-pago td { border-bottom: 1px solid #f1f5f9; padding: 6px; color: #1e293b; }
+      .table-pago .right { text-align: right; }
+      .table-pago .center { text-align: center; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-container">
+        <table style="table-layout: fixed; width: 100%">
+          <tr>
+            <td width="20%" valign="middle">
+              {% if logo_src %}
+              <img src="{{ logo_src }}" class="logo-img" alt="Logo" />
+              {% else %}
+              <div class="header-company">RÁPIDOS 3T</div>
+              {% endif %}
+            </td>
+            <td
+              width="55%"
+              valign="top"
+              style="font-size: 7pt; line-height: 1.35; padding-left: 10px"
+            >
+              <div
+                class="bold text-dark"
+                style="font-size: 10pt; margin-bottom: 2px"
+              >
+                {{ remitente_nombre }}
+              </div>
+              <div>
+                <span class="bold text-muted">RFC:</span>
+                <span class="text-dark">{{ remitente_rfc }}</span>
+              </div>
+              <div class="text-muted">C.P. EXPEDICIÓN: {{ cp_emisor }}</div>
+              <div>
+                <span class="bold text-muted">Régimen Fiscal:</span>
+                <span class="text-dark">{{ regimen_emisor }}</span>
+              </div>
+            </td>
+            <td width="25%" valign="top">
+              <div class="folio-badge center" style="margin-left: auto">
+                <div
+                  class="folio-badge-title"
+                  style="background-color: #0f172a; color: white"
+                >
+                  Recibo de Pago
+                </div>
+                <div class="folio-badge-content">
+                  <div
+                    class="text-primary bold"
+                    style="font-size: 11pt; margin-bottom: 3px; color: #0f172a"
+                  >
+                    {{ folio_interno }}
+                  </div>
+                  <div style="font-size: 5.5pt; color: #64748b">
+                    Fecha y Hora de Emisión:<br />
+                    <span class="text-dark bold">{{ fecha_emision }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="bento-card" style="margin-top: 15px">
+        <div class="bento-card-header">RECEPTOR</div>
+        <table class="grid-table">
+          <tr>
+            <td width="50%">
+              <span class="grid-label">Razón Social</span>
+              <span class="bold text-dark" style="font-size: 7.5pt"
+                >{{ destinatario_nombre }}</span
+              >
+            </td>
+            <td width="25%">
+              <span class="grid-label">RFC</span>
+              <span class="bold text-dark">{{ destinatario_rfc }}</span>
+            </td>
+            <td width="25%">
+              <span class="grid-label text-primary">Uso CFDI</span>
+              <span class="bold text-dark">{{ uso_cfdi }}</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="grid-label">Código Postal Fiscal</span>
+              <span class="text-dark">{{ cp_cliente }}</span>
+            </td>
+            <td colspan="2">
+              <span class="grid-label">Régimen Fiscal</span>
+              <span class="text-dark">{{ regimen_cliente }}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </header>
+
+    <main>
+      <div class="bento-card" style="margin-top: 10px">
+        <div class="bento-card-header">Documentos Relacionados de Pago</div>
+        <table class="table-pago">
+          <thead>
+            <tr>
+              <th width="5%">Serie</th>
+              <th width="10%">Folio</th>
+              <th width="30%">UUID</th>
+              <th width="5%" class="center">Parc.</th>
+              <th width="15%" class="right">Saldo Anterior</th>
+              <th width="15%" class="right">Monto Pagado</th>
+              <th width="15%" class="right">Saldo Insoluto</th>
+              <th width="5%" class="center">Mon</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in doctos_relacionados %}
+            <tr>
+              <td>{{ doc.serie if doc.serie else 'CP' }}</td>
+              <td class="bold">{{ doc.folio }}</td>
+              <td style="font-size: 6pt">{{ doc.uuid }}</td>
+              <td class="center">{{ doc.parcialidad }}</td>
+              <td class="right text-muted">$ {{ doc.saldo_anterior }}</td>
+              <td class="right bold text-primary">$ {{ doc.monto_pagado }}</td>
+              <td class="right">$ {{ doc.saldo_insoluto }}</td>
+              <td class="center">{{ doc.moneda }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bento-card" style="margin-top: 10px">
+        <div class="bento-card-header">Información del Complemento Pago</div>
+        <table class="table-pago" style="margin-top: 0">
+          <thead>
+            <tr>
+              <th>Fecha del Pago</th>
+              <th class="center">Forma Pago</th>
+              <th class="center">Tipo Cambio</th>
+              <th class="right">Total Pago</th>
+              <th class="center">Moneda</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="bold">{{ fecha_pago }}</td>
+              <td class="center bold">{{ forma_pago }}</td>
+              <td class="center">1</td>
+              <td class="right bold" style="font-size: 9pt; color: #0f172a">
+                $ {{ total }}
+              </td>
+              <td class="center bold">MXN</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div
+        style="
+          margin-top: 15px;
+          padding: 10px;
+          background-color: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+        "
+      >
+        <div
+          class="bold text-dark"
+          style="font-size: 7.5pt; margin-bottom: 2px"
+        >
+          Importe con letra:
+        </div>
+        <div style="font-size: 7pt; margin-bottom: 8px; color: #64748b">
+          {{ importe_letra }}
+        </div>
+
+        <table style="width: 100%; font-size: 7pt">
+          <tr>
+            <td width="50%">
+              <div>
+                <span class="text-muted">Banco Ordenante:</span>
+                <span class="bold">No Identificado</span>
+              </div>
+              <div style="margin-top: 3px">
+                <span class="text-muted">Cuenta Ordenante:</span>
+                <span class="bold">No Identificada</span>
+              </div>
+            </td>
+            <td width="50%">
+              <div>
+                <span class="text-muted">Banco Beneficiario:</span>
+                <span class="bold">{{ banco_beneficiario }}</span>
+              </div>
+              <div style="margin-top: 3px">
+                <span class="text-muted">Cuenta Beneficiario:</span>
+                <span class="bold">{{ cuenta_beneficiario }}</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </main>
+
+    <footer style="margin-top: 20px">
+      <div class="elegant-divider"></div>
+      <table style="table-layout: fixed; width: 100%">
+        <tr>
+          <td style="width: 120px; vertical-align: top">
+            <div
+              style="
+                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.5rem;
+                padding: 4px;
+                display: inline-block;
+              "
+            >
+              <img
+                src="{{ qr_src }}"
+                style="width: 108px; height: 108px; display: block"
+              />
+            </div>
+          </td>
+          <td style="vertical-align: top; padding-left: 8px">
+            <table class="sat-table">
+              <tr class="sat-table-header">
+                <td style="width: 40%">Folio Fiscal (UUID)</td>
+                <td style="width: 30%">No. Certificado SAT</td>
+                <td style="width: 30%">Fecha Certificación</td>
+              </tr>
+              <tr>
+                <td class="bold text-dark" style="font-size: 6.5pt">
+                  {{ uuid }}
+                </td>
+                <td class="bold text-dark">{{ cert_sat }}</td>
+                <td class="bold text-dark">{{ fecha_certificacion }}</td>
+              </tr>
+            </table>
+
+            <div class="sello-wrapper">
+              <div class="sello-title">Sello Digital del Emisor</div>
+              <div class="sello-text">{{ sello_emisor }}</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <div class="sello-wrapper">
+        <div class="sello-title">Sello Digital del SAT</div>
+        <div class="sello-text">{{ sello_sat }}</div>
+      </div>
+      <div class="sello-wrapper" style="margin-bottom: 0">
+        <div class="sello-title">
+          Cadena Original del Complemento de Certificación digital del SAT
+        </div>
+        <div class="sello-text">{{ cadena_original }}</div>
+      </div>
+      <div
+        class="center"
+        style="margin-top: 5px; font-size: 6pt; color: #94a3b8"
+      >
+        Este documento es una representation impresa de un CFDI de Pagos.
+      </div>
+    </footer>
+  </body>
+</html>"""
 
 # El contenido XML oficial con la Serie "CP" inyectada para la 17388
 xml_contenido_correcto = """<?xml version="1.0" encoding="UTF-8"?>
@@ -45,37 +322,43 @@ xml_contenido_correcto = """<?xml version="1.0" encoding="UTF-8"?>
 
 def forzar_generacion_pdf():
     print("\n" + "=" * 80)
-    print("🚀 PROCESANDO MAPEO Y ESCRITURA FÍSICA DEL PDF...")
+    print("🛠️ GUARDANDO PLANTILLA Y COMPILANDO PDF DIRECTO A DISCO")
     print("=" * 80)
 
-    # 1. Aseguramos el XML físico perfecto
+    # 1. Aseguramos que la plantilla manual exista en su carpeta para los includes
+    os.makedirs(template_dir, exist_ok=True)
+    with open(manual_template_path, "w", encoding="utf-8") as f:
+        f.write(html_plantilla_usuario.strip())
+    print("✅ Plantilla HTML registrada perfectamente.")
+
+    # 2. Forzamos el XML correcto de origen
     os.makedirs(xml_path.parent, exist_ok=True)
     with open(xml_path, "w", encoding="utf-8") as f:
         f.write(xml_contenido_correcto.strip())
-    print("✅ Archivo XML restaurado con Serie 'CP' para el folio 17388.")
+    print("✅ XML base de datos sobrescrito con el orden y formato original.")
 
-    # 2. Mapeo del contexto idéntico al de tu backend
+    # 3. Datos exactos para el motor del renderizado (Inyectando CP en la 17388)
     context = {
         "logo_src": "",
         "remitente_nombre": "RAPIDOS 3T",
         "remitente_rfc": "RTX110624KP5",
         "cp_emisor": "91808",
-        "regimen_emisor": "624",
+        "regimen_emisor": "624 - Coordinados",
         "folio_interno": "COM-2638",
         "fecha_emision": "2026-07-14 13:24:05",
         "destinatario_nombre": "HANSA MEYER GLOBAL TRANSPORT",
         "destinatario_rfc": "HMG980427Q42",
-        "uso_cfdi": "CP01",
+        "uso_cfdi": "CP01 - Pagos",
         "cp_cliente": "03710",
-        "regimen_cliente": "601",
+        "regimen_cliente": "601 - General de Ley Personas Morales",
         "doctos_relacionados": [
             {
                 "serie": "CP",
                 "folio": "17665",
                 "uuid": "A7CD5A1D-8094-4A8E-88DC-741581917104",
                 "parcialidad": "2",
-                "saldo_anterior": "85120.00",
-                "monto_pagado": "85120.00",
+                "saldo_anterior": "85,120.00",
+                "monto_pagado": "85,120.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
@@ -84,8 +367,8 @@ def forzar_generacion_pdf():
                 "folio": "17559",
                 "uuid": "539129E8-5627-4E1B-B0FC-B34C185CDABF",
                 "parcialidad": "2",
-                "saldo_anterior": "72800.00",
-                "monto_pagado": "72800.00",
+                "saldo_anterior": "72,800.00",
+                "monto_pagado": "72,800.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
@@ -94,8 +377,8 @@ def forzar_generacion_pdf():
                 "folio": "9762",
                 "uuid": "78ADE59D-48FF-40A2-84AF-81768B96F1DD",
                 "parcialidad": "2",
-                "saldo_anterior": "3074.00",
-                "monto_pagado": "3074.00",
+                "saldo_anterior": "3,074.00",
+                "monto_pagado": "3,074.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
@@ -104,8 +387,8 @@ def forzar_generacion_pdf():
                 "folio": "17444",
                 "uuid": "BE87BD06-6B0F-4AF3-B2FB-DBB22D530907",
                 "parcialidad": "2",
-                "saldo_anterior": "45920.00",
-                "monto_pagado": "45920.00",
+                "saldo_anterior": "45,920.00",
+                "monto_pagado": "45,920.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
@@ -114,8 +397,8 @@ def forzar_generacion_pdf():
                 "folio": "17441",
                 "uuid": "88ABFFF2-6CAB-4366-B352-055AE3272E37",
                 "parcialidad": "2",
-                "saldo_anterior": "45920.00",
-                "monto_pagado": "45920.00",
+                "saldo_anterior": "45,920.00",
+                "monto_pagado": "45,920.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
@@ -124,8 +407,8 @@ def forzar_generacion_pdf():
                 "folio": "17424",
                 "uuid": "78AAB569-26A0-4E1F-BE5E-D0071621DC78",
                 "parcialidad": "2",
-                "saldo_anterior": "45920.00",
-                "monto_pagado": "45920.00",
+                "saldo_anterior": "45,920.00",
+                "monto_pagado": "45,920.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
@@ -134,15 +417,15 @@ def forzar_generacion_pdf():
                 "folio": "17388",
                 "uuid": "58D2B363-1721-4E5E-8105-B42D56BD5EAA",
                 "parcialidad": "1",
-                "saldo_anterior": "44800.00",
-                "monto_pagado": "44800.00",
+                "saldo_anterior": "44,800.00",
+                "monto_pagado": "44,800.00",
                 "saldo_insoluto": "0.00",
                 "moneda": "MXN",
             },
         ],
-        "fecha_pago": "2026-06-30T12:00:00",
+        "fecha_pago": "2026-06-30 12:00:00",
         "forma_pago": "03",
-        "total": "343554.00",
+        "total": "343,554.00",
         "importe_letra": "(***TRESCIENTOS CUARENTA Y TRES MIL QUINIENTOS CINCUENTA Y CUATRO PESOS 00/100 MXN ***)",
         "banco_beneficiario": "BANORTE",
         "cuenta_beneficiario": "1001497363",
@@ -150,24 +433,28 @@ def forzar_generacion_pdf():
         "uuid": "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF",
         "cert_sat": "00001000000710052019",
         "fecha_certificacion": "2026-07-14 13:24:06",
-        "sello_emisor": "G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6PQFZAEVSZWOGPTHQYHFDCTLKUSYCNOGPWDIZ4PYPOWRW5P9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==",
-        "sello_sat": "MLIDKTTISIO/W5HJGNYHWLKYEXVHBUXFU3Q4MMKHTULAMKX/0/CBN1HUM6GAMRRH33RQU02WIXSHCVGZAAQEPNPXACSZM7JNJ2UA73KBPK5WXBOGBLTD01FKK90T6M003PK2LE9KMOHLD1IG7H27RMNVVYYFKKCJHGGYXKPLZBZJSKTNTRZN6UFGFFUKR4D9AWFFTYAYDCXB+MDAMSHVSUGEIMYYEVFYSPIP/WPHFOKYLEVDGDACQYJODJHTLP/PKKK5+GQVA5DWPKOVE07R1YENJ5BIVCQ0A1D30BMCYS8KHY73RKZMQPBCPUFCE4MZ1KC0C5FT900X0FUIH951G==",
-        "cadena_original": "||1.1|4F18F5B4-62C6-4D89-9065-74F9AA22ACBF|2026-07-14T13:24:06|SFE0807172W8|G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==|00001000000710052019||",
+        "sello_emisor": "G9S9I8KKRo7oCCejK4aSwtW3TAry66v25fhRYCPpQZQ6Eqrm22M8doCX/m4VWIVFn7Gv0duhEUl/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTpCiBFa3TjpVZvm2YNoXHMJzBecbAzxJvUlMOQC6JuD9nt6/FEeQr89VXU8YaCDefEyMZfiN6jc1fMhvPdIlJSYb4BGnKjNmpiPT4YWbDA9NdJ+2LV6WFq1oW8v2YVpj+Upk0pSGfYNxbgQgY+WdmKSH2biVR+5DNMnfpJMsiHuJsCTZeIY4yv/kfHGKl2IeBqzoeILsc7+IvMCZQ==",
+        "sello_sat": "MliDkTtisiO/W5HJgnyhwLKYeXVHbuXFU3q4mmkhtuLAmKx/0/cBn1Hum6gamrRH33RQUO2wIxShcVgzAaQEpNpXACSZm7jnj2uA73Kbpk5wxBOGBlTdo1fKk9OT6Mo03pk2Le9KmohLd1ig7H27RmnvvYYFKkcJHgGYXkPlzBZJSKTntrZn6UfGffukR4d9AWfFtYaYDcXB+MdaMsHVsUgEiMYyEVFYsPIpJ/WPhFoKylevDGdaCqyJOdJHtLP/PkkK5+gQVa5DwPkoVEo7r1yENJ58IvCqoa1D3QbMCYs8khy73RKzMQPbcPuFCe4Mz1kc0C5Ft9U0xOFuIh9S1g==",
+        "cadena_original": "||1.1|4F18F5B4-62C6-4D89-9065-74F9AA22ACBF|2026-07-14T13:24:06|SFE0807172W8|g9S9I8KKRo7oCCejK4aSwtW3TAry66v25fhRYCPpQZQ6Eqrm22M8doCX/m4VWIVFn7Gv0duhEUl/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTpCiBFa3TjpVZvm2YNoXHMJzBecbAzxJvUlMOQC6JuD9nt6/FEeQr89VXU8YaCDefEyMZfiN6jc1fMhvPdIlJSYb4BGnKjNmpiPT4YWbDA9NdJ+2LV6WFq1oW8v2YVpj+Upk0pSGfYNxbgQgY+WdmKSH2biVR+5DNMnfpJMsiHuJsCTZeIY4yv/kfHGKl2IeBqzoeILsc7+IvMCZQ==|00001000000710052019||",
     }
 
-    # 3. Compilar HTML usando el Jinja2 del proyecto
-    env = Environment(loader=FileSystemLoader(backend_dir / "app" / "templates"))
-    template = env.get_template("complemento_pago.html")
-    html_rendered = template.render(context)
-    print("✅ Plantilla HTML renderizada correctamente.")
+    # 4. Renderizado con Jinja2 en la plantilla manual
+    try:
+        env = Environment(loader=FileSystemLoader(template_dir))
+        template = env.get_template("complemento_pago_manual.html")
+        html_rendered = template.render(context)
+        print("✅ HTML procesado con el contexto de los folios.")
+    except Exception as je:
+        print(f"❌ Error Jinja2: {je}")
+        return
 
-    # 4. Renderizar el PDF directo a disco con pisa
+    # 5. Renderizado final directo a PDF usando pisa (xhtml2pdf)
     try:
         with open(pdf_path, "wb") as result_file:
             pisa.CreatePDF(html_rendered, dest=result_file)
-        print(f"\n🎉 ¡ÉXITO TOTAL! Archivo PDF generado físicamente en: {pdf_path}")
-    except Exception as e:
-        print(f"❌ Error al escribir el archivo final: {e}")
+        print(f"\n🎉 ¡ÉXITO ROTUNDO! PDF sembrado directamente en: {pdf_path}")
+    except Exception as pe:
+        print(f"❌ Error al compilar PDF: {pe}")
 
     print("=" * 80 + "\n")
 
