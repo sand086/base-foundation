@@ -3,26 +3,20 @@ import requests
 import uuid
 from pathlib import Path
 
-# Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from app.db.database import get_db
 from app.models.models import ReceivableInvoice, InvoiceStatus
 
 
-def cancelar_uuids_multiples():
+def cancelar_uuid_necio():
     db = next(get_db())
 
-    # 📌 LISTA ÚNICA CON LOS 4 UUIDS A CANCELAR
-    uuids_a_cancelar = [
-        "DC6E3BE8-DCDA-4972-8F7C-613425E4D6B1",
-        "CC660BD9-3F84-459F-9EDB-0E2770647C30",
-        "E545C881-3261-4E21-89E0-3649C6FF9572",
-        "8B62AAA4-1610-47B6-8417-E96C78A0648A",
-    ]
+    # 📌 SOLO EL UUID QUE FALLÓ POR CULPA DEL SAT
+    uuids_a_cancelar = ["8B62AAA4-1610-47B6-8417-E96C78A0648A"]
 
     print("\n" + "=" * 80)
-    print("🚀 INICIANDO CANCELACIÓN DIRECTA (BUSCANDO ESTRICTAMENTE POR UUID)")
+    print("🚀 REINTENTANDO CANCELACIÓN DIRECTA (BUSCANDO ESTRICTAMENTE POR UUID)")
     print("=" * 80)
 
     url = (
@@ -115,11 +109,9 @@ def cancelar_uuids_multiples():
                 print(response.text)
 
         except Exception as e:
-            # Rollback individual por si algo falla en uno de los UUIDs, para que el ciclo continúe con el siguiente
             db.rollback()
             print(f"❌ Ocurrió un error crítico procesando el UUID {uuid_obj}: {e}")
 
-    # Cerrar conexión al final del ciclo
     db.close()
     print("\n" + "=" * 80)
     print("✨ PROCESO TERMINADO. ✨")
@@ -127,4 +119,4 @@ def cancelar_uuids_multiples():
 
 
 if __name__ == "__main__":
-    cancelar_uuids_multiples()
+    cancelar_uuid_necio()
