@@ -1,72 +1,48 @@
-import os
 import sys
 from pathlib import Path
-import xml.etree.ElementTree as ET
+from sqlalchemy import text
 
-# Configurar rutas del proyecto
-backend_dir = Path(__file__).resolve().parent
-xml_path = (
-    backend_dir
-    / "app"
-    / "storage"
-    / "xml_timbrados"
-    / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.xml"
-)
-pdf_path = (
-    backend_dir
-    / "app"
-    / "storage"
-    / "xml_timbrados"
-    / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.pdf"
-)
+# Configurar el entorno para heredar los módulos
+sys.path.append(str(Path(__file__).resolve().parent))
 
-print("\n" + "=" * 80)
-print("🛠️ REPARANDO CAMPOS EN EL ARCHIVO XML LOCAL Y LIMPIANDO CACHÉ")
-print("=" * 80)
+from app.db.database import get_db
+from app.integrations.sat.api_billing import reconstruir_pdf_factura
 
-if not xml_path.exists():
-    print(f"❌ Error: No se encontró el archivo XML en la ruta: {xml_path}")
-    sys.exit(1)
 
-try:
-    # Registrar de forma estricta todos los namespaces para mantener la firma del SAT intacta
-    ET.register_namespace("cfdi", "http://www.sat.gob.mx/cfd/4")
-    ET.register_namespace("pago20", "http://www.sat.gob.mx/Pagos20")
-    ET.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
-    ET.register_namespace("tfd", "http://www.sat.gob.mx/TimbreFiscalDigital")
+def levantar_pdf_huerfano():
+    db = next(get_db())
+    uuid_pago = "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF"
 
-    # Cargar y parsear el XML proveído
-    tree = ET.parse(xml_path)
-    root = tree.getroot()
+    print("\n" + "=" * 80)
+    print("🔨 FORZANDO LA RECONSTRUCCIÓN NATIVA DEL PDF")
+    print("=" * 80)
 
-    modificado = False
+    try:
+        # 1. Conseguimos el ID numérico que tu función necesita
+        query = text("SELECT id FROM receivable_invoices WHERE uuid = :uuid")
+        result = db.execute(query, {"uuid": uuid_pago}).fetchone()
 
-    # Iterar sobre los elementos usando el nombre de tag correcto del SAT (DoctoRelacionado)
-    for elemento in root.iter():
-        if elemento.tag.endswith("DoctoRelacionado"):
-            folio = elemento.get("Folio")
-            if folio == "17388":
-                elemento.set("Serie", "CP")
-                print("✅ Serie 'CP' asignada exitosamente al Folio 17388.")
-                modificado = True
+        if not result:
+            print("❌ Error: No se encontró ese UUID en la tabla receivable_invoices.")
+            return
 
-    if modificado:
-        # Sobrescribir el XML con los cambios aplicados
-        tree.write(xml_path, encoding="utf-8", xml_declaration=True)
+        invoice_id = result[0]
+        print(f"🔍 Registro localizado en BD (ID: {invoice_id})")
+
+        # 2. Invocamos la función del sistema para que cree el archivo en el disco
+        print("⏳ Ejecutando motor de diseño sobre el XML... Por favor espera.")
+        reconstruir_pdf_factura(invoice_id=invoice_id, db=db)
+
         print(
-            "💾 Archivo XML actualizado correctamente en el almacenamiento del servidor."
+            "✅ ¡Éxito absoluto! El archivo PDF ha sido regenerado en su ruta física."
         )
 
-        # Eliminar el archivo PDF viejo para obligar al backend a leer la nueva estructura
-        if pdf_path.exists():
-            os.remove(pdf_path)
-            print("🗑️ PDF anterior removido con éxito para limpiar la caché.")
+    except Exception as e:
+        print(f"❌ Error al intentar compilar el PDF: {e}")
+    finally:
+        db.close()
+        print("=" * 80 + "\n")
 
-        print("\n🚀 ¡PROCESO COMPLETADO! El origen de datos quedó reparado.")
-    else:
-        print("⚠️ No se encontró la factura con el Folio '17388' dentro del XML.")
 
-except Exception as e:
-    print(f"❌ Error crítico al manipular el archivo XML: {e}")
-finally:
-    print("=" * 80 + "\n")
+if __name__ == "__main__":
+    levantar_pdf_huerfano()
