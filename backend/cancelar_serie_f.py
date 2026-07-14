@@ -70,9 +70,7 @@ def cirugia_clonacion_folios():
         if nuevo_pdf:
             factura_96.pdf_url = nuevo_pdf
 
-        # 🚨 USANDO LOS ENUMS EXACTOS DE TU MODELO PARA EL CLON 🚨
         factura_96.record_status = RecordStatus.ACTIVO
-        # No tocamos el 'estatus' de la factura (dejamos el que ya tenía la 96, ej. PENDIENTE)
         factura_96.status_sat = "VIGENTE"
 
         clon_nuevo = factura_96
@@ -84,9 +82,15 @@ def cirugia_clonacion_folios():
             .first()
         )
         print(f"🙈 Ocultando registro original {folio_96} por auditoría...")
-        original_96.uuid = f"{uuid_96}_AUDIT"
 
-        # 🚨 USANDO LOS ENUMS EXACTOS DE TU MODELO PARA OCULTAR 🚨
+        # 🛠️ AJUSTE PARA MANTENER EXACTAMENTE 36 CARACTERES:
+        # Rescatamos el UUID original completo en 'detalle_sat'
+        original_96.detalle_sat = (
+            f"UUID Original: {uuid_96} | Oculto por clonación de duplicidad"
+        )
+        # Cortamos los ultimos 6 caracteres y añadimos "-AUDIT" (Total: 36 chars)
+        original_96.uuid = f"{uuid_96[:30]}-AUDIT"
+
         original_96.record_status = RecordStatus.ELIMINADO
         original_96.estatus = InvoiceStatus.CANCELADO
 
@@ -98,7 +102,12 @@ def cirugia_clonacion_folios():
                 .filter(ReceivableInvoice.uuid == uuid_88)
                 .first()
             )
-            original_88.uuid = f"{uuid_88}_AUDIT"
+
+            original_88.detalle_sat = (
+                f"UUID Original: {uuid_88} | Oculto por clonación de duplicidad"
+            )
+            original_88.uuid = f"{uuid_88[:30]}-AUDIT"
+
             original_88.record_status = RecordStatus.ELIMINADO
             original_88.estatus = InvoiceStatus.CANCELADO
 
