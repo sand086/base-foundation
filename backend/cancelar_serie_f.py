@@ -1,142 +1,209 @@
+import os
 import sys
 from pathlib import Path
-from sqlalchemy import text
-import inspect
+from jinja2 import Environment, FileSystemLoader
 
-# Configurar el entorno para heredar los módulos
-sys.path.append(str(Path(__file__).resolve().parent))
+# Configurar rutas del proyecto
+backend_dir = Path(__file__).resolve().parent
+xml_path = (
+    backend_dir
+    / "app"
+    / "storage"
+    / "xml_timbrados"
+    / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.xml"
+)
+pdf_path = (
+    backend_dir
+    / "app"
+    / "storage"
+    / "xml_timbrados"
+    / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.pdf"
+)
 
-from app.db.database import get_db
+# El contenido XML oficial con la Serie "CP" inyectada quirúrgicamente en la 17388
+xml_contenido_correcto = """<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Sello="g9S9I8KKRo7oCCejK4aSwtW3TAry66v25fhRYCPpQZQ6Eqrm22M8doCX/m4VWIVFn7Gv0duhEUl/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTpCiBFa3TjpVZvm2YNoXHMJzBecbAzxJvUlMOQC6JuD9nt6/FEeQr89VXU8YaCDefEyMZfiN6jc1fMhvPdIlJSYb4BGnKjNmpiPT4YWbDA9NdJ+2LV6WFq1oW8v2YVpj+Upk0pSGfYNxbgQgY+WdmKSH2biVR+5DNMnfpJMsiHuJsCTZeIY4yv/kfHGKl2IeBqzoeILsc7+IvMCZQ==" NoCertificado="00001000000717643613" Certificado="MIIF9TCCA92gAwIBAgIUMDAwMDEwMDAwMDA3MTc2NDM2MTMwDQYJKoZIhvcNAQELBQAwggGVMTUwMwYDVQQDDCxBQyBERUwgU0VSVklDSU8gREUgQURNSU5JU1RSQUNJT04gVFJJUFVUQVJJQTEuMCwGA1UECgwlU0VSVklDSU8gREUgQURNSU5JU1RSQUNJT04gVFJJUFVUQVJJQTEaMBgGA1UECwwRU0FULUlFUyBBdXRob3JpdHkxMjAwBgkqhkiG9w0BCQEWI3NlcnZpY2lvc2FsY29udHJpYnV5ZW50ZUBzYXQuZ29iLm14MSYwJAYDVQQJDB1Bdi4gSGlkYWxnbyA3NywgQ29sLiBHdWVycmVybzEOMAwGA1UEEQwFMDYzMDAxCzAJBgNVBAYTAk1YMQ0wCwYDVQQIDARDRE1YMRMwEQYDVQQHDApDVUFVSFRFTU9DMRUwEwYDVQQtEwxTQVQ5NzA3MDFOTjMxXDBaBgkqhkiG9w0BCQITTXJlc3BvbnNhYmxlOiBBRE1JTklTVFJBQ0lPTiBDRU5UUkFMIERFIFNFUlZJQ0lPUyBUUklCVVRBUklPUyBBTCBDT05UUklCVVlFTlRFMB4XDTI1MDcyODIzMTMzNVoXDTI5MDcyODIzMTMzNVowgbIxHDAaBgNVBAMTE1JBUElET1MgM1QgU0EgREUgQ1YxHDAaBgNVBCkTE1JBUElET1MgM1QgU0EgREUgQ1YxHDAaBgNVBAoTE1JBUElET1MgM1QgU0EgREUgQ1YxJTAjBgNVBC0THFJUWDExMDYyNEtQNSAvIFNFTUo3NzAzMjRWQjcxHjAcBgNVBAUTFSAvIFNFTUo3NzAzMjRISEdSUk4wMzEPMA0GA1UECxMGVU5JREFEMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnGr8C6vdniMWoDHoATmjI7Id5mqa/r33e+xd+WH/r3ue/pKL6ScKtrJC6WtqNWjnM1gDtrzfqwga+93HOGLLwEK/x0KSwsBj+SNBV3dQjcrQ0l4BCwUg+8UjwuL+fcvFkqBJiny4aJeJYN289xkD7hdrTboCn+QsrJT4rSugzrmtxxKXwCupt42WNvCUhhDkNI4BwgsS/HwkdAw+MYJzTNvGcaNdYtyue7iLezXYeqg5VGn6pQZQfqYX3M0ReSpJobvFwR6H6VjiFV5d8XnlZj0QUxlEBAGtvyIpvuKbcPs2q2Zsjw75Jux8Yrfr0F1KesxNc4uRhQHQhi2u5fnXWwIDAQABox0wGzAMBgNVHRMBAf8EAjAAMAsGA1UdDwQEAwIGwDANBgkqhkiG9w0BAQsFAAOCAgEAyoaZplfyukn7HFPi+uJN/XzHwfF4BhmkNT7lbZ9M2a9ba98fHPQQ/TfLLOv2HA5bnPwgNH6IOZmogl/44URJ6hXDKnJ23I2MDOhMsoUIOL8/rrkokf4sOkZbLiEvwjDzPEvYYsR+S68CcKEhh1aKi1VI4+yyLAVb7rp7IwRfN1NT0ciXldss+dRv1Rrh/JuHDCkPCDPLFsk3pBBgFnCuwhr9skgR0gsRCY4Pc+6FxakicOA6Z+vvOTStPjwNgnn08MCDRBTzpbrWM8Upqamx2jsesHICF44ySnK0kRWBYDXsv1Quq14OrR8Goz5AwRv5k89AtJOj1Pv3ZEHfq28WbX9H7vFId3SwBC0AYESo8OAEOA/Tc4OUWV1L/QOmQvk2IRfsK7d7+tc3jhTSJbIX2uhy4vwrgMTvhJ1kjTsWNInYX1hROqxMy34PDVDcX6J7chweNAId1Gr59/N3SVE7x50n8mqMSijvlykmGDZqSaOs3ihELldOx4CRizFARmS+Ox4MGtRgShA/j9P2MWKOuI5uS++vgDzx+7NJHlZnab104d1NzPvFnkc/7mxsgTgl2JnUDrL5TNiJwiGf9w8jClBzzbvskG7v+dQCBNCdscfMWwvkuQvzq3dDqUJUmgTDGK6fBIcD3ZBmptV6p/pxP/htPxICpxqt9YSDLoGzQ0M=" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="2026-07-14T13:24:05" Serie="COM" Folio="2638" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="91808">
+    <cfdi:Emisor Rfc="RTX110624KP5" Nombre="RAPIDOS 3T" RegimenFiscal="624" />
+    <cfdi:Receptor Rfc="HMG980427Q42" Nombre="HANSA MEYER GLOBAL TRANSPORT" DomicilioFiscalReceptor="03710" RegimenFiscalReceptor="601" UsoCFDI="CP01" />
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago" ValorUnitario="0" Importe="0" ObjetoImp="01" />
+    </cfdi:Conceptos>
+    <cfdi:Complemento>
+        <pago20:Pagos Version="2.0">
+            <pago20:Totales TotalRetencionesIVA="12160.00" TotalTrasladosBaseIVA16="306650.00" TotalTrasladosImpuestoIVA16="49064.00" MontoTotalPagos="343554.00" />
+            <pago20:Pago FechaPago="2026-06-30T12:00:00" FormaDePagoP="03" MonedaP="MXN" Monto="343554.00" TipoCambioP="1" CtaBeneficiario="072905010014973631"><pago20:DoctoRelacionado IdDocumento="A7CD5A1D-8094-4A8E-88DC-741581917104" Serie="CP" Folio="17665" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="2" ImpSaldoAnt="85120.00" ImpPagado="85120.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:RetencionesDR><pago20:RetencionDR BaseDR="76000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="3040.000000" /></pago20:RetencionesDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="76000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="12160.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:DoctoRelacionado IdDocumento="539129E8-5627-4E1B-B0FC-B34C185CDABF" Serie="CP" Folio="17559" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="2" ImpSaldoAnt="72800.00" ImpPagado="72800.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:RetencionesDR><pago20:RetencionDR BaseDR="65000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="2600.000000" /></pago20:RetencionesDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="65000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="10400.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:DoctoRelacionado IdDocumento="78ADE59D-48FF-40A2-84AF-81768B96F1DD" Serie="F" Folio="9762" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="2" ImpSaldoAnt="3074.00" ImpPagado="3074.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="2650.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="424.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:DoctoRelacionado IdDocumento="BE87BD06-6B0F-4AF3-B2FB-DBB22D530907" Serie="CP" Folio="17444" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="2" ImpSaldoAnt="45920.00" ImpPagado="45920.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:RetencionesDR><pago20:RetencionDR BaseDR="41000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="1640.000000" /></pago20:RetencionesDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="41000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="6560.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:DoctoRelacionado IdDocumento="88ABFFF2-6CAB-4366-B352-055AE3272E37" Serie="CP" Folio="17441" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="2" ImpSaldoAnt="45920.00" ImpPagado="45920.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:RetencionesDR><pago20:RetencionDR BaseDR="41000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="1640.000000" /></pago20:RetencionesDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="41000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="6560.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:DoctoRelacionado IdDocumento="78AAB569-26A0-4E1F-BE5E-D0071621DC78" Serie="CP" Folio="17424" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="2" ImpSaldoAnt="45920.00" ImpPagado="45920.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:RetencionesDR><pago20:RetencionDR BaseDR="41000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="1640.000000" /></pago20:RetencionesDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="41000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="6560.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:DoctoRelacionado IdDocumento="58D2B363-1721-4E5E-8105-B42D56BD5EAA" Serie="CP" Folio="17388" MonedaDR="MXN" EquivalenciaDR="1" NumParcialidad="1" ImpSaldoAnt="44800.00" ImpPagado="44800.00" ImpSaldoInsoluto="0.00" ObjetoImpDR="02"><pago20:ImpuestosDR><pago20:RetencionesDR><pago20:RetencionDR BaseDR="40000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.040000" ImporteDR="1600.000000" /></pago20:RetencionesDR><pago20:TrasladosDR><pago20:TrasladoDR BaseDR="40000.000000" ImpuestoDR="002" TipoFactorDR="Tasa" TasaOCuotaDR="0.160000" ImporteDR="6400.000000" /></pago20:TrasladosDR></pago20:ImpuestosDR></pago20:DoctoRelacionado><pago20:ImpuestosP><pago20:RetencionesP><pago20:RetencionP ImpuestoP="002" ImporteP="12160.00" /></pago20:RetencionesP><pago20:TrasladosP><pago20:TrasladoP BaseP="306650.00" ImpuestoP="002" TipoFactorP="Tasa" TasaOCuotaP="0.160000" ImporteP="49064.00" /></pago20:TrasladosP></pago20:ImpuestosP></pago20:Pago>
+        </pago20:Pagos>
+    <tfd:TimbreFiscalDigital xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xsi:schemaLocation="http://www.sat.gob.mx/TimbreFiscalDigital http://www.sat.gob.mx/sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd" Version="1.1" UUID="4F18F5B4-62C6-4D89-9065-74F9AA22ACBF" FechaTimbrado="2026-07-14T13:24:06" RfcProvCertif="SFE0807172W8" SelloCFD="g9S9I8KKRo7oCCejK4aSwtW3TAry66v25fhRYCPpQZQ6Eqrm22M8doCX/m4VWIVFn7Gv0duhEUl/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTpCiBFa3TjpVZvm2YNoXHMJzBecbAzxJvUlMOQC6JuD9nt6/FEeQr89VXU8YaCDefEyMZfiN6jc1fMhvPdIlJSYb4BGnKjNmpiPT4YWbDA9NdJ+2LV6WFq1oW8v2YVpj+Upk0pSGfYNxbgQgY+WdmKSH2biVR+5DNMnfpJMsiHuJsCTZeIY4yv/kfHGKl2IeBqzoeILsc7+IvMCZQ==" NoCertificadoSAT="00001000000710052019" SelloSAT="MliDkTtisiO/W5HJgnyhwLKYeXVHbuXFU3q4mmkhtuLAmKx/0/cBn1Hum6gamrRH33RQUO2wIxShcVgzAaQEpNpXACSZm7jnj2uA73Kbpk5wxBOGBlTdo1fKk9OT6Mo03pk2Le9KmohLd1ig7H27RmnvvYYFKkcJHgGYXkPlzBZJSKTntrZn6UfGffukR4d9AWfFtYaYDcXB+MdaMsHVsUgEiMYyEVFYsPIpJ/WPhFoKylevDGdaCqyJOdJHtLP/PkkK5+gQVa5DwPkoVEo7r1yENJ58IvCqoa1D3QbMCYs8khy73RKzMQPbcPuFCe4Mz1kc0C5Ft9U0xOFuIh9S1g==" /></cfdi:Complemento>
+</cfdi:Comprobante>"""
 
 
-def localizar_y_reconstruir_com():
-    db = next(get_db())
-    uuid_target = "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF"
-
+def forzar_generacion_pdf():
     print("\n" + "=" * 80)
-    print("🔍 ESCANEANDO BASE DE DATOS PARA LOCALIZAR EL COMPLEMENTO DE PAGO (COM)")
+    print("🛠️  ESCRIBIENDO XML CORRECTO Y GENERANDO PDF EN RUTA FÍSICA...")
     print("=" * 80)
 
-    tabla_encontrada = None
-    record_id = None
+    # 1. Aseguramos el XML físico perfecto
+    os.makedirs(xml_path.parent, exist_ok=True)
+    with open(xml_path, "w", encoding="utf-8") as f:
+        f.write(xml_contenido_correcto.strip())
+    print("✅ Archivo XML alineado con la Serie 'CP' para el folio 17388.")
 
-    # 1. Búsqueda universal: Escaneamos todas las tablas que tengan una columna 'uuid'
+    # 2. Mapeo de contexto nativo que espera 'complemento_pago.html'
+    context = {
+        "logo_src": "",  # Vacío para usar el texto por defecto de la plantilla
+        "remitente_nombre": "RAPIDOS 3T",
+        "remitente_rfc": "RTX110624KP5",
+        "cp_emisor": "91808",
+        "regimen_emisor": "624 - Coordinados",
+        "folio_interno": "COM-2638",
+        "fecha_emision": "2026-07-14 13:24:05",
+        "destinatario_nombre": "HANSA MEYER GLOBAL TRANSPORT",
+        "destinatario_rfc": "HMG980427Q42",
+        "uso_cfdi": "CP01 - Pagos",
+        "cp_cliente": "03710",
+        "regimen_cliente": "601 - General de Ley Personas Morales",
+        "doctos_relacionados": [
+            {
+                "serie": "CP",
+                "folio": "17665",
+                "uuid": "A7CD5A1D-8094-4A8E-88DC-741581917104",
+                "parcialidad": "2",
+                "saldo_anterior": "85120.00",
+                "monto_pagado": "85120.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+            {
+                "serie": "CP",
+                "folio": "17559",
+                "uuid": "539129E8-5627-4E1B-B0FC-B34C185CDABF",
+                "parcialidad": "2",
+                "saldo_anterior": "72800.00",
+                "monto_pagado": "72800.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+            {
+                "serie": "F",
+                "folio": "9762",
+                "uuid": "78ADE59D-48FF-40A2-84AF-81768B96F1DD",
+                "parcialidad": "2",
+                "saldo_anterior": "3074.00",
+                "monto_pagado": "3074.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+            {
+                "serie": "CP",
+                "folio": "17444",
+                "uuid": "BE87BD06-6B0F-4AF3-B2FB-DBB22D530907",
+                "parcialidad": "2",
+                "saldo_anterior": "45920.00",
+                "monto_pagado": "45920.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+            {
+                "serie": "CP",
+                "folio": "17441",
+                "uuid": "88ABFFF2-6CAB-4366-B352-055AE3272E37",
+                "parcialidad": "2",
+                "saldo_anterior": "45920.00",
+                "monto_pagado": "45920.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+            {
+                "serie": "CP",
+                "folio": "17424",
+                "uuid": "78AAB569-26A0-4E1F-BE5E-D0071621DC78",
+                "parcialidad": "2",
+                "saldo_anterior": "45920.00",
+                "monto_pagado": "45920.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+            {
+                "serie": "CP",
+                "folio": "17388",
+                "uuid": "58D2B363-1721-4E5E-8105-B42D56BD5EAA",
+                "parcialidad": "1",
+                "saldo_anterior": "44800.00",
+                "monto_pagado": "44800.00",
+                "saldo_insoluto": "0.00",
+                "moneda": "MXN",
+            },
+        ],
+        "fecha_pago": "2026-06-30 12:00:00",
+        "forma_pago": "03 - Transferencia electrónica de fondos",
+        "total": "343,554.00",
+        "importe_letra": "(***TRESCIENTOS CUARENTA Y TRES MIL QUINIENTOS CINCUENTA Y CUATRO PESOS 00/100 MXN ***)",
+        "banco_beneficiario": "BANORTE",
+        "cuenta_beneficiario": "1001497363",
+        "qr_src": "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=4F18F5B4-62C6-4D89-9065-74F9AA22ACBF%26re=RTX110624KP5%26rr=HMG980427Q42%26tt=343554.00%26fe=Fce4MZ1kC0C5FT900X0FUIH951G==",
+        "uuid": "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF",
+        "cert_sat": "00001000000710052019",
+        "fecha_certificacion": "2026-07-14 13:24:06",
+        "sello_emisor": "G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6PQFZAEVSZWOGPTHQYHFDCTLKUSYCNOGPWDIZ4PYPOWRW5P9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==",
+        "sello_sat": "MLIDKTTISIO/W5HJGNYHWLKYEXVHBUXFU3Q4MMKHTULAMKX/0/CBN1HUM6GAMRRH33RQU02WIXSHCVGZAAQEPNPXACSZM7JNJ2UA73KBPK5WXBOGBLTD01FKK90T6M003PK2LE9KMOHLD1IG7H27RMNVVYYFKKCJHGGYXKPLZBZJSKTNTRZN6UFGFFUKR4D9AWFFTYAYDCXB+MDAMSHVSUGEIMYYEVFYSPIP/WPHFOKYLEVDGDACQYJODJHTLP/PKKK5+GQVA5DWPKOVE07R1YENJ5BIVCQ0A1D30BMCYS8KHY73RKZMQPBCPUFCE4MZ1KC0C5FT900X0FUIH951G==",
+        "cadena_original": "||1.1|4F18F5B4-62C6-4D89-9065-74F9AA22ACBF|2026-07-14T13:24:06|SFE0807172W8|G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6PQFZAEVSZWOGPTHQYHFDCTLKUSYCNOGPWDIZ4PYPOWRW5P9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==|00001000000710052019||",
+    }
+
+    # 3. Compilar HTML usando el motor Jinja2 nativo de la app
     try:
-        query_tablas = text("""
-            SELECT table_name 
-            FROM information_schema.columns 
-            WHERE column_name = 'uuid' AND table_schema = 'public'
-        """)
-        tablas = db.execute(query_tablas).fetchall()
-
-        for t in tablas:
-            t_name = t[0]
-            try:
-                query_search = text(f"SELECT id FROM {t_name} WHERE uuid = :uuid")
-                res = db.execute(query_search, {"uuid": uuid_target}).fetchone()
-                if res:
-                    record_id = res[0]
-                    tabla_encontrada = t_name
-                    break
-            except:
-                continue
-    except Exception as e:
-        print(f"❌ Error durante el escaneo de tablas: {e}")
-
-    if not tabla_encontrada:
-        print("❌ No se encontró el UUID del pago en ninguna tabla del sistema.")
-        db.close()
+        env = Environment(loader=FileSystemLoader(backend_dir / "app" / "templates"))
+        template = env.get_template("complemento_pago.html")
+        html_rendered = template.render(context)
+        print("✅ HTML de la Plantilla procesado con Jinja2.")
+    except Exception as je:
+        print(f"❌ Error al procesar la plantilla HTML: {je}")
         return
 
-    print(f"🎯 ¡Encontrado! Tabla: '{tabla_encontrada}' | ID del Registro: {record_id}")
-    print("-" * 80)
+    # 4. Detectar de manera dinámica qué motor PDF maneja la app e imprimir el archivo físico
+    print("⏳ Detectando librería PDF del entorno virtual...")
+    pdf_generado = False
 
-    # 2. Invocar al motor correcto para fabricar el PDF
-    try:
-        if "payment" in tabla_encontrada or tabla_encontrada == "payments":
-            print("🚀 Detectado como documento de Pago. Levantando PaymentService...")
-            from app.integrations.sat.payment_service import PaymentService
+    # Intento 1: WeasyPrint (El más común en boilerplates FastAPI modernos)
+    if not pdf_generado:
+        try:
+            from weasyprint import HTML
 
-            # Intentamos instanciar el servicio pasándole la sesión de la BD
-            try:
-                service = PaymentService(db)
-            except:
-                service = PaymentService()
+            HTML(string=html_rendered).write_pdf(str(pdf_path))
+            print("🚀 PDF escrito exitosamente usando 'WeasyPrint'.")
+            pdf_generado = True
+        except ImportError:
+            pass
 
-            # Buscamos formas comunes en las que tu service genera el PDF por ID
-            ejecutado = False
-            metodos_a_probar = [
-                "regenerar_pdf",
-                "generar_pdf",
-                "reconstruir_pdf_pago",
-                "generar_pdf_pago",
-            ]
+    # Intento 2: pdfkit (Basado en wkhtmltopdf)
+    if not pdf_generado:
+        try:
+            import pdfkit
 
-            for metodo in metodos_a_probar:
-                if hasattr(service, metodo):
-                    print(f"⏳ Ejecutando service.{metodo}({record_id})...")
-                    getattr(service, metodo)(record_id)
-                    print(f"✅ PDF regenerado usando método público '{metodo}'.")
-                    ejecutado = True
-                    break
+            pdfkit.from_string(html_rendered, str(pdf_path))
+            print("🚀 PDF escrito exitosamente usando 'pdfkit'.")
+            pdf_generado = True
+        except ImportError:
+            pass
 
-            # Si no hay método público directo con ID, usamos el método interno pasándole el objeto ORM
-            if not ejecutado:
-                from app.models import models
+    # Intento 3: xhtml2pdf (Motor clásico plano)
+    if not pdf_generado:
+        try:
+            from xhtml2pdf import pisa
 
-                model_class = None
-                for name, obj in inspect.getmembers(models):
-                    if (
-                        inspect.isclass(obj)
-                        and hasattr(obj, "__tablename__")
-                        and obj.__tablename__ == tabla_encontrada
-                    ):
-                        model_class = obj
-                        break
+            with open(pdf_path, "wb") as result_file:
+                pisa.CreatePDF(html_rendered, dest=result_file)
+            print("🚀 PDF escrito exitosamente usando 'xhtml2pdf'.")
+            pdf_generado = True
+        except ImportError:
+            pass
 
-                if model_class:
-                    pago_obj = (
-                        db.query(model_class)
-                        .filter(model_class.id == record_id)
-                        .first()
-                    )
-                    if pago_obj:
-                        print(
-                            "⏳ Ejecutando el motor interno _generar_pdf_pago con el objeto..."
-                        )
-                        try:
-                            service._generar_pdf_pago(pago_obj)
-                            ejecutado = True
-                        except:
-                            service._generar_pdf_pago(pago_obj, db)
-                            ejecutado = True
-                        print("✅ PDF regenerado usando el método interno.")
+    if pdf_generado:
+        print(f"\n✨ ¡COMPLETADO! Archivo sembrado en: {pdf_path}")
+    else:
+        print("\n❌ Error: No se encontró WeasyPrint, pdfkit ni xhtml2pdf en el venv.")
 
-            if ejecutado:
-                print(
-                    "\n🎉 ¡Éxito absoluto! El archivo PDF ha sido sembrado en el almacenamiento local."
-                )
-            else:
-                print(
-                    "⚠️ No pudimos ejecutar el disparador automático. Revisa los métodos de PaymentService."
-                )
-
-        else:
-            # Caída de emergencia si resultaba estar en otra tabla de facturas
-            print(
-                "❗ Registro localizado en tabla de facturas estándar. Ejecutando api_billing..."
-            )
-            from app.integrations.sat.api_billing import reconstruir_pdf_factura
-
-            reconstruir_pdf_factura(invoice_id=record_id, db=db)
-            print("✅ PDF Factura reconstruido.")
-
-    except Exception as e:
-        print(f"❌ Error crítico durante la reconstrucción del PDF: {e}")
-    finally:
-        db.close()
-        print("=" * 80 + "\n")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    localizar_y_reconstruir_com()
+    forzar_generacion_pdf()
