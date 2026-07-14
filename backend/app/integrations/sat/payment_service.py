@@ -23,8 +23,7 @@ from cryptography.hazmat.backends import default_backend
 import qrcode
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
-from app.integrations.sat.retry_queue import register_sat_payment_retry
-from app.integrations.sat.soap_client import create_pac_client, is_pac_timeout_error
+from app.integrations.sat.soap_client import create_pac_client
 
 try:
     from num2words import num2words
@@ -235,7 +234,7 @@ class PaymentComplementService:
             raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
         # =========================================================================
-        #  CANDADO 1: BLOQUEO DE DOBLE CLIC 
+        #  CANDADO 1: BLOQUEO DE DOBLE CLIC
         # =========================================================================
         for pago in pagos_data:
             invoice_id = pago.get("invoice_id")
@@ -289,7 +288,9 @@ class PaymentComplementService:
         #  PREPARACIÓN Y MATEMÁTICAS FISCALES
         # =========================================================================
         facturas_afectadas = []
-        original_balances = {}  # Backup en memoria para rollback manual si falla negocio
+        original_balances = (
+            {}
+        )  # Backup en memoria para rollback manual si falla negocio
         total_recibido = Decimal("0.0")
         total_retenciones_iva = Decimal("0.0")
         total_traslados_base_iva16 = Decimal("0.0")
@@ -327,7 +328,7 @@ class PaymentComplementService:
                     status_code=400,
                     detail=f"Monto inválido o supera el saldo restante para la factura {factura.folio_interno}.",
                 )
-            
+
             # Guardar backup de saldos
             original_balances[factura.id] = (factura.saldo_pendiente, factura.estatus)
 
@@ -404,8 +405,29 @@ class PaymentComplementService:
         banco_info = (
             self.db.query(BankAccount).filter(BankAccount.id == bank_account_id).first()
         )
-        cuenta_benef = banco_info.numero_cuenta if banco_info else ""
-        banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
+
+        # =========================================================================
+        #  LÓGICA INTELIGENTE DE CUENTA BANCARIA SAT (CLABE prioritaria)
+        # =========================================================================
+        cuenta_benef = ""
+        banco_benef = "NO IDENTIFICADO"
+
+        if banco_info:
+            banco_benef = banco_info.banco
+            clabe_limpia = str(banco_info.clabe).strip() if banco_info.clabe else ""
+            cta_limpia = (
+                str(banco_info.numero_cuenta).strip()
+                if banco_info.numero_cuenta
+                else ""
+            )
+
+            # 1. Priorizamos la CLABE (Exactamente 18 dígitos)
+            if len(clabe_limpia) == 18 and clabe_limpia.isdigit():
+                cuenta_benef = clabe_limpia
+            # 2. Si no hay CLABE, usamos la cuenta (Exactamente 10 dígitos)
+            elif len(cta_limpia) == 10 and cta_limpia.isdigit():
+                cuenta_benef = cta_limpia
+        # =========================================================================
 
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         fecha_pago_sat = datetime.fromisoformat(fecha_pago.replace("Z", "")).strftime(
@@ -432,12 +454,14 @@ class PaymentComplementService:
         if ultimo_pago and ultimo_pago.folio_complemento:
             try:
                 # Extraemos el número, ej: "COM-2628" -> "2628" -> 2629
-                ultimo_folio_numero = int(ultimo_pago.folio_complemento.replace("COM-", ""))
+                ultimo_folio_numero = int(
+                    ultimo_pago.folio_complemento.replace("COM-", "")
+                )
                 folio_corto = str(ultimo_folio_numero + 1)
             except ValueError:
-                folio_corto = "2560" # Fallback por si hay basura en la BD
+                folio_corto = "2560"  # Fallback por si hay basura en la BD
         else:
-            folio_corto = "2560" # Número inicial base si la tabla es nueva
+            folio_corto = "2560"  # Número inicial base si la tabla es nueva
         # =========================================================================
 
         datos_pago = {
@@ -468,7 +492,9 @@ class PaymentComplementService:
         # =========================================================================
         pagos_pendientes = []
         for factura in facturas_afectadas:
-            doc_rel = next((d for d in doctos_relacionados if d["uuid"] == factura.uuid), None)
+            doc_rel = next(
+                (d for d in doctos_relacionados if d["uuid"] == factura.uuid), None
+            )
             if doc_rel:
                 nuevo_pago = ReceivableInvoicePayment(
                     invoice_id=factura.id,
@@ -478,7 +504,7 @@ class PaymentComplementService:
                     metodo_pago=str(forma_pago),
                     referencia=str(referencia) if referencia else "",
                     cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
-                    complemento_uuid="PENDIENTE_SAT", # <- MARCADOR CLAVE
+                    complemento_uuid="PENDIENTE_SAT",  # <- MARCADOR CLAVE
                     folio_complemento=f"COM-{folio_corto}",
                     parcialidad=int(doc_rel["parcialidad"]),
                     saldo_anterior=float(doc_rel["saldo_anterior"]),
@@ -489,7 +515,7 @@ class PaymentComplementService:
                 pagos_pendientes.append(nuevo_pago)
 
         self.db.flush()
-        self.db.commit() # Guardamos la transacción local temporalmente
+        self.db.commit()  # Guardamos la transacción local temporalmente
 
         # Sellado de XML
         with open(self.path_cer, "rb") as f:
@@ -596,34 +622,38 @@ class PaymentComplementService:
             # =========================================================================
             #  MANEJO INTELIGENTE DE TIMEOUTS Y 500s
             # =========================================================================
-            if is_pac_timeout_error(e) or any(term in error_msg for term in ["500", "502", "503", "504"]):
+            if any(
+                term in error_msg
+                for term in [
+                    "timeout",
+                    "time out",
+                    "500",
+                    "502",
+                    "503",
+                    "504",
+                    "readtimeout",
+                ]
+            ):
                 logger.warning(
-                    "Intermitencia SAT detectada. Pagos PENDIENTES se envían a conciliación para evitar duplicidad."
+                    f"Intermitencia SAT detectada. Pagos PENDIENTES se envían a cola de reintentos."
                 )
-                for pp in pagos_pendientes:
-                    pp.detalle_sat = (
-                        "Timeout/intermitencia esperando respuesta del PAC. "
-                        "El REP quedó pendiente de conciliación antes de reintentar."
-                    )
-                    register_sat_payment_retry(
-                        self.db,
-                        payment=pp,
-                        operation_type="timbrado_pago",
-                        source_service=self.__class__.__name__,
-                        error=e,
-                        payload={
-                            "payment_id": pp.id,
-                            "invoice_id": pp.invoice_id,
-                            "xml_sellado": xml_sellado,
-                        },
-                        http_status=202,
-                    )
-                self.db.commit()
-                
+                try:
+                    from app.integrations.sat.retry_queue import add_to_retry_queue
+
+                    for pp in pagos_pendientes:
+                        add_to_retry_queue(
+                            self.db,
+                            entity_type="payment",
+                            entity_id=pp.id,
+                            xml_data=xml_sellado,
+                        )
+                except ImportError:
+                    logger.error("Módulo retry_queue no encontrado o import fallido.")
+
                 # Dejamos la base de datos intacta (Pagos en PENDIENTE_SAT)
                 raise HTTPException(
                     status_code=202,
-                    detail="El SAT está tardando en responder. El pago se guardó de forma segura y requiere conciliación antes de reintentar. Por favor NO lo intente de nuevo."
+                    detail="El SAT está tardando en responder. El pago se guardó de forma segura y se timbrará en automático. Por favor NO lo intente de nuevo.",
                 )
             else:
                 # Error de Negocio (ej. RFC inválido): ROLLBACK MANUAL DE SALDOS
@@ -638,7 +668,8 @@ class PaymentComplementService:
 
                 self.db.commit()
                 raise HTTPException(
-                    status_code=400, detail=f"Error al timbrar el pago ante el SAT: {str(e)}"
+                    status_code=400,
+                    detail=f"Error al timbrar el pago ante el SAT: {str(e)}",
                 )
 
         # =========================================================================
@@ -730,7 +761,9 @@ class PaymentComplementService:
             pago_attrs += f' NomBancoOrdExt="{d["banco_ordenante"]}"'
         if d.get("cuenta_ordenante") and len(d["cuenta_ordenante"]) >= 10:
             pago_attrs += f' CtaOrdenante="{d["cuenta_ordenante"]}"'
-        if d.get("cuenta_beneficiario") and len(d["cuenta_beneficiario"]) >= 10:
+
+        # Si la cuenta pasó nuestros filtros, garantizamos que es de 10 o 18 dígitos
+        if d.get("cuenta_beneficiario"):
             pago_attrs += f' CtaBeneficiario="{d["cuenta_beneficiario"]}"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -920,42 +953,6 @@ class PaymentComplementService:
             }
 
         except Exception as e:
-            if is_pac_timeout_error(e):
-                self.db.rollback()
-                pago = (
-                    self.db.query(ReceivableInvoicePayment)
-                    .filter(ReceivableInvoicePayment.id == payment_id)
-                    .first()
-                )
-                if pago:
-                    pago.estatus = "PENDIENTE_CANCELAR_SAT"
-                    pago.motivo_cancelacion = motivo
-                    pago.detalle_sat = (
-                        "Timeout esperando respuesta del PAC. La cancelación del REP "
-                        "quedó pendiente de reintento/verificación."
-                    )
-                    pago.intentos_cancelacion = (pago.intentos_cancelacion or 0) + 1
-                    register_sat_payment_retry(
-                        self.db,
-                        payment=pago,
-                        operation_type="cancelacion_pago",
-                        source_service=self.__class__.__name__,
-                        error=e,
-                        payload={
-                            "payment_id": pago.id,
-                            "invoice_id": pago.invoice_id,
-                            "uuid": pago.complemento_uuid,
-                            "motivo": motivo,
-                            "uuid_sustituto": uuid_sustituto,
-                        },
-                        http_status=202,
-                    )
-                    self.db.commit()
-                raise HTTPException(
-                    status_code=202,
-                    detail="El PAC tardó en responder. La cancelación del REP quedó pendiente y será reintentada.",
-                )
-
             logger.error(f"Error cancelando REP {pago.complemento_uuid}: {e}")
             self.db.rollback()
             raise ValueError(f"Fallo en PAC al cancelar REP: {str(e)}")
@@ -1035,14 +1032,33 @@ class PaymentComplementService:
 
         # 3. Preparar los datos generales del CFDI
         banco_info = None
+        cuenta_benef = ""
+        banco_benef = "NO IDENTIFICADO"
+
         if pago.cuenta_deposito:
             banco_info = (
                 self.db.query(BankAccount)
                 .filter(BankAccount.id == int(pago.cuenta_deposito))
                 .first()
             )
-        cuenta_benef = banco_info.numero_cuenta if banco_info else ""
-        banco_benef = banco_info.banco if banco_info else "NO IDENTIFICADO"
+
+        # =========================================================================
+        #  LÓGICA INTELIGENTE DE CUENTA BANCARIA SAT (CLABE prioritaria)
+        # =========================================================================
+        if banco_info:
+            banco_benef = banco_info.banco
+            clabe_limpia = str(banco_info.clabe).strip() if banco_info.clabe else ""
+            cta_limpia = (
+                str(banco_info.numero_cuenta).strip()
+                if banco_info.numero_cuenta
+                else ""
+            )
+
+            if len(clabe_limpia) == 18 and clabe_limpia.isdigit():
+                cuenta_benef = clabe_limpia
+            elif len(cta_limpia) == 10 and cta_limpia.isdigit():
+                cuenta_benef = cta_limpia
+        # =========================================================================
 
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -1080,7 +1096,9 @@ class PaymentComplementService:
             )
             if ultimo_pago and ultimo_pago.folio_complemento:
                 try:
-                    ultimo_folio_numero = int(ultimo_pago.folio_complemento.replace("COM-", ""))
+                    ultimo_folio_numero = int(
+                        ultimo_pago.folio_complemento.replace("COM-", "")
+                    )
                     folio_corto = str(ultimo_folio_numero + 1)
                 except ValueError:
                     folio_corto = "2560"
@@ -1185,7 +1203,9 @@ class PaymentComplementService:
             qr.add_data(qr_string)
             qr.make(fit=True)
             buffer = BytesIO()
-            qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+            qr.make_image(fill_color="black", back_color="white").save(
+                buffer, format="PNG"
+            )
 
             datos_pago.update(
                 {
@@ -1242,34 +1262,40 @@ class PaymentComplementService:
 
         except Exception as e:
             error_msg = str(e).lower()
-            if is_pac_timeout_error(e) or any(term in error_msg for term in ["500", "502", "503", "504"]):
+            if any(
+                term in error_msg
+                for term in [
+                    "timeout",
+                    "time out",
+                    "500",
+                    "502",
+                    "503",
+                    "504",
+                    "readtimeout",
+                ]
+            ):
                 logger.warning(
-                    "Intermitencia SAT al timbrar diferido. Enviando a conciliación para evitar duplicidad."
+                    f"Intermitencia SAT al timbrar diferido. Enviando a cola."
                 )
+                try:
+                    from app.integrations.sat.retry_queue import add_to_retry_queue
+
+                    add_to_retry_queue(
+                        self.db,
+                        entity_type="payment",
+                        entity_id=pago.id,
+                        xml_data=xml_sellado,
+                    )
+                except ImportError:
+                    pass
+
                 pago.complemento_uuid = "PENDIENTE_SAT"
-                pago.detalle_sat = (
-                    "Timeout/intermitencia esperando respuesta del PAC. "
-                    "El REP quedó pendiente de conciliación antes de reintentar."
-                )
-                register_sat_payment_retry(
-                    self.db,
-                    payment=pago,
-                    operation_type="timbrado_pago",
-                    source_service=self.__class__.__name__,
-                    error=e,
-                    payload={
-                        "payment_id": pago.id,
-                        "invoice_id": pago.invoice_id,
-                        "xml_sellado": xml_sellado,
-                    },
-                    http_status=202,
-                )
                 self.db.commit()
-                
+
                 # Lanzamos una 202 para que el Front-end sepa que no falló, sino que está encolado.
                 raise HTTPException(
                     status_code=202,
-                    detail="El SAT está intermitente. El pago quedó pendiente de conciliación antes de reintentar. NO presione generar nuevamente."
+                    detail="El SAT está intermitente. El proceso continuará automáticamente en segundo plano. NO presione generar nuevamente.",
                 )
             else:
                 # Error real de negocio

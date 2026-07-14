@@ -18,21 +18,26 @@ import { Separator } from "@/components/ui/separator";
 import {
   FileText,
   FileCode2,
-  Download,
   Calendar,
   DollarSign,
   Building2,
   Receipt,
+  Check,
   CreditCard,
+  Loader2,
   AlertTriangle,
   History,
   X,
+  Clock,
+  Hash,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 import type { PayableInvoice } from "@/features/payables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 interface InvoiceDetailSheetProps {
   open: boolean;
@@ -58,7 +63,7 @@ export function InvoicePayablesDetailSheet({
 }: InvoiceDetailSheetProps) {
   useEffect(() => {
     if (invoice && open) {
-      console.log("  FACTURA DE PROVEEDOR ABIERTA:", invoice);
+      console.log("🏢 FACTURA DE PROVEEDOR (CxP) ABIERTA:", invoice);
     }
   }, [invoice, open]);
 
@@ -69,17 +74,72 @@ export function InvoicePayablesDetailSheet({
   const statusInfo = getInvoiceStatusInfo(inv);
 
   const id = safeStr(inv.id);
-  const folioInterno = safeStr(inv.folio_interno) || `ID-${id}`;
+  const folioInterno =
+    safeStr(inv.folio_interno) || safeStr(inv.folio) || `ID-${id}`;
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
-  // 👇 EXTRACCIÓN SEGURA (CANCELACIONES E HISTORIAL)
-  const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
+  // 👇 EXTRACCIÓN SEGURA HOMOLOGADA CON CLIENTES
+  const estatusStr = safeStr(inv.estatus).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
+  const inProcess = estatusStr === "PROCESO_CANCELACION";
+  const isQueued = estatusStr === "PENDIENTE_CANCELAR_SAT";
+  const hasSatError =
+    inv.intentos_cancelacion > 0 && !isCanceled && !inProcess && !isQueued;
+
+  let badgeColor = "bg-slate-100 text-slate-800 border-slate-200";
+  let badgeLabel = estatusStr;
+
+  if (estatusStr === "TIMBRADO") {
+    badgeColor = "bg-green-100 text-green-800 border-green-300";
+  } else if (isCanceled) {
+    badgeColor = "bg-red-100 text-red-800 border-red-300";
+  } else if (estatusStr === "PROVISIONAL") {
+    badgeColor = "bg-amber-100 text-amber-800 border-amber-300";
+  } else if (inProcess) {
+    badgeColor = "bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+    badgeLabel = "En Proceso SAT";
+  } else if (isQueued) {
+    badgeColor = "bg-blue-50 text-blue-700 border-blue-200 animate-pulse";
+    badgeLabel = "En Cola (Reintento)";
+  }
+
+  const entidadNombre =
+    safeStr(inv.cliente_proveedor_nombre) ||
+    safeStr(inv.supplier?.razon_social) ||
+    "Proveedor Desconocido";
+
+  const entidadRfc =
+    safeStr(inv.cliente_proveedor_rfc) ||
+    safeStr(inv.supplier?.rfc) ||
+    "RFC NO DISPONIBLE";
+
+  const concepto = safeStr(inv.concepto) || "Gasto / Compra General";
+  const fechaEmision =
+    safeStr(inv.fecha_emision) || safeStr(inv.fechaEmision) || "—";
+  const fechaVencimiento =
+    safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
+
+  // 💰 CAMPOS FINANCIEROS (Nuevos desde el backend)
+  const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
+  const subtotal = toNumber(inv.subtotal);
+  const iva = toNumber(inv.iva);
+  const retenciones = toNumber(inv.retenciones);
+  const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
+  const moneda = safeStr(inv.moneda) || "MXN";
+
+  const isPaid = saldoPendiente <= 0 && montoTotal > 0;
+
+  // HISTORIAL Y ARCHIVOS
+  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
+  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
     : [];
-  const pdfUrl = safeStr(inv.pdf_url ?? inv.pdfUrl);
-  const xmlUrl = safeStr(inv.xml_url ?? inv.xmlUrl);
+  const payments: Array<any> = Array.isArray(inv.payments)
+    ? inv.payments
+    : Array.isArray(inv.pagos)
+      ? inv.pagos
+      : [];
 
   // AGRUPACIÓN DEL HISTORIAL POR VERSIÓN PARA LA TABLA
   const groupedHistory = Object.values(
@@ -101,33 +161,13 @@ export function InvoicePayablesDetailSheet({
       if (doc.document_type === "pdf") acc[v].pdf = doc;
       if (doc.document_type === "xml") acc[v].xml = doc;
       if (doc.document_type === "acuse_cancelacion") acc[v].acuse = doc;
-
       return acc;
     }, {}),
-  ).sort((a: any, b: any) => b.version - a.version); // Orden descendente (más nuevo primero)
-  // 👆 -----------------------------------------------------
+  ).sort((a: any, b: any) => b.version - a.version);
 
-  const entidadNombre =
-    safeStr(inv.supplier?.razon_social) ||
-    safeStr(inv.supplier_razon_social) ||
-    "Proveedor Desconocido";
-
-  const entidadRfc = safeStr(inv.supplier?.rfc) || "RFC NO DISPONIBLE";
-  const concepto = safeStr(inv.concepto) || "Sin descripción";
-  const fechaEmision =
-    safeStr(inv.fecha_emision) || safeStr(inv.fechaEmision) || "—";
-  const fechaVencimiento =
-    safeStr(inv.fecha_vencimiento) || safeStr(inv.fechaVencimiento) || "—";
-  const montoTotal = toNumber(inv.monto_total ?? inv.montoTotal);
-  const saldoPendiente = toNumber(inv.saldo_pendiente ?? inv.saldoPendiente);
-  const moneda = safeStr(inv.moneda) || "MXN";
-
-  const payments: Array<any> = Array.isArray(inv.payments)
-    ? inv.payments
-    : Array.isArray(inv.pagos)
-      ? inv.pagos
-      : [];
-
+  // ============================================================================
+  // DESCARGAS
+  // ============================================================================
   const handleDownload = (urlOrName: string) => {
     if (urlOrName.startsWith("http")) {
       window.open(urlOrName, "_blank", "noopener,noreferrer");
@@ -160,15 +200,22 @@ export function InvoicePayablesDetailSheet({
     }
   };
 
+  // ============================================================================
+  // FORMATTERS
+  // ============================================================================
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
       currency: "MXN",
     });
   const fD = (d: any) =>
-    d && d !== "—" ? new Date(d).toLocaleDateString("es-MX") : "—";
-
-  // FORMATEADOR DE FECHA Y HORA PARA LA TABLA
+    d && d !== "—"
+      ? new Date(d).toLocaleDateString("es-MX", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+      : "—";
   const fDT = (d: any) => {
     if (!d || d === "—") return "—";
     return new Date(d).toLocaleString("es-MX", {
@@ -180,53 +227,53 @@ export function InvoicePayablesDetailSheet({
     });
   };
 
-  const isPaid = saldoPendiente <= 0;
-
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-full sm:max-w-[560px] bg-background/95 backdrop-blur-xl border-l-slate-200 dark:border-l-white/10"
+        className="w-full sm:max-w-[650px] bg-slate-50 dark:bg-background/95 backdrop-blur-xl border-l-slate-200 dark:border-l-white/10 p-0 flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* HEADER */}
-        <SheetHeader className="pb-5 border-b border-border/50 flex flex-row items-center justify-between sticky top-0 bg-background/95 backdrop-blur-xl z-40 -mx-8 px-8 -mt-8 pt-8">
-          <SheetTitle className="flex items-center gap-3 text-brand-navy dark:text-white font-bold text-xl normal-case tracking-tight">
-            <div className="p-2 bg-brand-navy/5 dark:bg-brand-navy/20 rounded-xl border border-brand-navy/10 dark:border-brand-navy/30">
-              <Receipt className="h-5 w-5 text-brand-navy dark:text-blue-400" />
+        {/* HEADER FLOTANTE */}
+        <SheetHeader className="px-6 py-5 border-b border-border/50 flex flex-row items-center justify-between sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-40 shadow-sm">
+          <SheetTitle className="flex items-center gap-3 text-brand-navy dark:text-white font-black text-xl tracking-tight m-0">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800/50">
+              <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            Detalle de Gasto / CXP
+            Detalle de Cuenta por Pagar
           </SheetTitle>
 
-          <div className="flex items-center gap-3">
-            <StatusBadge status={statusInfo.status} className="shadow-sm">
-              {statusInfo.label}
-            </StatusBadge>
+          <div className="flex items-center gap-3 mt-0">
+            <Badge
+              variant="outline"
+              className={cn("shadow-sm font-black px-3 py-1", badgeColor)}
+            >
+              {badgeLabel}
+            </Badge>
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 transition-colors"
               onClick={() => onOpenChange(false)}
-              title="Cerrar panel"
             >
               <X className="h-4 w-4" />
             </Button>
           </div>
         </SheetHeader>
 
-        <div className="space-y-6 py-6 animate-in slide-in-from-right-4 duration-500 overflow-y-auto max-h-[calc(100vh-100px)] custom-scrollbar -mx-4 px-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
           {/* ALERTA DE CANCELACIÓN */}
           {isCanceled && (
             <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">
-                  Factura Cancelada
+                  Factura Cancelada por el Proveedor
                 </h4>
                 <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
                   Este comprobante fue cancelado el{" "}
                   <strong>{fDT(inv.fecha_cancelacion)}</strong>
                   {inv.motivo_cancelacion
-                    ? ` por el motivo "${inv.motivo_cancelacion}"`
+                    ? ` (Motivo SAT: ${inv.motivo_cancelacion})`
                     : ""}
                   .
                 </p>
@@ -234,178 +281,329 @@ export function InvoicePayablesDetailSheet({
             </div>
           )}
 
-          {/* IDENTIFICACIÓN */}
-          <div className="flex items-start justify-between bg-card p-5 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-brand-navy/50 group-hover:bg-brand-navy transition-colors"></div>
-            <div>
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">
-                Folio / Interno
-              </p>
-              <p className="font-mono font-black text-lg text-foreground tracking-tight">
-                {folioInterno}
-              </p>
+          {/* 🚀 NUEVA ALERTA: EN PROCESO DE CANCELACIÓN SAT */}
+          {inProcess && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">
+                  Cancelación en Proceso
+                </h4>
+                <p className="text-sm font-medium text-amber-700/80 dark:text-amber-400/80 mt-1">
+                  El proveedor solicitó la cancelación de este CFDI. Esperando
+                  validación fiscal o aceptación en el Buzón Tributario.
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
+          )}
+
+          {/* 🚀 NUEVA ALERTA: EN COLA DE REINTENTOS AUTOMÁTICA */}
+          {isQueued && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-blue-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
+                  Verificación de Gasto en Cola
+                </h4>
+                <p className="text-sm font-medium text-blue-700/80 dark:text-blue-400/80 mt-1">
+                  El sistema está conciliando el estatus de este gasto con el
+                  SAT en segundo plano de manera automática.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 🚀 NUEVA ALERTA: ERROR / RECHAZO SAT */}
+          {hasSatError && (
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-red-800 dark:text-red-400 uppercase tracking-widest">
+                  Alerta de Conciliación SAT (Intentos:{" "}
+                  {inv.intentos_cancelacion})
+                </h4>
+                <p className="text-sm font-medium text-red-700/80 dark:text-red-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "Se detectaron inconsistencias o rechazos en la validación fiscal del comprobante."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* TARJETA PRINCIPAL: FOLIO Y BOTÓN DE PAGO */}
+          {/* TARJETA PRINCIPAL: FOLIO, VALIDACIÓN SAT Y BOTÓN DE PAGO (CxP) */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group gap-4">
+            <div className="absolute top-0 left-0 w-1.5 h-full bg-brand-navy group-hover:bg-blue-600 transition-colors"></div>
+            <div className="flex-1 pl-2">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+                <Hash className="w-3.5 h-3.5 text-blue-500" /> Folio Interno /
+                Serie
+              </p>
+              <div className="flex items-center gap-3">
+                <p className="font-mono font-black text-xl text-foreground tracking-tight break-all">
+                  {folioInterno}
+                </p>
+
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT OPTIMIZADO (PROVEEDORES) */}
+                {uuid && uuid !== "NO TIMBRADO" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
+                    onClick={() => {
+                      // Para proveedores (CxP): El emisor es el proveedor externo (entidadRfc) y el receptor eres tú (RAPIDOS 3T)
+                      const re = inv.emisor_rfc || inv.rfc_emisor || entidadRfc;
+                      const rr =
+                        inv.receptor_rfc || inv.rfc_receptor || "RTX110624KP5";
+                      const tt =
+                        montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
+
+                      // Extraer los últimos 8 caracteres del Sello Digital para el parámetro 'fe'
+                      const sello =
+                        inv.sello_cfdi || inv.sello_sat || inv.sello || "";
+                      const fe = sello ? sello.slice(-8) : "";
+
+                      // Construcción de la URL oficial de Hacienda (SAT)
+                      let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
+                      if (re) satUrl += `&re=${re}`;
+                      if (rr) satUrl += `&rr=${rr}`;
+                      satUrl += `&tt=${tt}`;
+                      if (fe) satUrl += `&fe=${encodeURIComponent(fe)}`;
+
+                      window.open(satUrl, "_blank", "noopener,noreferrer");
+                    }}
+                    title="Verificar estatus fiscal del proveedor en el portal oficial del SAT"
+                  >
+                    <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
+                  </Button>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">
+                    UUID:
+                  </span>
+                  <span className="font-mono text-[10px] font-black text-slate-700 dark:text-slate-300 break-all">
+                    {uuid}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:items-end w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
               {!isPaid && !isCanceled && onPayClick && (
                 <Button
-                  size="sm"
                   onClick={() => onPayClick(invoice)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 text-xs tracking-widest uppercase rounded-xl shadow-lg shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-600 text-white font-black h-11 px-6 text-[11px] tracking-widest uppercase rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
                 >
-                  <DollarSign className="w-4 h-4 mr-2" /> Pagar
+                  <DollarSign className="w-4 h-4 mr-2" /> Registrar Pago
                 </Button>
               )}
             </div>
           </div>
 
-          {/* PROVEEDOR */}
-          <div className="p-5 bg-card rounded-2xl border border-border/50 shadow-sm transition-all hover:border-brand-navy/30">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+          {/* GRID: PROVEEDOR Y CONCEPTO (IDÉNTICO A CXC) */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="md:col-span-2 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                  <Building2 className="h-4 w-4 text-slate-500 dark:text-slate-400" />
+                </div>
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                  Proveedor
+                </span>
               </div>
-              <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                Datos del Proveedor
-              </span>
-            </div>
-            <p className="font-black text-foreground text-lg leading-tight mb-1">
-              {entidadNombre}
-            </p>
-            <div className="inline-flex items-center px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-xs font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-              RFC: {entidadRfc}
-            </div>
-          </div>
-
-          {/* CONCEPTO & UUID */}
-          <div className="grid gap-4">
-            <div className="p-4 bg-card rounded-2xl border border-border/50 shadow-sm">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">
-                Concepto
+              <p className="font-black text-foreground text-base leading-tight mb-3 break-words">
+                {entidadNombre}
               </p>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+              <div className="mt-auto">
+                <span className="inline-flex items-center px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  RFC: {entidadRfc}
+                </span>
+              </div>
+            </div>
+
+            <div className="md:col-span-3 p-5 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Concepto / Gasto
+              </p>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed flex-1 break-words whitespace-pre-wrap">
                 {concepto}
               </p>
-            </div>
-            <div className="p-4 bg-card rounded-2xl border border-border/50 shadow-sm">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-2">
-                Folio Fiscal SAT (UUID)
-              </p>
-              <p className="font-mono text-xs bg-slate-100 dark:bg-slate-900 p-2.5 rounded-lg break-all border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400">
-                {uuid}
-              </p>
+              <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end items-center">
+                <span className="font-mono text-xs font-black text-brand-navy dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded border border-blue-100 dark:border-blue-800/50">
+                  Moneda: {moneda}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* FECHAS */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-card rounded-2xl border border-border/50 flex items-center gap-4 shadow-sm">
-              <div className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                <Calendar className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-              </div>
-              <div>
-                <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-0.5">
-                  Emisión
-                </p>
-                <p className="font-bold text-sm text-foreground">
-                  {fD(fechaEmision)}
-                </p>
-              </div>
-            </div>
-            <div
-              className={`p-4 bg-card rounded-2xl border flex items-center gap-4 shadow-sm ${statusInfo.status === "danger" ? "border-rose-200 dark:border-rose-900/50" : "border-border/50"}`}
-            >
+          {/* GRID: SALDO, FECHAS Y RESUMEN FINANCIERO */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* IZQUIERDA: SALDO Y FECHAS */}
+            <div className="grid grid-cols-2 gap-3">
               <div
-                className={`p-2.5 rounded-xl ${statusInfo.status === "danger" ? "bg-rose-100 dark:bg-rose-900/30" : "bg-slate-100 dark:bg-slate-800"}`}
+                className={cn(
+                  "col-span-2 p-4 rounded-2xl border flex flex-col justify-center shadow-sm",
+                  isPaid
+                    ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/40"
+                    : "bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900/40",
+                )}
               >
-                <Calendar
-                  className={`h-4 w-4 ${statusInfo.status === "danger" ? "text-rose-600 dark:text-rose-400" : "text-slate-500 dark:text-slate-400"}`}
-                />
-              </div>
-              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <CreditCard
+                    className={cn(
+                      "h-4 w-4",
+                      isPaid ? "text-emerald-600" : "text-amber-600",
+                    )}
+                  />
+                  <p
+                    className={cn(
+                      "text-[10px] font-black uppercase tracking-widest",
+                      isPaid ? "text-emerald-600/70" : "text-amber-600/70",
+                    )}
+                  >
+                    Deuda Pendiente
+                  </p>
+                </div>
                 <p
-                  className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${statusInfo.status === "danger" ? "text-rose-600/70 dark:text-rose-400/70" : "text-muted-foreground"}`}
+                  className={cn(
+                    "text-3xl font-black tracking-tighter",
+                    isPaid
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-500",
+                  )}
                 >
-                  Vencimiento
+                  {fC(saldoPendiente)}
                 </p>
-                <p
-                  className={`font-bold text-sm ${statusInfo.status === "danger" ? "text-rose-600 dark:text-rose-400" : "text-foreground"}`}
+              </div>
+
+              <div className="p-4 bg-white dark:bg-card rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm flex flex-col justify-center">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="text-[10px] font-black uppercase text-muted-foreground tracking-wider">
+                    Emisión
+                  </span>
+                </div>
+                <span className="font-bold text-sm text-foreground">
+                  {fD(fechaEmision)}
+                </span>
+              </div>
+
+              <div
+                className={cn(
+                  "p-4 rounded-2xl border shadow-sm flex flex-col justify-center",
+                  statusInfo.status === "danger"
+                    ? "bg-rose-50 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/40"
+                    : "bg-white dark:bg-card border-slate-200 dark:border-border/50",
+                )}
+              >
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Clock
+                    className={cn(
+                      "h-3.5 w-3.5",
+                      statusInfo.status === "danger"
+                        ? "text-rose-500"
+                        : "text-slate-400",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "text-[10px] font-black uppercase tracking-wider",
+                      statusInfo.status === "danger"
+                        ? "text-rose-600/70 dark:text-rose-400/70"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    Vencimiento
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "font-bold text-sm",
+                    statusInfo.status === "danger"
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-foreground",
+                  )}
                 >
                   {fD(fechaVencimiento)}
-                </p>
+                </span>
+              </div>
+            </div>
+
+            {/* DERECHA: RESUMEN FINANCIERO */}
+            <div className="p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-white/10 shadow-inner flex flex-col justify-center">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                <DollarSign className="w-4 h-4 text-slate-400" /> Resumen de
+                Compra
+              </p>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-bold text-slate-500">Subtotal:</span>
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                    {fC(subtotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-bold text-slate-500">IVA:</span>
+                  <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                    {fC(iva)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-sm pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <span className="font-bold text-slate-500">Retenciones:</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
+                    -{fC(retenciones)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="font-black text-sm text-brand-navy dark:text-white uppercase tracking-wider">
+                    Total Factura:
+                  </span>
+                  <span className="font-mono text-xl font-black text-brand-navy dark:text-white">
+                    {fC(montoTotal)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* MONTOS */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-brand-navy/5 dark:bg-brand-navy/10 rounded-2xl border border-brand-navy/10 dark:border-brand-navy/20">
-              <div className="flex items-center gap-1.5 mb-1">
-                <DollarSign className="h-3.5 w-3.5 text-brand-navy/70 dark:text-blue-400" />
-                <p className="text-[10px] font-black text-brand-navy/70 dark:text-blue-400/70 uppercase tracking-widest">
-                  Monto Total
-                </p>
-              </div>
-              <p className="text-2xl font-black text-brand-navy dark:text-white tracking-tighter">
-                {fC(montoTotal)}
-              </p>
-            </div>
-            <div
-              className={`p-4 rounded-2xl border shadow-inner ${isPaid ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30" : "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30"}`}
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <CreditCard
-                  className={`h-3.5 w-3.5 ${isPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
-                />
-                <p
-                  className={`text-[10px] font-black uppercase tracking-widest ${isPaid ? "text-emerald-600/70 dark:text-emerald-400/70" : "text-amber-600/70 dark:text-amber-400/70"}`}
-                >
-                  Saldo a Pagar
-                </p>
-              </div>
-              <p
-                className={`text-2xl font-black tracking-tighter ${isPaid ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-500"}`}
-              >
-                {fC(saldoPendiente)}
-              </p>
-            </div>
-          </div>
+          <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          <Separator className="bg-border/50" />
-
-          {/* HISTORIAL DE PAGOS */}
+          {/* HISTORIAL DE PAGOS REGISTRADOS */}
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
                   <Receipt className="h-4 w-4 text-slate-600 dark:text-slate-300" />
                 </div>
-                Historial de Pagos Egresados
-                <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full text-xs font-bold ml-1">
+                Abonos y Pagos Registrados
+                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full text-xs font-black">
                   {payments.length}
                 </span>
               </h3>
             </div>
 
             {payments.length === 0 ? (
-              <div className="p-8 text-center bg-card rounded-2xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2">
-                <Receipt className="h-8 w-8 text-muted-foreground/30" />
-                <p className="text-sm font-medium text-muted-foreground">
-                  No hay pagos registrados
+              <div className="text-center py-8 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <History className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm font-bold text-slate-500">
+                  No hay pagos registrados para este proveedor.
                 </p>
               </div>
             ) : (
-              <div className="border border-border/50 rounded-2xl overflow-hidden bg-card shadow-sm">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-card">
                 <DataTable>
                   <DataTableHeader>
-                    <DataTableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b-border/50">
-                      <DataTableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                    <DataTableRow className="bg-slate-50/50 dark:bg-slate-900/50">
+                      <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 px-4">
                         Fecha
                       </DataTableHead>
-                      <DataTableHead className="text-right text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+                      <DataTableHead className="text-right text-[10px] font-black uppercase tracking-widest h-10">
                         Monto
                       </DataTableHead>
-                      <DataTableHead className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">
-                        Ref.
+                      <DataTableHead className="text-[10px] font-black uppercase tracking-widest h-10 px-4">
+                        Referencia
                       </DataTableHead>
                     </DataTableRow>
                   </DataTableHeader>
@@ -418,17 +616,17 @@ export function InvoicePayablesDetailSheet({
                       return (
                         <DataTableRow
                           key={safeStr(p.id)}
-                          className="border-b-border/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
+                          className="border-b-slate-100 dark:border-b-border/50 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors"
                         >
-                          <DataTableCell className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          <DataTableCell className="py-2.5 px-4 text-xs font-bold text-slate-700 dark:text-slate-300">
                             {fD(fecha)}
                           </DataTableCell>
-                          <DataTableCell className="text-right">
+                          <DataTableCell className="text-right py-2.5">
                             <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded-md border border-emerald-100 dark:border-emerald-900/50">
                               {fC(monto)}
                             </span>
                           </DataTableCell>
-                          <DataTableCell className="text-xs font-mono text-muted-foreground">
+                          <DataTableCell className="py-2.5 px-4 text-xs font-mono text-muted-foreground">
                             {referencia}
                           </DataTableCell>
                         </DataTableRow>
@@ -440,13 +638,13 @@ export function InvoicePayablesDetailSheet({
             )}
           </div>
 
-          <Separator className="bg-border/50" />
+          <Separator className="bg-slate-200 dark:bg-border/50" />
 
-          {/* TABLA DE EXPEDIENTE Y VERSIONES (CORREGIDA PARA QUE SIEMPRE SEA TABLA) */}
+          {/* TABLA DE EXPEDIENTE Y VERSIONES */}
           <div className="bg-white dark:bg-card p-5 rounded-2xl border border-slate-200 dark:border-border/50 shadow-sm relative overflow-hidden group">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 mb-4 flex items-center gap-2 relative z-10">
               <History className="h-3.5 w-3.5 text-blue-500" /> Expediente y
-              Versiones de Factura
+              Archivos
             </h3>
 
             <div className="border border-slate-200 dark:border-border/50 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/20 relative z-10">
@@ -457,7 +655,7 @@ export function InvoicePayablesDetailSheet({
                       Documento
                     </DataTableHead>
                     <DataTableHead className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
-                      Fecha / Hora
+                      Fecha Carga
                     </DataTableHead>
                     <DataTableHead className="text-center text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest py-3 h-auto">
                       Descargas
@@ -469,7 +667,12 @@ export function InvoicePayablesDetailSheet({
                     groupedHistory.map((group: any) => (
                       <DataTableRow
                         key={`v-${group.version}`}
-                        className={`border-b-slate-100 dark:border-b-border/50 transition-colors ${group.is_active ? "hover:bg-slate-50 dark:hover:bg-slate-800/50" : "opacity-60 grayscale hover:grayscale-0"}`}
+                        className={cn(
+                          "border-b-slate-100 dark:border-b-border/50 transition-colors",
+                          group.is_active
+                            ? "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                            : "opacity-60 grayscale hover:grayscale-0",
+                        )}
                       >
                         <DataTableCell className="py-2.5">
                           <div className="flex flex-col">
@@ -540,12 +743,12 @@ export function InvoicePayablesDetailSheet({
                       </DataTableRow>
                     ))
                   ) : pdfUrl || xmlUrl ? (
-                    // 👈 FALLBACK INTEGRADO DENTRO DE LA TABLA
+                    // FALLBACK: Si no hay historial pero sí URLs directas (Ej. Facturas subidas manuales)
                     <DataTableRow className="border-b-slate-100 dark:border-b-border/50 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                       <DataTableCell className="py-2.5">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            {folioInterno || "Factura"}
+                            {folioInterno || "Factura_Proveedor"}
                           </span>
                           <span className="text-[9px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-0.5">
                             Versión Única (Activa)

@@ -2147,6 +2147,146 @@ def export_client_statement_excel(
         raise HTTPException(status_code=500, detail=f"Error generando excel: {str(e)}")
 
 
+import requests
+import re
+import traceback
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
+from app.models import models
+from app.models.models import RecordStatus, InvoiceStatus
+from app.db.database import get_db
+
+
+@router.get("/receivables/{invoice_id}/verify-sat", response_model=dict)
+def verify_receivable_invoice_sat_status(
+    invoice_id: int, db: Session = Depends(get_db)
+):
+    """
+    Consulta en TIEMPO REAL el estatus fiscal de un CFDI directamente
+    en el WebService oficial del SAT de Hacienda y actualiza la BD local.
+    """
+    # 1. Obtener la factura de la base de datos con su cliente amarrado
+    invoice = (
+        db.query(models.ReceivableInvoice)
+        .filter(
+            models.ReceivableInvoice.id == invoice_id,
+            models.ReceivableInvoice.record_status != RecordStatus.ELIMINADO,
+        )
+        .first()
+    )
+
+    if not invoice:
+        raise HTTPException(
+            status_code=404, detail="Factura no encontrada en el sistema."
+        )
+
+    if not invoice.uuid:
+        raise HTTPException(
+            status_code=400,
+            detail="Esta factura no cuenta con un UUID (No ha sido timbrada).",
+        )
+
+    # 2. Extraer parámetros fiscales requeridos por el SAT
+    # Emisor: Tu empresa RAPIDOS 3T (Usamos tu RFC por defecto si no viene en el registro)
+    rfc_emisor = getattr(invoice, "emisor_rfc", None) or "RTX110624KP5"
+    # Receptor: El RFC de tu cliente
+    rfc_receptor = invoice.client.rfc if invoice.client else "XAXX010101000"
+    total_factura = f"{float(invoice.monto_total):.2f}"
+    uuid_fiscal = invoice.uuid.strip()
+
+    try:
+        # 3. Construir el sobre SOAP oficial para el WebService del SAT
+        url_sat = (
+            "https://consultaqr.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc"
+        )
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": "http://tempuri.org/IConsultaCFDIService/Consulta",
+        }
+
+        # Expresión regular impresa estricta del SAT
+        expresion = (
+            f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total_factura}&id={uuid_fiscal}"
+        )
+
+        soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">
+           <soapenv:Header/>
+           <soapenv:Body>
+              <tem:Consulta>
+                 <tem:expresionImpresa><![CDATA[{expresion}]]></tem:expresionImpresa>
+              </tem:Consulta>
+           </soapenv:Body>
+        </soapenv:Envelope>"""
+
+        # 4. Consumir el WebService de Hacienda con un timeout de 10 segundos
+        response = requests.post(
+            url_sat, data=soap_envelope, headers=headers, timeout=10
+        )
+
+        if response.status_code != 200:
+            raise ValueError(
+                f"El servidor del SAT respondió con código de error: {response.status_code}"
+            )
+
+        response_text = response.text
+
+        # 5. Parseo seguro de la respuesta utilizando expresiones regulares (Fuzzy & Lightweight)
+        estado_match = re.search(r"<.*:Estado>(.*?)</.*:Estado>", response_text)
+        codigo_match = re.search(
+            r"<.*:CodigoEstatus>(.*?)</.*:CodigoEstatus>", response_text
+        )
+        cancelable_match = re.search(
+            r"<.*:EsCancelable>(.*?)</.*:EsCancelable>", response_text
+        )
+
+        estado_sat = estado_match.group(1).upper() if estado_match else "DESCONOCIDO"
+        codigo_estatus = codigo_match.group(1) if codigo_match else "No recibido"
+        es_cancelable = cancelable_match.group(1) if cancelable_match else "No"
+
+        # 6. Sincronizar y mapear el resultado con tu Base de Datos local
+        # Valores comunes del SAT: "VIGENTE", "CANCELADO", "NO ENCONTRADO"
+        if "VIGENTE" in estado_sat:
+            invoice.status_sat = "TIMBRADO"
+        elif "CANCELADO" in estado_sat:
+            invoice.status_sat = "CANCELADO"
+
+            # 👇 CORRECCIÓN CRÍTICA AQUÍ: USAR EL ENUM STRICTO 👇
+            invoice.estatus = InvoiceStatus.CANCELADO
+
+            from datetime import datetime
+
+            if hasattr(invoice, "fecha_cancelacion") and not invoice.fecha_cancelacion:
+                invoice.fecha_cancelacion = datetime.now()
+
+        # Guardar los cambios de manera atómica
+        db.commit()
+        db.refresh(invoice)
+
+        return {
+            "status": "success",
+            "invoice_id": invoice.id,
+            "uuid": uuid_fiscal,
+            "folio": invoice.folio_interno,
+            "estatus_sat_real": estado_sat,
+            "codigo_sat": codigo_estatus,
+            "es_cancelable": es_cancelable,
+            "base_datos_actualizada": invoice.status_sat,
+            "message": f"Sincronización exitosa. Estatus real en SAT: {estado_sat}.",
+        }
+
+    except Exception as e:
+        db.rollback()
+        print("\n" + "=" * 60)
+        print("💥 ERROR AL CONSULTAR WEBSERVICE DEL SAT 💥")
+        traceback.print_exc()
+        print("=" * 60 + "\n")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fallo la conexión o el parseo del WebService del SAT: {str(e)}",
+        )
+
+
 @router.get("/export/statement/supplier/{supplier_id}")
 def export_supplier_statement_excel(
     supplier_id: int,

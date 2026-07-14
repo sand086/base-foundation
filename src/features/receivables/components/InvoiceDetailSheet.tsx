@@ -49,6 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ReceivableInvoice } from "@/features/receivables/types";
 import { getInvoiceStatusInfo } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import axiosClient from "@/api/axiosClient";
 
 interface InvoiceDetailSheetProps {
   open: boolean;
@@ -83,6 +84,7 @@ export function InvoiceDetailSheet({
   const [cancelingId, setCancelingId] = useState<number | null>(null);
   const [isRebuilding, setIsRebuilding] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
 
   useEffect(() => {
     if (invoice && open) {
@@ -100,10 +102,36 @@ export function InvoiceDetailSheet({
   const rawFolio = safeStr(inv.folio_interno) || safeStr(inv.folio);
   const displayFolio = rawFolio && rawFolio !== "S/F" ? rawFolio : uuid;
 
-  const estatusStr = safeStr(inv.estatus || inv.status_sat).toUpperCase();
+  const estatusStr = safeStr(inv.estatus).toUpperCase();
+
   const isCanceled = estatusStr === "CANCELADO";
-  const inProcess = inv.status_sat === "PROCESO_CANCELACION";
-  const hasSatError = inv.intentos_cancelacion > 0 && !isCanceled && !inProcess;
+  const inProcess = estatusStr === "PROCESO_CANCELACION";
+  const isQueued = estatusStr === "PENDIENTE_CANCELAR_SAT";
+  const hasSatError =
+    inv.intentos_cancelacion > 0 && !isCanceled && !inProcess && !isQueued;
+
+  // Lógica de Badge independiente para garantizar homologación visual
+  let badgeColor = "bg-slate-100 text-slate-800 border-slate-200";
+  let badgeLabel = estatusStr;
+
+  if (estatusStr === "TIMBRADA" || estatusStr === "TIMBRADO") {
+    badgeColor = "bg-green-100 text-green-800 border-green-300";
+  } else if (isCanceled) {
+    badgeColor = "bg-red-100 text-red-800 border-red-300";
+  } else if (estatusStr === "PROVISIONAL") {
+    badgeColor = "bg-amber-100 text-amber-800 border-amber-300";
+  } else if (estatusStr === "RECIBO INTERNO") {
+    badgeColor = "bg-slate-100 text-slate-700 border-slate-300";
+  } else if (inProcess) {
+    badgeColor = "bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+    badgeLabel = "En Proceso SAT";
+  } else if (isQueued) {
+    badgeColor = "bg-blue-50 text-blue-700 border-blue-200 animate-pulse";
+    badgeLabel = "En Cola (Reintento)";
+  } else if (hasSatError) {
+    badgeColor = "bg-rose-100 text-rose-800 border-rose-300";
+    badgeLabel = "Error SAT";
+  }
 
   const docHistory = Array.isArray(inv.document_history)
     ? inv.document_history
@@ -323,6 +351,55 @@ export function InvoiceDetailSheet({
     setIsVerifying(false);
   };
 
+  // 🚀 LÓGICA DE CANCELACIÓN SECUENCIAL INTELIGENTE (Paso 1 y 2)
+  const handleSafeRetryCancel = async () => {
+    if (!inv.id) return;
+    setIsRetrying(true);
+    const toastId = toast.loading(
+      "Paso 1/2: Verificando estatus real en el SAT...",
+    );
+
+    try {
+      const verifyRes = await axiosClient.get(
+        `/api/finance/receivables/${inv.id}/verify-sat`,
+      );
+      const estatusSatReal = verifyRes.data?.estatus_sat_real;
+
+      if (estatusSatReal === "CANCELADO") {
+        toast.success(
+          "¡Sincronizado! El SAT ya tenía registrado este comprobante como CANCELADO.",
+          { id: toastId },
+        );
+        if (onVerifySat) await onVerifySat(inv.id);
+        setIsRetrying(false);
+        return;
+      }
+
+      toast.loading(
+        "Paso 2/2: El comprobante sigue VIGENTE. Lanzando reintento al SAT...",
+        { id: toastId },
+      );
+
+      if (onRetryCancel) {
+        await onRetryCancel(inv.id, inv.motivo_cancelacion || "02");
+      }
+
+      toast.success("Proceso de reintento ejecutado.", { id: toastId });
+    } catch (error: any) {
+      console.error("Error en flujo de reintento:", error);
+      const errorMsg =
+        error.response?.data?.detail ||
+        error.message ||
+        "Error al conectar con el servidor.";
+      toast.error(
+        `Error: ${typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg)}`,
+        { id: toastId },
+      );
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
   const fC = (n: any) =>
     Number(n || 0).toLocaleString("es-MX", {
       style: "currency",
@@ -370,12 +447,12 @@ export function InvoiceDetailSheet({
           </SheetTitle>
 
           <div className="flex items-center gap-3 mt-0">
-            <StatusBadge
-              status={statusInfo.status}
-              className="shadow-sm font-black px-3 py-1"
+            <Badge
+              variant="outline"
+              className={cn("shadow-sm font-black px-3 py-1", badgeColor)}
             >
-              {statusInfo.label}
-            </StatusBadge>
+              {badgeLabel}
+            </Badge>
 
             <Button
               variant="ghost"
@@ -440,6 +517,30 @@ export function InvoiceDetailSheet({
             </div>
           )}
 
+          {/* 🚀 NUEVA ALERTA: Muestra que el cronjob está trabajando */}
+          {isQueued && (
+            <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
+              <Loader2 className="w-5 h-5 text-blue-500 shrink-0 mt-0.5 animate-spin" />
+              <div className="flex-1">
+                <h4 className="text-[11px] font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest">
+                  En Cola de Reintentos Automática
+                </h4>
+                <p className="text-sm font-medium text-blue-700/80 dark:text-blue-400/80 mt-1">
+                  {inv.detalle_sat ||
+                    "El SAT tardó en responder. El sistema está intentando cancelar esta factura en segundo plano."}
+                </p>
+                <div className="mt-3">
+                  <Badge
+                    variant="outline"
+                    className="bg-blue-100 text-blue-800 border-blue-300"
+                  >
+                    Intentos: {inv.intentos_cancelacion || 0}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+
           {hasSatError && (
             <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
@@ -454,11 +555,17 @@ export function InvoiceDetailSheet({
                 <div className="flex gap-2 mt-3">
                   {onRetryCancel && (
                     <Button
-                      onClick={() => onRetryCancel(inv.id, "02")}
+                      onClick={handleSafeRetryCancel}
+                      disabled={isRetrying}
                       size="sm"
-                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
+                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8 transition-all"
                     >
-                      <RefreshCw className="w-3 h-3 mr-2" /> Reintentar (01)
+                      {isRetrying ? (
+                        <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-3 h-3 mr-2" />
+                      )}
+                      Reintentar Cancelación
                     </Button>
                   )}
                 </div>
@@ -568,42 +675,61 @@ export function InvoiceDetailSheet({
                   {displayFolio}
                 </p>
                 {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT ATUALIZADO */}
+                {/* 🚀 BOTÓN OFICIAL DE VALIDACIÓN SAT (RÉPLICA EXACTA DEL QR) */}
                 {uuid && uuid !== "NO TIMBRADO" && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-7 px-2 text-[10px] font-black uppercase tracking-widest border-emerald-200 text-emerald-600 bg-emerald-50 hover:bg-emerald-100"
                     onClick={() => {
-                      const isProveedor =
-                        inv.tipo_documento === "FACTURA_PROVEEDOR";
+                      // 1. Buscamos si tu BD ya guardó la URL original del código QR
+                      const qrUrlOficial =
+                        inv.qr_url ||
+                        inv.url_qr ||
+                        inv.cadena_qr ||
+                        inv.qr_string;
 
-                      // Extraer los valores, cruzando los datos disponibles de la factura
-                      const re =
-                        inv.emisor_rfc ||
-                        inv.rfc_emisor ||
-                        (isProveedor ? entidadRfc : "");
-                      const rr =
-                        inv.receptor_rfc ||
-                        inv.rfc_receptor ||
-                        (!isProveedor ? entidadRfc : "");
-                      const tt =
-                        montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
+                      let satUrl = "";
 
-                      // Los últimos 8 caracteres del Sello Digital del SAT
-                      const sello =
-                        inv.sello_cfdi || inv.sello_sat || inv.sello || "";
-                      const fe = sello ? sello.slice(-8) : inv.fe || "";
+                      if (
+                        qrUrlOficial &&
+                        qrUrlOficial.includes("verificacfdi")
+                      ) {
+                        // Si ya tenemos el QR oficial, usamos ese enlace directo (Es el más seguro)
+                        satUrl = qrUrlOficial;
+                      } else {
+                        // 2. Si no lo tenemos, replicamos EXACTAMENTE la estructura de un escáner QR
+                        const re =
+                          inv.emisor_rfc || inv.rfc_emisor || "RTX110624KP5";
+                        const rr =
+                          inv.receptor_rfc || inv.rfc_receptor || entidadRfc;
+                        const tt =
+                          montoTotal > 0 ? montoTotal.toFixed(2) : "0.00";
 
-                      // Concatenar los parámetros correctamente (encodeURIComponent protege los + y / del base64)
-                      let satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}`;
-                      if (re) satUrl += `&re=${re}`;
-                      if (rr) satUrl += `&rr=${rr}`;
-                      satUrl += `&tt=${tt}`;
-                      if (fe) satUrl += `&fe=${encodeURIComponent(fe)}`;
+                        // Extracción de los 8 caracteres del sello
+                        const sello =
+                          inv.sello_cfdi ||
+                          inv.sello_emisor ||
+                          inv.sello ||
+                          inv.cfdi_sello ||
+                          "";
+                        const fe = sello.length >= 8 ? sello.slice(-8) : "";
 
-                      window.open(satUrl, "_blank");
+                        satUrl = `https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=${uuid}&re=${re}&rr=${rr}&tt=${tt}`;
+
+                        if (fe) {
+                          satUrl += `&fe=${fe}`;
+                        } else {
+                          toast.error(
+                            "Falta el Sello Digital. Hacienda podría no autollenar el formulario.",
+                          );
+                        }
+                      }
+
+                      // Abrimos la pestaña de Hacienda. Al estar la URL idéntica al QR, el SAT llenará todo.
+                      window.open(satUrl, "_blank", "noopener,noreferrer");
                     }}
-                    title="Abre el validador oficial del SAT con todos los datos de esta factura"
+                    title="Abre el portal del SAT autollenando los datos desde el código QR"
                   >
                     <Check className="w-3 h-3 mr-1" /> Validar Estatus SAT
                   </Button>

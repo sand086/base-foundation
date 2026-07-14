@@ -10,13 +10,28 @@ import { request as __request } from '../core/request';
 export class SatProductosCpService {
     /**
      * Get All
+     * @param skip
+     * @param limit
+     * @param search
      * @returns SatProductResponse Successful Response
      * @throws ApiError
      */
-    public static getAllApiSatSatProductsGet(): CancelablePromise<Array<SatProductResponse>> {
+    public static getAllApiSatSatProductsGet(
+        skip?: number,
+        limit: number = 500,
+        search?: (string | null),
+    ): CancelablePromise<Array<SatProductResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-products',
+            query: {
+                'skip': skip,
+                'limit': limit,
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

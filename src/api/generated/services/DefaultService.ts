@@ -21,7 +21,7 @@ import type { ModuleSchema } from '../models/ModuleSchema';
 import type { ReceivableInvoiceCreate } from '../models/ReceivableInvoiceCreate';
 import type { RegistroPagoPayload } from '../models/RegistroPagoPayload';
 import type { RouteCreate } from '../models/RouteCreate';
-import type { SatCancelPayload } from '../models/SatCancelPayload';
+import type { SatMassCancelPayload } from '../models/SatMassCancelPayload';
 import type { SettlementConceptBase } from '../models/SettlementConceptBase';
 import type { SystemConfigResponse } from '../models/SystemConfigResponse';
 import type { SystemConfigUpdate } from '../models/SystemConfigUpdate';
@@ -1008,24 +1008,20 @@ export class DefaultService {
         });
     }
     /**
-     * Cancel Invoice In Sat
-     * Endpoint para CANCELAR FÍSICAMENTE una factura (CFDI) en el SAT.
-     * Aplica para Cuentas por Cobrar (Facturas Libres o Cartas Porte).
-     * @param invoiceId
+     * Cancel Mass Invoices In Sat
+     * Endpoint para CANCELAR 1 o N facturas en el SAT.
+     * Delega al servicio inteligente. Si el PAC falla (Timeout/500),
+     * el servicio lo manda automáticamente al SatRetryQueue.
      * @param requestBody
      * @returns any Successful Response
      * @throws ApiError
      */
-    public static cancelInvoiceInSatApiSatStampCancelInvoiceIdPost(
-        invoiceId: number,
-        requestBody: SatCancelPayload,
+    public static cancelMassInvoicesInSatApiSatStampCancelMassPost(
+        requestBody: SatMassCancelPayload,
     ): CancelablePromise<Record<string, any>> {
         return __request(OpenAPI, {
             method: 'POST',
-            url: '/api/sat/stamp/cancel/{invoice_id}',
-            path: {
-                'invoice_id': invoiceId,
-            },
+            url: '/api/sat/stamp/cancel-mass',
             body: requestBody,
             mediaType: 'application/json',
             errors: {
