@@ -56,6 +56,8 @@ from app.models.models import (
     SatProduct,
     SatRetryQueue,
     ReceivableInvoicePayment,
+    ReceivableInvoiceDocumentHistory,
+    ReceivablePaymentDocumentHistory,
     BankAccount,
 )
 from app.modules.finance import crud as finance_crud
@@ -1747,7 +1749,50 @@ class BillingService:
                 continue
 
             try:
-                if item.operation_type == "cancelacion":
+                if item.document_type == "rep":
+                    from app.integrations.sat.payment_service import (
+                        PaymentComplementService,
+                    )
+
+                    payload = item.request_payload or {}
+                    payment_id = item.payment_id or payload.get("payment_id")
+                    if not payment_id:
+                        raise ValueError("No hay payment_id para reintentar REP.")
+
+                    payment_service = PaymentComplementService(self.db)
+                    if item.operation_type == "timbrado_pago":
+                        item.status = "CONCILIACION_REQUERIDA"
+                        item.locked_at = None
+                        item.next_attempt_at = None
+                        item.last_error = (
+                            "Timeout previo de timbrado REP. No se reintenta automaticamente "
+                            "porque el PAC pudo haber generado el complemento; primero debe conciliarse."
+                        )
+                        self.db.commit()
+                        resultados.append(
+                            {
+                                "id": item.id,
+                                "invoice_id": item.invoice_id,
+                                "payment_id": item.payment_id,
+                                "document_type": item.document_type,
+                                "operation_type": item.operation_type,
+                                "status": item.status,
+                                "message": "Requiere conciliacion antes de reintentar timbrado.",
+                            }
+                        )
+                        continue
+                    elif item.operation_type == "cancelacion_pago":
+                        payment_service.cancelar_pago_sat(
+                            payment_id=payment_id,
+                            motivo=payload.get("motivo") or "02",
+                            uuid_sustituto=payload.get("uuid_sustituto"),
+                        )
+                    else:
+                        raise ValueError(
+                            f"Tipo de operación REP no soportado: {item.operation_type}"
+                        )
+
+                elif item.operation_type == "cancelacion":
                     payload = item.request_payload or {}
                     self.cancelar_factura_sat(
                         invoice_id=factura.id,
@@ -1759,28 +1804,30 @@ class BillingService:
                     self.db.refresh(factura)
 
                 elif item.operation_type == "timbrado":
-                    payload = item.request_payload or {}
-                    sat_payload = payload.get("sat_payload") or {}
-                    if not sat_payload:
-                        raise ValueError(
-                            "No hay sat_payload guardado para reintentar timbrado."
-                        )
-
-                    resultado_pac = self._importar_comprobante_ws(
-                        sat_payload, relacion_uuid=payload.get("relacion_uuid")
+                    item.status = "CONCILIACION_REQUERIDA"
+                    item.locked_at = None
+                    item.next_attempt_at = None
+                    item.last_error = (
+                        "Timeout previo de timbrado CFDI. No se reintenta automaticamente "
+                        "porque el PAC pudo haber generado el timbre; primero debe conciliarse."
                     )
-                    uuid_generado = getattr(resultado_pac, "uuid", None)
-
-                    factura.uuid = uuid_generado
-                    factura.status_sat = "TIMBRADA"
-                    factura.detalle_sat = None
-                    if uuid_generado:
-                        factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
-                        factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
-                        if factura.trip:
-                            factura.trip.uuid_fiscal = uuid_generado
-                            factura.trip.estatus = "facturado"
+                    factura.detalle_sat = (
+                        "Timbrado pendiente por timeout. Requiere conciliación con PAC/SAT "
+                        "antes de reintentar para evitar duplicidad."
+                    )
                     self.db.commit()
+                    resultados.append(
+                        {
+                            "id": item.id,
+                            "invoice_id": item.invoice_id,
+                            "payment_id": item.payment_id,
+                            "document_type": item.document_type,
+                            "operation_type": item.operation_type,
+                            "status": item.status,
+                            "message": "Requiere conciliacion antes de reintentar timbrado.",
+                        }
+                    )
+                    continue
 
                 else:
                     raise ValueError(
@@ -1796,6 +1843,8 @@ class BillingService:
                     {
                         "id": item.id,
                         "invoice_id": item.invoice_id,
+                        "payment_id": item.payment_id,
+                        "document_type": item.document_type,
                         "operation_type": item.operation_type,
                         "status": item.status,
                     }
@@ -1816,6 +1865,8 @@ class BillingService:
                     {
                         "id": item.id,
                         "invoice_id": item.invoice_id,
+                        "payment_id": item.payment_id,
+                        "document_type": item.document_type,
                         "operation_type": item.operation_type,
                         "status": item.status,
                         "error": item.last_error,
@@ -1823,6 +1874,176 @@ class BillingService:
                 )
 
         return {"procesadas": len(pendientes), "resultados": resultados}
+
+    def resolver_timbrado_conciliado(
+        self,
+        retry_id: int,
+        uuid: str,
+        pdf_url: str | None = None,
+        xml_url: str | None = None,
+        notas: str | None = None,
+    ):
+        uuid = (uuid or "").strip().upper()
+        if not uuid:
+            raise HTTPException(status_code=400, detail="UUID requerido.")
+
+        item = (
+            self.db.query(SatRetryQueue)
+            .filter(SatRetryQueue.id == retry_id)
+            .first()
+        )
+        if not item:
+            raise HTTPException(status_code=404, detail="Registro de cola no encontrado.")
+
+        if item.operation_type not in {"timbrado", "timbrado_pago"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Solo se pueden conciliar timeouts de timbrado.",
+            )
+
+        pdf_url = pdf_url or f"/api/sat/invoice/{uuid}/pdf"
+        xml_url = xml_url or f"/api/sat/invoice/{uuid}/xml"
+
+        if item.document_type == "rep":
+            payment_id = item.payment_id or (item.request_payload or {}).get("payment_id")
+            pago = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(ReceivableInvoicePayment.id == payment_id)
+                .first()
+            )
+            if not pago:
+                raise HTTPException(status_code=404, detail="Pago REP no encontrado.")
+
+            duplicado = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(
+                    ReceivableInvoicePayment.id != pago.id,
+                    ReceivableInvoicePayment.complemento_uuid == uuid,
+                )
+                .first()
+            )
+            if duplicado:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"El UUID ya está ligado al pago {duplicado.id}.",
+                )
+
+            pago.complemento_uuid = uuid
+            pago.comprobante_url = pdf_url
+            pago.estatus = "ACTIVO"
+            pago.detalle_sat = notas or "REP conciliado contra respuesta tardía del PAC."
+
+            if not pago.folio_complemento:
+                pago.folio_complemento = f"COM-{pago.id + 5000}"
+
+            self._upsert_payment_document_history(pago.id, "xml", uuid, xml_url)
+            self._upsert_payment_document_history(pago.id, "pdf", uuid, pdf_url)
+
+        else:
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.id == item.invoice_id)
+                .first()
+            )
+            if not factura:
+                raise HTTPException(status_code=404, detail="Factura no encontrada.")
+
+            duplicado = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.id != factura.id,
+                    ReceivableInvoice.uuid == uuid,
+                    ReceivableInvoice.record_status != "E",
+                )
+                .first()
+            )
+            if duplicado:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"El UUID ya está ligado a la factura {duplicado.folio_interno or duplicado.id}.",
+                )
+
+            factura.uuid = uuid
+            factura.status_sat = "TIMBRADA"
+            factura.detalle_sat = notas or "CFDI conciliado contra respuesta tardía del PAC."
+            factura.pdf_url = pdf_url
+            factura.xml_url = xml_url
+            if factura.trip:
+                factura.trip.uuid_fiscal = uuid
+                factura.trip.estatus = "facturado"
+
+            self._upsert_invoice_document_history(factura.id, "xml", uuid, xml_url)
+            self._upsert_invoice_document_history(factura.id, "pdf", uuid, pdf_url)
+
+        item.uuid = uuid
+        item.status = "RESUELTO"
+        item.locked_at = None
+        item.next_attempt_at = None
+        item.resolved_at = datetime.utcnow()
+        item.last_error = notas or "Conciliado manualmente con UUID generado por PAC."
+        self.db.commit()
+
+        return {
+            "status": "success",
+            "message": "Timbrado conciliado sin reintentar.",
+            "retry_id": item.id,
+            "document_type": item.document_type,
+            "invoice_id": item.invoice_id,
+            "payment_id": item.payment_id,
+            "uuid": uuid,
+        }
+
+    def _upsert_invoice_document_history(
+        self, invoice_id: int, document_type: str, uuid: str, file_url: str
+    ):
+        existing = (
+            self.db.query(ReceivableInvoiceDocumentHistory)
+            .filter(
+                ReceivableInvoiceDocumentHistory.invoice_id == invoice_id,
+                ReceivableInvoiceDocumentHistory.document_type == document_type,
+                ReceivableInvoiceDocumentHistory.file_url == file_url,
+            )
+            .first()
+        )
+        if existing:
+            existing.is_active = True
+            return existing
+
+        row = ReceivableInvoiceDocumentHistory(
+            invoice_id=invoice_id,
+            document_type=document_type,
+            filename=f"{uuid}.{document_type}",
+            file_url=file_url,
+            is_active=True,
+        )
+        self.db.add(row)
+        return row
+
+    def _upsert_payment_document_history(
+        self, payment_id: int, document_type: str, uuid: str, file_url: str
+    ):
+        existing = (
+            self.db.query(ReceivablePaymentDocumentHistory)
+            .filter(
+                ReceivablePaymentDocumentHistory.payment_id == payment_id,
+                ReceivablePaymentDocumentHistory.document_type == document_type,
+                ReceivablePaymentDocumentHistory.file_url == file_url,
+            )
+            .first()
+        )
+        if existing:
+            existing.is_active = True
+            return existing
+
+        row = ReceivablePaymentDocumentHistory(
+            payment_id=payment_id,
+            document_type=document_type,
+            filename=f"{uuid}.{document_type}",
+            file_url=file_url,
+            is_active=True,
+        )
+        self.db.add(row)
+        return row
 
     # =========================================================================
     # LÓGICA FACTURA LIBRE (FINANZAS)
