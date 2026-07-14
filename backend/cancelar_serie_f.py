@@ -1,48 +1,72 @@
+import os
 import sys
 from pathlib import Path
-from sqlalchemy import text
+import xml.etree.ElementTree as ET
 
-# Configurar el path para heredar los módulos de la aplicación
-sys.path.append(str(Path(__file__).resolve().parent))
+# Configurar la ruta base
+backend_dir = Path(__file__).resolve().parent
+xml_path = (
+    backend_dir
+    / "app"
+    / "storage"
+    / "xml_timbrados"
+    / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.xml"
+)
+pdf_path = (
+    backend_dir
+    / "app"
+    / "storage"
+    / "xml_timbrados"
+    / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.pdf"
+)
 
-from app.db.database import get_db
+print("\n" + "=" * 80)
+# Tiempos modernos en 2026: Arreglando la data directo en el core del XML
+print("🛠️ INYECTANDO SERIES DIRECTAMENTE EN EL ARCHIVO XML LOCAL")
+print("=" * 80)
 
+if not xml_path.exists():
+    print(f"❌ Error: No se encontró el archivo XML en {xml_path}")
+    sys.exit(1)
 
-def arreglar_folios_con_serie():
-    db = next(get_db())
+try:
+    # Registrar los namespaces para no romper la estructura del SAT
+    ET.register_namespace("cfdi", "http://www.sat.gob.mx/cfd/4")
+    ET.register_namespace("pago20", "http://www.sat.gob.mx/Pagos20")
+    ET.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
 
-    print("\n" + "=" * 80)
-    print("🚀 CORRIGIENDO EL FORMATO DEL FOLIO INTERNO")
-    print("=" * 80)
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
 
-    try:
-        # Le regresamos el prefijo CP- y F- a la columna folio_interno
-        query = text("""
-            UPDATE receivable_invoices 
-            SET folio_interno = 'CP-17388' 
-            WHERE uuid = '58D2B363-1721-4E5E-8105-B42D56BD5EAA';
-            
-            UPDATE receivable_invoices 
-            SET folio_interno = 'F-9762' 
-            WHERE uuid = '78ADE59D-48FF-40A2-84AF-81768B96F1DD';
-        """)
+    modificado = False
+    # Buscar los nodos de los documentos relacionados dentro del XML
+    for elemento in root.iter():
+        if elemento.tag.endswith("DocRelacionado"):
+            folio = elemento.get("Folio")
+            if folio == "17388":
+                elemento.set("Serie", "CP")
+                print("✅ Serie 'CP' inyectada exitosamente al Folio 17388.")
+                modificado = True
+            elif folio == "9762":
+                elemento.set("Serie", "F")
+                print("✅ Serie 'F' inyectada exitosamente al Folio 9762.")
+                modificado = True
 
-        db.execute(query)
-        db.commit()
+    if modificado:
+        # Guardar los cambios en el archivo XML
+        tree.write(xml_path, encoding="utf-8", xml_declaration=True)
+        print("💾 Archivo XML actualizado en el servidor.")
 
-        print("✅ ¡Éxito! El folio 17388 ahora es 'CP-17388'.")
-        print("✅ ¡Éxito! El folio 9762 ahora es 'F-9762'.")
-        print("\n💾 BD Sincronizada: El sistema ya podrá separar la serie para el PDF.")
+        # Eliminar el PDF viejo para obligar al sistema a leer el XML corregido
+        if pdf_path.exists():
+            os.remove(pdf_path)
+            print("🗑️ PDF anterior eliminado para limpiar la caché.")
 
-    except Exception as e:
-        db.rollback()
-        print(f"❌ Error crítico: {e}")
-    finally:
-        db.close()
-        print("\n" + "=" * 80)
-        print("✨ PROCESO TERMINADO. ✨")
-        print("=" * 80 + "\n")
+        print("\n🚀 ¡PROCESO EXITOSO! El origen de los datos ya tiene las series.")
+    else:
+        print("⚠️ No se encontraron los folios 17388 o 9762 dentro del XML.")
 
-
-if __name__ == "__main__":
-    arreglar_folios_con_serie()
+except Exception as e:
+    print(f"❌ Error crítico al manipular el XML: {e}")
+finally:
+    print("\n" + "=" * 80 + "\n")
