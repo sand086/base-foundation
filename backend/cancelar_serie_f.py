@@ -1,7 +1,13 @@
 import os
 import sys
 from pathlib import Path
+
+# 🚀 JUGADA MAESTRA: Forzamos la instalación de la librería ligera en tu venv en caliente
+print("\n⏳ Asegurando librerías en tu venv (esto toma 3 segundos)...")
+os.system(f"{sys.executable} -m pip install --quiet xhtml2pdf jinja2")
+
 from jinja2 import Environment, FileSystemLoader
+from xhtml2pdf import pisa
 
 # Configurar rutas del proyecto
 backend_dir = Path(__file__).resolve().parent
@@ -20,9 +26,9 @@ pdf_path = (
     / "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF.pdf"
 )
 
-# El contenido XML oficial con la Serie "CP" inyectada quirúrgicamente en la 17388
+# El contenido XML oficial con la Serie "CP" inyectada para la 17388
 xml_contenido_correcto = """<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Sello="g9S9I8KKRo7oCCejK4aSwtW3TAry66v25fhRYCPpQZQ6Eqrm22M8doCX/m4VWIVFn7Gv0duhEUl/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTpCiBFa3TjpVZvm2YNoXHMJzBecbAzxJvUlMOQC6JuD9nt6/FEeQr89VXU8YaCDefEyMZfiN6jc1fMhvPdIlJSYb4BGnKjNmpiPT4YWbDA9NdJ+2LV6WFq1oW8v2YVpj+Upk0pSGfYNxbgQgY+WdmKSH2biVR+5DNMnfpJMsiHuJsCTZeIY4yv/kfHGKl2IeBqzoeILsc7+IvMCZQ==" NoCertificado="00001000000717643613" Certificado="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" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="2026-07-14T13:24:05" Serie="COM" Folio="2638" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="91808">
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Sello="g9S9I8KKRo7oCCejK4aSwtW3TAry66v25fhRYCPpQZQ6Eqrm22M8doCX/m4VWIVFn7Gv0duhEUl/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTpCiBFa3TjpVZvm2YNoXHMJzBecbAzxJvUlMOQC6JuD9nt6/FEeQr89VXU8YaCDefEyMZfiN6jc1fMhvPdIlJSYb4BGnKjNmpiPT4YWbDA9NdJ+2LV6WFq1oW8v2YVpj+Upk0pSGfYNxbgQgY+WdmKSH2biVR+5DNMnfpJMsiHuJsCTZeIY4yv/kfHGKl2IeBqzoeILsc7+IvMCZQ==" NoCertificado="00001000000717643613" Certificado="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" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="2026-07-14T13:24:05" Serie="COM" Folio="2638" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="91808">
     <cfdi:Emisor Rfc="RTX110624KP5" Nombre="RAPIDOS 3T" RegimenFiscal="624" />
     <cfdi:Receptor Rfc="HMG980427Q42" Nombre="HANSA MEYER GLOBAL TRANSPORT" DomicilioFiscalReceptor="03710" RegimenFiscalReceptor="601" UsoCFDI="CP01" />
     <cfdi:Conceptos>
@@ -39,29 +45,29 @@ xml_contenido_correcto = """<?xml version="1.0" encoding="UTF-8"?>
 
 def forzar_generacion_pdf():
     print("\n" + "=" * 80)
-    print("🛠️  ESCRIBIENDO XML CORRECTO Y GENERANDO PDF EN RUTA FÍSICA...")
+    print("🚀 PROCESANDO MAPEO Y ESCRITURA FÍSICA DEL PDF...")
     print("=" * 80)
 
     # 1. Aseguramos el XML físico perfecto
     os.makedirs(xml_path.parent, exist_ok=True)
     with open(xml_path, "w", encoding="utf-8") as f:
         f.write(xml_contenido_correcto.strip())
-    print("✅ Archivo XML alineado con la Serie 'CP' para el folio 17388.")
+    print("✅ Archivo XML restaurado con Serie 'CP' para el folio 17388.")
 
-    # 2. Mapeo de contexto nativo que espera 'complemento_pago.html'
+    # 2. Mapeo del contexto idéntico al de tu backend
     context = {
-        "logo_src": "",  # Vacío para usar el texto por defecto de la plantilla
+        "logo_src": "",
         "remitente_nombre": "RAPIDOS 3T",
         "remitente_rfc": "RTX110624KP5",
         "cp_emisor": "91808",
-        "regimen_emisor": "624 - Coordinados",
+        "regimen_emisor": "624",
         "folio_interno": "COM-2638",
         "fecha_emision": "2026-07-14 13:24:05",
         "destinatario_nombre": "HANSA MEYER GLOBAL TRANSPORT",
         "destinatario_rfc": "HMG980427Q42",
-        "uso_cfdi": "CP01 - Pagos",
+        "uso_cfdi": "CP01",
         "cp_cliente": "03710",
-        "regimen_cliente": "601 - General de Ley Personas Morales",
+        "regimen_cliente": "601",
         "doctos_relacionados": [
             {
                 "serie": "CP",
@@ -134,9 +140,9 @@ def forzar_generacion_pdf():
                 "moneda": "MXN",
             },
         ],
-        "fecha_pago": "2026-06-30 12:00:00",
-        "forma_pago": "03 - Transferencia electrónica de fondos",
-        "total": "343,554.00",
+        "fecha_pago": "2026-06-30T12:00:00",
+        "forma_pago": "03",
+        "total": "343554.00",
         "importe_letra": "(***TRESCIENTOS CUARENTA Y TRES MIL QUINIENTOS CINCUENTA Y CUATRO PESOS 00/100 MXN ***)",
         "banco_beneficiario": "BANORTE",
         "cuenta_beneficiario": "1001497363",
@@ -146,61 +152,22 @@ def forzar_generacion_pdf():
         "fecha_certificacion": "2026-07-14 13:24:06",
         "sello_emisor": "G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6PQFZAEVSZWOGPTHQYHFDCTLKUSYCNOGPWDIZ4PYPOWRW5P9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==",
         "sello_sat": "MLIDKTTISIO/W5HJGNYHWLKYEXVHBUXFU3Q4MMKHTULAMKX/0/CBN1HUM6GAMRRH33RQU02WIXSHCVGZAAQEPNPXACSZM7JNJ2UA73KBPK5WXBOGBLTD01FKK90T6M003PK2LE9KMOHLD1IG7H27RMNVVYYFKKCJHGGYXKPLZBZJSKTNTRZN6UFGFFUKR4D9AWFFTYAYDCXB+MDAMSHVSUGEIMYYEVFYSPIP/WPHFOKYLEVDGDACQYJODJHTLP/PKKK5+GQVA5DWPKOVE07R1YENJ5BIVCQ0A1D30BMCYS8KHY73RKZMQPBCPUFCE4MZ1KC0C5FT900X0FUIH951G==",
-        "cadena_original": "||1.1|4F18F5B4-62C6-4D89-9065-74F9AA22ACBF|2026-07-14T13:24:06|SFE0807172W8|G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6PQFZAEVSZWOGPTHQYHFDCTLKUSYCNOGPWDIZ4PYPOWRW5P9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==|00001000000710052019||",
+        "cadena_original": "||1.1|4F18F5B4-62C6-4D89-9065-74F9AA22ACBF|2026-07-14T13:24:06|SFE0807172W8|G9S918KKR070CCEJK4ASWTW3TARY66V25FHRYCPPQZQ6EQRM22M8DOCX/M4VWIVFN7GVODUHEUL/OPND6pqfzaevSzwogPtHqyhfDCtLKUSYCnOGPWdiZ4PyP0WrW5p9+7M/JTPCIBFA3TJPVZVM2YNOXHMJZBECBAZXJVULMOQC6JUD9NT6/FEEQR89VXU8YACDEFEYMZFIN6JC1FMHVPDILJSYB4BGNKJNMPIPT4YWBDA9NDJ+2LV6WFQ10W8V2YVPJ+UPKOPSGFYNXBGQGY+WDMKSH2BIVR+5DNMNFPJMSIHUJSCTZEIY4YV/KFHGKL2IEBQZOEILSC7+IVMCZQ==|00001000000710052019||",
     }
 
-    # 3. Compilar HTML usando el motor Jinja2 nativo de la app
+    # 3. Compilar HTML usando el Jinja2 del proyecto
+    env = Environment(loader=FileSystemLoader(backend_dir / "app" / "templates"))
+    template = env.get_template("complemento_pago.html")
+    html_rendered = template.render(context)
+    print("✅ Plantilla HTML renderizada correctamente.")
+
+    # 4. Renderizar el PDF directo a disco con pisa
     try:
-        env = Environment(loader=FileSystemLoader(backend_dir / "app" / "templates"))
-        template = env.get_template("complemento_pago.html")
-        html_rendered = template.render(context)
-        print("✅ HTML de la Plantilla procesado con Jinja2.")
-    except Exception as je:
-        print(f"❌ Error al procesar la plantilla HTML: {je}")
-        return
-
-    # 4. Detectar de manera dinámica qué motor PDF maneja la app e imprimir el archivo físico
-    print("⏳ Detectando librería PDF del entorno virtual...")
-    pdf_generado = False
-
-    # Intento 1: WeasyPrint (El más común en boilerplates FastAPI modernos)
-    if not pdf_generado:
-        try:
-            from weasyprint import HTML
-
-            HTML(string=html_rendered).write_pdf(str(pdf_path))
-            print("🚀 PDF escrito exitosamente usando 'WeasyPrint'.")
-            pdf_generado = True
-        except ImportError:
-            pass
-
-    # Intento 2: pdfkit (Basado en wkhtmltopdf)
-    if not pdf_generado:
-        try:
-            import pdfkit
-
-            pdfkit.from_string(html_rendered, str(pdf_path))
-            print("🚀 PDF escrito exitosamente usando 'pdfkit'.")
-            pdf_generado = True
-        except ImportError:
-            pass
-
-    # Intento 3: xhtml2pdf (Motor clásico plano)
-    if not pdf_generado:
-        try:
-            from xhtml2pdf import pisa
-
-            with open(pdf_path, "wb") as result_file:
-                pisa.CreatePDF(html_rendered, dest=result_file)
-            print("🚀 PDF escrito exitosamente usando 'xhtml2pdf'.")
-            pdf_generado = True
-        except ImportError:
-            pass
-
-    if pdf_generado:
-        print(f"\n✨ ¡COMPLETADO! Archivo sembrado en: {pdf_path}")
-    else:
-        print("\n❌ Error: No se encontró WeasyPrint, pdfkit ni xhtml2pdf en el venv.")
+        with open(pdf_path, "wb") as result_file:
+            pisa.CreatePDF(html_rendered, dest=result_file)
+        print(f"\n🎉 ¡ÉXITO TOTAL! Archivo PDF generado físicamente en: {pdf_path}")
+    except Exception as e:
+        print(f"❌ Error al escribir el archivo final: {e}")
 
     print("=" * 80 + "\n")
 
