@@ -2,20 +2,21 @@ import sys
 from pathlib import Path
 from sqlalchemy import text
 
-# Configurar el path del entorno
+# Configurar el path del entorno para heredar los módulos del proyecto
 sys.path.append(str(Path(__file__).resolve().parent))
+
 from app.db.database import get_db
 
 
-def analizar_y_localizar():
+def encontrar_y_regenerar_nativo():
     db = next(get_db())
     uuid_target = "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF"
 
     print("\n" + "=" * 80)
-    print("🔍 LOCALIZANDO REGISTRO REAL Y EXAMINANDO MOTOR NATIVO")
+    print("🔍 BUSCANDO REGISTRO (IGNORANDO MAYÚSCULAS/MINÚSCULAS EN POSTGRES)")
     print("=" * 80)
 
-    # 1. Escaneo universal para encontrar el ID del COM de pago
+    # 1. Buscamos todas las tablas que tengan una columna llamada 'uuid'
     query_tablas = text("""
         SELECT table_name FROM information_schema.columns 
         WHERE column_name = 'uuid' AND table_schema = 'public'
@@ -26,39 +27,66 @@ def analizar_y_localizar():
     for t in tablas:
         t_name = t[0]
         try:
-            res = db.execute(
-                text(f"SELECT id FROM {t_name} WHERE uuid = :uuid"),
-                {"uuid": uuid_target},
-            ).fetchone()
+            # Usamos LOWER() en ambos lados para romper la sensibilidad de Postgres
+            query_search = text(
+                f"SELECT id FROM {t_name} WHERE LOWER(uuid) = LOWER(:uuid)"
+            )
+            res = db.execute(query_search, {"uuid": uuid_target}).fetchone()
             if res:
-                tabla_real, id_real = t_name, res[0]
-                print(f"🎯 ¡Localizado! Tabla: '{t_name}' | ID del Registro: {id_real}")
+                id_real = res[0]
+                tabla_real = t_name
+                print(
+                    f"🎯 ¡Encontrado! Vive en la tabla: '{t_name}' | ID interno: {id_real}"
+                )
                 break
         except:
             continue
 
-    if not tabla_real:
-        print("❌ No se encontró el UUID del pago en ninguna tabla.")
+    if not id_real:
+        print("❌ No se encontró el UUID en ninguna tabla del sistema usando LOWER().")
         db.close()
         return
 
-    # 2. Leer la función de reconstrucción del sistema para clonar su llamada exacta
-    api_path = Path("app/integrations/sat/api_billing.py")
-    if api_path.exists():
-        contenido = api_path.read_text().splitlines()
-        print("\n📦 REVISANDO TU MÉTODO NATIVO DE GENERACIÓN:")
-        for idx, line in enumerate(contenido):
-            if "def reconstruir_pdf_factura" in line:
-                print(
-                    f"\n--- Código de reconstruir_pdf_factura (Línea {idx+1} en adelante) ---"
-                )
-                for k in range(idx, min(idx + 25, len(contenido))):
-                    print(contenido[k])
-                break
+    print("-" * 80)
+    print("⏳ Disparando el motor original de tu sistema para reconstruir el PDF...")
+
+    # 2. Intentamos regenerar usando el flujo nativo de tu API
+    pdf_reconstruido = False
+
+    try:
+        from app.integrations.sat.api_billing import reconstruir_pdf_factura
+
+        print("🚀 Intentando vía api_billing.reconstruir_pdf_factura()...")
+        reconstruir_pdf_factura(invoice_id=id_real, db=db)
+        print(
+            "✅ ¡Éxito Nativo! El sistema procesó la plantilla original correctamente."
+        )
+        pdf_reconstruido = True
+    except Exception as e:
+        print(f"⚠️ El primer motor falló o no aplica a esta tabla: {e}")
+
+    # 3. Intento alternativo usando tu BillingService en caso de que falle el primero
+    if not pdf_reconstruido:
+        try:
+            from app.integrations.sat.billing_service import BillingService
+
+            print(
+                "🚀 Intentando vía alternativa billing_service.regenerar_pdf_factura()..."
+            )
+            try:
+                service = BillingService(db)
+            except:
+                service = BillingService()
+
+            service.regenerar_pdf_factura(id_real)
+            print("✅ ¡Éxito Nativo! Reconstruido a través de BillingService.")
+            pdf_reconstruido = True
+        except Exception as e2:
+            print(f"❌ El segundo motor también falló: {e2}")
 
     db.close()
     print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    analizar_y_localizar()
+    encontrar_y_regenerar_nativo()
