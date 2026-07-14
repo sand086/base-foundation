@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-# Configurar la ruta base
+# Configurar rutas del proyecto
 backend_dir = Path(__file__).resolve().parent
 xml_path = (
     backend_dir
@@ -21,52 +21,52 @@ pdf_path = (
 )
 
 print("\n" + "=" * 80)
-# Tiempos modernos en 2026: Arreglando la data directo en el core del XML
-print("🛠️ INYECTANDO SERIES DIRECTAMENTE EN EL ARCHIVO XML LOCAL")
+print("🛠️ REPARANDO CAMPOS EN EL ARCHIVO XML LOCAL Y LIMPIANDO CACHÉ")
 print("=" * 80)
 
 if not xml_path.exists():
-    print(f"❌ Error: No se encontró el archivo XML en {xml_path}")
+    print(f"❌ Error: No se encontró el archivo XML en la ruta: {xml_path}")
     sys.exit(1)
 
 try:
-    # Registrar los namespaces para no romper la estructura del SAT
+    # Registrar de forma estricta todos los namespaces para mantener la firma del SAT intacta
     ET.register_namespace("cfdi", "http://www.sat.gob.mx/cfd/4")
     ET.register_namespace("pago20", "http://www.sat.gob.mx/Pagos20")
     ET.register_namespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+    ET.register_namespace("tfd", "http://www.sat.gob.mx/TimbreFiscalDigital")
 
+    # Cargar y parsear el XML proveído
     tree = ET.parse(xml_path)
     root = tree.getroot()
 
     modificado = False
-    # Buscar los nodos de los documentos relacionados dentro del XML
+
+    # Iterar sobre los elementos usando el nombre de tag correcto del SAT (DoctoRelacionado)
     for elemento in root.iter():
-        if elemento.tag.endswith("DocRelacionado"):
+        if elemento.tag.endswith("DoctoRelacionado"):
             folio = elemento.get("Folio")
             if folio == "17388":
                 elemento.set("Serie", "CP")
-                print("✅ Serie 'CP' inyectada exitosamente al Folio 17388.")
-                modificado = True
-            elif folio == "9762":
-                elemento.set("Serie", "F")
-                print("✅ Serie 'F' inyectada exitosamente al Folio 9762.")
+                print("✅ Serie 'CP' asignada exitosamente al Folio 17388.")
                 modificado = True
 
     if modificado:
-        # Guardar los cambios en el archivo XML
+        # Sobrescribir el XML con los cambios aplicados
         tree.write(xml_path, encoding="utf-8", xml_declaration=True)
-        print("💾 Archivo XML actualizado en el servidor.")
+        print(
+            "💾 Archivo XML actualizado correctamente en el almacenamiento del servidor."
+        )
 
-        # Eliminar el PDF viejo para obligar al sistema a leer el XML corregido
+        # Eliminar el archivo PDF viejo para obligar al backend a leer la nueva estructura
         if pdf_path.exists():
             os.remove(pdf_path)
-            print("🗑️ PDF anterior eliminado para limpiar la caché.")
+            print("🗑️ PDF anterior removido con éxito para limpiar la caché.")
 
-        print("\n🚀 ¡PROCESO EXITOSO! El origen de los datos ya tiene las series.")
+        print("\n🚀 ¡PROCESO COMPLETADO! El origen de datos quedó reparado.")
     else:
-        print("⚠️ No se encontraron los folios 17388 o 9762 dentro del XML.")
+        print("⚠️ No se encontró la factura con el Folio '17388' dentro del XML.")
 
 except Exception as e:
-    print(f"❌ Error crítico al manipular el XML: {e}")
+    print(f"❌ Error crítico al manipular el archivo XML: {e}")
 finally:
-    print("\n" + "=" * 80 + "\n")
+    print("=" * 80 + "\n")
