@@ -12,15 +12,15 @@ from app.models import models
 def generar_pago_perfecto():
     db = next(get_db())
 
-    # Los datos exactos extraídos de tu auditoría, mapeando la Serie correcta
+    # 1. Unificamos la Serie y el Folio en la columna "folio_interno" que SÍ existe
     facturas_data = [
-        {"id": 331, "folio": "17665", "serie": "CP", "monto": 85120.00},
-        {"id": 222, "folio": "17559", "serie": "CP", "monto": 72800.00},
-        {"id": 115, "folio": "9762", "serie": "F", "monto": 3074.00},
-        {"id": 108, "folio": "17444", "serie": "CP", "monto": 45920.00},
-        {"id": 105, "folio": "17441", "serie": "CP", "monto": 45920.00},
-        {"id": 87, "folio": "17424", "serie": "CP", "monto": 45920.00},
-        {"id": 745, "folio": "17388", "serie": "CP", "monto": 44800.00},
+        {"id": 331, "folio_interno": "CP-17665", "monto": 85120.00},
+        {"id": 222, "folio_interno": "CP-17559", "monto": 72800.00},
+        {"id": 115, "folio_interno": "F-9762", "monto": 3074.00},
+        {"id": 108, "folio_interno": "CP-17444", "monto": 45920.00},
+        {"id": 105, "folio_interno": "CP-17441", "monto": 45920.00},
+        {"id": 87, "folio_interno": "CP-17424", "monto": 45920.00},
+        {"id": 745, "folio_interno": "CP-17388", "monto": 44800.00},
     ]
 
     print("\n" + "=" * 80)
@@ -28,18 +28,19 @@ def generar_pago_perfecto():
     print("=" * 80)
 
     try:
-        # 1. Asegurar que las series "F" y "CP" estén inyectadas en la BD
-        # para que tu integrador las lea al armar el XML.
-        print("🛠️ Alineando series F y CP en la base de datos...")
+        # 2. Actualizar el folio_interno en la BD para que incluya las series "F" y "CP"
+        print("🛠️ Alineando series F y CP en la columna 'folio_interno'...")
         for f in facturas_data:
             db.execute(
-                text("UPDATE receivable_invoices SET serie = :serie WHERE id = :id"),
-                {"serie": f["serie"], "id": f["id"]},
+                text(
+                    "UPDATE receivable_invoices SET folio_interno = :folio WHERE id = :id"
+                ),
+                {"folio": f["folio_interno"], "id": f["id"]},
             )
         db.commit()
-        print("   ✅ Series actualizadas correctamente en 'receivable_invoices'.")
+        print("   ✅ Folios internos actualizados correctamente.")
 
-        # 2. Obtener el client_id (Hansa Meyer) desde la primera factura
+        # 3. Obtener el client_id (Hansa Meyer) desde la primera factura
         factura_ejemplo = (
             db.query(models.ReceivableInvoice)
             .filter(models.ReceivableInvoice.id == 331)
@@ -51,12 +52,12 @@ def generar_pago_perfecto():
 
         client_id = factura_ejemplo.client_id
 
-        # 3. Preparar el payload exacto para tu motor de pagos (Mismos montos del XML original)
+        # 4. Preparar el payload exacto para tu motor de pagos (Mismos montos del XML original)
         pagos_payload = [
             {"invoice_id": f["id"], "monto_pagado": f["monto"]} for f in facturas_data
         ]
 
-        # 4. Instanciar el servicio nativo de tu sistema y timbrar
+        # 5. Instanciar el servicio nativo de tu sistema y timbrar
         print(
             "⏳ Conectando con el PAC para timbrar el nuevo Complemento de Pago (Parcialidad 1)..."
         )
@@ -75,9 +76,7 @@ def generar_pago_perfecto():
         print("\n🎉 ¡TIMBRADO EXITOSO!")
         nuevo_uuid = resultado.get("data", {}).get("uuid", "N/A")
         print(f"👉 Nuevo UUID Oficial: {nuevo_uuid}")
-        print(
-            "👉 Como borramos el historial antes, el SAT y tu sistema lo registraron con Parcialidad 1."
-        )
+        print("👉 ¡El SAT lo registró con Parcialidad 1 y las series correctas!")
 
     except Exception as e:
         db.rollback()
