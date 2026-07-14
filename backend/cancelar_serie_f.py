@@ -2,61 +2,48 @@ import sys
 from pathlib import Path
 from sqlalchemy import text
 
-# Configurar el path del entorno para heredar tu conexión
+# Configurar el path del entorno
 sys.path.append(str(Path(__file__).resolve().parent))
 from app.db.database import get_db
 
 
-def auditoria_fiscal():
+def diagnostico_exacto():
     db = next(get_db())
     uuid_com = "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF"
-    folios = ["17665", "17559", "9762", "17444", "17441", "17424", "17388"]
+    folios_relacionados = ["17665", "17559", "9762", "17444", "17441", "17424", "17388"]
 
     print("\n" + "=" * 80)
-    print("🕵️‍♂️ INICIANDO AUDITORÍA FISCAL (SOLO LECTURA)")
+    print("🔬 DIAGNÓSTICO EXACTO BASADO EN TUS MODELOS ORM")
     print("=" * 80)
 
-    # 1. Rastrear el UUID del Complemento de Pago
-    print(f"\n1️⃣ BUSCANDO EL COMPLEMENTO DE PAGO UUID: {uuid_com}")
-    tablas = db.execute(
-        text(
-            "SELECT table_name FROM information_schema.columns WHERE column_name = 'uuid' AND table_schema = 'public'"
-        )
-    ).fetchall()
+    # 1. Buscar en la tabla correcta de Complementos de Pago
+    print(f"\n1️⃣ BUSCANDO COMPLEMENTO FANTASMA EN 'receivable_invoice_payments'")
+    query_pago = text("""
+        SELECT id, monto, parcialidad, estatus, complemento_uuid, folio_complemento 
+        FROM receivable_invoice_payments 
+        WHERE LOWER(complemento_uuid) = LOWER(:u) OR folio_complemento = '2638'
+    """)
+    pago = db.execute(query_pago, {"u": uuid_com}).fetchone()
 
-    encontrado_pago = False
-    for t in tablas:
-        t_name = t[0]
-        try:
-            res = db.execute(
-                text(f"SELECT * FROM {t_name} WHERE LOWER(uuid) = LOWER(:uuid)"),
-                {"uuid": uuid_com},
-            ).fetchone()
-            if res:
-                encontrado_pago = True
-                print(f"   ✅ ¡ENCONTRADO en la tabla '{t_name}'!")
-                # Extraemos e imprimimos la información cruda
-                datos = dict(res._mapping) if hasattr(res, "_mapping") else dict(res)
-                print(f"   👉 Datos crudos: {datos}")
-        except:
-            continue
-
-    if not encontrado_pago:
+    if pago:
+        p_data = dict(pago._mapping) if hasattr(pago, "_mapping") else dict(pago)
+        print(f"   ⚠️ ¡ATENCIÓN! El pago SÍ existe en la BD: {p_data}")
         print(
-            "   ❌ El UUID del complemento NO existe en ninguna tabla. Es un timbrado fantasma."
+            "   👉 Como el registro existe, por eso tu interfaz lo cuenta para la Parcialidad 2."
         )
+    else:
+        print("   ❌ El Complemento no existe en 'receivable_invoice_payments'.")
 
-    # 2. Analizar las Facturas y sus Pagos (Para ver por qué sale Parcialidad 2)
-    print("\n2️⃣ ANALIZANDO FACTURAS RELACIONADAS Y SU HISTORIAL DE PAGOS")
-
-    for folio in folios:
-        print(f"\n--- Factura Folio: {folio} ---")
+    # 2. Revisar el estado de las facturas originales
+    print("\n2️⃣ REVISANDO SALDOS REALES EN 'receivable_invoices'")
+    for folio in folios_relacionados:
         try:
-            # Rastrear la factura en sí
-            query_inv = text(
-                "SELECT id, folio_interno, uuid, total, saldo_insoluto, status FROM receivable_invoices WHERE folio_interno LIKE :folio"
-            )
-            factura = db.execute(query_inv, {"folio": f"%{folio}%"}).fetchone()
+            query_inv = text("""
+                SELECT id, folio_interno, monto_total, saldo_pendiente, estatus 
+                FROM receivable_invoices 
+                WHERE folio_interno LIKE :f
+            """)
+            factura = db.execute(query_inv, {"f": f"%{folio}%"}).fetchone()
 
             if factura:
                 f_data = (
@@ -65,62 +52,29 @@ def auditoria_fiscal():
                     else dict(factura)
                 )
                 print(
-                    f"   ✅ Factura en BD: ID={f_data['id']} | UUID={f_data['uuid']} | Total={f_data['total']} | Saldo Insoluto={f_data.get('saldo_insoluto', 'N/A')} | Status={f_data['status']}"
+                    f"   ✅ Factura {folio}: ID={f_data['id']} | Monto Total=${f_data['monto_total']} | Saldo Pendiente=${f_data['saldo_pendiente']} | Estatus={f_data['estatus']}"
                 )
 
-                # Rastrear pagos en 'invoice_payments'
-                try:
-                    pagos = db.execute(
-                        text(
-                            "SELECT * FROM invoice_payments WHERE invoice_id = :inv_id"
-                        ),
-                        {"inv_id": f_data["id"]},
-                    ).fetchall()
-                    if pagos:
+                # Ver si tienen pagos anclados
+                query_pagos = text(
+                    "SELECT id, monto, parcialidad, estatus FROM receivable_invoice_payments WHERE invoice_id = :inv_id"
+                )
+                pagos = db.execute(query_pagos, {"inv_id": f_data["id"]}).fetchall()
+                if pagos:
+                    print(f"      ⚠️ ¡TIENE {len(pagos)} PAGOS REGISTRADOS!")
+                    for p in pagos:
+                        p_d = dict(p._mapping) if hasattr(p, "_mapping") else dict(p)
                         print(
-                            f"   ⚠️ ADVERTENCIA: Tiene {len(pagos)} pago(s) registrado(s) en 'invoice_payments'."
+                            f"         - Pago ID: {p_d['id']} | Monto: ${p_d['monto']} | Parcialidad: {p_d['parcialidad']} | Estatus: {p_d['estatus']}"
                         )
-                        for p in pagos:
-                            p_data = (
-                                dict(p._mapping) if hasattr(p, "_mapping") else dict(p)
-                            )
-                            print(
-                                f"      -> Pago ID={p_data.get('id')}, Monto={p_data.get('amount', p_data.get('monto', 0))}, Status={p_data.get('status', 'N/A')}"
-                            )
-                    else:
-                        print("   ✔️ Sin pagos en 'invoice_payments'.")
-                except:
-                    pass
-
-                # Rastrear pagos en 'bank_movements' (usado en tu API)
-                try:
-                    movimientos = db.execute(
-                        text("SELECT * FROM bank_movements WHERE invoice_id = :inv_id"),
-                        {"inv_id": f_data["id"]},
-                    ).fetchall()
-                    if movimientos:
-                        print(
-                            f"   ⚠️ ADVERTENCIA: Tiene {len(movimientos)} movimiento(s) en 'bank_movements'."
-                        )
-                        for m in movimientos:
-                            m_data = (
-                                dict(m._mapping) if hasattr(m, "_mapping") else dict(m)
-                            )
-                            print(
-                                f"      -> Movimiento ID={m_data.get('id')}, Monto={m_data.get('amount', m_data.get('monto', 0))}"
-                            )
-                except:
-                    pass
             else:
-                print(
-                    f"   ❌ No se encontró la factura con folio {folio} en 'receivable_invoices'."
-                )
+                print(f"   ❌ No se encontró factura para el folio {folio}.")
         except Exception as e:
-            print(f"   ❌ Error al leer factura: {e}")
+            print(f"   ❌ Error al consultar folio {folio}: {e}")
 
     db.close()
     print("\n" + "=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    auditoria_fiscal()
+    diagnostico_exacto()
