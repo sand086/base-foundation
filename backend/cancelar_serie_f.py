@@ -1,4 +1,3 @@
-import os
 import sys
 from pathlib import Path
 from sqlalchemy import text
@@ -6,63 +5,63 @@ from sqlalchemy import text
 # Configurar el path del entorno
 sys.path.append(str(Path(__file__).resolve().parent))
 from app.db.database import get_db
+from app.integrations.sat.billing_service import BillingService
 
 
-def limpieza_quirurgica():
+def cancelar_via_pac():
     db = next(get_db())
-
-    # Los IDs exactos de las facturas afectadas según tu auditoría
-    invoice_ids = (331, 222, 115, 108, 105, 87, 745)
-    uuid_com = "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF"
+    uuid_a_cancelar = "4F18F5B4-62C6-4D89-9065-74F9AA22ACBF"
 
     print("\n" + "=" * 80)
-    print("🩹 INICIANDO CIRUGÍA DE BASE DE DATOS")
+    print(f"📡 ENVIANDO ORDEN DE CANCELACIÓN AL PAC PARA EL UUID: {uuid_a_cancelar}")
     print("=" * 80)
 
+    # Buscamos una factura válida para usarla como puente
+    res = db.execute(
+        text("SELECT id, uuid FROM receivable_invoices WHERE uuid IS NOT NULL LIMIT 1")
+    ).fetchone()
+
+    if not res:
+        print("❌ No se encontró ninguna factura para usar como puente.")
+        db.close()
+        return
+
+    id_puente = res[0]
+    uuid_original = res[1]
+
     try:
-        # 1. Borrar de raíz todos los pagos (activos y cancelados) de estas facturas
-        # Esto garantiza que el sistema calcule "Parcialidad 1" al hacer el nuevo pago
-        res_pagos = db.execute(
-            text(
-                f"DELETE FROM receivable_invoice_payments WHERE invoice_id IN {invoice_ids}"
-            )
+        # 1. Inyectar temporalmente el UUID en la base de datos
+        print("🔄 Preparando entorno para enviar la orden al PAC...")
+        db.execute(
+            text("UPDATE receivable_invoices SET uuid = :malo WHERE id = :id"),
+            {"malo": uuid_a_cancelar, "id": id_puente},
         )
-        print(
-            f"✅ Se eliminaron {res_pagos.rowcount} registros de pagos (limpiando el historial de parcialidades)."
-        )
-
-        # 2. Restaurar las facturas a su estado original (Pendientes y con saldo completo)
-        res_inv = db.execute(
-            text(
-                f"UPDATE receivable_invoices SET saldo_pendiente = monto_total, estatus = 'pendiente' WHERE id IN {invoice_ids}"
-            )
-        )
-        print(
-            f"✅ Se restauraron {res_inv.rowcount} facturas a estatus 'pendiente' y saldo intacto."
-        )
-
         db.commit()
-        print("💾 Cambios guardados en la base de datos de forma segura.")
+
+        # 2. Enviar cancelación usando tu servicio
+        service = BillingService(db)
+        print("⏳ Disparando petición SOAP al PAC (Motivo 02)...")
+        service.cancelar_factura_sat(invoice_id=id_puente, motivo="02")
+        print("✅ ¡ÉXITO! El PAC procesó la cancelación correctamente.")
+
     except Exception as e:
-        db.rollback()
-        print(f"❌ Error en la base de datos: {e}")
+        print(f"⚠️ El PAC devolvió un mensaje: {e}")
+        print(
+            "💡 (Si el PAC indica que ya está cancelado o en proceso, el objetivo se cumplió)."
+        )
 
-    # 3. Limpiar los archivos físicos corruptos
-    backend_dir = Path(__file__).resolve().parent
-    xml_path = backend_dir / "app" / "storage" / "xml_timbrados" / f"{uuid_com}.xml"
-    pdf_path = backend_dir / "app" / "storage" / "xml_timbrados" / f"{uuid_com}.pdf"
-
-    if xml_path.exists():
-        os.remove(xml_path)
-        print("🗑️ XML del complemento fulminado del disco.")
-    if pdf_path.exists():
-        os.remove(pdf_path)
-        print("🗑️ PDF del complemento fulminado del disco.")
+    finally:
+        # 3. Restaurar la factura puente siempre, aunque el PAC falle o marque error
+        db.execute(
+            text("UPDATE receivable_invoices SET uuid = :orig WHERE id = :id"),
+            {"orig": uuid_original, "id": id_puente},
+        )
+        db.commit()
+        print("🧹 Base de datos restaurada y segura. (Puente devuelto a la normalidad)")
 
     db.close()
-    print("\n🚀 CIRUGÍA EXITOSA. TODO LISTO PARA REGENERAR DESDE LA INTERFAZ.")
     print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    limpieza_quirurgica()
+    cancelar_via_pac()
