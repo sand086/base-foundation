@@ -3,20 +3,25 @@ import requests
 import uuid
 from pathlib import Path
 
+# Configurar el path para heredar los módulos de la aplicación
 sys.path.append(str(Path(__file__).resolve().parent))
 
 from app.db.database import get_db
 from app.models.models import ReceivableInvoice, InvoiceStatus
 
 
-def cancelar_uuid_necio():
+def cancelar_uuids_multiples():
     db = next(get_db())
 
-    # 📌 SOLO EL UUID QUE FALLÓ POR CULPA DEL SAT
-    uuids_a_cancelar = ["8B62AAA4-1610-47B6-8417-E96C78A0648A"]
+    # 📌 LISTA CON LOS NUEVOS 3 UUIDS A CANCELAR
+    uuids_a_cancelar = [
+        "DAEA7824-88B0-4F47-B134-97078B6A26F7",  # Folio 9807
+        "4509B102-1620-4C27-8893-912D4F081CC8",  # Folio 9806
+        "0E84E197-0696-4A7F-B1B4-885B95FB9711",  # Folio 9805
+    ]
 
     print("\n" + "=" * 80)
-    print("🚀 REINTENTANDO CANCELACIÓN DIRECTA (BUSCANDO ESTRICTAMENTE POR UUID)")
+    print("🚀 INICIANDO CANCELACIÓN DIRECTA (BUSCANDO ESTRICTAMENTE POR UUID)")
     print("=" * 80)
 
     url = (
@@ -119,4 +124,4 @@ def cancelar_uuid_necio():
 
 
 if __name__ == "__main__":
-    cancelar_uuid_necio()
+    cancelar_uuids_multiples()
