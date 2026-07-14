@@ -9,69 +9,91 @@ from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
 
 
-def cancelar_solo_un_peso():
+def cancelar_uuids_especificos():
     db = next(get_db())
     service = BillingService(db)
 
     print("\n" + "=" * 80)
-    print("🚀 INICIANDO CANCELACIÓN SEGURA: SOLO FACTURAS DE $1.12")
+    print("🚀 INICIANDO CANCELACIÓN DE UUIDS ESPECÍFICOS")
     print("=" * 80)
 
-    # 🔒 FILTRO 1: Buscar en BD solo facturas con monto exacto de 1.12 que sigan vigentes
-    facturas_1_peso = (
-        db.query(ReceivableInvoice)
-        .filter(
-            ReceivableInvoice.monto_total == 1.12,
-            ReceivableInvoice.status_sat != "CANCELADO",
+    # 📌 LISTA DE UUIDS A CANCELAR
+    uuids_a_cancelar = [
+        "B9BB1E49-87B9-42A9-A867-2AFB0BA38C2A",
+        "FFDE385D-EBA7-490D-9458-4B7125E601E2",
+    ]
+
+    for uuid_obj in uuids_a_cancelar:
+        print(f"\n🔍 Buscando UUID: {uuid_obj}")
+
+        # 1. Buscar en BD
+        factura = (
+            db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.uuid == uuid_obj)
+            .first()
         )
-        .all()
-    )
 
-    if not facturas_1_peso:
-        print("✅ No se encontraron facturas de $1.12 pendientes por cancelar.")
-        return
-
-    print(f"🔍 Se encontraron {len(facturas_1_peso)} facturas de $1.12 exactos.")
-
-    for factura in facturas_1_peso:
-        # 🔒 FILTRO 2 (CANDADO DE SEGURIDAD): Doble validación antes de tocar el PAC/SAT
-        if factura.monto_total != 1.12:
+        if factura:
             print(
-                f"⚠️ SALTANDO FOLIO {factura.folio_interno} porque su monto NO es 1.12 (Es ${factura.monto_total})"
+                f"✅ Factura encontrada en BD. Folio interno: {factura.folio_interno}"
             )
-            continue
-
-        print(
-            f"\n⏳ Cancelando Folio: {factura.folio_interno} | Monto: ${factura.monto_total} | UUID: {factura.uuid}"
-        )
-        try:
-            # Disparamos la cancelación con Motivo 02 (Errores sin relación)
-            service.cancelar_factura_sat(
-                invoice_id=factura.id, motivo="02", uuid_sustituto=None
-            )
-            print(f"✅ ¡ÉXITO! Folio {factura.folio_interno} cancelado ante el SAT.")
-
-        except Exception as e:
-            error_msg = str(e).lower()
-            if (
-                "ya se encuentra cancelado" in error_msg
-                or "comprobante cancelado" in error_msg
-            ):
-                print(
-                    f"ℹ️ El SAT informa que el Folio {factura.folio_interno} YA ESTABA CANCELADO. Sincronizando BD..."
+            try:
+                # Disparamos la cancelación con Motivo 02 (Errores sin relación) usando tu método actual
+                service.cancelar_factura_sat(
+                    invoice_id=factura.id, motivo="02", uuid_sustituto=None
                 )
+                print(f"✅ ¡ÉXITO! UUID {uuid_obj} cancelado ante el SAT.")
+
+                # Actualizar estado en BD
                 factura.status_sat = "CANCELADO"
                 factura.estatus = "cancelado"
                 db.commit()
-            else:
-                print(
-                    f"❌ Error devuelto por el PAC para el Folio {factura.folio_interno}: {e}"
-                )
+                print("💾 Estatus actualizado a CANCELADO en la base de datos.")
+
+            except Exception as e:
+                error_msg = str(e).lower()
+                if (
+                    "ya se encuentra cancelado" in error_msg
+                    or "comprobante cancelado" in error_msg
+                ):
+                    print(
+                        f"ℹ️ El SAT informa que el UUID {uuid_obj} YA ESTABA CANCELADO. Sincronizando BD..."
+                    )
+                    factura.status_sat = "CANCELADO"
+                    factura.estatus = "cancelado"
+                    db.commit()
+                else:
+                    print(f"❌ Error devuelto por el PAC para el UUID {uuid_obj}: {e}")
+
+        else:
+            print(
+                f"⚠️ El UUID {uuid_obj} NO existe en la BD. Intentando cancelar directamente..."
+            )
+            try:
+                # 🔒 ALERTA: Si la factura no está en la BD, no tienes 'invoice_id'.
+                # Si tu BillingService tiene un método para cancelar directo por UUID, úsalo aquí.
+                # De lo contrario, tendrías que llamar directamente a tu cliente SOAP/PAC pasándole el RFC Emisor a mano.
+
+                if hasattr(service, "cancelar_por_uuid"):
+                    service.cancelar_por_uuid(uuid=uuid_obj, motivo="02")
+                    print(
+                        f"✅ ¡ÉXITO! UUID {uuid_obj} cancelado directamente ante el PAC/SAT (Sin tocar BD)."
+                    )
+                else:
+                    print(
+                        f"🛑 ATENCIÓN: Tu 'BillingService' requiere un 'invoice_id' para leer el RFC y CSD del emisor."
+                    )
+                    print(
+                        f"   Debes implementar una llamada directa a tu cliente SOAP para cancelar este UUID huérfano."
+                    )
+
+            except Exception as e:
+                print(f"❌ Error al intentar cancelar el UUID huérfano {uuid_obj}: {e}")
 
     print("\n" + "=" * 80)
-    print("✨ PROCESO TERMINADO. NINGUNA OTRA FACTURA FUE TOCADA. ✨")
+    print("✨ PROCESO TERMINADO. ✨")
     print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    cancelar_solo_un_peso()
+    cancelar_uuids_especificos()
