@@ -1,6 +1,7 @@
 import sys
 import requests
 import uuid
+import datetime  # 👈 AHORA SÍ IMPORTAMOS LA LIBRERÍA DE FECHAS
 from pathlib import Path
 
 # Configurar el path para heredar los módulos de la aplicación
@@ -13,11 +14,11 @@ from app.models.models import ReceivableInvoice, ReceivableInvoicePayment, Invoi
 def cancelar_rep_incorrecto():
     db = next(get_db())
 
-    # 📌 EL UUID DEL COMPLEMENTO DE PAGO MALO (EL QUE VAMOS A DESTRUIR)
+    # 📌 EL UUID DEL COMPLEMENTO DE PAGO MALO
     uuid_rep = "F9E5A3E8-3DB8-4A32-9E52-B75A85EC45E4"
 
     print("\n" + "=" * 80)
-    print("🚀 INICIANDO CANCELACIÓN DEL COMPLEMENTO DE PAGO (REP)")
+    print("🚀 INICIANDO SINCRONIZACIÓN DE CANCELACIÓN DE REP (BD LOCAL)")
     print(f"   UUID a cancelar: {uuid_rep}")
     print("=" * 80)
 
@@ -102,11 +103,9 @@ def cancelar_rep_incorrecto():
                 factura_p.status_sat = "CANCELADO"
                 factura_p.estatus = InvoiceStatus.CANCELADO
             if pago:
-                # Actualizamos el estatus del pago para que la factura regrese a tener saldo pendiente
+                # 🛠️ LA SOLUCIÓN AL ERROR DE FECHA: USAMOS DATETIME DE VERDAD
                 pago.estatus = "CANCELADO"
-                pago.fecha_cancelacion = (
-                    requests.utils.default_user_agent()
-                )  # Truco simple para forzar fecha
+                pago.fecha_cancelacion = datetime.datetime.now()
 
             db.commit()
             print("💾 BD Sincronizada correctamente. El pago fue anulado internamente.")
