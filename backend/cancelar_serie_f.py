@@ -10,24 +10,14 @@ from app.db.database import get_db
 from app.models.models import ReceivableInvoice, InvoiceStatus
 
 
-def cancelar_uuids_multiples():
+def cancelar_uuid_necio():
     db = next(get_db())
 
-    # 📌 LISTA UNIFICADA CON LOS 8 UUIDS A CANCELAR
-    uuids_a_cancelar = [
-        # Folios 1744X
-        "750B250B-E120-4BAA-873E-4D12EC4F71D2",  # Folio 17441
-        "4D89B7AC-D472-440F-AFCA-4F1D9D78768D",  # Folio 17440
-        "75C26C35-7743-4BE9-B155-3C85E561AD84",  # Folio 17449
-        "AFF5A957-8869-46B4-B478-DFDEAD4A3659",  # Folio 17448
-        "573C1A49-F555-407C-99E7-4629E15F67CC",  # Folio 17447
-        # Folios 980X
-        "DAEA7824-88B0-4F47-B134-97078B6A26F7",  # Folio 9807
-        "4509B102-1620-4C27-8893-912D4F081CC8",  # Folio 9806
-    ]
+    # 📌 SOLO EL UUID QUE FALLÓ POR CULPA DEL SAT
+    uuids_a_cancelar = ["75C26C35-7743-4BE9-B155-3C85E561AD84"]
 
     print("\n" + "=" * 80)
-    print("🚀 INICIANDO CANCELACIÓN DIRECTA (LOTE DE 8 UUIDS)")
+    print("🚀 REINTENTANDO CANCELACIÓN DIRECTA (TIMEOUT DEL SAT)")
     print("=" * 80)
 
     url = (
@@ -120,11 +110,9 @@ def cancelar_uuids_multiples():
                 print(response.text)
 
         except Exception as e:
-            # Rollback individual por si algo falla en uno de los UUIDs, para que el ciclo continúe
             db.rollback()
             print(f"❌ Ocurrió un error crítico procesando el UUID {uuid_obj}: {e}")
 
-    # Cerrar conexión al final del ciclo
     db.close()
     print("\n" + "=" * 80)
     print("✨ PROCESO TERMINADO. ✨")
@@ -132,4 +120,4 @@ def cancelar_uuids_multiples():
 
 
 if __name__ == "__main__":
-    cancelar_uuids_multiples()
+    cancelar_uuid_necio()
