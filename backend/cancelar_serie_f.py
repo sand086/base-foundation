@@ -52,12 +52,50 @@ def generar_pago_perfecto():
 
         client_id = factura_ejemplo.client_id
 
-        # 4. Preparar el payload exacto para tu motor de pagos (Mismos montos del XML original)
+        # 4. 🚨 BÚSQUEDA DINÁMICA DEL ID DE LA CUENTA BANCARIA 🚨
+        # Buscamos el ID interno de Postgres de tu cuenta Banorte
+        cuenta_bancaria = db.execute(
+            text(
+                "SELECT id FROM bank_accounts WHERE numero_cuenta LIKE '%072905010014973631%' LIMIT 1"
+            )
+        ).fetchone()
+
+        if cuenta_bancaria:
+            bank_account_id = cuenta_bancaria[0]
+            print(
+                f"   ✅ ID interno de la cuenta bancaria encontrado: {bank_account_id}"
+            )
+        else:
+            # Si por algo no la encuentra (quizás la escribieron con espacios), buscamos cualquier cuenta principal
+            print(
+                "   ⚠️ No se encontró la cuenta con ese número exacto. Buscando la cuenta principal de Banorte..."
+            )
+            fallback_cuenta = db.execute(
+                text(
+                    "SELECT id FROM bank_accounts WHERE LOWER(banco) LIKE '%banorte%' LIMIT 1"
+                )
+            ).fetchone()
+            if fallback_cuenta:
+                bank_account_id = fallback_cuenta[0]
+                print(
+                    f"   ✅ Usando cuenta Banorte alternativa (ID: {bank_account_id})"
+                )
+            else:
+                # Fallback extremo: usar el primer banco que exista
+                primera_cuenta = db.execute(
+                    text("SELECT id FROM bank_accounts LIMIT 1")
+                ).fetchone()
+                bank_account_id = primera_cuenta[0] if primera_cuenta else None
+                print(
+                    f"   ⚠️ Usando primera cuenta disponible como emergencia (ID: {bank_account_id})"
+                )
+
+        # 5. Preparar el payload exacto para tu motor de pagos
         pagos_payload = [
             {"invoice_id": f["id"], "monto_pagado": f["monto"]} for f in facturas_data
         ]
 
-        # 5. Instanciar el servicio nativo de tu sistema y timbrar
+        # 6. Instanciar el servicio nativo de tu sistema y timbrar
         print(
             "⏳ Conectando con el PAC para timbrar el nuevo Complemento de Pago (Parcialidad 1)..."
         )
@@ -69,7 +107,7 @@ def generar_pago_perfecto():
             forma_pago="03",  # Transferencia electrónica de fondos
             fecha_pago="2026-06-30T12:00:00",
             referencia="Pago Liberado Hansa Meyer",
-            cuenta_deposito="072905010014973631",  # Tu cuenta (Banorte)
+            cuenta_deposito=bank_account_id,  # <--- ¡AQUÍ ESTÁ LA MAGIA! Pasamos el ID, no el número largo
             user_id=1,  # Usuario admin por defecto
         )
 
