@@ -9,7 +9,7 @@ def cancelar_folio_huerfano(uuid_a_cancelar):
         "https://solucionfactible.com/ws/services/Timbrado.TimbradoHttpsSoap11Endpoint/"
     )
 
-    # Credenciales y Certificados extraídos directamente de tu log exitoso
+    # Credenciales y Certificados de tu PAC
     usuario_pac = "trafico2@3t.com.mx"
     password_pac = "iMbm2Z49.2_"
     contrasena_csd = "RTX110624"
@@ -48,8 +48,11 @@ def cancelar_folio_huerfano(uuid_a_cancelar):
         print("\n📥 RESPUESTA DEL PAC:")
         print(f"HTTP Status: {response.status_code}")
 
-        # Validamos rápidamente si el SAT aceptó la cancelación o si ya estaba cancelado
-        if "en proceso" in response.text or "cancelado" in response.text.lower():
+        if (
+            "en proceso" in response.text
+            or "cancelado" in response.text.lower()
+            or "statusUUID>211" in response.text
+        ):
             print(
                 f"✅ ¡ÉXITO! UUID {uuid_a_cancelar} fue enviado a cancelación exitosamente."
             )
@@ -62,5 +65,5 @@ def cancelar_folio_huerfano(uuid_a_cancelar):
 
 
 if __name__ == "__main__":
-    # Inyectamos el UUID huérfano
-    cancelar_folio_huerfano("FFDE385D-EBA7-490D-9458-4B7125E601E2")
+    # UUID inyectado
+    cancelar_folio_huerfano("5B02B7EE-4CAF-4F5C-A003-EC52B5F6B8CA")
