@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # UUID EXACTO Y MOTIVO
 UUID_OBJETIVO = "A3731D16-EB53-484F-9F87-346EC6DEDB7B"
-# Motivo 02 = Comprobante emitido con errores sin relación (ideal para cancelar directo sin que el SAT pida reemplazo)
+# Motivo 02 = Comprobante emitido con errores sin relación (ideal para cancelar directo)
 MOTIVO_CANCELACION = "02"
 
 
@@ -42,22 +42,25 @@ def cancelar_factura_pac():
     client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
 
     try:
+        # BÚSQUEDA POR COINCIDENCIA (Ignorando espacios y mayúsculas/minúsculas)
         factura = (
             db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.uuid == UUID_OBJETIVO)
+            .filter(ReceivableInvoice.uuid.ilike(f"%{UUID_OBJETIVO.strip()}%"))
             .first()
         )
+
         if not factura:
             logger.error(
-                f"❌ No se encontró la factura con UUID {UUID_OBJETIVO} en la base de datos."
+                f"❌ Sigo sin encontrar la factura que coincida con el UUID {UUID_OBJETIVO} en la BD."
             )
             return
 
         logger.info(
-            f"==> Iniciando cancelación real en PAC para: {factura.folio_interno} | UUID: {factura.uuid}"
+            f"==> ¡Factura encontrada! Iniciando cancelación en PAC para: {factura.folio_interno} | UUID en BD: {factura.uuid}"
         )
 
         # Formato estricto para Motivo 02 en Solución Factible: "UUID|02"
+        # Usamos el UUID exacto como lo tiene tu BD para evitar rechazos del PAC
         uuid_formateado_sat = f"{factura.uuid.strip()}|{MOTIVO_CANCELACION}"
 
         logger.info(f"Enviando petición de cancelación al SAT...")
