@@ -6,16 +6,11 @@ from datetime import datetime, timezone
 # 1. Aseguramos que los imports del backend funcionen
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# --- PARCHE PARA EVITAR EL ERROR DE LA BASE DE DATOS ---
-import app.integrations.sat.billing_service as bs
-
-bs.register_sat_retry = lambda *args, **kwargs: None
-# -------------------------------------------------------
-
 try:
     from app.models.models import ReceivableInvoice, InvoiceStatus
     from app.db.database import SessionLocal
     from app.integrations.sat.billing_service import BillingService
+    from app.integrations.sat.soap_client import create_pac_client
 except ImportError as e:
     print(f"Error de importación: {e}")
     sys.exit(1)
@@ -66,85 +61,132 @@ UUIDS_A_CANCELAR = [
 ]
 
 
-def procesar_cancelaciones():
+def procesar_cancelaciones_sat_directo():
     db = SessionLocal()
-    pac_service = BillingService(db)
+    pac = BillingService(db)  # Usamos tu clase solo para cargar configuraciones
+
+    # Cargar certificados CSD para firmar la orden
+    try:
+        with open(pac.path_cer, "rb") as f_cer:
+            cer_bytes = f_cer.read()
+        with open(pac.path_key, "rb") as f_key:
+            key_bytes = f_key.read()
+    except Exception as e:
+        logger.error(f"Error cargando certificados CSD: {e}")
+        return
+
+    # Crear el cliente SOAP del PAC directo
+    client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
 
     exitosos = 0
     errores = 0
 
     try:
-        logger.info("Iniciando búsqueda de facturas (sin importar estatus local)...")
-
+        # Quitamos la restricción de estatus para atraparlas todas
         facturas = (
             db.query(ReceivableInvoice)
             .filter(
                 ReceivableInvoice.uuid.in_(UUIDS_A_CANCELAR),
-                # ELIMINAMOS LA RESTRICCIÓN DE ESTATUS PARA FORZAR EL ENVÍO AL PAC
                 ReceivableInvoice.fecha_emision <= "2026-07-10",
                 ReceivableInvoice.monto_total <= 2.00,
             )
             .all()
         )
 
-        if not facturas:
-            logger.info("No se encontraron facturas basura con esos UUIDs.")
-            return
-
         logger.info(
-            f"¡Se encontraron {len(facturas)} facturas basura para enviar al PAC!"
+            f"¡Se encontraron {len(facturas)} facturas basura para ejecutar en el SAT!"
         )
 
         for factura in facturas:
             logger.info(
-                f"---> Mandando al PAC: {factura.folio_interno} | UUID: {factura.uuid}"
+                f"==> Analizando {factura.folio_interno} | UUID: {factura.uuid}"
             )
 
-            try:
-                # Llamada al PAC (lo forzará así tu BD diga que ya está cancelada)
-                pac_service.cancelar_factura_sat(invoice_id=factura.id, motivo="02")
-
-                # Si es exitoso, aseguramos el estado final en BD
-                factura.estatus = "cancelado"
-                factura.status_sat = "CANCELADO"
-                factura.fecha_cancelacion = datetime.now(timezone.utc)
-                factura.motivo_cancelacion = "02"
-                factura.detalle_sat = "Cancelación manual por tiempo y depuración"
-                db.commit()
-
-                exitosos += 1
-                logger.info(
-                    f"✅ EXITO: {factura.folio_interno} procesada correctamente."
+            # Buscar la Factura Chida del mismo viaje para pasarla como sustituto
+            factura_chida = None
+            if factura.viaje_id:
+                factura_chida = (
+                    db.query(ReceivableInvoice)
+                    .filter(
+                        ReceivableInvoice.viaje_id == factura.viaje_id,
+                        ReceivableInvoice.monto_total > 2.00,
+                        ReceivableInvoice.uuid != None,
+                        ReceivableInvoice.estatus != "cancelado",
+                    )
+                    .first()
                 )
+
+            if factura_chida and factura_chida.uuid:
+                motivo = "01"
+                uuid_sustituto = factura_chida.uuid
+                logger.info(
+                    f"    - Factura Chida encontrada: {factura_chida.folio_interno} ({uuid_sustituto}). Usando Motivo 01."
+                )
+            else:
+                motivo = "02"
+                uuid_sustituto = ""
+                logger.info(f"    - No hay factura chida. Usando Motivo 02.")
+
+            # FORMATO ESTRICTO DEL PAC: "UUID|Motivo|UuidSustitucion"
+            uuid_formateado_sat = f"{factura.uuid.strip()}|{motivo}|{uuid_sustituto.strip() if uuid_sustituto else ''}"
+
+            try:
+                # Llamamos a Solución Factible saltando la "Auto-Corrección"
+                resultado = client_zeep.service.cancelar(
+                    usuario=pac.pac_user,
+                    password=pac.pac_pass,
+                    uuids=[uuid_formateado_sat],
+                    derCertCSD=cer_bytes,
+                    derKeyCSD=key_bytes,
+                    contrasenaCSD=pac.key_password,
+                )
+
+                if int(getattr(resultado, "status", 0)) not in [200, 201, 202]:
+                    raise Exception(f"Rechazo PAC: {resultado.mensaje}")
+
+                res_sat = resultado.resultados[0]
+                codigo_sat = int(getattr(res_sat, "status", 0))
+                mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
+
+                # Si el SAT responde bien (201 en proceso, 202 cancelado previo)
+                if (
+                    codigo_sat in [201, 202]
+                    or "proceso" in mensaje_sat
+                    or "previamente cancelado" in mensaje_sat
+                ):
+                    factura.estatus = "cancelado"
+                    factura.status_sat = (
+                        "CANCELADO" if codigo_sat == 202 else "PROCESO_CANCELACION"
+                    )
+                    factura.fecha_cancelacion = datetime.now(timezone.utc)
+                    factura.motivo_cancelacion = motivo
+                    factura.detalle_sat = f"Cancelación SAT Exitosa. Motivo: {motivo}"
+                    db.commit()
+                    exitosos += 1
+                    logger.info(f"    ✅ SAT ACEPTÓ LA CANCELACIÓN: {mensaje_sat}")
+                else:
+                    raise Exception(f"Rechazo SAT ({codigo_sat}): {res_sat.mensaje}")
 
             except Exception as e:
                 error_str = str(e).lower()
-
-                # Si el SAT responde con el timeout 500, FORZAMOS la cancelación local
-                if (
-                    "tardó en responder" in error_str
-                    or "tardado demasiado" in error_str
-                    or "500" in error_str
-                ):
-                    logger.warning(
-                        f"⚠️ SAT LENTO con {factura.folio_interno}. Forzando cancelación local en BD..."
-                    )
-
+                if "tardado demasiado" in error_str or "500" in error_str:
+                    logger.warning(f"    ⚠️ SAT LENTO. Forzando local...")
                     factura.estatus = "cancelado"
                     factura.status_sat = "PROCESO_CANCELACION"
                     factura.fecha_cancelacion = datetime.now(timezone.utc)
-                    factura.motivo_cancelacion = "02"
+                    factura.motivo_cancelacion = motivo
                     factura.detalle_sat = (
-                        "Forzada a cancelado localmente. El SAT devolvió Timeout (500)."
+                        "Forzada localmente. SAT devolvió Timeout (500)."
                     )
-
                     db.commit()
                     exitosos += 1
                 else:
-                    logger.error(f"❌ ERROR PAC con {factura.folio_interno}: {str(e)}")
+                    logger.error(f"    ❌ ERROR: {str(e)}")
                     errores += 1
 
-        logger.info(f"--- RESUMEN FINAL: {exitosos} procesadas, {errores} errores ---")
+        logger.info(
+            f"--- RESUMEN FINAL: {exitosos} aceptadas por SAT/BD, {errores} errores ---"
+        )
 
     except Exception as e:
         logger.error(f"Error crítico: {str(e)}")
@@ -153,4 +195,4 @@ def procesar_cancelaciones():
 
 
 if __name__ == "__main__":
-    procesar_cancelaciones()
+    procesar_cancelaciones_sat_directo()
