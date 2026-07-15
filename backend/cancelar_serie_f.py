@@ -6,6 +6,12 @@ from datetime import datetime, timezone
 # Aseguramos que los imports funcionen en tu entorno
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# --- PARCHE PARA EVITAR ERRORES DE BD ---
+import app.integrations.sat.billing_service as bs
+
+bs.register_sat_retry = lambda *args, **kwargs: None
+# ----------------------------------------
+
 try:
     from app.models.models import ReceivableInvoice
     from app.db.database import SessionLocal
@@ -18,9 +24,9 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# UUID EXACTO Y MOTIVO
-UUID_OBJETIVO = "A3731D16-EB53-484F-9F87-346EC6DEDB7B"
-# Motivo 02 = Comprobante emitido con errores sin relación (ideal para cancelar directo)
+# CONFIGURACIÓN DE LOS UUIDs
+UUID_EN_BD = "A3731D16-EB53-484F-9F87-346EC6-AUDIT"
+UUID_REAL_SAT = "A3731D16-EB53-484F-9F87-346EC6DEDB7B"
 MOTIVO_CANCELACION = "02"
 
 
@@ -42,28 +48,29 @@ def cancelar_factura_pac():
     client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
 
     try:
-        # BÚSQUEDA POR COINCIDENCIA (Ignorando espacios y mayúsculas/minúsculas)
+        # BÚSQUEDA USANDO EL UUID QUE ESTÁ EN LA BD
         factura = (
             db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.uuid.ilike(f"%{UUID_OBJETIVO.strip()}%"))
+            .filter(ReceivableInvoice.uuid == UUID_EN_BD)
             .first()
         )
 
         if not factura:
             logger.error(
-                f"❌ Sigo sin encontrar la factura que coincida con el UUID {UUID_OBJETIVO} en la BD."
+                f"❌ Sigo sin encontrar la factura en la BD con el UUID {UUID_EN_BD}."
             )
             return
 
         logger.info(
-            f"==> ¡Factura encontrada! Iniciando cancelación en PAC para: {factura.folio_interno} | UUID en BD: {factura.uuid}"
+            f"==> ¡Factura encontrada! Iniciando cancelación en PAC para: {factura.folio_interno}"
         )
 
-        # Formato estricto para Motivo 02 en Solución Factible: "UUID|02"
-        # Usamos el UUID exacto como lo tiene tu BD para evitar rechazos del PAC
-        uuid_formateado_sat = f"{factura.uuid.strip()}|{MOTIVO_CANCELACION}"
+        # PERO AL SAT LE MANDAMOS EL UUID REAL
+        uuid_formateado_sat = f"{UUID_REAL_SAT}|{MOTIVO_CANCELACION}"
 
-        logger.info(f"Enviando petición de cancelación al SAT...")
+        logger.info(
+            f"Enviando petición de cancelación al SAT con el UUID real ({UUID_REAL_SAT})..."
+        )
         resultado = client_zeep.service.cancelar(
             usuario=pac.pac_user,
             password=pac.pac_pass,
@@ -79,7 +86,7 @@ def cancelar_factura_pac():
 
         logger.info(f"Respuesta PAC: {mensaje_sat} (Código: {codigo_sat})")
 
-        # 201 = Solicitud recibida, 202 = Ya estaba cancelado, 211 = En proceso
+        # Evaluamos la respuesta
         if (
             codigo_sat in [201, 202, 211]
             or "proceso" in mensaje_sat.lower()
