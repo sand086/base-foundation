@@ -847,6 +847,7 @@ class CartaPorteService:
         )
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
+
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")

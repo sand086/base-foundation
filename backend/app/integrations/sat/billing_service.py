@@ -708,6 +708,12 @@ class BillingService:
     # =========================================================================
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
+
+        if str(d.get("clave_prod_serv")).strip() == "78121605":
+            d["clave_prod_serv"] = "78101802"
+        if str(d.get("sat_clave_producto")).strip() == "78121605":
+            d["sat_clave_producto"] = "78101802"
+
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
@@ -1887,13 +1893,11 @@ class BillingService:
         if not uuid:
             raise HTTPException(status_code=400, detail="UUID requerido.")
 
-        item = (
-            self.db.query(SatRetryQueue)
-            .filter(SatRetryQueue.id == retry_id)
-            .first()
-        )
+        item = self.db.query(SatRetryQueue).filter(SatRetryQueue.id == retry_id).first()
         if not item:
-            raise HTTPException(status_code=404, detail="Registro de cola no encontrado.")
+            raise HTTPException(
+                status_code=404, detail="Registro de cola no encontrado."
+            )
 
         if item.operation_type not in {"timbrado", "timbrado_pago"}:
             raise HTTPException(
@@ -1905,7 +1909,9 @@ class BillingService:
         xml_url = xml_url or f"/api/sat/invoice/{uuid}/xml"
 
         if item.document_type == "rep":
-            payment_id = item.payment_id or (item.request_payload or {}).get("payment_id")
+            payment_id = item.payment_id or (item.request_payload or {}).get(
+                "payment_id"
+            )
             pago = (
                 self.db.query(ReceivableInvoicePayment)
                 .filter(ReceivableInvoicePayment.id == payment_id)
@@ -1931,7 +1937,9 @@ class BillingService:
             pago.complemento_uuid = uuid
             pago.comprobante_url = pdf_url
             pago.estatus = "ACTIVO"
-            pago.detalle_sat = notas or "REP conciliado contra respuesta tardía del PAC."
+            pago.detalle_sat = (
+                notas or "REP conciliado contra respuesta tardía del PAC."
+            )
 
             if not pago.folio_complemento:
                 pago.folio_complemento = f"COM-{pago.id + 5000}"
@@ -1965,7 +1973,9 @@ class BillingService:
 
             factura.uuid = uuid
             factura.status_sat = "TIMBRADA"
-            factura.detalle_sat = notas or "CFDI conciliado contra respuesta tardía del PAC."
+            factura.detalle_sat = (
+                notas or "CFDI conciliado contra respuesta tardía del PAC."
+            )
             factura.pdf_url = pdf_url
             factura.xml_url = xml_url
             if factura.trip:
@@ -2080,6 +2090,9 @@ class BillingService:
             impuestos_xml += "</cfdi:Impuestos>"
 
             clave_prod = c.get("claveProdServ", "84111506")
+            if str(clave_prod).strip() == "78121605":
+                clave_prod = "78101802"
+
             clave_uni = c.get("claveUnidad", "E48")
             no_id = html.escape(str(c.get("id", "01")))
 
