@@ -677,174 +677,9 @@ class CartaPorteService:
             ),
         }
 
-    def _importar_comprobante_ws(self, data, relacion_uuid=None):
-        logger.info("Generando XML Carta Porte y enviando al PAC...")
-        xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
-
-        with open(self.path_cer, "rb") as f:
-            cer_data = f.read()
-            cert = x509.load_der_x509_certificate(cer_data)
-            cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
-            sn_hex = format(cert.serial_number, "x")
-            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
-            data["cert_emisor"] = no_certificado
-
-        xml_con_cert = xml_base.replace(
-            "<cfdi:Comprobante",
-            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
-        )
-        sello_b64, cadena_original = self._generar_sello_xslt(
-            xml_con_cert.encode("utf-8")
-        )
-        xml_sellado = xml_con_cert.replace(
-            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
-        )
-
-        try:
-            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
-            result = client_zeep.service.timbrar(
-                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
-            )
-
-            if int(getattr(result, "status", 0)) != 200:
-                raise HTTPException(
-                    status_code=400, detail=f"Error PAC: {result.mensaje}"
-                )
-            res_sat = result.resultados[0]
-            if int(getattr(res_sat, "status", 0)) != 200:
-                raise HTTPException(
-                    status_code=400, detail=f"Error SAT: {res_sat.mensaje}"
-                )
-
-            uuid_timbrado = res_sat.uuid
-            logger.info(f"¡FACTURA TIMBRADA! UUID: {uuid_timbrado}")
-            raw_cfdi = res_sat.cfdiTimbrado
-            cfdi_bytes = (
-                raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
-            )
-
-            self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
-
-            try:
-                root = etree.fromstring(cfdi_bytes)
-                ns = {
-                    "cfdi": "http://www.sat.gob.mx/cfd/4",
-                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
-                }
-                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
-                s_sat = tfd_node.get("SelloSAT", "0000")
-                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
-                s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-                fecha_timbrado_sat = tfd_node.get("FechaTimbrado", "")
-                data["fecha_timbrado"] = fecha_timbrado_sat
-
-                cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
-                total_float = _clean_float(data.get("total", 0))
-
-                if HAS_NUM2WORDS:
-                    entero = int(total_float)
-                    decimales = int(round((total_float - entero) * 100))
-                    texto = num2words(entero, lang="es").upper()
-                    if texto == "UNO":
-                        texto = "UN"
-                    importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
-                else:
-                    importe_letra = f"({total_float:,.2f} MXN)"
-
-                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={data.get('rfc_cliente', '')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
-                qr = qrcode.QRCode(version=1, box_size=10, border=2)
-                qr.add_data(qr_string)
-                qr.make(fit=True)
-                buffer = BytesIO()
-                qr.make_image(fill_color="black", back_color="white").save(
-                    buffer, format="PNG"
-                )
-
-                self._generar_pdf_con_diseno(
-                    data,
-                    uuid_timbrado,
-                    buffer.getvalue(),
-                    s_sat,
-                    s_emi,
-                    c_sat,
-                    cadena_original_tfd,
-                    importe_letra,
-                )
-                logger.info(
-                    f"¡PDF GENERADO EXITOSAMENTE PARA LA CARTA PORTE: {uuid_timbrado}!"
-                )
-            except Exception as e:
-                logger.error(f"Error generando PDF: {e}")
-
-            class PACResult:
-                pass
-
-            ret = PACResult()
-            ret.uuid = uuid_timbrado
-            return ret
-
-        except Exception as e:
-            logger.error(f"Error en comunicación con PAC: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
-            )
-
-    def _guardar_xml_disco(self, cfdi_bytes: bytes, uuid_timbrado: str):
-        """
-        Guarda el archivo XML timbrado en el directorio de almacenamiento especificado.
-        """
-        try:
-            # Creamos la ruta completa combinando el directorio y el UUID
-            xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
-
-            # Escribimos los bytes del XML ('wb' es para escritura de bytes)
-            with open(xml_path, "wb") as f:
-                f.write(cfdi_bytes)
-
-            logger.info(f"💾 XML guardado en disco correctamente: {xml_path}")
-        except Exception as e:
-            logger.error(f"❌ Error crítico al guardar el XML en disco: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error interno del servidor al almacenar el archivo XML: {str(e)}",
-            )
-
-    def _marcar_timbrado_pendiente(
-        self,
-        factura: ReceivableInvoice,
-        error: Exception,
-        payload: dict | None = None,
-        relacion_uuid: str | None = None,
-    ):
-        factura.status_sat = "PENDIENTE_TIMBRADO"
-        factura.detalle_sat = (
-            "Timeout esperando respuesta del PAC. El CFDI puede haber sido recibido; "
-            "requiere conciliación/reintento antes de generar otro timbre."
-        )
-        register_sat_retry(
-            self.db,
-            invoice=factura,
-            operation_type="timbrado",
-            source_service=self.__class__.__name__,
-            error=error,
-            payload={
-                "sat_payload": payload or {},
-                "relacion_uuid": relacion_uuid,
-                "invoice_id": factura.id,
-                "viaje_id": factura.viaje_id,
-                "folio_interno": factura.folio_interno,
-                "is_nominal": factura.is_nominal,
-                "status_sat": factura.status_sat,
-            },
-            http_status=202,
-        )
-        self.db.commit()
-        logger.warning(
-            "Timbrado pendiente por timeout. factura_id=%s folio=%s error=%s",
-            getattr(factura, "id", None),
-            getattr(factura, "folio_interno", None),
-            error,
-        )
+    # =========================================================================
+    # LÓGICA CARTA PORTE (LOGÍSTICA)
+    # =========================================================================
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
 
@@ -949,6 +784,129 @@ class CartaPorteService:
         </cartaporte31:CartaPorte>
     </cfdi:Complemento>
 </cfdi:Comprobante>""".strip()
+
+    def _importar_comprobante_ws(self, data, relacion_uuid=None):
+        logger.info("Generando XML Carta Porte y enviando al PAC...")
+        xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
+
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
+            cert = x509.load_der_x509_certificate(cer_data)
+            cert_b64 = base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
+            sn_hex = format(cert.serial_number, "x")
+            no_certificado = "".join([sn_hex[i] for i in range(1, len(sn_hex), 2)])
+            data["cert_emisor"] = no_certificado
+
+        xml_con_cert = xml_base.replace(
+            "<cfdi:Comprobante",
+            f'<cfdi:Comprobante NoCertificado="{no_certificado}" Certificado="{cert_b64}"',
+        )
+        sello_b64, cadena_original = self._generar_sello_xslt(
+            xml_con_cert.encode("utf-8")
+        )
+        xml_sellado = xml_con_cert.replace(
+            "<cfdi:Comprobante", f'<cfdi:Comprobante Sello="{sello_b64}"'
+        )
+
+        try:
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
+            result = client_zeep.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
+            )
+
+            if int(getattr(result, "status", 0)) != 200:
+                raise HTTPException(
+                    status_code=400, detail=f"Error PAC: {result.mensaje}"
+                )
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) != 200:
+                raise HTTPException(
+                    status_code=400, detail=f"Error SAT: {res_sat.mensaje}"
+                )
+
+            uuid_timbrado = res_sat.uuid
+            logger.info(f"¡FACTURA TIMBRADA! UUID: {uuid_timbrado}")
+            raw_cfdi = res_sat.cfdiTimbrado
+            cfdi_bytes = (
+                raw_cfdi.encode("utf-8") if isinstance(raw_cfdi, str) else raw_cfdi
+            )
+
+            self._guardar_xml_disco(cfdi_bytes, uuid_timbrado)
+
+            try:
+                root = etree.fromstring(cfdi_bytes)
+                ns = {
+                    "cfdi": "http://www.sat.gob.mx/cfd/4",
+                    "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+                }
+                tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+                s_sat = tfd_node.get("SelloSAT", "0000")
+                c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+                s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+                fecha_timbrado_sat = tfd_node.get("FechaTimbrado", "")
+                data["fecha_timbrado"] = fecha_timbrado_sat
+
+                cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+                total_float = _clean_float(data.get("total", 0))
+
+                if HAS_NUM2WORDS:
+                    entero = int(total_float)
+                    decimales = int(round((total_float - entero) * 100))
+                    texto = num2words(entero, lang="es").upper()
+                    if texto == "UNO":
+                        texto = "UN"
+                    importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+                else:
+                    importe_letra = f"({total_float:,.2f} MXN)"
+
+                qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={data.get('rfc_cliente', '')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+                qr = qrcode.QRCode(version=1, box_size=10, border=2)
+                qr.add_data(qr_string)
+                qr.make(fit=True)
+                buffer = BytesIO()
+                qr.make_image(fill_color="black", back_color="white").save(
+                    buffer, format="PNG"
+                )
+
+                self._generar_pdf_con_diseno(
+                    data,
+                    uuid_timbrado,
+                    buffer.getvalue(),
+                    s_sat,
+                    s_emi,
+                    c_sat,
+                    cadena_original_tfd,
+                    importe_letra,
+                )
+                logger.info(
+                    f"¡PDF GENERADO EXITOSAMENTE PARA LA CARTA PORTE: {uuid_timbrado}!"
+                )
+            except Exception as e:
+                logger.error(f"Error generando PDF: {e}")
+
+            class PACResult:
+                pass
+
+            ret = PACResult()
+            ret.uuid = uuid_timbrado
+
+            # --- NUEVO: Pasamos la serie y folio reales ---
+            try:
+                root_xml = etree.fromstring(cfdi_bytes)
+                ret.serie = root_xml.get("Serie")
+                ret.folio = root_xml.get("Folio")
+            except Exception:
+                ret.serie = None
+                ret.folio = None
+            # ----------------------------------------------
+
+            return ret
+
+        except Exception as e:
+            logger.error(f"Error en comunicación con PAC: {e}")
+            raise HTTPException(
+                status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
+            )
 
     def _generar_pdf_con_diseno(
         self,
@@ -1082,6 +1040,8 @@ class CartaPorteService:
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
+        from app.modules.logistics.schemas import SatCfdiPayload
+
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
             invoice_data.viaje_id, buscar_tramo_carretera=True
         )
@@ -1162,6 +1122,13 @@ class CartaPorteService:
         try:
             resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            # --- NUEVO: El XML manda. Obligamos a la BD a adoptar el folio legal ---
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                nueva_factura.folio_interno = f"{serie_real}-{folio_real}"
+            # -----------------------------------------------------------------------
 
             nueva_factura.uuid = uuid_generado
             nueva_factura.status_sat = "TIMBRADA"
@@ -1291,6 +1258,13 @@ class CartaPorteService:
             # -------------------------------------------------------------------
 
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            # --- NUEVO: El XML manda. Obligamos a la BD a adoptar el folio legal ---
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+            # -----------------------------------------------------------------------
 
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
@@ -1437,6 +1411,13 @@ class CartaPorteService:
             )
             uuid_generado = getattr(resultado_pac, "uuid", None)
 
+            # --- NUEVO: El XML manda. Obligamos a la BD a adoptar el folio legal ---
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+            # -----------------------------------------------------------------------
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1448,7 +1429,6 @@ class CartaPorteService:
             self.db.commit()
             self.db.refresh(factura)
             return factura
-
         except Exception as e:
             if is_pac_timeout_error(e):
                 self._marcar_timbrado_pendiente(factura, e, data, uuid_relacionado_real)

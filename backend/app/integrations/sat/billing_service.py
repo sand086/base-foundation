@@ -906,6 +906,15 @@ class BillingService:
 
             ret = PACResult()
             ret.uuid = uuid_timbrado
+
+            try:
+                root_xml = etree.fromstring(cfdi_bytes)
+                ret.serie = root_xml.get("Serie")
+                ret.folio = root_xml.get("Folio")
+            except Exception:
+                ret.serie = None
+                ret.folio = None
+
             return ret
 
         except Exception as e:
@@ -1151,6 +1160,12 @@ class BillingService:
         try:
             resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                nueva_factura.folio_interno = f"{serie_real}-{folio_real}"
+
             nueva_factura.uuid = uuid_generado
             nueva_factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1266,6 +1281,12 @@ class BillingService:
         try:
             resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1409,6 +1430,12 @@ class BillingService:
                 data, relacion_uuid=uuid_relacionado_real
             )
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -2342,6 +2369,14 @@ class BillingService:
             except Exception as pdf_error:
                 logger.error(f"Error generando PDF para factura libre: {pdf_error}")
 
+            try:
+                serie_real = root.get("Serie")
+                folio_real = root.get("Folio")
+                if serie_real and folio_real:
+                    factura.folio_interno = f"{serie_real}-{folio_real}"
+            except Exception:
+                pass
+
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"
             factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
@@ -2534,6 +2569,14 @@ class BillingService:
                 )
             except Exception as pdf_error:
                 logger.error(f"Error generando PDF para factura libre: {pdf_error}")
+
+            try:
+                serie_real = root.get("Serie")
+                folio_real = root.get("Folio")
+                if serie_real and folio_real:
+                    factura.folio_interno = f"{serie_real}-{folio_real}"
+            except Exception:
+                pass
 
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"
