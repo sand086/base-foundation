@@ -2321,6 +2321,7 @@ class BillingService:
         except Exception as e:
             logger.error(f"Fallo en factura existente {factura.id}: {e}")
             factura.status_sat = "ERROR_SAT"
+            factura.detalle_sat = str(e)
             self.db.commit()
             raise ValueError(f"Fallo en timbrado SAT: {str(e)}")
 

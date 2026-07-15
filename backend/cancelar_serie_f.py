@@ -1,38 +1,71 @@
 import sys
-from pathlib import Path
-from sqlalchemy import text
+import os
 
-# Configurar el path del entorno
-sys.path.append(str(Path(__file__).resolve().parent))
-from app.db.database import get_db
+# Asegurar que Python detecte la carpeta 'app'
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from app.db.database import SessionLocal
+from app.models.models import ReceivableInvoice
+from app.integrations.sat.billing_service import BillingService
+from sqlalchemy.orm.attributes import flag_modified
 
 
-def buscar_nuevo_uuid():
-    db = next(get_db())
+def fix_and_stamp():
+    db = SessionLocal()
+    try:
+        # 1. Buscar la factura
+        factura = (
+            db.query(ReceivableInvoice).filter(ReceivableInvoice.id == 756).first()
+        )
 
-    # Buscamos el último pago timbrado que se acaba de generar
-    query = text("""
-        SELECT complemento_uuid, folio_complemento, parcialidad 
-        FROM receivable_invoice_payments 
-        WHERE complemento_uuid IS NOT NULL 
-        ORDER BY id DESC LIMIT 1
-    """)
+        if not factura:
+            print("❌ No se encontró la factura 756.")
+            return
 
-    res = db.execute(query).fetchone()
+        print(f"✅ Factura {factura.folio_interno} encontrada.")
 
-    print("\n" + "=" * 80)
-    if res:
-        print(f"🎉 ¡AQUÍ ESTÁ TU NUEVO COMPLEMENTO OFICIAL!")
-        print(f"👉 UUID del SAT: {res[0]}")
-        print(f"📄 Folio Interno: {res[1]}")
-        print(f"🔢 Parcialidad Registrada: {res[2]}")
-        print("\nPara descargar tu PDF impecable, entra a:")
-        print(f"https://3tapp.online/api/sat/invoice/{res[0]}/pdf?limpiar_cache=1")
-    else:
-        print("❌ No se encontraron complementos timbrados recientemente.")
+        # 2. Corregir el JSON de los conceptos
+        conceptos = factura.conceptos_detalle
+        modificado = False
 
-    print("=" * 80 + "\n")
+        for concepto in conceptos:
+            if concepto.get("claveProdServ") == "78121605":
+                print(
+                    f"🔄 Cambiando clave de {concepto.get('descripcion')} a 78101802..."
+                )
+                concepto["claveProdServ"] = "78101802"
+                modificado = True
+
+        if modificado:
+            # Reasignamos y marcamos como modificado para que SQLAlchemy guarde el JSONB
+            factura.conceptos_detalle = conceptos
+            flag_modified(factura, "conceptos_detalle")
+
+            # Limpiamos el error viejo
+            factura.detalle_sat = "Clave SAT corregida por código. Reintentando..."
+            db.commit()
+            print("💾 Base de datos actualizada correctamente.")
+
+            # 3. Mandar a Timbrar
+            print("🚀 Enviando a timbrar al SAT...")
+            billing_service = BillingService(db)
+            resultado = billing_service.timbrar_factura_existente(756)
+
+            print(f"🎉 ¡ÉXITO! La factura se timbró correctamente.")
+            print(f"📄 UUID Fiscal: {resultado.uuid}")
+            print(f"🔗 Puedes descargar el PDF en: {resultado.pdf_url}")
+
+        else:
+            print(
+                "⚠️ No se encontró la clave errónea en los conceptos. ¿Ya se había corregido?"
+            )
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Ocurrió un error al intentar timbrar: {str(e)}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    buscar_nuevo_uuid()
+    fix_and_stamp()
