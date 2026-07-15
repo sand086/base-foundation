@@ -10,8 +10,8 @@ try:
     from app.models.models import ReceivableInvoice, InvoiceStatus
     from app.db.database import SessionLocal
 
-    # IMPORTANTE: Aquí debes importar tu servicio de SAT/PAC
-    # from app.integrations.sat.billing_service import SatBillingService
+    # IMPORTANTE: Aquí importamos tu servicio de SAT/PAC
+    from app.integrations.sat.billing_service import SatBillingService
 except ImportError as e:
     print(f"Error de importación: {e}")
     sys.exit(1)
@@ -69,13 +69,15 @@ FOLIOS_A_CANCELAR = [
     "CP-17448",
     "CP-17447",
     "CP-17446",
-    "CP-17440",  # Quité el 17441 porque detectaste que estaba pagado
+    "CP-17440",
 ]
 
 
 def procesar_cancelaciones():
     db = SessionLocal()
-    # pac_service = SatBillingService() # Instancia tu servicio aquí
+
+    # AQUÍ ESTABA EL ERROR: Ya está descomentado e instanciado tu servicio real
+    pac_service = SatBillingService()
 
     exitosos = 0
     errores = 0
@@ -109,7 +111,6 @@ def procesar_cancelaciones():
             )
 
             # --- VALIDACIÓN DEL VIAJE (REGLA DE ORO) ---
-            # Si tiene viaje, verificamos que en el mismo viaje exista una "Factura Chida"
             if factura.viaje_id:
                 factura_chida = (
                     db.query(ReceivableInvoice)
@@ -130,36 +131,36 @@ def procesar_cancelaciones():
 
             try:
                 # =========================================================
-                # LLAMADA A TU PAC (Descomenta cuando conectes tu servicio)
+                # LLAMADA REAL A TU PAC
                 # =========================================================
-                # respuesta = pac_service.cancelar_cfdi(factura.uuid, "02")
+                # Si tu servicio requiere pasar la base de datos, cambialo a: pac_service.cancelar_cfdi(db, factura.uuid, "02")
+                respuesta = pac_service.cancelar_cfdi(factura.uuid, "02")
 
-                # Simulamos éxito:
-                pac_respondio_bien = True
+                # Si el PAC no arrojó ninguna excepción (error), asumimos que el SAT lo aceptó
+                factura.estatus = InvoiceStatus.CANCELADO
+                factura.fecha_cancelacion = datetime.now(timezone.utc)
+                factura.motivo_cancelacion = "02"
+                factura.detalle_sat = (
+                    "Cancelación manual por tiempo y duplicidad (No nominal)"
+                )
 
-                if pac_respondio_bien:
-                    factura.estatus = InvoiceStatus.CANCELADO
-                    factura.fecha_cancelacion = datetime.now(timezone.utc)
-                    factura.motivo_cancelacion = "02"
-                    factura.detalle_sat = (
-                        "Cancelación manual por tiempo y duplicidad (No nominal)"
-                    )
-
-                    exitosos += 1
-                    logger.info(
-                        f"EXITO: {factura.folio_interno} marcada como cancelada."
-                    )
+                exitosos += 1
+                logger.info(
+                    f"EXITO: {factura.folio_interno} cancelada en el PAC y actualizada en BD."
+                )
 
             except Exception as e:
+                # Si el PAC rechaza la cancelación (ej. UUID no encontrado, error de red), cae aquí
                 logger.error(f"ERROR PAC con {factura.folio_interno}: {str(e)}")
                 factura.detalle_sat = f"Error PAC manual: {str(e)}"
+
                 if factura.intentos_cancelacion is None:
                     factura.intentos_cancelacion = 0
                 factura.intentos_cancelacion += 1
                 errores += 1
 
         db.commit()
-        logger.info(f"--- RESUMEN: {exitosos} canceladas, {errores} errores ---")
+        logger.info(f"--- RESUMEN FINAL: {exitosos} canceladas, {errores} errores ---")
 
     except Exception as e:
         db.rollback()
