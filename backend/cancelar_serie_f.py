@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # False = Solo imprime en consola lo que encontró (Seguro)
 # True = Se conecta al PAC y dispara la cancelación al SAT (Irreversible)
 # =========================================================================
-EJECUTAR_CANCELACION = False
+EJECUTAR_CANCELACION = True  # Cambiar a True para ejecutar la cancelación real
 
 
 def auditar_y_limpiar():
