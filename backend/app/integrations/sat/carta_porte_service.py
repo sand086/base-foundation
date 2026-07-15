@@ -961,6 +961,27 @@ class CartaPorteService:
         cadena_original,
         importe_letra,
     ):
+        import re
+
+        dir_cliente = d.get("direccion_cliente", "")
+        cp_val = str(d.get("cp_cliente", "")).strip()
+
+        if dir_cliente and cp_val:
+            # Expresión regular (?i) insensible a mayúsculas/minúsculas. \b valida palabras completas.
+            # Captura de manera segura: "CP", "C.P.", "c.p.", "c.p", "C. P."
+            tiene_cp_texto = re.search(
+                r"(?i)\b(c\.?\s*p\.?|código\s*postal|codigo\s*postal)\b",
+                str(dir_cliente),
+            )
+            tiene_cp_numerico = cp_val in str(dir_cliente)
+
+            # Si NO viene el texto 'CP' ni el número del código postal escrito dentro de la dirección...
+            if not (tiene_cp_texto or tiene_cp_numerico):
+                # Se lo añadimos limpiamente al final para asegurar cobertura
+                d["direccion_cliente"] = (
+                    f"{str(dir_cliente).rstrip(', ')}, C.P. {cp_val}"
+                )
+
         logo_path = self.templates_dir / "assets" / "logo-black.png"
         logo_src = (
             f"data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode('utf-8')}"
