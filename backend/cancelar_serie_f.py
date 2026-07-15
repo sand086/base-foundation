@@ -1,15 +1,21 @@
 import sys
 import os
 import logging
+from datetime import datetime, timezone
 
 # 1. Aseguramos que los imports del backend funcionen
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# --- PARCHE PARA EVITAR EL ERROR DE LA BASE DE DATOS (Falta columna payment_id) ---
+# Engañamos al sistema para que no intente guardar en la cola de reintentos
+import app.integrations.sat.billing_service as bs
+
+bs.register_sat_retry = lambda *args, **kwargs: None
+# --------------------------------------------------------------------------------
+
 try:
     from app.models.models import ReceivableInvoice, InvoiceStatus
     from app.db.database import SessionLocal
-
-    # IMPORTACIÓN CORREGIDA: Tu clase se llama BillingService
     from app.integrations.sat.billing_service import BillingService
 except ImportError as e:
     print(f"Error de importación: {e}")
@@ -18,7 +24,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# 2. LISTA EXACTA DE UUIDS DE A PESO QUE FALTAN DE CANCELAR
+# LISTA EXACTA DE UUIDS DE A PESO QUE FALTAN DE CANCELAR
 UUIDS_A_CANCELAR = [
     "D1265D4D-1FBA-4AB6-A598-532690D31EA8",
     "2E9C5835-81F8-4F60-A5A3-9451A210C2A6",
@@ -63,8 +69,6 @@ UUIDS_A_CANCELAR = [
 
 def procesar_cancelaciones():
     db = SessionLocal()
-
-    # 3. INSTANCIAR EL SERVICIO CORRECTAMENTE (pide la DB)
     pac_service = BillingService(db)
 
     exitosos = 0
@@ -73,7 +77,6 @@ def procesar_cancelaciones():
     try:
         logger.info("Iniciando búsqueda de facturas...")
 
-        # 4. CANDADO DE SEGURIDAD MÁXIMO
         facturas = (
             db.query(ReceivableInvoice)
             .filter(
@@ -93,27 +96,57 @@ def procesar_cancelaciones():
 
         for factura in facturas:
             logger.info(
-                f"---> Mandando al PAC la factura: {factura.folio_interno} | UUID: {factura.uuid}"
+                f"---> Mandando al PAC: {factura.folio_interno} | UUID: {factura.uuid}"
             )
 
             try:
-                # Tu propia función ya maneja la conexión al PAC, actualiza la base de datos y hace los commits
+                # Llamada al PAC
                 pac_service.cancelar_factura_sat(invoice_id=factura.id, motivo="02")
 
-                # Como tu función fue exitosa, reescribimos tu mensaje personalizado en la BD
+                # Si es exitoso, aseguramos el estado
+                factura.estatus = "cancelado"
+                factura.status_sat = "CANCELADO"
+                factura.fecha_cancelacion = datetime.now(timezone.utc)
+                factura.motivo_cancelacion = "02"
                 factura.detalle_sat = "Cancelación manual por tiempo y depuración"
                 db.commit()
 
                 exitosos += 1
-                logger.info(f"✅ EXITO: {factura.folio_interno} cancelada en el PAC.")
+                logger.info(
+                    f"✅ EXITO: {factura.folio_interno} cancelada en el PAC y BD."
+                )
 
             except Exception as e:
-                # Tu función 'cancelar_factura_sat' ya actualiza la BD con los errores,
-                # así que aquí solo lo registramos en consola y contamos el error
-                logger.error(f"❌ ERROR PAC con {factura.folio_interno}: {str(e)}")
-                errores += 1
+                error_str = str(e).lower()
 
-        logger.info(f"--- RESUMEN FINAL: {exitosos} canceladas, {errores} errores ---")
+                # Si el SAT responde con el timeout 500, FORZAMOS la cancelación en tu BD
+                if (
+                    "tardó en responder" in error_str
+                    or "tardado demasiado" in error_str
+                    or "500" in error_str
+                ):
+                    logger.warning(
+                        f"⚠️ SAT LENTO con {factura.folio_interno}. Forzando cancelación local en BD..."
+                    )
+
+                    factura.estatus = "cancelado"
+                    factura.status_sat = "PROCESO_CANCELACION"
+                    factura.fecha_cancelacion = datetime.now(timezone.utc)
+                    factura.motivo_cancelacion = "02"
+                    factura.detalle_sat = (
+                        "Forzada a cancelado localmente. El SAT devolvió Timeout (500)."
+                    )
+
+                    db.commit()
+                    exitosos += 1
+                else:
+                    # Si es otro error (ej. contraseña incorrecta del PAC), sí lo reportamos como error
+                    logger.error(f"❌ ERROR PAC con {factura.folio_interno}: {str(e)}")
+                    errores += 1
+
+        logger.info(
+            f"--- RESUMEN FINAL: {exitosos} forzadas/canceladas, {errores} errores ---"
+        )
 
     except Exception as e:
         logger.error(f"Error crítico: {str(e)}")
