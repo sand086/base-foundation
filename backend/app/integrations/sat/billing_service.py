@@ -925,27 +925,22 @@ class BillingService:
         cadena_original,
         importe_letra,
     ):
-
         import re
 
         dir_cliente = d.get("direccion_cliente", "")
         cp_cliente = d.get("cp_cliente", "")
 
-        if dir_cliente:
-            # Expresión regular (?i) ignora mayúsculas/minúsculas. \b valida límites de palabra completa.
-            # Captura: "CP", "C.P.", "c.p.", "c.p", "C. P.", "Código Postal", "Codigo Postal"
+        if dir_cliente and cp_cliente:
+            # Expresión regular (?i) insensible a mayúsculas/minúsculas. \b valida palabras completas.
             tiene_cp_texto = re.search(
                 r"(?i)\b(c\.?\s*p\.?|código\s*postal|codigo\s*postal)\b",
                 str(dir_cliente),
             )
+            tiene_cp_numero = str(cp_cliente).strip() in str(dir_cliente)
 
-            # También validamos si el número de código postal numérico ya viene escrito adentro
-            tiene_cp_numero = (
-                str(cp_cliente) in str(dir_cliente) if cp_cliente else False
-            )
-
-            # Si NO se encuentra ninguna de las dos condiciones, le concatenamos el CP al final
-            if not (tiene_cp_texto or tiene_cp_numero) and cp_cliente:
+            # Si NO viene el texto 'CP' ni el número del código postal escrito dentro de la dirección...
+            if not (tiene_cp_texto or tiene_cp_numero):
+                # Se lo añadimos limpiamente al final para asegurar cobertura
                 d["direccion_cliente"] = (
                     f"{str(dir_cliente).rstrip(', ')}, C.P. {cp_cliente}"
                 )
@@ -1045,7 +1040,7 @@ class BillingService:
             "logo_src": logo_src,
             "qr_src": qr_src,
             "metodo_pago": d.get("metodo_pago", "PPD"),
-            "tipo_comprobante": "I (Ingreso)",
+            "type_comprobante": "I (Ingreso)",
             "moneda": d.get("moneda", "MXN"),
             "tc": "1",
             "forma_pago": d.get("forma_pago", "99"),
