@@ -6,12 +6,11 @@ from datetime import datetime, timezone
 # 1. Aseguramos que los imports del backend funcionen
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# --- PARCHE PARA EVITAR EL ERROR DE LA BASE DE DATOS (Falta columna payment_id) ---
-# Engañamos al sistema para que no intente guardar en la cola de reintentos
+# --- PARCHE PARA EVITAR EL ERROR DE LA BASE DE DATOS ---
 import app.integrations.sat.billing_service as bs
 
 bs.register_sat_retry = lambda *args, **kwargs: None
-# --------------------------------------------------------------------------------
+# -------------------------------------------------------
 
 try:
     from app.models.models import ReceivableInvoice, InvoiceStatus
@@ -24,7 +23,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# LISTA EXACTA DE UUIDS DE A PESO QUE FALTAN DE CANCELAR
+# LISTA EXACTA DE UUIDS
 UUIDS_A_CANCELAR = [
     "D1265D4D-1FBA-4AB6-A598-532690D31EA8",
     "2E9C5835-81F8-4F60-A5A3-9451A210C2A6",
@@ -75,13 +74,13 @@ def procesar_cancelaciones():
     errores = 0
 
     try:
-        logger.info("Iniciando búsqueda de facturas...")
+        logger.info("Iniciando búsqueda de facturas (sin importar estatus local)...")
 
         facturas = (
             db.query(ReceivableInvoice)
             .filter(
                 ReceivableInvoice.uuid.in_(UUIDS_A_CANCELAR),
-                ReceivableInvoice.estatus != InvoiceStatus.CANCELADO,
+                # ELIMINAMOS LA RESTRICCIÓN DE ESTATUS PARA FORZAR EL ENVÍO AL PAC
                 ReceivableInvoice.fecha_emision <= "2026-07-10",
                 ReceivableInvoice.monto_total <= 2.00,
             )
@@ -89,10 +88,12 @@ def procesar_cancelaciones():
         )
 
         if not facturas:
-            logger.info("No se encontraron facturas basura pendientes en la BD.")
+            logger.info("No se encontraron facturas basura con esos UUIDs.")
             return
 
-        logger.info(f"¡Se encontraron {len(facturas)} facturas basura para cancelar!")
+        logger.info(
+            f"¡Se encontraron {len(facturas)} facturas basura para enviar al PAC!"
+        )
 
         for factura in facturas:
             logger.info(
@@ -100,10 +101,10 @@ def procesar_cancelaciones():
             )
 
             try:
-                # Llamada al PAC
+                # Llamada al PAC (lo forzará así tu BD diga que ya está cancelada)
                 pac_service.cancelar_factura_sat(invoice_id=factura.id, motivo="02")
 
-                # Si es exitoso, aseguramos el estado
+                # Si es exitoso, aseguramos el estado final en BD
                 factura.estatus = "cancelado"
                 factura.status_sat = "CANCELADO"
                 factura.fecha_cancelacion = datetime.now(timezone.utc)
@@ -113,13 +114,13 @@ def procesar_cancelaciones():
 
                 exitosos += 1
                 logger.info(
-                    f"✅ EXITO: {factura.folio_interno} cancelada en el PAC y BD."
+                    f"✅ EXITO: {factura.folio_interno} procesada correctamente."
                 )
 
             except Exception as e:
                 error_str = str(e).lower()
 
-                # Si el SAT responde con el timeout 500, FORZAMOS la cancelación en tu BD
+                # Si el SAT responde con el timeout 500, FORZAMOS la cancelación local
                 if (
                     "tardó en responder" in error_str
                     or "tardado demasiado" in error_str
@@ -140,13 +141,10 @@ def procesar_cancelaciones():
                     db.commit()
                     exitosos += 1
                 else:
-                    # Si es otro error (ej. contraseña incorrecta del PAC), sí lo reportamos como error
                     logger.error(f"❌ ERROR PAC con {factura.folio_interno}: {str(e)}")
                     errores += 1
 
-        logger.info(
-            f"--- RESUMEN FINAL: {exitosos} forzadas/canceladas, {errores} errores ---"
-        )
+        logger.info(f"--- RESUMEN FINAL: {exitosos} procesadas, {errores} errores ---")
 
     except Exception as e:
         logger.error(f"Error crítico: {str(e)}")
