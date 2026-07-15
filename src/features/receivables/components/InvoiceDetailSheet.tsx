@@ -1016,7 +1016,7 @@ export function InvoiceDetailSheet({
           <Separator className="bg-slate-200 dark:bg-border/50" />
 
           {/* HISTORIAL DE COBROS/PAGOS (REP) */}
-          <div>
+          {/*           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-sm font-black text-foreground flex items-center gap-2 tracking-tight">
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-md">
@@ -1104,7 +1104,6 @@ export function InvoiceDetailSheet({
                             <div className="flex items-center justify-end gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                               {hasRep ? (
                                 <>
-                                  {/* 🚀 NUEVA DESCARGA BLINDADA REP */}
                                   <Button
                                     variant="ghost"
                                     size="icon"
@@ -1171,7 +1170,7 @@ export function InvoiceDetailSheet({
               </div>
             )}
           </div>
-
+ */}
           {/* HISTORIAL DE ARCHIVOS Y VERSIONES */}
           {groupedHistory.length > 0 && (
             <>
