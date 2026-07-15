@@ -63,9 +63,8 @@ UUIDS_A_CANCELAR = [
 
 def procesar_cancelaciones_sat_directo():
     db = SessionLocal()
-    pac = BillingService(db)  # Usamos tu clase solo para cargar configuraciones
+    pac = BillingService(db)
 
-    # Cargar certificados CSD para firmar la orden
     try:
         with open(pac.path_cer, "rb") as f_cer:
             cer_bytes = f_cer.read()
@@ -75,14 +74,13 @@ def procesar_cancelaciones_sat_directo():
         logger.error(f"Error cargando certificados CSD: {e}")
         return
 
-    # Crear el cliente SOAP del PAC directo
+    # Cliente SOAP directo al PAC (Sin intermediarios ni auto-correcciones)
     client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
 
     exitosos = 0
     errores = 0
 
     try:
-        # Quitamos la restricción de estatus para atraparlas todas
         facturas = (
             db.query(ReceivableInvoice)
             .filter(
@@ -102,36 +100,38 @@ def procesar_cancelaciones_sat_directo():
                 f"==> Analizando {factura.folio_interno} | UUID: {factura.uuid}"
             )
 
-            # Buscar la Factura Chida del mismo viaje para pasarla como sustituto
+            # BUSCADOR AMPLIADO: Traer la factura con mayor monto del mismo viaje, sin importar su estatus
             factura_chida = None
             if factura.viaje_id:
                 factura_chida = (
                     db.query(ReceivableInvoice)
                     .filter(
                         ReceivableInvoice.viaje_id == factura.viaje_id,
-                        ReceivableInvoice.monto_total > 2.00,
-                        ReceivableInvoice.uuid != None,
-                        ReceivableInvoice.estatus != "cancelado",
+                        ReceivableInvoice.id != factura.id,  # Que no sea ella misma
+                        ReceivableInvoice.uuid.isnot(None),  # Que sí tenga UUID
+                        ReceivableInvoice.uuid != "",
                     )
+                    .order_by(ReceivableInvoice.monto_total.desc())
                     .first()
                 )
 
-            if factura_chida and factura_chida.uuid:
+            if factura_chida:
                 motivo = "01"
                 uuid_sustituto = factura_chida.uuid
                 logger.info(
-                    f"    - Factura Chida encontrada: {factura_chida.folio_interno} ({uuid_sustituto}). Usando Motivo 01."
+                    f"    - Factura relacionada encontrada: {factura_chida.folio_interno} ({uuid_sustituto}). Usando Motivo 01."
                 )
             else:
                 motivo = "02"
                 uuid_sustituto = ""
-                logger.info(f"    - No hay factura chida. Usando Motivo 02.")
+                logger.info(
+                    f"    - No hay NINGUNA otra factura en el viaje. Usando Motivo 02."
+                )
 
             # FORMATO ESTRICTO DEL PAC: "UUID|Motivo|UuidSustitucion"
             uuid_formateado_sat = f"{factura.uuid.strip()}|{motivo}|{uuid_sustituto.strip() if uuid_sustituto else ''}"
 
             try:
-                # Llamamos a Solución Factible saltando la "Auto-Corrección"
                 resultado = client_zeep.service.cancelar(
                     usuario=pac.pac_user,
                     password=pac.pac_pass,
@@ -148,7 +148,6 @@ def procesar_cancelaciones_sat_directo():
                 codigo_sat = int(getattr(res_sat, "status", 0))
                 mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
 
-                # Si el SAT responde bien (201 en proceso, 202 cancelado previo)
                 if (
                     codigo_sat in [201, 202]
                     or "proceso" in mensaje_sat
@@ -156,7 +155,9 @@ def procesar_cancelaciones_sat_directo():
                 ):
                     factura.estatus = "cancelado"
                     factura.status_sat = (
-                        "CANCELADO" if codigo_sat == 202 else "PROCESO_CANCELACION"
+                        "CANCELADO"
+                        if codigo_sat == 202 or "previamente" in mensaje_sat
+                        else "PROCESO_CANCELACION"
                     )
                     factura.fecha_cancelacion = datetime.now(timezone.utc)
                     factura.motivo_cancelacion = motivo
