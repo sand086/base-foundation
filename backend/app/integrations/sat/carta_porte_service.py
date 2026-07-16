@@ -785,6 +785,63 @@ class CartaPorteService:
     </cfdi:Complemento>
 </cfdi:Comprobante>""".strip()
 
+    def _guardar_xml_disco(self, cfdi_bytes: bytes, uuid_timbrado: str):
+        """
+        Guarda el archivo XML timbrado en el directorio de almacenamiento especificado.
+        """
+        try:
+            # Creamos la ruta completa combinando el directorio y el UUID
+            xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
+
+            # Escribimos los bytes del XML ('wb' es para escritura de bytes)
+            with open(xml_path, "wb") as f:
+                f.write(cfdi_bytes)
+
+            logger.info(f"💾 XML guardado en disco correctamente: {xml_path}")
+        except Exception as e:
+            logger.error(f"❌ Error crítico al guardar el XML en disco: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error interno del servidor al almacenar el archivo XML: {str(e)}",
+            )
+
+    def _marcar_timbrado_pendiente(
+        self,
+        factura: ReceivableInvoice,
+        error: Exception,
+        payload: dict | None = None,
+        relacion_uuid: str | None = None,
+    ):
+        factura.status_sat = "PENDIENTE_TIMBRADO"
+        factura.detalle_sat = (
+            "Timeout esperando respuesta del PAC. El CFDI puede haber sido recibido; "
+            "requiere conciliación/reintento antes de generar otro timbre."
+        )
+        register_sat_retry(
+            self.db,
+            invoice=factura,
+            operation_type="timbrado",
+            source_service=self.__class__.__name__,
+            error=error,
+            payload={
+                "sat_payload": payload or {},
+                "relacion_uuid": relacion_uuid,
+                "invoice_id": factura.id,
+                "viaje_id": factura.viaje_id,
+                "folio_interno": factura.folio_interno,
+                "is_nominal": factura.is_nominal,
+                "status_sat": factura.status_sat,
+            },
+            http_status=202,
+        )
+        self.db.commit()
+        logger.warning(
+            "Timbrado pendiente por timeout. factura_id=%s folio=%s error=%s",
+            getattr(factura, "id", None),
+            getattr(factura, "folio_interno", None),
+            error,
+        )
+
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
         logger.info("Generando XML Carta Porte y enviando al PAC...")
         xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
