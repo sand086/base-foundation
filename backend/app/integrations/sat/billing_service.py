@@ -442,7 +442,9 @@ class BillingService:
             error,
         )
 
-    def _obtener_datos_completos(self, viaje_id: int, usar_tramo_final: bool = False):
+    def _obtener_datos_completos(
+        self, viaje_id: int, buscar_tramo_carretera: bool = False
+    ):
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
@@ -452,14 +454,17 @@ class BillingService:
         )
         if not viaje.legs:
             raise HTTPException(
-                status_code=400, detail="El viaje no tiene tramos (TripLeg) asignados."
+                status_code=400, detail="El viaje no tiene tramos (TripLeg)."
             )
 
-        tramo_seleccionado = (
-            viaje.legs[-1]
-            if usar_tramo_final and len(viaje.legs) > 1
-            else viaje.legs[0]
-        )
+        tramo_seleccionado = viaje.legs[0]
+        if buscar_tramo_carretera and len(viaje.legs) > 1:
+            # LÓGICA INTELIGENTE (Restaurada): Busca el tramo de carretera para no agarrar el camión vacío
+            tramo_ruta = next(
+                (leg for leg in viaje.legs if "ruta" in str(leg.leg_type).lower()), None
+            )
+            tramo_seleccionado = tramo_ruta if tramo_ruta else viaje.legs[-1]
+
         unidad = (
             self.db.query(Unit).filter(Unit.id == tramo_seleccionado.unit_id).first()
         )
@@ -1198,8 +1203,10 @@ class BillingService:
     ) -> ReceivableInvoice:
         from app.modules.logistics.schemas import SatCfdiPayload
 
+        uuid_frontend = getattr(invoice_data, "uuid_relacionado", None)
+
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         raw_data = self._build_dict_from_models(
             viaje,
@@ -1320,7 +1327,7 @@ class BillingService:
         from app.modules.logistics.schemas import SatCfdiPayload
 
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         carta_porte = (
             self.db.query(ReceivableInvoice)

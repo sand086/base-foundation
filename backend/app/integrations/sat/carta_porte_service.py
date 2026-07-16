@@ -1140,7 +1140,7 @@ class CartaPorteService:
 
         try:
             validated_payload = SatCfdiPayload(**raw_data)
-            data = validated_payload.model_dump()
+            data = {**raw_data, **validated_payload.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1239,7 +1239,7 @@ class CartaPorteService:
 
         try:
             validated_payload = SatCfdiPayload(**raw_data)
-            data = validated_payload.model_dump()
+            data = {**raw_data, **validated_payload.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1388,7 +1388,7 @@ class CartaPorteService:
 
         try:
             validador = SatCfdiPayload(**raw_data)
-            data = validador.model_dump()
+            data = {**raw_data, **validador.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
