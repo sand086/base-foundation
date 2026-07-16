@@ -51,7 +51,7 @@ def auditar_y_limpiar():
                 ReceivableInvoice.created_at >= fecha_limite,
                 ReceivableInvoice.estatus != "cancelado",
                 ReceivableInvoice.folio_interno.like("CP-%"),
-                ReceivableInvoice.nominales == True,
+                ReceivableInvoice.is_nominal == True,
                 ReceivableInvoice.total == 1.00,
             )
             .all()
