@@ -1668,7 +1668,9 @@ class SatRetryQueue(AuditMixin, Base):
         nullable=True,
         index=True,
     )
-    viaje_id = Column(Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True)
+    viaje_id = Column(
+        Integer, ForeignKey("trips.id", ondelete="SET NULL"), nullable=True
+    )
 
     operation_type = Column(String(30), nullable=False)  # timbrado, cancelacion
     document_type = Column(String(30), nullable=False, default="cfdi")
@@ -1733,6 +1735,11 @@ class ReceivableInvoicePayment(AuditMixin, Base):
         Integer, default=0, server_default="0", nullable=False
     )
     detalle_sat = Column(Text, nullable=True)
+    sat_error_log = Column(
+        Text,
+        nullable=True,
+        doc="Almacena el error devuelto por el PAC/SAT si el timbrado falla",
+    )
 
     # NUEVO: Relación de historial documental
     document_history = relationship(

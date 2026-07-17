@@ -478,6 +478,7 @@ export function InvoiceDetailSheet({
                   Cancelada el <strong>{fDT(inv.fecha_cancelacion)}</strong>.
                   Detalle SAT:{" "}
                   {inv.detalle_sat ||
+                    inv.sat_error_log ||
                     (inv.motivo_cancelacion
                       ? `por el motivo "${inv.motivo_cancelacion}"`
                       : "Sin detalle.")}

@@ -1298,5 +1298,21 @@ class PaymentComplementService:
                     detail="El SAT está intermitente. El proceso continuará automáticamente en segundo plano. NO presione generar nuevamente.",
                 )
             else:
-                # Error real de negocio
-                raise ValueError(f"Fallo de negocio o validación SAT: {e}")
+                # =========================================================================
+                # 🛠️ PARCHE FASE 2: ROMPEMOS EL BUCLE DE "PENDIENTE_SAT"
+                # =========================================================================
+                logger.error(
+                    f"Fallo de negocio o validación SAT definitivo para pago ID {pago.id}: {e}"
+                )
+
+                # 1. Cambiamos el marcador para liberar el candado
+                pago.complemento_uuid = "RECHAZADO_SAT"
+
+                # 2. Guardamos el motivo exacto del rechazo para mostrarlo en React
+                pago.sat_error_log = str(e)
+
+                self.db.add(pago)
+                self.db.commit()
+
+                # 3. Lanzamos el error para que el frontend o el cron lo atrapen
+                raise ValueError(f"Verifica la validación de Hacienda: {e}")
