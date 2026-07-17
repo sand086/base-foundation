@@ -1029,9 +1029,33 @@ class PaymentComplementService:
             monto_abono = Decimal(str(pago.monto))
             proporcion = monto_abono / inv_total if inv_total > 0 else Decimal("1.0")
 
+            # La base se sigue sacando por proporción
             base_dr = (inv_subtotal * proporcion).quantize(Decimal("0.000001"))
-            iva_dr = (inv_iva * proporcion).quantize(Decimal("0.000001"))
-            ret_dr = (inv_ret * proporcion).quantize(Decimal("0.000001"))
+
+            # =====================================================================
+            # 🛠️ CORRECCIÓN CRP20254: Recalcular impuestos directamente de la Base
+            # =====================================================================
+            tasa_iva = Decimal("0.160000")
+            # Detectar si la factura original era al 8% (frontera)
+            if inv_subtotal > 0 and inv_iva > 0:
+                tasa_calc = inv_iva / inv_subtotal
+                if Decimal("0.079") <= tasa_calc <= Decimal("0.081"):
+                    tasa_iva = Decimal("0.080000")
+
+            tasa_ret = Decimal("0.040000")  # 4% Retención Autotransporte
+
+            # Calculamos el impuesto exacto a 6 decimales (Base * Tasa) para que el SAT no rechace
+            iva_dr = (
+                (base_dr * tasa_iva).quantize(Decimal("0.000001"))
+                if inv_iva > 0
+                else Decimal("0.0")
+            )
+            ret_dr = (
+                (base_dr * tasa_ret).quantize(Decimal("0.000001"))
+                if inv_ret > 0
+                else Decimal("0.0")
+            )
+            # =====================================================================
 
             total_retenciones_iva += ret_dr
             total_traslados_base_iva16 += base_dr
