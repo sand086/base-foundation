@@ -22,7 +22,7 @@ echo "[$(date)] 🧹 2/3 Iniciando auditoría y cancelación de CPs..." >> "$LOG
 $PYTHON_ENV auditor_cp.py >> "$LOG_FILE" 2>&1
 
 # =====================================================================
-# 🛠️ TAREA 3: PROCESAR LA COLA DE TIMBRADOS PENDIENTES (EL PARCHE FALTANTE)
+#  TAREA 3: PROCESAR LA COLA DE TIMBRADOS PENDIENTES (EL PARCHE FALTANTE)
 # =====================================================================
 echo "[$(date)] 🚀 3/3 Procesando cola de reintentos de Pagos y Facturas..." >> "$LOG_FILE"
 # Nota: Ajusta el nombre del script ".py" según cómo lo hayas nombrado en tu backend

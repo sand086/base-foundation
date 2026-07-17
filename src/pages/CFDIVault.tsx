@@ -769,13 +769,13 @@ export default function CFDIVault() {
               "bg-blue-50 text-blue-700 border-blue-200 animate-pulse font-black";
             displayLabel = "EN COLA (REINTENTO)";
           }
-          // 🛠️ 1. AGREGAMOS EL CASO DE RECHAZO AQUÍ:
+          //  1. AGREGAMOS EL CASO DE RECHAZO AQUÍ:
           else if (s === "RECHAZADO_SAT") {
             badgeClass = "bg-rose-100 text-rose-800 border-rose-300 font-black";
             displayLabel = "ERROR TIMBRADO";
           }
 
-          // 🛠️ 2. ASEGURAMOS QUE HASERROR SE ACTIVE CON RECHAZADO_SAT PARA QUE SALGA TU ICONITO DE TRIÁNGULO
+          //  2. ASEGURAMOS QUE HASERROR SE ACTIVE CON RECHAZADO_SAT PARA QUE SALGA TU ICONITO DE TRIÁNGULO
           const hasError =
             (row.intentos_cancelacion > 0 || s === "RECHAZADO_SAT") &&
             s !== "CANCELADO" &&

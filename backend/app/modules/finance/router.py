@@ -1749,20 +1749,46 @@ def stamp_existing_payment(
 ):
     """
     Toma un pago que se registró financieramente sin generar complemento
-    y ejecuta el timbrado en el SAT (Generación Diferida).
+    y ejecuta el timbrado en el SAT (Generación Diferida / Lote).
     """
     try:
         from app.integrations.sat.payment_service import PaymentComplementService
 
+        # Aseguramos importar el modelo para poder buscar el folio
+        from app.models.models import ReceivableInvoicePayment
+
+        # 1. Buscamos el pago específico que el usuario clickeó en el Frontend
+        pago = (
+            db.query(ReceivableInvoicePayment)
+            .filter(ReceivableInvoicePayment.id == payment_id)
+            .first()
+        )
+
+        if not pago:
+            raise HTTPException(status_code=404, detail="Pago no encontrado.")
+
+        if not pago.folio_complemento:
+            raise HTTPException(
+                status_code=400,
+                detail="El pago no tiene un folio de complemento (COM-XXXX) asignado.",
+            )
+
+        # 2. Instanciamos el servicio blindado
         sat_service = PaymentComplementService(db)
+
+        # 3. TRUCO SENIOR: Traducimos el ID a Folio para procesar el lote completo
         resultado = sat_service.timbrar_pago_existente(
-            payment_id=payment_id, user_id=current_user.id
+            folio_complemento=pago.folio_complemento, user_id=current_user.id
         )
 
         return resultado
 
     except ValueError as ve:
+        # Errores de negocio (RFC inválido, montos no cuadran, etc.)
         raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        # Dejamos pasar los errores HTTP que ya vienen formateados (como el 202 de la cola de reintentos)
+        raise
     except Exception as e:
         db.rollback()
         import traceback
