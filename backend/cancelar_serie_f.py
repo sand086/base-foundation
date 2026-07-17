@@ -111,20 +111,32 @@ def regenerar_pdf(folio: str):
     datos_pago = {
         "folio": folio.replace("COM-", ""),
         "fecha": comprobante.get("Fecha"),
+        # =========================================================
+        # 🛠️ DATOS DEL EMISOR (RAPIDOS 3T) COMPLETOS Y FIJOS
+        # =========================================================
+        "rfc_emisor": "RTX110624KP5",
+        "nombre_emisor": "RÁPIDOS 3T",
+        "cp_emisor": "91808",
+        "regimen_emisor": "624",
+        "direccion_emisor": "DESARROLLO URBANO, MANZANA 3, LOTE 10 Y 11, COL. RENACIMIENTO, C.P. 91808, VERACRUZ, VER. TEL. 2291000240",
+        # DATOS DEL RECEPTOR (Cliente)
         "rfc_cliente": receptor.get("Rfc"),
         "nombre_cliente": receptor.get("Nombre", "PUBLICO EN GENERAL"),
         "cp_cliente": receptor.get("DomicilioFiscalReceptor"),
         "regimen_cliente": receptor.get("RegimenFiscalReceptor"),
         "uso_cfdi": receptor.get("UsoCFDI"),
+        # DATOS DEL PAGO
         "fecha_pago": pago_node.get("FechaPago"),
         "forma_pago": pago_node.get("FormaDePagoP"),
         "monto_total": monto_total,
         "doctos_relacionados": doctos_relacionados,
+        # DATOS BANCARIOS (Base de Datos)
         "cuenta_deposito": pago.cuenta_deposito,
-        "cuenta_beneficiario": cuenta_benef,  # <-- Inyecta 1001497363
-        "banco_beneficiario": banco_benef,  # <-- Inyecta BANORTE
+        "cuenta_beneficiario": cuenta_benef,
+        "banco_beneficiario": banco_benef,
         "banco_ordenante": pago_node.get("NomBancoOrdExt", "NO IDENTIFICADO"),
         "cuenta_ordenante": pago_node.get("CtaOrdenante", "NO IDENTIFICADA"),
+        # TOTALES Y CONCEPTO
         "subtotal": "0.00",
         "iva": "0.00",
         "retenciones": "0.00",
