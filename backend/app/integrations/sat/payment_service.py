@@ -32,7 +32,7 @@ try:
 except ImportError:
     HAS_NUM2WORDS = False
 
-#  IMPORTAMOS MODELOS DE FINANZAS
+# IMPORTAMOS MODELOS DE FINANZAS
 from app.models.models import (
     ReceivableInvoice,
     Client as ClientModel,
@@ -44,7 +44,7 @@ from app.models.models import (
     RecordStatus,
 )
 
-#  IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
+# IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
 from app.modules.finance.crud import create_bank_movement
 from app.modules.finance import schemas as finance_schemas
 
@@ -846,7 +846,7 @@ class PaymentComplementService:
             "qr_src": qr_src,
             "metodo_pago": "PPD",
             "tipo_comprobante": "P (Pago)",
-            "moneda": "XXX",
+            "moneda": "MXN",
             "tc": "1",
             "cert_sat": c_sat,
             "cert_emisor": data.get("cert_emisor", "00001000000000000000"),
@@ -854,8 +854,14 @@ class PaymentComplementService:
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
             "importe_letra": importe_letra,
+            "nombre_emisor": "RÁPIDOS 3T",
+            "cp_emisor": "91808",
+            "regimen_emisor": "624",
             "remitente_nombre": self.emisor_nombre,
             "remitente_rfc": self.emisor_rfc,
+            "remitente_regimen": self.emisor_regimen,
+            "remitente_cp": self.emisor_cp,
+            "remitente_direccion": "DESARROLLO URBANO, MANZANA 3, LOTE 10 Y 11, COL. RENACIMIENTO, C.P. 91808, VERACRUZ, VER. TEL. 2291000240",
             "destinatario_nombre": data.get("nombre_cliente", ""),
             "destinatario_rfc": data.get("rfc_cliente", ""),
             "domicilio_destino": f"{data.get('cp_cliente', '')}",
