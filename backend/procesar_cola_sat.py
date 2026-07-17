@@ -3,9 +3,7 @@ import os
 import logging
 
 # 1. Aseguramos que el script pueda encontrar los módulos de 'app'
-# Esto es vital para los scripts que corren por Cron fuera del contexto de FastAPI
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 
 from app.db.database import SessionLocal
 from app.models.models import ReceivableInvoicePayment
@@ -25,7 +23,7 @@ def procesar_cola():
     db = SessionLocal()
 
     try:
-        # 3. Buscar todos los pagos que se quedaron colgados por intermitencias
+        # 3. Buscar todos los pagos que se quedaron colgados
         pagos_pendientes = (
             db.query(ReceivableInvoicePayment)
             .filter(ReceivableInvoicePayment.complemento_uuid == "PENDIENTE_SAT")
@@ -36,35 +34,41 @@ def procesar_cola():
             logger.info("La cola está vacía. No hay pagos pendientes.")
             return
 
+        # =====================================================================
+        # 🛠️ AGRUPACIÓN: Obtenemos los folios únicos (ej. COM-2643) para procesar en lote
+        # =====================================================================
+        folios_pendientes = list(
+            set(p.folio_complemento for p in pagos_pendientes if p.folio_complemento)
+        )
+
         logger.info(
-            f"Se encontraron {len(pagos_pendientes)} pagos en cola. Iniciando reintentos..."
+            f"Se encontraron {len(folios_pendientes)} lotes (folios) en cola. Iniciando reintentos..."
         )
 
         # 4. Instanciar tu servicio de pagos
         payment_service = PaymentComplementService(db)
 
-        # 5. Iterar y procesar cada pago
-        for pago in pagos_pendientes:
+        # 5. Iterar y procesar cada FOLIO en lugar de cada pago individual
+        for folio in folios_pendientes:
             try:
                 logger.info(
-                    f"-> Reintentando timbrado para Pago ID {pago.id} (Factura: {pago.invoice_id})"
+                    f"-> Reintentando timbrado para Lote de Pagos (Folio: {folio})"
                 )
 
-                # Llamamos a la función que ya parchamos en la Fase 2
-                payment_service.timbrar_pago_existente(payment_id=pago.id, user_id=1)
+                # Llamamos a la función actualizada que recibe el folio completo
+                payment_service.timbrar_pago_existente(
+                    folio_complemento=folio, user_id=1
+                )
 
-                logger.info(f"✅ ÉXITO: Pago {pago.id} timbrado correctamente.")
+                logger.info(f"✅ ÉXITO: Lote {folio} timbrado correctamente.")
 
             except Exception as e:
-                # Si falla, no rompemos el ciclo. El parche que hicimos en payment_service.py
-                # ya se encargó de pasarlo a "RECHAZADO_SAT" si fue error de negocio,
-                # o dejarlo en "PENDIENTE_SAT" si volvió a ser Timeout.
-                logger.error(f"❌ FALLO en Pago {pago.id}: {e}")
+                logger.error(f"❌ FALLO en Lote {folio}: {e}")
 
     except Exception as e:
         logger.error(f"Error crítico conectando a la BD en procesar_cola_sat: {e}")
     finally:
-        # 6. Siempre cerramos la sesión para no agotar el pool de conexiones
+        # 6. Siempre cerramos la sesión para no agotar el pool
         db.close()
         logger.info("Escaneo finalizado. Conexión cerrada.")
 
