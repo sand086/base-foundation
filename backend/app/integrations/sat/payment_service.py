@@ -1073,7 +1073,11 @@ class PaymentComplementService:
                     "uuid": factura.uuid,
                     "serie": serie_dr,
                     "folio": folio_dr,
-                    "moneda": getattr(factura, "moneda", "MXN"),
+                    "moneda": (
+                        factura.moneda.value
+                        if hasattr(factura.moneda, "value")
+                        else str(getattr(factura, "moneda", "MXN")).split(".")[-1]
+                    ),
                     "saldo_anterior": f"{pago.saldo_anterior:.2f}",
                     "monto_pagado": f"{pago.monto:.2f}",
                     "saldo_insoluto": f"{pago.saldo_insoluto:.2f}",
