@@ -1,183 +1,160 @@
 import sys
 import os
-import logging
-from datetime import datetime, timezone
+from io import BytesIO
+from lxml import etree
+import qrcode
 
-# Aseguramos que los imports funcionen
+# Aseguramos el entorno
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# --- PARCHE PARA EVITAR ERRORES DE BD (Solo si es necesario) ---
-try:
-    import app.integrations.sat.billing_service as bs
-
-    bs.register_sat_retry = lambda *args, **kwargs: None
-except:
-    pass
+from app.db.database import SessionLocal
+from app.integrations.sat.payment_service import PaymentComplementService
 
 try:
-    from app.models.models import ReceivableInvoice
-    from app.db.database import SessionLocal
-    from app.integrations.sat.billing_service import BillingService
-    from app.integrations.sat.soap_client import create_pac_client
-except ImportError as e:
-    print(f"Error de importación: {e}")
-    sys.exit(1)
+    from num2words import num2words
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger(__name__)
-
-# =========================================================================
-# ⚠️ MODO DE EJECUCIÓN
-# False = Solo imprime en consola lo que encontró (Seguro)
-# True = Se conecta al PAC y dispara la cancelación al SAT (Irreversible)
-# =========================================================================
-EJECUTAR_CANCELACION = True  # Cambiar a True para ejecutar la cancelación real
+    HAS_NUM2WORDS = True
+except ImportError:
+    HAS_NUM2WORDS = False
 
 
-def auditar_y_limpiar():
+def regenerar_pdf(folio: str):
     db = SessionLocal()
-    fecha_inicio = "2026-07-10"
+    service = PaymentComplementService(db)
 
-    try:
-        # 1. Buscamos todas las CP activas desde el 10 de julio
-        logger.info(f"🔎 Buscando facturas activas creadas desde el {fecha_inicio}...")
-        facturas_recientes = (
-            db.query(ReceivableInvoice)
-            .filter(
-                ReceivableInvoice.created_at >= fecha_inicio,
-                ReceivableInvoice.estatus != "cancelado",
-                ReceivableInvoice.folio_interno.like("CP-%"),
-            )
-            .all()
-        )
+    # 1. Obtener el UUID de la base de datos usando el folio
+    from app.models.models import ReceivableInvoicePayment
 
-        # 2. Agrupamos por el ID del viaje
-        # NOTA: Asumo que la columna se llama 'viaje_id'. Cámbiala si en tu modelo se llama distinto (ej. 'shipment_id', 'order_id')
-        viajes_dict = {}
-        for fac in facturas_recientes:
-            viaje_id = getattr(fac, "viaje_id", None)
-            if viaje_id:
-                if viaje_id not in viajes_dict:
-                    viajes_dict[viaje_id] = []
-                viajes_dict[viaje_id].append(fac)
+    pago = (
+        db.query(ReceivableInvoicePayment)
+        .filter(ReceivableInvoicePayment.folio_complemento == folio)
+        .first()
+    )
 
-        logger.info("-" * 60)
-        logger.info("📋 REPORTE DE DUPLICIDAD POR VIAJE")
-        logger.info("-" * 60)
-
-        facturas_a_cancelar = []
-
-        # 3. Analizamos qué viajes tienen más de 1 CP viva
-        for viaje_id, lista_facturas in viajes_dict.items():
-            if len(lista_facturas) > 1:
-                # Ordenamos por ID descendente. La de ID más alto (la más nueva) será la "Chida"
-                lista_facturas.sort(key=lambda x: x.id, reverse=True)
-
-                factura_chida = lista_facturas[0]
-                facturas_viejas = lista_facturas[1:]
-
-                logger.info(
-                    f"🚀 Viaje [{viaje_id}] tiene {len(lista_facturas)} CPs activas."
-                )
-                logger.info(
-                    f"   ✅ SE QUEDA (Factura Chida): {factura_chida.folio_interno} | {factura_chida.uuid}"
-                )
-
-                for vieja in facturas_viejas:
-                    logger.info(
-                        f"   ❌ A CANCELAR: {vieja.folio_interno} | {vieja.uuid}"
-                    )
-                    facturas_a_cancelar.append({"vieja": vieja, "chida": factura_chida})
-
-        logger.info("-" * 60)
-        logger.info(f"Total de facturas basura detectadas: {len(facturas_a_cancelar)}")
-
-        if len(facturas_a_cancelar) == 0:
-            logger.info(
-                "¡Todo está limpio! No hay facturas vigentes duplicadas para cancelar."
-            )
-            return
-
-        # 4. Fase de Ejecución (Solo si EJECUTAR_CANCELACION es True)
-        if EJECUTAR_CANCELACION:
-            ejecutar_bajas_sat(db, facturas_a_cancelar)
-        else:
-            logger.info("\n⚠️ MODO SIMULACIÓN ACTIVO.")
-            logger.info(
-                "Para cancelar estas facturas en el SAT, cambia 'EJECUTAR_CANCELACION = True' en el script."
-            )
-
-    except Exception as e:
-        logger.error(f"Error en la auditoría: {e}")
-    finally:
-        db.close()
-
-
-def ejecutar_bajas_sat(db, facturas_a_cancelar):
-    logger.info("\n🔥 INICIANDO CANCELACIÓN MASIVA EN EL SAT...")
-    pac = BillingService(db)
-
-    try:
-        with open(pac.path_cer, "rb") as f_cer:
-            cer_bytes = f_cer.read()
-        with open(pac.path_key, "rb") as f_key:
-            key_bytes = f_key.read()
-    except Exception as e:
-        logger.error(f"Error cargando certificados: {e}")
+    if not pago or not pago.complemento_uuid:
+        print(f"❌ No se encontró un UUID válido timbrado para el folio {folio}")
         return
 
-    client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
-    exitosos = 0
+    uuid_pago = pago.complemento_uuid
+    print(f"📄 UUID encontrado: {uuid_pago}")
 
-    for pareja in facturas_a_cancelar:
-        vieja = pareja["vieja"]
-        chida = pareja["chida"]
+    # 2. Leer el XML timbrado desde el disco
+    xml_path_upper = service.storage_dir / f"{uuid_pago.upper()}.xml"
+    xml_path_lower = service.storage_dir / f"{uuid_pago.lower()}.xml"
+    xml_path = xml_path_upper if xml_path_upper.exists() else xml_path_lower
 
-        logger.info(
-            f"Disparando a {vieja.folio_interno} usando Motivo 01 -> {chida.uuid}"
+    if not xml_path.exists():
+        print(f"❌ No se encontró el XML físico en {xml_path}")
+        return
+
+    with open(xml_path, "rb") as f:
+        cfdi_bytes = f.read()
+
+    root = etree.fromstring(cfdi_bytes)
+    ns = {
+        "cfdi": "http://www.sat.gob.mx/cfd/4",
+        "pago20": "http://www.sat.gob.mx/Pagos20",
+        "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+    }
+
+    comprobante = root
+    emisor = root.find("cfdi:Emisor", ns)
+    receptor = root.find("cfdi:Receptor", ns)
+    complemento = root.find("cfdi:Complemento", ns)
+    pagos_node = complemento.find("pago20:Pagos", ns)
+    pago_node = pagos_node.find("pago20:Pago", ns)
+
+    # 3. Extraer datos DIRECTAMENTE DEL XML (Para que la moneda venga como MXN puro)
+    monto_total = pago_node.get("Monto")
+
+    doctos_relacionados = []
+    for doc in pago_node.findall("pago20:DoctoRelacionado", namespaces=ns):
+        doctos_relacionados.append(
+            {
+                "uuid": doc.get("IdDocumento"),
+                "serie": doc.get("Serie", ""),
+                "folio": doc.get("Folio", ""),
+                "moneda": doc.get(
+                    "MonedaDR", "MXN"
+                ),  # 🚀 AQUÍ OCURRE LA MAGIA. Lee 'MXN' del XML
+                "saldo_anterior": doc.get("ImpSaldoAnt"),
+                "monto_pagado": doc.get("ImpPagado"),
+                "saldo_insoluto": doc.get("ImpSaldoInsoluto"),
+                "parcialidad": doc.get("NumParcialidad"),
+            }
         )
 
-        uuid_formateado = f"{vieja.uuid.strip()}|01|{chida.uuid.strip()}"
+    datos_pago = {
+        "folio": folio.replace("COM-", ""),
+        "fecha": comprobante.get("Fecha"),
+        "rfc_cliente": receptor.get("Rfc"),
+        "nombre_cliente": receptor.get("Nombre", "PUBLICO EN GENERAL"),
+        "cp_cliente": receptor.get("DomicilioFiscalReceptor"),
+        "regimen_cliente": receptor.get("RegimenFiscalReceptor"),
+        "uso_cfdi": receptor.get("UsoCFDI"),
+        "fecha_pago": pago_node.get("FechaPago"),
+        "forma_pago": pago_node.get("FormaDePagoP"),
+        "monto_total": monto_total,
+        "doctos_relacionados": doctos_relacionados,
+        "cuenta_deposito": "",
+        "cuenta_beneficiario": pago_node.get("CtaBeneficiario", ""),
+        "banco_beneficiario": (
+            "NO IDENTIFICADO"
+            if not pago_node.get("CtaBeneficiario")
+            else "INSTITUCIÓN BANCARIA"
+        ),
+        "banco_ordenante": pago_node.get("NomBancoOrdExt", ""),
+        "cuenta_ordenante": pago_node.get("CtaOrdenante", ""),
+        "subtotal": "0.00",
+        "iva": "0.00",
+        "retenciones": "0.00",
+        "total": monto_total,
+        "descripcion_concepto": "COMPLEMENTO DE RECEPCIÓN DE PAGOS",
+    }
 
-        try:
-            resultado = client_zeep.service.cancelar(
-                usuario=pac.pac_user,
-                password=pac.pac_pass,
-                uuids=[uuid_formateado],
-                derCertCSD=cer_bytes,
-                derKeyCSD=key_bytes,
-                contrasenaCSD=pac.key_password,
-            )
+    # 4. Extraer Sellos y Cadena Original
+    tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+    s_sat = tfd_node.get("SelloSAT", "0000")
+    c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+    s_emi = comprobante.get("Sello", "0000")
+    fecha_certificacion = tfd_node.get("FechaTimbrado", "")
 
-            res_sat = resultado.resultados[0]
-            codigo_sat = int(getattr(res_sat, "status", 0))
-            mensaje_sat = str(getattr(res_sat, "mensaje", "")).lower()
+    cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_pago}|{fecha_certificacion}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
-            if (
-                codigo_sat in [201, 202, 211]
-                or "proceso" in mensaje_sat
-                or "previamente" in mensaje_sat
-            ):
-                vieja.estatus = "cancelado"
-                vieja.status_sat = (
-                    "CANCELADO" if codigo_sat == 202 else "PROCESO_CANCELACION"
-                )
-                vieja.fecha_cancelacion = datetime.now(timezone.utc)
-                vieja.motivo_cancelacion = "01"
-                vieja.detalle_sat = f"Sustituida por: {chida.uuid}"
-                db.commit()
-                exitosos += 1
-                logger.info("   ✅ SAT Aceptó.")
-            else:
-                logger.error(f"   ❌ SAT Rechazó: {res_sat.mensaje}")
+    total_float = float(monto_total)
+    if HAS_NUM2WORDS:
+        entero = int(total_float)
+        decimales = int(round((total_float - entero) * 100))
+        texto = num2words(entero, lang="es").upper().replace("UNO", "UN")
+        importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
+    else:
+        importe_letra = f"(*** {total_float:,.2f} MXN ***)"
 
-        except Exception as e:
-            logger.error(f"   ❌ Error de conexión: {e}")
+    qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_pago}&re={emisor.get('Rfc')}&rr={receptor.get('Rfc')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+    qr = qrcode.QRCode(version=1, box_size=10, border=2)
+    qr.add_data(qr_string)
+    qr.make(fit=True)
+    buffer = BytesIO()
+    qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
 
-    logger.info(
-        f"--- CANCELACIÓN TERMINADA: {exitosos} exitosas de {len(facturas_a_cancelar)} ---"
+    # 5. Generar PDF sobrescribiendo el defectuoso
+    service._generar_pdf_pago(
+        datos_pago,
+        uuid_pago,
+        buffer.getvalue(),
+        s_sat,
+        s_emi,
+        c_sat,
+        cadena_original_tfd,
+        importe_letra,
+        fecha_certificacion,
+    )
+    print(
+        f"✅ ¡ÉXITO! PDF regenerado. Moneda corregida. Archivo en: {service.storage_dir}/{uuid_pago.upper()}.pdf"
     )
 
 
 if __name__ == "__main__":
-    auditar_y_limpiar()
+    if len(sys.argv) > 1:
+        regenerar_pdf(sys.argv[1])
+    else:
+        print("Por favor especifica un folio.")
