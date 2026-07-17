@@ -6,7 +6,8 @@ import logging
 # Esto es vital para los scripts que corren por Cron fuera del contexto de FastAPI
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.db.session import SessionLocal
+
+from app.db.database import SessionLocal
 from app.models.models import ReceivableInvoicePayment
 from app.integrations.sat.payment_service import PaymentComplementService
 
