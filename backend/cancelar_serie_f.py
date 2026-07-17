@@ -8,6 +8,7 @@ import qrcode
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from app.db.database import SessionLocal
 from app.integrations.sat.payment_service import PaymentComplementService
+from app.models.models import ReceivableInvoicePayment, BankAccount
 
 try:
     from num2words import num2words
@@ -21,9 +22,7 @@ def regenerar_pdf(folio: str):
     db = SessionLocal()
     service = PaymentComplementService(db)
 
-    # 1. Obtener el UUID de la base de datos usando el folio
-    from app.models.models import ReceivableInvoicePayment
-
+    # 1. Obtener el UUID y el registro del pago de la BD
     pago = (
         db.query(ReceivableInvoicePayment)
         .filter(ReceivableInvoicePayment.folio_complemento == folio)
@@ -36,6 +35,34 @@ def regenerar_pdf(folio: str):
 
     uuid_pago = pago.complemento_uuid
     print(f"📄 UUID encontrado: {uuid_pago}")
+
+    # =====================================================================
+    # 🛠️ NUEVO: OBTENER DATOS DEL BANCO DIRECTO DE TESORERÍA (Base de Datos)
+    # =====================================================================
+    banco_info = None
+    cuenta_benef = "NO IDENTIFICADA"
+    banco_benef = "NO IDENTIFICADO"
+
+    if pago.cuenta_deposito:
+        banco_info = (
+            db.query(BankAccount)
+            .filter(BankAccount.id == int(pago.cuenta_deposito))
+            .first()
+        )
+        if banco_info:
+            banco_benef = banco_info.banco or "NO IDENTIFICADO"
+            clabe_limpia = str(banco_info.clabe).strip() if banco_info.clabe else ""
+            cta_limpia = (
+                str(banco_info.numero_cuenta).strip()
+                if banco_info.numero_cuenta
+                else ""
+            )
+
+            if len(clabe_limpia) == 18 and clabe_limpia.isdigit():
+                cuenta_benef = clabe_limpia
+            elif len(cta_limpia) == 10 and cta_limpia.isdigit():
+                cuenta_benef = cta_limpia
+    # =====================================================================
 
     # 2. Leer el XML timbrado desde el disco
     xml_path_upper = service.storage_dir / f"{uuid_pago.upper()}.xml"
@@ -63,7 +90,7 @@ def regenerar_pdf(folio: str):
     pagos_node = complemento.find("pago20:Pagos", ns)
     pago_node = pagos_node.find("pago20:Pago", ns)
 
-    # 3. Extraer datos DIRECTAMENTE DEL XML (Para que la moneda venga como MXN puro)
+    # 3. Extraer Monto Exacto del XML
     monto_total = pago_node.get("Monto")
 
     doctos_relacionados = []
@@ -73,9 +100,7 @@ def regenerar_pdf(folio: str):
                 "uuid": doc.get("IdDocumento"),
                 "serie": doc.get("Serie", ""),
                 "folio": doc.get("Folio", ""),
-                "moneda": doc.get(
-                    "MonedaDR", "MXN"
-                ),  # 🚀 AQUÍ OCURRE LA MAGIA. Lee 'MXN' del XML
+                "moneda": doc.get("MonedaDR", "MXN"),  # <-- Arregla el "CURRENCY.MXN"
                 "saldo_anterior": doc.get("ImpSaldoAnt"),
                 "monto_pagado": doc.get("ImpPagado"),
                 "saldo_insoluto": doc.get("ImpSaldoInsoluto"),
@@ -95,15 +120,11 @@ def regenerar_pdf(folio: str):
         "forma_pago": pago_node.get("FormaDePagoP"),
         "monto_total": monto_total,
         "doctos_relacionados": doctos_relacionados,
-        "cuenta_deposito": "",
-        "cuenta_beneficiario": pago_node.get("CtaBeneficiario", ""),
-        "banco_beneficiario": (
-            "NO IDENTIFICADO"
-            if not pago_node.get("CtaBeneficiario")
-            else "INSTITUCIÓN BANCARIA"
-        ),
-        "banco_ordenante": pago_node.get("NomBancoOrdExt", ""),
-        "cuenta_ordenante": pago_node.get("CtaOrdenante", ""),
+        "cuenta_deposito": pago.cuenta_deposito,
+        "cuenta_beneficiario": cuenta_benef,  # <-- Inyecta 1001497363
+        "banco_beneficiario": banco_benef,  # <-- Inyecta BANORTE
+        "banco_ordenante": pago_node.get("NomBancoOrdExt", "NO IDENTIFICADO"),
+        "cuenta_ordenante": pago_node.get("CtaOrdenante", "NO IDENTIFICADA"),
         "subtotal": "0.00",
         "iva": "0.00",
         "retenciones": "0.00",
@@ -120,6 +141,9 @@ def regenerar_pdf(folio: str):
 
     cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_pago}|{fecha_certificacion}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
+    # =====================================================================
+    # 🛠️ NUEVO: CONVERSIÓN EXACTA DE NÚMERO A LETRA PARA EL MONTO TOTAL
+    # =====================================================================
     total_float = float(monto_total)
     if HAS_NUM2WORDS:
         entero = int(total_float)
@@ -128,6 +152,7 @@ def regenerar_pdf(folio: str):
         importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
     else:
         importe_letra = f"(*** {total_float:,.2f} MXN ***)"
+    # =====================================================================
 
     qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_pago}&re={emisor.get('Rfc')}&rr={receptor.get('Rfc')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
     qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -149,7 +174,7 @@ def regenerar_pdf(folio: str):
         fecha_certificacion,
     )
     print(
-        f"✅ ¡ÉXITO! PDF regenerado. Moneda corregida. Archivo en: {service.storage_dir}/{uuid_pago.upper()}.pdf"
+        f"✅ ¡ÉXITO! PDF regenerado. Banco y Letras corregidas. Archivo en: {service.storage_dir}/{uuid_pago.upper()}.pdf"
     )
 
 
