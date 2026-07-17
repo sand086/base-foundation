@@ -1277,12 +1277,16 @@ class PaymentComplementService:
 
         except Exception as e:
             error_msg = str(e).lower()
+
+            # 🛠️ IMPRIMIR EL ERROR CRUDO PARA SABER QUÉ LE DUELE AL SAT
+            logger.error(f"🔥 ERROR RAW DEL PAC/SAT: {str(e)}")
+
+            # Quitamos el '500' de aquí porque Zeep (SOAP) lo usa para Errores de Negocio
             if any(
                 term in error_msg
                 for term in [
                     "timeout",
                     "time out",
-                    "500",
                     "502",
                     "503",
                     "504",
@@ -1317,7 +1321,7 @@ class PaymentComplementService:
                 )
             else:
                 # =========================================================================
-                #  PARCHE FASE 2: ROMPEMOS EL BUCLE DE "PENDIENTE_SAT" EN LOTE
+                # 🛠️ PARCHE FASE 2: ROMPEMOS EL BUCLE DE "PENDIENTE_SAT" EN LOTE
                 # =========================================================================
                 logger.error(
                     f"Fallo de negocio o validación SAT definitivo para lote {folio_complemento}: {e}"
