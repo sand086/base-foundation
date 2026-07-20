@@ -1086,18 +1086,36 @@ export default function CFDIVault() {
         onRetryCancel={async (id, motivo) => {
           try {
             const toastId = toast.loading(
-              "Reintentando cancelación en el SAT...",
+              "Enviando solicitud de cancelación al SAT...",
             );
+
+            // 1. Enviamos la orden de cancelación
             await axiosClient.post(
               `/api/finance/receivables/${id}/cancel-sat`,
               { motivo },
             );
-            toast.success("Solicitud enviada al SAT", { id: toastId });
+
+            // 2. Cambiamos el mensaje del Toast para avisar que estamos verificando
+            toast.loading("Sincronizando estatus final con Hacienda...", {
+              id: toastId,
+            });
+
+            // 3. Consultamos el estatus real INMEDIATAMENTE después de cancelar
+            await axiosClient.get(`/api/finance/receivables/${id}/verify-sat`);
+
+            // 4. Concluimos con éxito y refrescamos la tabla
+            toast.success("¡Cancelación procesada y sincronizada!", {
+              id: toastId,
+            });
+
             if (refetch) refetch();
           } catch (error: any) {
             toast.error(
-              error.response?.data?.detail || "Error al cancelar la factura.",
+              error.response?.data?.detail ||
+                "Error al intentar cancelar o verificar la factura.",
             );
+            // Refrescamos por si la cancelación pasó pero la verificación falló
+            if (refetch) refetch();
           }
         }}
         onStampPayment={async (paymentId) => {
