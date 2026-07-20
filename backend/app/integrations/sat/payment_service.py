@@ -32,7 +32,7 @@ try:
 except ImportError:
     HAS_NUM2WORDS = False
 
-#  IMPORTAMOS MODELOS DE FINANZAS
+# IMPORTAMOS MODELOS DE FINANZAS
 from app.models.models import (
     ReceivableInvoice,
     Client as ClientModel,
@@ -44,7 +44,7 @@ from app.models.models import (
     RecordStatus,
 )
 
-#  IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
+# IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
 from app.modules.finance.crud import create_bank_movement
 from app.modules.finance import schemas as finance_schemas
 
@@ -846,7 +846,7 @@ class PaymentComplementService:
             "qr_src": qr_src,
             "metodo_pago": "PPD",
             "tipo_comprobante": "P (Pago)",
-            "moneda": "XXX",
+            "moneda": "MXN",
             "tc": "1",
             "cert_sat": c_sat,
             "cert_emisor": data.get("cert_emisor", "00001000000000000000"),
@@ -854,8 +854,14 @@ class PaymentComplementService:
             "sello_emisor": chunk_b64(s_emi),
             "cadena_original": chunk_b64(cadena_original),
             "importe_letra": importe_letra,
+            "nombre_emisor": "RÁPIDOS 3T",
+            "cp_emisor": "91808",
+            "regimen_emisor": "624",
             "remitente_nombre": self.emisor_nombre,
             "remitente_rfc": self.emisor_rfc,
+            "remitente_regimen": self.emisor_regimen,
+            "remitente_cp": self.emisor_cp,
+            "remitente_direccion": "DESARROLLO URBANO, MANZANA 3, LOTE 10 Y 11, COL. RENACIMIENTO, C.P. 91808, VERACRUZ, VER. TEL. 2291000240",
             "destinatario_nombre": data.get("nombre_cliente", ""),
             "destinatario_rfc": data.get("rfc_cliente", ""),
             "domicilio_destino": f"{data.get('cp_cliente', '')}",
@@ -957,88 +963,149 @@ class PaymentComplementService:
             self.db.rollback()
             raise ValueError(f"Fallo en PAC al cancelar REP: {str(e)}")
 
-    def timbrar_pago_existente(self, payment_id: int, user_id: int = 1):
+    def timbrar_pago_existente(self, folio_complemento: str, user_id: int = 1):
         """
-        Toma un recibo de pago ya existente (que no se timbró en su momento),
-        reconstruye la matemática fiscal y lo envía al SAT SIN afectar el saldo
+        Toma un folio de recibo de pago ya existente (que puede abarcar múltiples facturas),
+        reconstruye la matemática fiscal en lote y lo envía al SAT SIN afectar el saldo
         ni generar movimientos bancarios duplicados.
         """
-        logger.info(f"--- INICIANDO TIMBRADO DIFERIDO DE PAGO (ID: {payment_id}) ---")
-
-        # 1. Traer el pago, la factura y el cliente
-        pago = (
-            self.db.query(ReceivableInvoicePayment)
-            .filter(ReceivableInvoicePayment.id == payment_id)
-            .first()
+        logger.info(
+            f"--- INICIANDO TIMBRADO DIFERIDO DE LOTE (FOLIO: {folio_complemento}) ---"
         )
-        if not pago:
-            raise ValueError("Pago no encontrado.")
-        if pago.complemento_uuid and pago.complemento_uuid != "PENDIENTE_SAT":
+
+        # 1. Traer TODOS los pagos que pertenecen al mismo lote/folio
+        pagos = (
+            self.db.query(ReceivableInvoicePayment)
+            .filter(
+                ReceivableInvoicePayment.folio_complemento == folio_complemento,
+                ReceivableInvoicePayment.complemento_uuid.in_(
+                    ["PENDIENTE_SAT", "RECHAZADO_SAT"]
+                ),
+            )
+            .all()
+        )
+
+        if not pagos:
             raise ValueError(
-                "Operación rechazada: Este pago ya cuenta con un UUID timbrado."
+                f"No se encontraron pagos pendientes o rechazados para el folio {folio_complemento}."
             )
 
-        factura = (
+        # Tomamos datos base del primer pago (aplica para todo el lote)
+        pago_base = pagos[0]
+        factura_base = (
             self.db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == pago.invoice_id)
+            .filter(ReceivableInvoice.id == pago_base.invoice_id)
             .first()
         )
         cliente = (
             self.db.query(ClientModel)
-            .filter(ClientModel.id == factura.client_id)
+            .filter(ClientModel.id == factura_base.client_id)
             .first()
         )
 
-        # 2. Reconstruir la matemática fiscal exacta de ese pago
-        inv_subtotal = (
-            Decimal(str(factura.subtotal)) if factura.subtotal else Decimal("0.0")
-        )
-        inv_iva = Decimal(str(factura.iva)) if factura.iva else Decimal("0.0")
-        inv_ret = (
-            Decimal(str(factura.retenciones)) if factura.retenciones else Decimal("0.0")
-        )
-        inv_total = (
-            Decimal(str(factura.monto_total)) if factura.monto_total else Decimal("1.0")
-        )
+        # 2. Reconstruir la matemática fiscal del lote completo
+        doctos_relacionados = []
+        total_recibido = Decimal("0.0")
+        total_retenciones_iva = Decimal("0.0")
+        total_traslados_base_iva16 = Decimal("0.0")
+        total_traslados_impuesto_iva16 = Decimal("0.0")
 
-        monto_abono = Decimal(str(pago.monto))
-        proporcion = monto_abono / inv_total if inv_total > 0 else Decimal("1.0")
-        base_dr = (inv_subtotal * proporcion).quantize(Decimal("0.000001"))
-        iva_dr = (inv_iva * proporcion).quantize(Decimal("0.000001"))
-        ret_dr = (inv_ret * proporcion).quantize(Decimal("0.000001"))
+        for pago in pagos:
+            factura = (
+                self.db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.id == pago.invoice_id)
+                .first()
+            )
 
-        folio_split = str(factura.folio_interno).split("-")
-        serie_dr = folio_split[0] if len(folio_split) > 1 else ""
-        folio_dr = folio_split[-1]
+            inv_subtotal = (
+                Decimal(str(factura.subtotal)) if factura.subtotal else Decimal("0.0")
+            )
+            inv_iva = Decimal(str(factura.iva)) if factura.iva else Decimal("0.0")
+            inv_ret = (
+                Decimal(str(factura.retenciones))
+                if factura.retenciones
+                else Decimal("0.0")
+            )
+            inv_total = (
+                Decimal(str(factura.monto_total))
+                if factura.monto_total
+                else Decimal("1.0")
+            )
 
-        objeto_imp = "02" if (inv_iva > 0 or inv_ret > 0) else "01"
+            monto_abono = Decimal(str(pago.monto))
+            proporcion = monto_abono / inv_total if inv_total > 0 else Decimal("1.0")
 
-        docto_relacionado = {
-            "uuid": factura.uuid,
-            "serie": serie_dr,
-            "folio": folio_dr,
-            "moneda": getattr(factura, "moneda", "MXN"),
-            "saldo_anterior": f"{pago.saldo_anterior:.2f}",
-            "monto_pagado": f"{pago.monto:.2f}",
-            "saldo_insoluto": f"{pago.saldo_insoluto:.2f}",
-            "base_dr": f"{base_dr:.6f}",
-            "iva_dr": f"{iva_dr:.6f}",
-            "ret_dr": f"{ret_dr:.6f}",
-            "tiene_iva": inv_iva > 0,
-            "tiene_retencion": inv_ret > 0,
-            "parcialidad": str(pago.parcialidad),
-            "objeto_imp": objeto_imp,
-        }
+            # La base se sigue sacando por proporción
+            base_dr = (inv_subtotal * proporcion).quantize(Decimal("0.000001"))
+
+            # =====================================================================
+            # 🛠️ CORRECCIÓN CRP20254: Recalcular impuestos directamente de la Base
+            # =====================================================================
+            tasa_iva = Decimal("0.160000")
+            # Detectar si la factura original era al 8% (frontera)
+            if inv_subtotal > 0 and inv_iva > 0:
+                tasa_calc = inv_iva / inv_subtotal
+                if Decimal("0.079") <= tasa_calc <= Decimal("0.081"):
+                    tasa_iva = Decimal("0.080000")
+
+            tasa_ret = Decimal("0.040000")  # 4% Retención Autotransporte
+
+            # Calculamos el impuesto exacto a 6 decimales (Base * Tasa) para que el SAT no rechace
+            iva_dr = (
+                (base_dr * tasa_iva).quantize(Decimal("0.000001"))
+                if inv_iva > 0
+                else Decimal("0.0")
+            )
+            ret_dr = (
+                (base_dr * tasa_ret).quantize(Decimal("0.000001"))
+                if inv_ret > 0
+                else Decimal("0.0")
+            )
+            # =====================================================================
+
+            total_retenciones_iva += ret_dr
+            total_traslados_base_iva16 += base_dr
+            total_traslados_impuesto_iva16 += iva_dr
+            total_recibido += monto_abono
+
+            folio_split = str(factura.folio_interno).split("-")
+            serie_dr = folio_split[0] if len(folio_split) > 1 else ""
+            folio_dr = folio_split[-1]
+
+            objeto_imp = "02" if (inv_iva > 0 or inv_ret > 0) else "01"
+
+            doctos_relacionados.append(
+                {
+                    "uuid": factura.uuid,
+                    "serie": serie_dr,
+                    "folio": folio_dr,
+                    "moneda": (
+                        factura.moneda.value
+                        if hasattr(factura.moneda, "value")
+                        else str(getattr(factura, "moneda", "MXN")).split(".")[-1]
+                    ),
+                    "saldo_anterior": f"{pago.saldo_anterior:.2f}",
+                    "monto_pagado": f"{pago.monto:.2f}",
+                    "saldo_insoluto": f"{pago.saldo_insoluto:.2f}",
+                    "base_dr": f"{base_dr:.6f}",
+                    "iva_dr": f"{iva_dr:.6f}",
+                    "ret_dr": f"{ret_dr:.6f}",
+                    "tiene_iva": inv_iva > 0,
+                    "tiene_retencion": inv_ret > 0,
+                    "parcialidad": str(pago.parcialidad),
+                    "objeto_imp": objeto_imp,
+                }
+            )
 
         # 3. Preparar los datos generales del CFDI
         banco_info = None
         cuenta_benef = ""
         banco_benef = "NO IDENTIFICADO"
 
-        if pago.cuenta_deposito:
+        if pago_base.cuenta_deposito:
             banco_info = (
                 self.db.query(BankAccount)
-                .filter(BankAccount.id == int(pago.cuenta_deposito))
+                .filter(BankAccount.id == int(pago_base.cuenta_deposito))
                 .first()
             )
 
@@ -1062,14 +1129,14 @@ class PaymentComplementService:
 
         fecha_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # Asegurar el formato de la fecha de pago
+        # Asegurar el formato de la fecha de pago (Usamos el del primer pago del lote)
         try:
-            if isinstance(pago.fecha_pago, str):
+            if isinstance(pago_base.fecha_pago, str):
                 fecha_pago_obj = datetime.strptime(
-                    pago.fecha_pago.split("T")[0], "%Y-%m-%d"
+                    pago_base.fecha_pago.split("T")[0], "%Y-%m-%d"
                 )
             else:
-                fecha_pago_obj = pago.fecha_pago
+                fecha_pago_obj = pago_base.fecha_pago
             fecha_pago_sat = fecha_pago_obj.strftime("%Y-%m-%dT12:00:00")
         except Exception:
             fecha_pago_sat = datetime.now().strftime("%Y-%m-%dT12:00:00")
@@ -1082,29 +1149,8 @@ class PaymentComplementService:
             .strip()
         )
 
-        # =========================================================================
-        # REUTILIZAR O GENERAR FOLIO INTELIGENTE
-        # =========================================================================
-        if pago.folio_complemento and pago.folio_complemento.startswith("COM-"):
-            folio_corto = pago.folio_complemento.replace("COM-", "")
-        else:
-            ultimo_pago = (
-                self.db.query(ReceivableInvoicePayment)
-                .filter(ReceivableInvoicePayment.folio_complemento.like("COM-%"))
-                .order_by(ReceivableInvoicePayment.id.desc())
-                .first()
-            )
-            if ultimo_pago and ultimo_pago.folio_complemento:
-                try:
-                    ultimo_folio_numero = int(
-                        ultimo_pago.folio_complemento.replace("COM-", "")
-                    )
-                    folio_corto = str(ultimo_folio_numero + 1)
-                except ValueError:
-                    folio_corto = "2560"
-            else:
-                folio_corto = "2560"
-        # =========================================================================
+        # Usamos el folio que nos pasan (quitando el COM- si lo trae para el nodo XML)
+        folio_corto = folio_complemento.replace("COM-", "")
 
         datos_pago = {
             "serie": "COM",
@@ -1116,13 +1162,13 @@ class PaymentComplementService:
             "regimen_cliente": str(getattr(cliente, "regimen_fiscal", "601")),
             "uso_cfdi": "CP01",
             "fecha_pago": fecha_pago_sat,
-            "forma_pago": str(pago.metodo_pago).strip().zfill(2),
-            "monto_total": f"{monto_abono:.2f}",
-            "doctos_relacionados": [docto_relacionado],
-            "total_retenciones_iva": f"{ret_dr.quantize(Decimal('0.00')):.2f}",
-            "total_traslados_base_iva16": f"{base_dr.quantize(Decimal('0.00')):.2f}",
-            "total_traslados_impuesto_iva16": f"{iva_dr.quantize(Decimal('0.00')):.2f}",
-            "cuenta_deposito": pago.cuenta_deposito,
+            "forma_pago": str(pago_base.metodo_pago).strip().zfill(2),
+            "monto_total": f"{total_recibido:.2f}",
+            "doctos_relacionados": doctos_relacionados,
+            "total_retenciones_iva": f"{total_retenciones_iva.quantize(Decimal('0.00')):.2f}",
+            "total_traslados_base_iva16": f"{total_traslados_base_iva16.quantize(Decimal('0.00')):.2f}",
+            "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16.quantize(Decimal('0.00')):.2f}",
+            "cuenta_deposito": pago_base.cuenta_deposito,
             "cuenta_beneficiario": cuenta_benef,
             "banco_beneficiario": banco_benef,
             "banco_ordenante": "",
@@ -1145,7 +1191,7 @@ class PaymentComplementService:
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
 
         # =========================================================================
-        #  LLAMADA AL PAC AISLADA TAMBIÉN EN EL DIFERIDO
+        #  LLAMADA AL PAC AISLADA
         # =========================================================================
         try:
             client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
@@ -1175,7 +1221,7 @@ class PaymentComplementService:
             # 5. Guardar Archivos
             self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
 
-            # 6. Generar el PDF y QRs (reutilizamos tu lógica exacta)
+            # 6. Generar el PDF y QRs
             root = etree.fromstring(cfdi_bytes)
             ns = {
                 "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -1189,7 +1235,7 @@ class PaymentComplementService:
 
             cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
-            total_float = float(monto_abono)
+            total_float = float(total_recibido)
             if HAS_NUM2WORDS:
                 entero = int(total_float)
                 decimales = int(round((total_float - entero) * 100))
@@ -1229,28 +1275,31 @@ class PaymentComplementService:
                 fecha_certificacion,
             )
 
-            # 7. Actualizar el pago en la BD con su nuevo UUID y guardar en historial documental
-            pago.complemento_uuid = str(complemento_uuid)
-            pago.folio_complemento = f"COM-{folio_corto}"
-            pago.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
-
+            # 7. Actualizar TODOS los pagos del lote en la BD
             from app.models.models import ReceivablePaymentDocumentHistory
 
-            hist_xml = ReceivablePaymentDocumentHistory(
-                payment_id=pago.id,
-                document_type="xml",
-                filename=f"{complemento_uuid}.xml",
-                file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
-                is_active=True,
-            )
-            hist_pdf = ReceivablePaymentDocumentHistory(
-                payment_id=pago.id,
-                document_type="pdf",
-                filename=f"{complemento_uuid}.pdf",
-                file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
-                is_active=True,
-            )
-            self.db.add_all([hist_xml, hist_pdf])
+            for p in pagos:
+                p.complemento_uuid = str(complemento_uuid)
+                p.folio_complemento = f"COM-{folio_corto}"
+                p.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+                p.sat_error_log = None  # Limpiamos el error si fue exitoso
+                self.db.add(p)
+
+                hist_xml = ReceivablePaymentDocumentHistory(
+                    payment_id=p.id,
+                    document_type="xml",
+                    filename=f"{complemento_uuid}.xml",
+                    file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
+                    is_active=True,
+                )
+                hist_pdf = ReceivablePaymentDocumentHistory(
+                    payment_id=p.id,
+                    document_type="pdf",
+                    filename=f"{complemento_uuid}.pdf",
+                    file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
+                    is_active=True,
+                )
+                self.db.add_all([hist_xml, hist_pdf])
 
             self.db.commit()
 
@@ -1262,12 +1311,16 @@ class PaymentComplementService:
 
         except Exception as e:
             error_msg = str(e).lower()
+
+            # 🛠️ IMPRIMIR EL ERROR CRUDO PARA SABER QUÉ LE DUELE AL SAT
+            logger.error(f"🔥 ERROR RAW DEL PAC/SAT: {str(e)}")
+
+            # Quitamos el '500' de aquí porque Zeep (SOAP) lo usa para Errores de Negocio
             if any(
                 term in error_msg
                 for term in [
                     "timeout",
                     "time out",
-                    "500",
                     "502",
                     "503",
                     "504",
@@ -1283,20 +1336,37 @@ class PaymentComplementService:
                     add_to_retry_queue(
                         self.db,
                         entity_type="payment",
-                        entity_id=pago.id,
+                        entity_id=pago_base.id,
                         xml_data=xml_sellado,
                     )
                 except ImportError:
                     pass
 
-                pago.complemento_uuid = "PENDIENTE_SAT"
+                # Devolver el estado a todo el lote
+                for p in pagos:
+                    p.complemento_uuid = "PENDIENTE_SAT"
+                    self.db.add(p)
+
                 self.db.commit()
 
-                # Lanzamos una 202 para que el Front-end sepa que no falló, sino que está encolado.
                 raise HTTPException(
                     status_code=202,
                     detail="El SAT está intermitente. El proceso continuará automáticamente en segundo plano. NO presione generar nuevamente.",
                 )
             else:
-                # Error real de negocio
-                raise ValueError(f"Fallo de negocio o validación SAT: {e}")
+                # =========================================================================
+                # 🛠️ PARCHE FASE 2: ROMPEMOS EL BUCLE DE "PENDIENTE_SAT" EN LOTE
+                # =========================================================================
+                logger.error(
+                    f"Fallo de negocio o validación SAT definitivo para lote {folio_complemento}: {e}"
+                )
+
+                # Aplicamos el error a todos los pagos del mismo folio
+                for p in pagos:
+                    p.complemento_uuid = "RECHAZADO_SAT"
+                    p.sat_error_log = str(e)
+                    self.db.add(p)
+
+                self.db.commit()
+
+                raise ValueError(f"Verifica la validación de Hacienda: {e}")

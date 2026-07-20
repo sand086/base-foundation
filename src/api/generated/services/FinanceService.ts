@@ -684,6 +684,28 @@ export class FinanceService {
         });
     }
     /**
+     * Verify Receivable Invoice Sat Status
+     * Consulta en TIEMPO REAL el estatus fiscal de un CFDI directamente
+     * en el WebService oficial del SAT de Hacienda y actualiza la BD local.
+     * @param invoiceId
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static verifyReceivableInvoiceSatStatusApiFinanceReceivablesInvoiceIdVerifySatGet(
+        invoiceId: number,
+    ): CancelablePromise<Record<string, any>> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/finance/receivables/{invoice_id}/verify-sat',
+            path: {
+                'invoice_id': invoiceId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
      * Export Supplier Statement Excel
      * Exporta el Estado de Cuenta detallado de un Proveedor (Cuentas por Pagar).
      * @param supplierId

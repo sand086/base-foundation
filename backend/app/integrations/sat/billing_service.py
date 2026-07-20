@@ -442,7 +442,9 @@ class BillingService:
             error,
         )
 
-    def _obtener_datos_completos(self, viaje_id: int, usar_tramo_final: bool = False):
+    def _obtener_datos_completos(
+        self, viaje_id: int, buscar_tramo_carretera: bool = False
+    ):
         viaje = self.db.query(Trip).filter(Trip.id == viaje_id).first()
         if not viaje:
             raise HTTPException(status_code=404, detail="Viaje no encontrado.")
@@ -452,14 +454,17 @@ class BillingService:
         )
         if not viaje.legs:
             raise HTTPException(
-                status_code=400, detail="El viaje no tiene tramos (TripLeg) asignados."
+                status_code=400, detail="El viaje no tiene tramos (TripLeg)."
             )
 
-        tramo_seleccionado = (
-            viaje.legs[-1]
-            if usar_tramo_final and len(viaje.legs) > 1
-            else viaje.legs[0]
-        )
+        tramo_seleccionado = viaje.legs[0]
+        if buscar_tramo_carretera and len(viaje.legs) > 1:
+            # LÓGICA INTELIGENTE (Restaurada): Busca el tramo de carretera para no agarrar el camión vacío
+            tramo_ruta = next(
+                (leg for leg in viaje.legs if "ruta" in str(leg.leg_type).lower()), None
+            )
+            tramo_seleccionado = tramo_ruta if tramo_ruta else viaje.legs[-1]
+
         unidad = (
             self.db.query(Unit).filter(Unit.id == tramo_seleccionado.unit_id).first()
         )
@@ -708,6 +713,12 @@ class BillingService:
     # =========================================================================
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
+
+        if str(d.get("clave_prod_serv")).strip() == "78121605":
+            d["clave_prod_serv"] = "78101802"
+        if str(d.get("sat_clave_producto")).strip() == "78121605":
+            d["sat_clave_producto"] = "78101802"
+
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
@@ -900,6 +911,15 @@ class BillingService:
 
             ret = PACResult()
             ret.uuid = uuid_timbrado
+
+            try:
+                root_xml = etree.fromstring(cfdi_bytes)
+                ret.serie = root_xml.get("Serie")
+                ret.folio = root_xml.get("Folio")
+            except Exception:
+                ret.serie = None
+                ret.folio = None
+
             return ret
 
         except Exception as e:
@@ -919,6 +939,26 @@ class BillingService:
         cadena_original,
         importe_letra,
     ):
+        import re
+
+        dir_cliente = d.get("direccion_cliente", "")
+        cp_cliente = d.get("cp_cliente", "")
+
+        if dir_cliente and cp_cliente:
+            # Expresión regular (?i) insensible a mayúsculas/minúsculas. \b valida palabras completas.
+            tiene_cp_texto = re.search(
+                r"(?i)\b(c\.?\s*p\.?|código\s*postal|codigo\s*postal)\b",
+                str(dir_cliente),
+            )
+            tiene_cp_numero = str(cp_cliente).strip() in str(dir_cliente)
+
+            # Si NO viene el texto 'CP' ni el número del código postal escrito dentro de la dirección...
+            if not (tiene_cp_texto or tiene_cp_numero):
+                # Se lo añadimos limpiamente al final para asegurar cobertura
+                d["direccion_cliente"] = (
+                    f"{str(dir_cliente).rstrip(', ')}, C.P. {cp_cliente}"
+                )
+
         logo_path = self.templates_dir / "assets" / "logo-black.png"
         logo_src = (
             f"data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode('utf-8')}"
@@ -1014,7 +1054,7 @@ class BillingService:
             "logo_src": logo_src,
             "qr_src": qr_src,
             "metodo_pago": d.get("metodo_pago", "PPD"),
-            "tipo_comprobante": "I (Ingreso)",
+            "type_comprobante": "I (Ingreso)",
             "moneda": d.get("moneda", "MXN"),
             "tc": "1",
             "forma_pago": d.get("forma_pago", "99"),
@@ -1125,6 +1165,12 @@ class BillingService:
         try:
             resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                nueva_factura.folio_interno = f"{serie_real}-{folio_real}"
+
             nueva_factura.uuid = uuid_generado
             nueva_factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1157,8 +1203,10 @@ class BillingService:
     ) -> ReceivableInvoice:
         from app.modules.logistics.schemas import SatCfdiPayload
 
+        uuid_frontend = getattr(invoice_data, "uuid_relacionado", None)
+
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         raw_data = self._build_dict_from_models(
             viaje,
@@ -1240,6 +1288,12 @@ class BillingService:
         try:
             resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1273,7 +1327,7 @@ class BillingService:
         from app.modules.logistics.schemas import SatCfdiPayload
 
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-            invoice_data.viaje_id, usar_tramo_final=True
+            invoice_data.viaje_id, buscar_tramo_carretera=True
         )
         carta_porte = (
             self.db.query(ReceivableInvoice)
@@ -1383,6 +1437,12 @@ class BillingService:
                 data, relacion_uuid=uuid_relacionado_real
             )
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1887,13 +1947,11 @@ class BillingService:
         if not uuid:
             raise HTTPException(status_code=400, detail="UUID requerido.")
 
-        item = (
-            self.db.query(SatRetryQueue)
-            .filter(SatRetryQueue.id == retry_id)
-            .first()
-        )
+        item = self.db.query(SatRetryQueue).filter(SatRetryQueue.id == retry_id).first()
         if not item:
-            raise HTTPException(status_code=404, detail="Registro de cola no encontrado.")
+            raise HTTPException(
+                status_code=404, detail="Registro de cola no encontrado."
+            )
 
         if item.operation_type not in {"timbrado", "timbrado_pago"}:
             raise HTTPException(
@@ -1905,7 +1963,9 @@ class BillingService:
         xml_url = xml_url or f"/api/sat/invoice/{uuid}/xml"
 
         if item.document_type == "rep":
-            payment_id = item.payment_id or (item.request_payload or {}).get("payment_id")
+            payment_id = item.payment_id or (item.request_payload or {}).get(
+                "payment_id"
+            )
             pago = (
                 self.db.query(ReceivableInvoicePayment)
                 .filter(ReceivableInvoicePayment.id == payment_id)
@@ -1931,7 +1991,9 @@ class BillingService:
             pago.complemento_uuid = uuid
             pago.comprobante_url = pdf_url
             pago.estatus = "ACTIVO"
-            pago.detalle_sat = notas or "REP conciliado contra respuesta tardía del PAC."
+            pago.detalle_sat = (
+                notas or "REP conciliado contra respuesta tardía del PAC."
+            )
 
             if not pago.folio_complemento:
                 pago.folio_complemento = f"COM-{pago.id + 5000}"
@@ -1965,7 +2027,9 @@ class BillingService:
 
             factura.uuid = uuid
             factura.status_sat = "TIMBRADA"
-            factura.detalle_sat = notas or "CFDI conciliado contra respuesta tardía del PAC."
+            factura.detalle_sat = (
+                notas or "CFDI conciliado contra respuesta tardía del PAC."
+            )
             factura.pdf_url = pdf_url
             factura.xml_url = xml_url
             if factura.trip:
@@ -2080,6 +2144,9 @@ class BillingService:
             impuestos_xml += "</cfdi:Impuestos>"
 
             clave_prod = c.get("claveProdServ", "84111506")
+            if str(clave_prod).strip() == "78121605":
+                clave_prod = "78101802"
+
             clave_uni = c.get("claveUnidad", "E48")
             no_id = html.escape(str(c.get("id", "01")))
 
@@ -2309,6 +2376,14 @@ class BillingService:
             except Exception as pdf_error:
                 logger.error(f"Error generando PDF para factura libre: {pdf_error}")
 
+            try:
+                serie_real = root.get("Serie")
+                folio_real = root.get("Folio")
+                if serie_real and folio_real:
+                    factura.folio_interno = f"{serie_real}-{folio_real}"
+            except Exception:
+                pass
+
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"
             factura.pdf_url = f"/api/sat/invoice/{uuid_timbrado}/pdf"
@@ -2321,6 +2396,7 @@ class BillingService:
         except Exception as e:
             logger.error(f"Fallo en factura existente {factura.id}: {e}")
             factura.status_sat = "ERROR_SAT"
+            factura.detalle_sat = str(e)
             self.db.commit()
             raise ValueError(f"Fallo en timbrado SAT: {str(e)}")
 
@@ -2500,6 +2576,14 @@ class BillingService:
                 )
             except Exception as pdf_error:
                 logger.error(f"Error generando PDF para factura libre: {pdf_error}")
+
+            try:
+                serie_real = root.get("Serie")
+                folio_real = root.get("Folio")
+                if serie_real and folio_real:
+                    factura.folio_interno = f"{serie_real}-{folio_real}"
+            except Exception:
+                pass
 
             factura.uuid = uuid_timbrado
             factura.status_sat = "TIMBRADA"

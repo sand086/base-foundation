@@ -104,8 +104,10 @@ export function CreateInvoiceModal({
     useSatCatalogs();
 
   // INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
-  const { generateOneShotInvoice, generateFreeInvoice, isStamping } =
-    useBilling();
+  const { generateOneShotInvoice, generateFreeInvoice } = useBilling();
+
+  // 🔒 CANDADO ESTRICTO LOCAL PARA EVITAR EL DOBLE CLIC
+  const [isLocalStamping, setIsLocalStamping] = useState(false);
 
   const [clienteId, setClienteId] = useState("");
   const [subClienteId, setSubClienteId] = useState("");
@@ -467,6 +469,12 @@ export function CreateInvoiceModal({
       return;
     }
 
+    // 🔒 1. ACTIVAMOS EL CANDADO Y MOSTRAMOS LOADING
+    setIsLocalStamping(true);
+    const toastId = toast.loading(
+      "⏳ Procesando en el SAT... Por favor no cierres la ventana.",
+    );
+
     const payload = {
       client_id: Number(clienteId),
       sub_client_id: subClienteId ? Number(subClienteId) : null,
@@ -494,39 +502,64 @@ export function CreateInvoiceModal({
       tipo_relacion: esRefacturacion ? tipoRelacion : null,
     };
 
-    let result;
+    try {
+      let result;
 
-    if (importedServices && importedServices.length > 0) {
-      // 1. GENERAR NUEVA CARTA PORTE (Desde Despacho)
-      const dataWithTrip = {
-        ...payload,
-        viaje_id: importedServices[0].id,
-        servicios_relacionados: importedServices.map((s) => s.id),
-      };
-      result = await generateOneShotInvoice(dataWithTrip);
-    } else if (
-      esRefacturacion &&
-      invoiceToRefactor &&
-      (invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id)
-    ) {
-      // 2. REFACTURACIÓN DE CARTA PORTE (Sustitución)
-      const viajeId = invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id;
-      const dataWithTrip = {
-        ...payload,
-        viaje_id: viajeId,
-      };
-      result = await generateOneShotInvoice(dataWithTrip);
-    } else {
-      // 3. FACTURA LIBRE (Nueva o Refacturación)
-      result = await generateFreeInvoice(payload);
-    }
-
-    if (result) {
-      if (result.data && result.data.uuid) {
-        window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
+      if (importedServices && importedServices.length > 0) {
+        // 1. GENERAR NUEVA CARTA PORTE (Desde Despacho)
+        const dataWithTrip = {
+          ...payload,
+          viaje_id: importedServices[0].id,
+          servicios_relacionados: importedServices.map((s) => s.id),
+        };
+        result = await generateOneShotInvoice(dataWithTrip);
+      } else if (
+        esRefacturacion &&
+        invoiceToRefactor &&
+        (invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id)
+      ) {
+        // 2. REFACTURACIÓN DE CARTA PORTE (Sustitución)
+        const viajeId = invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id;
+        const dataWithTrip = {
+          ...payload,
+          viaje_id: viajeId,
+        };
+        result = await generateOneShotInvoice(dataWithTrip);
+      } else {
+        // 3. FACTURA LIBRE (Nueva o Refacturación)
+        result = await generateFreeInvoice(payload);
       }
-      onSubmit();
-      onOpenChange(false);
+
+      if (result) {
+        // ✅ 2. ÉXITO: Actualizamos el toast PERO NO liberamos el candado (se destruirá al cerrarse el modal)
+        toast.success("¡CFDI timbrado con éxito!", { id: toastId });
+
+        if (result.data && result.data.uuid) {
+          window.open(`/api/sat/invoice/${result.data.uuid}/pdf`, "_blank");
+        }
+        onSubmit();
+        onOpenChange(false);
+      }
+    } catch (error: any) {
+      // ❌ 3. ERROR: AHORA SÍ LIBERAMOS EL CANDADO PARA QUE PUEDAN REINTENTAR
+      setIsLocalStamping(false);
+
+      // 🛡️ 4. ATRAPAMOS EL 429 DEL BACKEND
+      if (error?.response?.status === 429) {
+        toast.error("⏳ Timbrado en proceso", {
+          id: toastId,
+          description:
+            error.response?.data?.detail ||
+            "Por favor NO des doble clic. El SAT está procesando la solicitud previa.",
+        });
+      } else {
+        toast.error("Error al timbrar", {
+          id: toastId,
+          description:
+            error?.response?.data?.detail ||
+            "Ocurrió un error de validación o conexión con el SAT.",
+        });
+      }
     }
   };
 
@@ -1390,7 +1423,7 @@ export function CreateInvoiceModal({
                 !clienteId ||
                 montoTotal <= 0 ||
                 loadingClients ||
-                isStamping ||
+                isLocalStamping ||
                 !razonSocialEditable ||
                 !rfcEditable ||
                 !cpEditable ||
@@ -1400,10 +1433,10 @@ export function CreateInvoiceModal({
               }
               className="w-full sm:w-auto haptic-press border-none text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_4px_15px_rgba(79,70,229,0.3)] font-black uppercase tracking-widest text-[10px]"
             >
-              {isStamping ? (
+              {isLocalStamping ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> Timbrando
-                  SAT...
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> ⏳ SAT
+                  Procesando...
                 </>
               ) : invoiceToRefactor ? (
                 "Timbrar Refacturación"

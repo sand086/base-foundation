@@ -1,5 +1,58 @@
-# Logs
-logs
+# =========================
+# PYTHON & BACKEND
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.tox/
+build/
+
+# Entornos Virtuales
+venv/
+backend/venv/
+.venv/
+env/
+ENV/
+
+# Cachés de Testing y Linters
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Alembic / local
+alembic.ini
+
+# Bases de Datos locales pesadas
+*.sqlite3
+*.sqlite
+*.db
+
+# =========================
+# REACT & FRONTEND
+# =========================
+node_modules/
+/.pnp
+/vendor
+dist/
+dist-ssr/
+/public
+/build
+*.local
+
+# Cachés y Reportes de Frontend
+.eslintcache
+coverage/
+.next/
+.nuxt/
+.cache/
+
+# =========================
+# ARCHIVOS DE SISTEMA Y LOGS
+# =========================
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,44 +60,46 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# Directorios de Editores e IDEs
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
+ehthumbs.db
+$RECYCLE.BIN/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# carpetas publicas y archivos generados
-/public
-/build
+# =========================
+# ARCHIVOS DEL PROYECTO Y UPLOADS
+# =========================
+app/uploads/
+app/storage/
 /db/*
+/backend/app/certs/
 
-# archivos de entorno
+# Archivos multimedia y comprimidos
+*.zip
+*.tar.gz
+*.rar
+*.mp4
+*.pdf
+
+# =========================
+# ENTORNOS (ENV)
+# =========================
 .env
 .env.*
+.env*.local
 backend/.env
 backend/.env.*
 
-# dependencias
-/node_modules
-/.pnp
-/vendor
-backend/venv/
-/backend/app/certs/
-
-# Docker local/dev
-.dockerignore
-Dockerfile
-backend/Dockerfile
-docker-compose*.yml
-docker-compose*.yaml
-docker/
+# =========================
+# ARCHIVOS OCULTOS
+# =========================
+.*
+!.gitignore

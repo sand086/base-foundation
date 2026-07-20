@@ -1,77 +1,90 @@
 import sys
-from pathlib import Path
+import os
+import logging
 
-# Configurar el path para heredar los módulos de la aplicación
-sys.path.append(str(Path(__file__).resolve().parent))
+# Asegurar que el script encuentre la app
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.db.database import get_db
-from app.models.models import ReceivableInvoice
-from app.integrations.sat.billing_service import BillingService
+from app.db.database import SessionLocal
+from app.integrations.sat.payment_service import PaymentComplementService
+from app.integrations.sat.soap_client import create_pac_client
+
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("cancelacion_forzada")
+
+# 📋 LISTA DE LOS 6 UUIDS HUÉRFANOS QUE QUEDARON EN EL SAT
+UUIDS_A_CANCELAR = [
+    "3034CD70-BBBA-4591-A4FD-48275AA2F2C9",
+    "E1DC9939-F323-4FB6-8945-07BA53E8D962",
+    "B1371686-641B-43C6-9769-CF5806590D60",
+    "C40177B1-4823-48A0-B5E4-85E32B7654F8",
+    "B5EE26F0-EA2D-4C56-896F-0D64B42047E3",
+    "D50B2134-87B4-4200-910D-96CDF237E993",
+]
 
 
-def cancelar_solo_un_peso():
-    db = next(get_db())
-    service = BillingService(db)
-
-    print("\n" + "=" * 80)
-    print("🚀 INICIANDO CANCELACIÓN SEGURA: SOLO FACTURAS DE $1.12")
-    print("=" * 80)
-
-    # 🔒 FILTRO 1: Buscar en BD solo facturas con monto exacto de 1.12 que sigan vigentes
-    facturas_1_peso = (
-        db.query(ReceivableInvoice)
-        .filter(
-            ReceivableInvoice.monto_total == 1.12,
-            ReceivableInvoice.status_sat != "CANCELADO",
-        )
-        .all()
+def disparar_cancelacion_sat():
+    logger.info(
+        f"Iniciando proceso de cancelación forzada para {len(UUIDS_A_CANCELAR)} UUIDs en el SAT..."
     )
+    db = SessionLocal()
 
-    if not facturas_1_peso:
-        print("✅ No se encontraron facturas de $1.12 pendientes por cancelar.")
-        return
+    # Instanciamos el servicio solo para heredar credenciales y certificados
+    service = PaymentComplementService(db)
 
-    print(f"🔍 Se encontraron {len(facturas_1_peso)} facturas de $1.12 exactos.")
+    try:
+        # 1. Leer Certificados de la empresa (CSD)
+        with open(service.path_cer, "rb") as f_cer:
+            cer_bytes = f_cer.read()
+        with open(service.path_key, "rb") as f_key:
+            key_bytes = f_key.read()
 
-    for factura in facturas_1_peso:
-        # 🔒 FILTRO 2 (CANDADO DE SEGURIDAD): Doble validación antes de tocar el PAC/SAT
-        if factura.monto_total != 1.12:
-            print(
-                f"⚠️ SALTANDO FOLIO {factura.folio_interno} porque su monto NO es 1.12 (Es ${factura.monto_total})"
-            )
-            continue
+        # 2. Formatear los UUIDs bajo la especificación del PAC (UUID|Motivo|Sustituto)
+        # Usamos Motivo 02 (Comprobante emitido con errores sin relación)
+        uuids_formateados = [f"{uuid.strip()}|02|" for uuid in UUIDS_A_CANCELAR]
 
-        print(
-            f"\n⏳ Cancelando Folio: {factura.folio_interno} | Monto: ${factura.monto_total} | UUID: {factura.uuid}"
+        logger.info(f"Conectando al PAC: {service.wsdl_timbrado}")
+        client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
+
+        # 3. Disparar el SOAP Request al PAC (Se envían los 6 de golpe)
+        resultado = client_zeep.service.cancelar(
+            usuario=service.pac_user,
+            password=service.pac_pass,
+            uuids=uuids_formateados,
+            derCertCSD=cer_bytes,
+            derKeyCSD=key_bytes,
+            contrasenaCSD=service.key_password,
         )
-        try:
-            # Disparamos la cancelación con Motivo 02 (Errores sin relación)
-            service.cancelar_factura_sat(
-                invoice_id=factura.id, motivo="02", uuid_sustituto=None
+
+        logger.info(
+            f"Respuesta General PAC - Status: {getattr(resultado, 'status', 'S/S')} | Mensaje: {getattr(resultado, 'mensaje', 'S/M')}"
+        )
+
+        # 4. Desglosar el estatus de cada UUID de manera detallada
+        if hasattr(resultado, "resultados") and resultado.resultados:
+            print("\n" + "=" * 70)
+            print("📊 DETALLE DE CANCELACIÓN POR COMPROBANTE:")
+            print("=" * 70)
+            for res in resultado.resultados:
+                print(f"UUID: {getattr(res, 'uuid', 'DESCONOCIDO')}")
+                print(f"Status SAT: {getattr(res, 'status', 'Sin Status')}")
+                print(f"Mensaje Hacienda: {getattr(res, 'mensaje', 'Sin Mensaje')}")
+                print("-" * 70)
+        else:
+            logger.warning(
+                "El PAC procesó la solicitud pero no devolvió el desglose individual por UUID."
             )
-            print(f"✅ ¡ÉXITO! Folio {factura.folio_interno} cancelado ante el SAT.")
 
-        except Exception as e:
-            error_msg = str(e).lower()
-            if (
-                "ya se encuentra cancelado" in error_msg
-                or "comprobante cancelado" in error_msg
-            ):
-                print(
-                    f"ℹ️ El SAT informa que el Folio {factura.folio_interno} YA ESTABA CANCELADO. Sincronizando BD..."
-                )
-                factura.status_sat = "CANCELADO"
-                factura.estatus = "cancelado"
-                db.commit()
-            else:
-                print(
-                    f"❌ Error devuelto por el PAC para el Folio {factura.folio_interno}: {e}"
-                )
-
-    print("\n" + "=" * 80)
-    print("✨ PROCESO TERMINADO. NINGUNA OTRA FACTURA FUE TOCADA. ✨")
-    print("=" * 80 + "\n")
+    except Exception as e:
+        logger.error(
+            f"❌ Ocurrió un error crítico durante la comunicación con el SAT: {e}"
+        )
+    finally:
+        db.close()
+        logger.info("Proceso terminado. Conexión cerrada.")
 
 
 if __name__ == "__main__":
-    cancelar_solo_un_peso()
+    disparar_cancelacion_sat()

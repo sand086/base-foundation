@@ -122,7 +122,8 @@
           <tbody>
             {% for doc in doctos_relacionados %}
             <tr>
-              <td>{{ doc.serie }}</td>
+              <!-- 🔥 AQUÍ ESTÁ EL AJUSTE: Si no hay serie, imprime CP -->
+              <td>{{ doc.serie if doc.serie else 'CP' }}</td>
               <td class="bold">{{ doc.folio }}</td>
               <td style="font-size: 6pt">{{ doc.uuid }}</td>
               <td class="center">{{ doc.parcialidad }}</td>

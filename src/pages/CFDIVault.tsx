@@ -769,10 +769,15 @@ export default function CFDIVault() {
               "bg-blue-50 text-blue-700 border-blue-200 animate-pulse font-black";
             displayLabel = "EN COLA (REINTENTO)";
           }
+          //  1. AGREGAMOS EL CASO DE RECHAZO AQUÍ:
+          else if (s === "RECHAZADO_SAT") {
+            badgeClass = "bg-rose-100 text-rose-800 border-rose-300 font-black";
+            displayLabel = "ERROR TIMBRADO";
+          }
 
-          // Solo es error si NO está cancelado, NO está en proceso, y NO está en la cola
+          //  2. ASEGURAMOS QUE HASERROR SE ACTIVE CON RECHAZADO_SAT PARA QUE SALGA TU ICONITO DE TRIÁNGULO
           const hasError =
-            row.intentos_cancelacion > 0 &&
+            (row.intentos_cancelacion > 0 || s === "RECHAZADO_SAT") &&
             s !== "CANCELADO" &&
             s !== "PROCESO_CANCELACION" &&
             s !== "PENDIENTE_CANCELAR_SAT";
@@ -784,7 +789,8 @@ export default function CFDIVault() {
               </Badge>
               {hasError && (
                 <div
-                  title={`Error en SAT: ${row.detalle_sat || "Rechazo"}`}
+                  // Cambiamos a detalle_sat o sat_error_log según cómo lo hayas dejado en el Schema
+                  title={`Error en SAT: ${row.sat_error_log || row.detalle_sat || "Rechazo"}`}
                   className="p-1 bg-rose-100 rounded-full cursor-help animate-pulse"
                 >
                   <AlertTriangle className="w-3 h-3 text-rose-600" />

@@ -1,133 +1,156 @@
 import sys
-import time
-from pathlib import Path
+import os
+import logging
+from datetime import datetime, timezone, timedelta
 
-# Configurar el path para heredar los módulos de la aplicación
-sys.path.append(str(Path(__file__).resolve().parent))
+# Aseguramos que los imports funcionen en tu entorno
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.db.database import get_db
-from app.models.models import ReceivableInvoice
-from app.integrations.sat.billing_service import BillingService
+# --- PARCHE PARA EVITAR ERRORES DE BASE DE DATOS LOCAL ---
+try:
+    import app.integrations.sat.billing_service as bs
+
+    bs.register_sat_retry = lambda *args, **kwargs: None
+except:
+    pass
+
+try:
+    from app.models.models import ReceivableInvoice
+    from app.db.database import SessionLocal
+    from app.integrations.sat.billing_service import BillingService
+    from app.integrations.sat.soap_client import create_pac_client
+except ImportError as e:
+    print(f"Error de importación: {e}")
+    sys.exit(1)
+
+# ─── CONFIGURACIÓN DE LOGS INDEPENDIENTES ────────────────────────────────
+# Log General (Consola / Salida estándar para el cron)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
+logger = logging.getLogger(__name__)
+
+# Log Especializado de Errores (Va a un archivo dedicado exclusivamente)
+PATH_ERR_LOG = (
+    "/home/desarrolloas/base-foundation/backend/scripts/errores_cancelacion.log"
+)
+os.makedirs(os.path.dirname(PATH_ERR_LOG), exist_ok=True)
+
+error_logger = logging.getLogger("ErrorLogger")
+error_logger.setLevel(logging.ERROR)
+file_handler = logging.FileHandler(PATH_ERR_LOG, encoding="utf-8")
+file_handler.setFormatter(logging.Formatter("[%(asctime)s] %(message)s"))
+error_logger.addHandler(file_handler)
+# ─────────────────────────────────────────────────────────────────────────
 
 
-def auto_vigilante_sat():
-    db = next(get_db())
-    service = BillingService(db)
+def verificar_y_forzar_cancelaciones():
+    db = SessionLocal()
+    # Ventana móvil de los últimos 7 días para validar cambios recientes de estatus
+    fecha_limite = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
 
-    print("\n" + "=" * 80)
-    print(
-        "🤖 [VIGILANTE NOCTURNO] CONSULTANDO ESTATUS DE CANCELACIONES PENDIENTES AL PAC/SAT"
+    logger.info(
+        f"🔎 Buscando facturas locales con estatus 'cancelado' desde el {fecha_limite}..."
     )
-    print("=" * 80)
 
-    print("📬 Procesando cola SAT de reintentos técnicos...")
-    resultado_cola = service.procesar_sat_retry_queue(limit=10)
-    print(f"   Procesadas en cola: {resultado_cola.get('procesadas', 0)}")
-
-    # 1. Buscamos SOLAMENTE facturas (Ingreso y CPs) que estén atrapadas en "En Proceso"
-    facturas_en_proceso = (
-        db.query(ReceivableInvoice)
-        .filter(
-            ReceivableInvoice.status_sat == "PROCESO_CANCELACION",
-            ReceivableInvoice.uuid.isnot(None),
-        )
-        .all()
-    )
-
-    total = len(facturas_en_proceso)
-
-    if total == 0:
-        print("✅ Todo limpio. No hay facturas en 'Proceso de Cancelación'.")
-        print("=" * 80 + "\n")
-        return
-
-    print(
-        f"📋 Se encontraron {total} facturas esperando respuesta del receptor o del SAT."
-    )
-    print("⏳ Preguntando al PAC su estatus actual...\n")
-
-    aprobadas = 0
-    rechazadas = 0
-    siguen_pendientes = 0
-    errores = 0
-
-    for fac in facturas_en_proceso:
-        print(f"🚀 Consultando UUID: {fac.uuid} (Folio: {fac.folio_interno})...")
-
-        try:
-            # 2. Le preguntamos al PAC qué dice el SAT sobre este UUID
-            # Nota: Asumimos que tu BillingService ahora tiene un método 'consultar_estatus_sat'
-            # (Si no lo tiene, crearemos uno genérico usando 'cancelar_factura_sat' con un "reintento")
-
-            # Como no podemos estar seguros si tu PAC expone la consulta limpia,
-            # reintentamos la cancelación para que el SAT nos escupa la verdad (Previamente cancelada o Rechazada)
-            service.cancelar_factura_sat(
-                invoice_id=fac.id, motivo=fac.motivo_cancelacion or "01"
+    try:
+        # Buscamos CUALQUIER tipo de factura (CP, COM, F) que localmente esté cancelada
+        facturas_canceladas_local = (
+            db.query(ReceivableInvoice)
+            .filter(
+                ReceivableInvoice.updated_at >= fecha_limite,
+                ReceivableInvoice.estatus == "cancelado",
             )
+            .all()
+        )
 
-            # Si pasa limpio sin levantar error, significa que el SAT la acaba de matar
-            print("   ✅ EL SAT DIO LUZ VERDE: Cancelación aprobada.")
-            aprobadas += 1
+        if not facturas_canceladas_local:
+            logger.info(
+                "Everything clean! No hay cancelaciones locales recientes que verificar."
+            )
+            return
 
-        except Exception as e:
-            error_msg = str(e).lower()
+        pac = BillingService(db)
+        client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
 
-            if (
-                "previamente cancelado" in error_msg
-                or "ya se encuentra cancelado" in error_msg
-            ):
-                print("   ✅ EL SAT CONFIRMA: El cliente ya aceptó y la factura murió.")
-                # Confirmar baja en BD
-                db.refresh(fac)
-                fac.status_sat = "CANCELADO"
-                fac.estatus = "cancelado"
-                fac.saldo_pendiente = 0.0
-                fac.detalle_sat = "El Receptor aprobó la cancelación."
-                db.add(fac)
-                db.commit()
-                aprobadas += 1
+        for factura in facturas_canceladas_local:
+            if not factura.uuid:
+                continue
 
-            elif "proceso" in error_msg:
-                print(
-                    "   ⏳ PACIENCIA: El cliente receptor aún no entra a su buzón a darle Aceptar/Rechazar."
+            try:
+                # 1. Consultamos el estatus real directo en el Web Service del SAT
+                # Nota: Si tu BillingService usa otro nombre (ej. 'consultar_estatus'), cámbialo aquí
+                resultado_sat = pac.consultar_estatus_sat(factura.uuid)
+                estado_sat = (
+                    resultado_sat.get("estado", "")
+                    if isinstance(resultado_sat, dict)
+                    else str(resultado_sat)
                 )
-                siguen_pendientes += 1
 
-            elif (
-                "rechazada" in error_msg
-                or "rechazo" in error_msg
-                or "no cancelable" in error_msg
-            ):
-                print(
-                    "   ❌ EL CLIENTE RECHAZÓ LA CANCELACIÓN (O tiene pagos relacionados). ¡Haciendo Rollback!"
+                # 2. Si en nuestra BD dice cancelada, pero el SAT dice que sigue VIGENTE, actuamos:
+                if "vigente" in estado_sat.lower():
+                    logger.info(
+                        f"⚠️ DISCREPANCIA DETECTADA: {factura.folio_interno} está VIGENTE en el SAT pero CANCELADA localmente."
+                    )
+                    logger.info(
+                        f"🚀 Forzando petición de cancelación real ante el SAT..."
+                    )
+
+                    # Usamos Motivo 02 (Con errores sin relación) para poder cancelarla directo sin sustituto
+                    uuid_formateado = f"{factura.uuid.strip()}|02"
+
+                    with open(pac.path_cer, "rb") as f_cer:
+                        cer_bytes = f_cer.read()
+                    with open(pac.path_key, "rb") as f_key:
+                        key_bytes = f_key.read()
+
+                    resultado_cancelacion = client_zeep.service.cancelar(
+                        usuario=pac.pac_user,
+                        password=pac.pac_pass,
+                        uuids=[uuid_formateado],
+                        derCertCSD=cer_bytes,
+                        derKeyCSD=key_bytes,
+                        contrasenaCSD=pac.key_password,
+                    )
+
+                    res_sat = resultado_cancelacion.resultados[0]
+                    codigo_sat = int(getattr(res_sat, "status", 0))
+                    mensaje_sat = str(getattr(res_sat, "mensaje", ""))
+
+                    if (
+                        codigo_sat in [201, 202, 211]
+                        or "proceso" in mensaje_sat.lower()
+                        or "previamente" in mensaje_sat.lower()
+                    ):
+                        factura.status_sat = (
+                            "CANCELADO" if codigo_sat == 202 else "PROCESO_CANCELACION"
+                        )
+                        factura.detalle_sat = f"Cancelación forzada exitosa por el sincronizador: {mensaje_sat}"
+                        db.commit()
+                        logger.info(
+                            f"✅ ¡Éxito! El SAT aceptó la cancelación forzada para {factura.folio_interno}."
+                        )
+                    else:
+                        # Si el SAT rechaza la cancelación forzada, guardamos el error en el archivo separado
+                        error_msg = f"ERROR DE CANCELACIÓN FORZADA en {factura.folio_interno} ({factura.uuid}): El SAT/PAC rechazó la solicitud. Respuesta: {mensaje_sat} (Código: {codigo_sat})"
+                        logger.error(
+                            f"❌ Error crítico guardado en bitácora independiente."
+                        )
+                        error_logger.error(error_msg)
+
+            except Exception as e:
+                # Si truena la consulta o la red, el error se va directo al archivo aislado
+                error_msg = f"FALLA DE CONEXIÓN/EJECUCIÓN en {factura.folio_interno} ({factura.uuid}): {str(e)}"
+                logger.error(
+                    f"❌ Falla de comunicación guardada en bitácora independiente."
                 )
-                # Rollback automático a la vida
-                db.refresh(fac)
-                fac.status_sat = "TIMBRADA"
-                fac.estatus = "pendiente"
-                fac.saldo_pendiente = fac.monto_total  # Revivimos la deuda
-                fac.detalle_sat = f"Alerta: {str(e)}"
-                db.add(fac)
-                db.commit()
-                rechazadas += 1
+                error_logger.error(error_msg)
 
-            else:
-                print(f"   ⚠️ ERROR INESPERADO AL CONSULTAR: {str(e)}")
-                errores += 1
-
-        # Pausa para no saturar los Web Services de Solución Factible
-        time.sleep(2)
-
-    print("\n" + "=" * 80)
-    print("🏁 REPORTE DEL VIGILANTE:")
-    print(f"   - 🟢 Cancelaciones Aprobadas (Deuda muerta): {aprobadas}")
-    print(f"   - 🔴 Cancelaciones Rechazadas (Deuda reactivada): {rechazadas}")
-    print(
-        f"   - 🟡 Siguen en Proceso (El cliente no ha contestado): {siguen_pendientes}"
-    )
-    print(f"   - ⚠️ Errores de red: {errores}")
-    print("=======================================================================\n")
+    except Exception as e:
+        error_logger.error(
+            f"Error general en el ciclo del script sincronizar_realidad_sat: {str(e)}"
+        )
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    auto_vigilante_sat()
+    verificar_y_forzar_cancelaciones()

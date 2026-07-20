@@ -237,10 +237,9 @@ class InvoicePaymentBase(BaseModel):
     motivo_cancelacion: Optional[str] = None
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
-
-    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
+    sat_error_log: Optional[str] = None
 
 
 class InvoicePaymentCreate(InvoicePaymentBase):

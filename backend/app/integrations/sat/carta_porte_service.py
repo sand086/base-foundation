@@ -677,6 +677,171 @@ class CartaPorteService:
             ),
         }
 
+    # =========================================================================
+    # LÓGICA CARTA PORTE (LOGÍSTICA)
+    # =========================================================================
+
+    def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
+
+        desc_concepto_xml = html.escape(
+            str(d.get("descripcion_concepto", ""))
+            .replace(" | ", " - ")
+            .replace("|", "-")
+        )
+        desc_mercancia_xml = html.escape(
+            str(d.get("descripcion_mercancia", ""))
+            .replace(" | ", " - ")
+            .replace("|", "-")
+        )
+
+        relacion_xml = (
+            f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
+            if relacion_uuid
+            else ""
+        )
+
+        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque", "CTR004")}" Placa="{d.get("placa_remolque_1", "1XXXX99")}" />'
+        if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
+            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{d["placa_remolque_2"]}" />'
+
+        # =========================================================
+        # MATERIAL PELIGROSO Y SEGURO AMBIENTAL
+        # =========================================================
+        clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
+        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
+        mat_peligroso_attr = ""
+
+        # 1. Bandera estricta para saber si al final SÍ fue peligroso
+        es_peligroso_final_xml = False
+
+        if flag_cat == "0":
+            # El SAT prohíbe enviar el atributo si el catálogo dicta 0
+            mat_peligroso_attr = ""
+        elif flag_cat == "1":
+            # El SAT exige "Sí" si el catálogo dicta 1
+            mat_peligroso_attr = ' MaterialPeligroso="Sí"'
+            es_peligroso_final_xml = True
+            if d.get("cve_material_peligroso"):
+                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+        else:
+            # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
+            es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
+            mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
+            if es_peligroso_str == "Sí":
+                es_peligroso_final_xml = True
+                if d.get("cve_material_peligroso"):
+                    mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+
+        # 2. SÓLO agregamos el Seguro Ambiental si la mercancía SÍ fue peligrosa (Regla CP182)
+        seguro_ambiental_attr = ""
+        if (
+            es_peligroso_final_xml
+            and d.get("aseguradora_med_ambiente")
+            and d.get("poliza_med_ambiente")
+        ):
+            seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
+        # =========================================================
+
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
+            <cfdi:Impuestos>
+                <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
+                <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
+            </cfdi:Impuestos>
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
+        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
+        <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
+    </cfdi:Impuestos>
+    <cfdi:Complemento>
+        <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['distancia_total']}">
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
+                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['distancia_total']}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>
+            <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
+                <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
+                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
+                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}"{seguro_ambiental_attr} />
+                    <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
+                </cartaporte31:Autotransporte>
+            </cartaporte31:Mercancias>
+            <cartaporte31:FiguraTransporte>
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
+                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                </cartaporte31:TiposFigura>
+            </cartaporte31:FiguraTransporte>
+        </cartaporte31:CartaPorte>
+    </cfdi:Complemento>
+</cfdi:Comprobante>""".strip()
+
+    def _guardar_xml_disco(self, cfdi_bytes: bytes, uuid_timbrado: str):
+        """
+        Guarda el archivo XML timbrado en el directorio de almacenamiento especificado.
+        """
+        try:
+            # Creamos la ruta completa combinando el directorio y el UUID
+            xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
+
+            # Escribimos los bytes del XML ('wb' es para escritura de bytes)
+            with open(xml_path, "wb") as f:
+                f.write(cfdi_bytes)
+
+            logger.info(f"💾 XML guardado en disco correctamente: {xml_path}")
+        except Exception as e:
+            logger.error(f"❌ Error crítico al guardar el XML en disco: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error interno del servidor al almacenar el archivo XML: {str(e)}",
+            )
+
+    def _marcar_timbrado_pendiente(
+        self,
+        factura: ReceivableInvoice,
+        error: Exception,
+        payload: dict | None = None,
+        relacion_uuid: str | None = None,
+    ):
+        factura.status_sat = "PENDIENTE_TIMBRADO"
+        factura.detalle_sat = (
+            "Timeout esperando respuesta del PAC. El CFDI puede haber sido recibido; "
+            "requiere conciliación/reintento antes de generar otro timbre."
+        )
+        register_sat_retry(
+            self.db,
+            invoice=factura,
+            operation_type="timbrado",
+            source_service=self.__class__.__name__,
+            error=error,
+            payload={
+                "sat_payload": payload or {},
+                "relacion_uuid": relacion_uuid,
+                "invoice_id": factura.id,
+                "viaje_id": factura.viaje_id,
+                "folio_interno": factura.folio_interno,
+                "is_nominal": factura.is_nominal,
+                "status_sat": factura.status_sat,
+            },
+            http_status=202,
+        )
+        self.db.commit()
+        logger.warning(
+            "Timbrado pendiente por timeout. factura_id=%s folio=%s error=%s",
+            getattr(factura, "id", None),
+            getattr(factura, "folio_interno", None),
+            error,
+        )
+
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
         logger.info("Generando XML Carta Porte y enviando al PAC...")
         xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
@@ -781,6 +946,17 @@ class CartaPorteService:
 
             ret = PACResult()
             ret.uuid = uuid_timbrado
+
+            # --- NUEVO: Pasamos la serie y folio reales ---
+            try:
+                root_xml = etree.fromstring(cfdi_bytes)
+                ret.serie = root_xml.get("Serie")
+                ret.folio = root_xml.get("Folio")
+            except Exception:
+                ret.serie = None
+                ret.folio = None
+            # ----------------------------------------------
+
             return ret
 
         except Exception as e:
@@ -788,166 +964,6 @@ class CartaPorteService:
             raise HTTPException(
                 status_code=500, detail=f"Error al timbrar Carta Porte: {str(e)}"
             )
-
-    def _guardar_xml_disco(self, cfdi_bytes: bytes, uuid_timbrado: str):
-        """
-        Guarda el archivo XML timbrado en el directorio de almacenamiento especificado.
-        """
-        try:
-            # Creamos la ruta completa combinando el directorio y el UUID
-            xml_path = self.storage_dir / f"{uuid_timbrado}.xml"
-
-            # Escribimos los bytes del XML ('wb' es para escritura de bytes)
-            with open(xml_path, "wb") as f:
-                f.write(cfdi_bytes)
-
-            logger.info(f"💾 XML guardado en disco correctamente: {xml_path}")
-        except Exception as e:
-            logger.error(f"❌ Error crítico al guardar el XML en disco: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error interno del servidor al almacenar el archivo XML: {str(e)}",
-            )
-
-    def _marcar_timbrado_pendiente(
-        self,
-        factura: ReceivableInvoice,
-        error: Exception,
-        payload: dict | None = None,
-        relacion_uuid: str | None = None,
-    ):
-        factura.status_sat = "PENDIENTE_TIMBRADO"
-        factura.detalle_sat = (
-            "Timeout esperando respuesta del PAC. El CFDI puede haber sido recibido; "
-            "requiere conciliación/reintento antes de generar otro timbre."
-        )
-        register_sat_retry(
-            self.db,
-            invoice=factura,
-            operation_type="timbrado",
-            source_service=self.__class__.__name__,
-            error=error,
-            payload={
-                "sat_payload": payload or {},
-                "relacion_uuid": relacion_uuid,
-                "invoice_id": factura.id,
-                "viaje_id": factura.viaje_id,
-                "folio_interno": factura.folio_interno,
-                "is_nominal": factura.is_nominal,
-                "status_sat": factura.status_sat,
-            },
-            http_status=202,
-        )
-        self.db.commit()
-        logger.warning(
-            "Timbrado pendiente por timeout. factura_id=%s folio=%s error=%s",
-            getattr(factura, "id", None),
-            getattr(factura, "folio_interno", None),
-            error,
-        )
-
-    def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
-        desc_concepto_xml = html.escape(
-            str(d.get("descripcion_concepto", ""))
-            .replace(" | ", " - ")
-            .replace("|", "-")
-        )
-        desc_mercancia_xml = html.escape(
-            str(d.get("descripcion_mercancia", ""))
-            .replace(" | ", " - ")
-            .replace("|", "-")
-        )
-
-        relacion_xml = (
-            f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
-            if relacion_uuid
-            else ""
-        )
-
-        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque", "CTR004")}" Placa="{d.get("placa_remolque_1", "1XXXX99")}" />'
-        if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
-            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{d["placa_remolque_2"]}" />'
-
-        # =========================================================
-        # MATERIAL PELIGROSO Y SEGURO AMBIENTAL
-        # =========================================================
-        clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
-        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
-        mat_peligroso_attr = ""
-
-        # 1. Bandera estricta para saber si al final SÍ fue peligroso
-        es_peligroso_final_xml = False
-
-        if flag_cat == "0":
-            # El SAT prohíbe enviar el atributo si el catálogo dicta 0
-            mat_peligroso_attr = ""
-        elif flag_cat == "1":
-            # El SAT exige "Sí" si el catálogo dicta 1
-            mat_peligroso_attr = ' MaterialPeligroso="Sí"'
-            es_peligroso_final_xml = True
-            if d.get("cve_material_peligroso"):
-                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
-        else:
-            # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
-            es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
-            mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
-            if es_peligroso_str == "Sí":
-                es_peligroso_final_xml = True
-                if d.get("cve_material_peligroso"):
-                    mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
-
-        # 2. SÓLO agregamos el Seguro Ambiental si la mercancía SÍ fue peligrosa (Regla CP182)
-        seguro_ambiental_attr = ""
-        if (
-            es_peligroso_final_xml
-            and d.get("aseguradora_med_ambiente")
-            and d.get("poliza_med_ambiente")
-        ):
-            seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
-        # =========================================================
-
-        return f"""<?xml version="1.0" encoding="UTF-8"?>
-<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
-    <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
-            <cfdi:Impuestos>
-                <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-                <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-            </cfdi:Impuestos>
-        </cfdi:Concepto>
-    </cfdi:Conceptos>
-    <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
-        <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-        <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-    </cfdi:Impuestos>
-    <cfdi:Complemento>
-        <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['distancia_total']}">
-            <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['distancia_total']}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
-                </cartaporte31:Ubicacion>
-            </cartaporte31:Ubicaciones>
-            <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
-                <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
-                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
-                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}"{seguro_ambiental_attr} />
-                    <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
-                </cartaporte31:Autotransporte>
-            </cartaporte31:Mercancias>
-            <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:TiposFigura>
-            </cartaporte31:FiguraTransporte>
-        </cartaporte31:CartaPorte>
-    </cfdi:Complemento>
-</cfdi:Comprobante>""".strip()
 
     def _generar_pdf_con_diseno(
         self,
@@ -960,6 +976,27 @@ class CartaPorteService:
         cadena_original,
         importe_letra,
     ):
+        import re
+
+        dir_cliente = d.get("direccion_cliente", "")
+        cp_val = str(d.get("cp_cliente", "")).strip()
+
+        if dir_cliente and cp_val:
+            # Expresión regular (?i) insensible a mayúsculas/minúsculas. \b valida palabras completas.
+            # Captura de manera segura: "CP", "C.P.", "c.p.", "c.p", "C. P."
+            tiene_cp_texto = re.search(
+                r"(?i)\b(c\.?\s*p\.?|código\s*postal|codigo\s*postal)\b",
+                str(dir_cliente),
+            )
+            tiene_cp_numerico = cp_val in str(dir_cliente)
+
+            # Si NO viene el texto 'CP' ni el número del código postal escrito dentro de la dirección...
+            if not (tiene_cp_texto or tiene_cp_numerico):
+                # Se lo añadimos limpiamente al final para asegurar cobertura
+                d["direccion_cliente"] = (
+                    f"{str(dir_cliente).rstrip(', ')}, C.P. {cp_val}"
+                )
+
         logo_path = self.templates_dir / "assets" / "logo-black.png"
         logo_src = (
             f"data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode('utf-8')}"
@@ -1060,6 +1097,8 @@ class CartaPorteService:
     def generar_carta_porte_nominal(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
+        from app.modules.logistics.schemas import SatCfdiPayload
+
         viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
             invoice_data.viaje_id, buscar_tramo_carretera=True
         )
@@ -1101,7 +1140,7 @@ class CartaPorteService:
 
         try:
             validated_payload = SatCfdiPayload(**raw_data)
-            data = validated_payload.model_dump()
+            data = {**raw_data, **validated_payload.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1140,6 +1179,13 @@ class CartaPorteService:
         try:
             resultado_pac = self._importar_comprobante_ws(data, relacion_uuid=None)
             uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            # --- NUEVO: El XML manda. Obligamos a la BD a adoptar el folio legal ---
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                nueva_factura.folio_interno = f"{serie_real}-{folio_real}"
+            # -----------------------------------------------------------------------
 
             nueva_factura.uuid = uuid_generado
             nueva_factura.status_sat = "TIMBRADA"
@@ -1193,7 +1239,7 @@ class CartaPorteService:
 
         try:
             validated_payload = SatCfdiPayload(**raw_data)
-            data = validated_payload.model_dump()
+            data = {**raw_data, **validated_payload.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1270,6 +1316,13 @@ class CartaPorteService:
 
             uuid_generado = getattr(resultado_pac, "uuid", None)
 
+            # --- NUEVO: El XML manda. Obligamos a la BD a adoptar el folio legal ---
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+            # -----------------------------------------------------------------------
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1335,7 +1388,7 @@ class CartaPorteService:
 
         try:
             validador = SatCfdiPayload(**raw_data)
-            data = validador.model_dump()
+            data = {**raw_data, **validador.model_dump()}
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1415,6 +1468,13 @@ class CartaPorteService:
             )
             uuid_generado = getattr(resultado_pac, "uuid", None)
 
+            # --- NUEVO: El XML manda. Obligamos a la BD a adoptar el folio legal ---
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+            # -----------------------------------------------------------------------
+
             factura.uuid = uuid_generado
             factura.status_sat = "TIMBRADA"
             if uuid_generado:
@@ -1426,7 +1486,6 @@ class CartaPorteService:
             self.db.commit()
             self.db.refresh(factura)
             return factura
-
         except Exception as e:
             if is_pac_timeout_error(e):
                 self._marcar_timbrado_pendiente(factura, e, data, uuid_relacionado_real)
