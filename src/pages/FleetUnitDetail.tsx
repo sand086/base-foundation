@@ -272,7 +272,7 @@ export default function FlotaUnitDetail() {
       const enrichedUnit: UnitDetail = {
         ...apiData,
         documents: constructedDocuments,
-        // 👇 AQUI ESTA LA MAGIA: Filtramos las llantas que tengan record_status "E"
+        //   AQUI ESTA LA MAGIA: Filtramos las llantas que tengan record_status "E"
         tires: (apiData.tires || []).filter(
           (tire: any) => tire.record_status !== "E",
         ),

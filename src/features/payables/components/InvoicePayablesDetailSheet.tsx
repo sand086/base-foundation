@@ -78,7 +78,7 @@ export function InvoicePayablesDetailSheet({
     safeStr(inv.folio_interno) || safeStr(inv.folio) || `ID-${id}`;
   const uuid = safeStr(inv.uuid) || "NO TIMBRADO";
 
-  // 👇 EXTRACCIÓN SEGURA HOMOLOGADA CON CLIENTES
+  //   EXTRACCIÓN SEGURA HOMOLOGADA CON CLIENTES
   const estatusStr = safeStr(inv.estatus).toUpperCase();
   const isCanceled = estatusStr === "CANCELADO";
   const inProcess = estatusStr === "PROCESO_CANCELACION";

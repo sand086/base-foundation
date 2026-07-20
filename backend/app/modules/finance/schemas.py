@@ -170,7 +170,7 @@ class PayableInvoiceBase(BaseModel):
     acuse_cancelacion_url: Optional[str] = None
     fecha_cancelacion: Optional[datetime] = None
 
-    # 👇 NUEVOS CAMPOS AÑADIDOS 👇
+    #   NUEVOS CAMPOS AÑADIDOS
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
 

@@ -32,11 +32,11 @@ export interface CFDIHistoryRecord {
   motivo_cancelacion: string | null;
   versiones_archivos: DocumentVersion[];
 
-  // 👇 PROPIEDADES INYECTADAS DINÁMICAMENTE PARA FILAS VIRTUALES HIJAS 👇
+  //   PROPIEDADES INYECTADAS DINÁMICAMENTE PARA FILAS VIRTUALES HIJAS
   isVirtualChild?: boolean;
   parentFolio?: string | null;
 
-  // 👇 CAMPOS DE TRAZABILIDAD DEL SAT Y JERARQUÍAS DEL CORE BÓVEDA 👇
+  //   CAMPOS DE TRAZABILIDAD DEL SAT Y JERARQUÍAS DEL CORE BÓVEDA
   status_sat?: string | null;
   intentos_cancelacion?: number;
   detalle_sat?: string | null;

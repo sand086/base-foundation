@@ -107,7 +107,7 @@ export const useReceivables = () => {
     },
   });
 
-  // 8. 👇 NUEVO: MUTACIÓN DE PLANCHADO/SINCRONIZACIÓN DE CANCELADAS 👇
+  // 8.   NUEVO: MUTACIÓN DE PLANCHADO/SINCRONIZACIÓN DE CANCELADAS
   const syncCancelledMut = useMutation({
     mutationFn: () => axiosClient.post(`/api/finance/sync-cancelled-invoices`),
     onSuccess: () => {
@@ -286,7 +286,7 @@ export const useReceivables = () => {
       }
     },
 
-    // 👇 9. NUEVA ACCIÓN EXPUESTA A LA UI: Sincronizar canceladas 👇
+    //   9. NUEVA ACCIÓN EXPUESTA A LA UI: Sincronizar canceladas
     syncCancelledInvoices: async () => {
       const toastId = toast.loading(
         "Sincronizando estado de facturas canceladas...",
