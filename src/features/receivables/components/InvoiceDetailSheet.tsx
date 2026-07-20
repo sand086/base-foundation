@@ -472,16 +472,20 @@ export function InvoiceDetailSheet({
               <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-[11px] font-black text-rose-700 dark:text-rose-400 uppercase tracking-widest">
-                  Factura Cancelada
+                  Factura Cancelada{" "}
+                  {inv.detalle_sat?.toLowerCase().includes("sin aceptación")
+                    ? "(Sin Aceptación)"
+                    : ""}
                 </h4>
                 <p className="text-sm font-medium text-rose-600/80 dark:text-rose-400/80 mt-1 leading-snug">
                   Cancelada el <strong>{fDT(inv.fecha_cancelacion)}</strong>.
-                  Detalle SAT:{" "}
+                  <br />
+                  Respuesta SAT:{" "}
                   {inv.detalle_sat ||
                     inv.sat_error_log ||
                     (inv.motivo_cancelacion
-                      ? `por el motivo "${inv.motivo_cancelacion}"`
-                      : "Sin detalle.")}
+                      ? `Motivo "${inv.motivo_cancelacion}"`
+                      : "Cancelado exitosamente.")}
                 </p>
               </div>
             </div>
@@ -547,11 +551,16 @@ export function InvoiceDetailSheet({
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <h4 className="text-[11px] font-black text-red-800 dark:text-red-400 uppercase tracking-widest">
-                  Rechazo de Cancelación (Intento {inv.intentos_cancelacion})
+                  {/* Hacemos dinámico el título: Si el mensaje del SAT incluye "cancelado", no lo tratamos como "Rechazo" */}
+                  {inv.detalle_sat?.toLowerCase().includes("cancelado")
+                    ? `Aviso SAT (Intento ${inv.intentos_cancelacion})`
+                    : `Alerta de Cancelación (Intento ${inv.intentos_cancelacion})`}
                 </h4>
                 <p className="text-sm font-medium text-red-700/80 dark:text-red-400/80 mt-1">
+                  {/* Priorizamos SIEMPRE la respuesta real del SAT antes de poner un texto genérico */}
                   {inv.detalle_sat ||
-                    "El SAT o el Receptor rechazaron la solicitud de cancelación."}
+                    inv.sat_error_log ||
+                    "Hay una alerta con la cancelación. Sincroniza con el SAT para ver el estatus real."}
                 </p>
                 <div className="flex gap-2 mt-3">
                   {onRetryCancel && (
@@ -566,7 +575,7 @@ export function InvoiceDetailSheet({
                       ) : (
                         <RefreshCw className="w-3 h-3 mr-2" />
                       )}
-                      Reintentar Cancelación
+                      Reintentar / Sincronizar
                     </Button>
                   )}
                 </div>

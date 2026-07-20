@@ -188,9 +188,22 @@ export default function CFDIVault() {
   // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla
   const sortedFilteredRecords = useMemo(() => {
     return [...filteredRecords].sort((a, b) => {
-      const timeA = a.fecha_emision ? new Date(a.fecha_emision).getTime() : 0;
-      const timeB = b.fecha_emision ? new Date(b.fecha_emision).getTime() : 0;
-      return timeB - timeA;
+      const folioA = a.folio || a.folio_interno || "";
+      const folioB = b.folio || b.folio_interno || "";
+
+      // Extraemos solo los dígitos numéricos del string
+      const numA = parseInt(String(folioA).replace(/[^0-9]/g, ""), 10) || 0;
+      const numB = parseInt(String(folioB).replace(/[^0-9]/g, ""), 10) || 0;
+
+      if (numA !== numB) {
+        return numB - numA; // El número de folio más alto sube al inicio
+      }
+
+      // Respaldo alfabético inverso en caso de folios idénticos o sin números
+      return String(folioB).localeCompare(String(folioA), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
     });
   }, [filteredRecords]);
 
@@ -790,7 +803,7 @@ export default function CFDIVault() {
               {hasError && (
                 <div
                   // Cambiamos a detalle_sat o sat_error_log según cómo lo hayas dejado en el Schema
-                  title={`Error en SAT: ${row.sat_error_log || row.detalle_sat || "Rechazo"}`}
+                  title={`Mensaje SAT: ${row.detalle_sat || row.sat_error_log || "Alerta de sincronización"}`}
                   className="p-1 bg-rose-100 rounded-full cursor-help animate-pulse"
                 >
                   <AlertTriangle className="w-3 h-3 text-rose-600" />
