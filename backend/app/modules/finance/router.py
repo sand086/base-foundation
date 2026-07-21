@@ -2264,20 +2264,41 @@ def verify_receivable_invoice_sat_status(
         cancelable_match = re.search(
             r"<.*:EsCancelable>(.*?)</.*:EsCancelable>", response_text
         )
+        #   LÍNEA AÑADIDA: Extraer el estatus exacto de cancelación ("Cancelado sin aceptación")
+        estatus_canc_match = re.search(
+            r"<.*:EstatusCancelacion>(.*?)</.*:EstatusCancelacion>", response_text
+        )
 
         estado_sat = estado_match.group(1).upper() if estado_match else "DESCONOCIDO"
         codigo_estatus = codigo_match.group(1) if codigo_match else "No recibido"
         es_cancelable = cancelable_match.group(1) if cancelable_match else "No"
+        estatus_cancelacion_sat = (
+            estatus_canc_match.group(1) if estatus_canc_match else ""
+        )
+
+        #   LÍNEA AÑADIDA: Asignamos el mensaje real que nos entregó el SAT
+        mensaje_real_sat = (
+            estatus_cancelacion_sat if estatus_cancelacion_sat else estado_sat
+        )
 
         # 6. Sincronizar y mapear el resultado con tu Base de Datos local
-        # Valores comunes del SAT: "VIGENTE", "CANCELADO", "NO ENCONTRADO"
         if "VIGENTE" in estado_sat:
             invoice.status_sat = "TIMBRADO"
+
+            #   LÍNEA AÑADIDA: Manejo del desfase de Hacienda
+            if getattr(invoice, "intentos_cancelacion", 0) > 0:
+                invoice.detalle_sat = "El SAT aún reporta la factura como VIGENTE en su WebService (Posible desfase de Hacienda)."
+            else:
+                invoice.detalle_sat = "Vigente"
+
         elif "CANCELADO" in estado_sat:
             invoice.status_sat = "CANCELADO"
 
-            # 👇 CORRECCIÓN CRÍTICA AQUÍ: USAR EL ENUM STRICTO 👇
+            # CORRECCIÓN CRÍTICA AQUÍ: USAR EL ENUM STRICTO
             invoice.estatus = InvoiceStatus.CANCELADO
+
+            #   LÍNEA AÑADIDA: Guardamos "Cancelado sin aceptación" en la Base de Datos
+            invoice.detalle_sat = mensaje_real_sat
 
             from datetime import datetime
 
@@ -2297,6 +2318,9 @@ def verify_receivable_invoice_sat_status(
             "codigo_sat": codigo_estatus,
             "es_cancelable": es_cancelable,
             "base_datos_actualizada": invoice.status_sat,
+            "detalle_sat": getattr(
+                invoice, "detalle_sat", ""
+            ),  # Añadimos esto a la respuesta por si el frontend lo requiere
             "message": f"Sincronización exitosa. Estatus real en SAT: {estado_sat}.",
         }
 

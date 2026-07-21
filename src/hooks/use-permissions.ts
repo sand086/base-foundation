@@ -156,7 +156,7 @@ export const usePermissions = (moduleCode?: string) => {
       const moduleName =
         mod === "finance" ? "receivables" : mod === "sat" ? "receivables" : mod;
 
-      // 👇 FIX CRÍTICO: Traductor exacto Backend -> DB
+      //   FIX CRÍTICO: Traductor exacto Backend -> DB
       const actionName =
         action === "cancel_invoice"
           ? "cancel"

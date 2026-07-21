@@ -188,9 +188,22 @@ export default function CFDIVault() {
   // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla
   const sortedFilteredRecords = useMemo(() => {
     return [...filteredRecords].sort((a, b) => {
-      const timeA = a.fecha_emision ? new Date(a.fecha_emision).getTime() : 0;
-      const timeB = b.fecha_emision ? new Date(b.fecha_emision).getTime() : 0;
-      return timeB - timeA;
+      const folioA = a.folio || a.folio_interno || "";
+      const folioB = b.folio || b.folio_interno || "";
+
+      // Extraemos solo los dígitos numéricos del string
+      const numA = parseInt(String(folioA).replace(/[^0-9]/g, ""), 10) || 0;
+      const numB = parseInt(String(folioB).replace(/[^0-9]/g, ""), 10) || 0;
+
+      if (numA !== numB) {
+        return numB - numA; // El número de folio más alto sube al inicio
+      }
+
+      // Respaldo alfabético inverso en caso de folios idénticos o sin números
+      return String(folioB).localeCompare(String(folioA), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
     });
   }, [filteredRecords]);
 
@@ -790,7 +803,7 @@ export default function CFDIVault() {
               {hasError && (
                 <div
                   // Cambiamos a detalle_sat o sat_error_log según cómo lo hayas dejado en el Schema
-                  title={`Error en SAT: ${row.sat_error_log || row.detalle_sat || "Rechazo"}`}
+                  title={`Mensaje SAT: ${row.detalle_sat || row.sat_error_log || "Alerta de sincronización"}`}
                   className="p-1 bg-rose-100 rounded-full cursor-help animate-pulse"
                 >
                   <AlertTriangle className="w-3 h-3 text-rose-600" />
@@ -1073,18 +1086,36 @@ export default function CFDIVault() {
         onRetryCancel={async (id, motivo) => {
           try {
             const toastId = toast.loading(
-              "Reintentando cancelación en el SAT...",
+              "Enviando solicitud de cancelación al SAT...",
             );
+
+            // 1. Enviamos la orden de cancelación
             await axiosClient.post(
               `/api/finance/receivables/${id}/cancel-sat`,
               { motivo },
             );
-            toast.success("Solicitud enviada al SAT", { id: toastId });
+
+            // 2. Cambiamos el mensaje del Toast para avisar que estamos verificando
+            toast.loading("Sincronizando estatus final con Hacienda...", {
+              id: toastId,
+            });
+
+            // 3. Consultamos el estatus real INMEDIATAMENTE después de cancelar
+            await axiosClient.get(`/api/finance/receivables/${id}/verify-sat`);
+
+            // 4. Concluimos con éxito y refrescamos la tabla
+            toast.success("¡Cancelación procesada y sincronizada!", {
+              id: toastId,
+            });
+
             if (refetch) refetch();
           } catch (error: any) {
             toast.error(
-              error.response?.data?.detail || "Error al cancelar la factura.",
+              error.response?.data?.detail ||
+                "Error al intentar cancelar o verificar la factura.",
             );
+            // Refrescamos por si la cancelación pasó pero la verificación falló
+            if (refetch) refetch();
           }
         }}
         onStampPayment={async (paymentId) => {
