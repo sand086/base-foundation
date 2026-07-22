@@ -706,6 +706,12 @@ class BillingService:
                 subcliente, "correo_electronico", getattr(subcliente, "correo", "")
             ),
             "subcliente_direccion": direccion_destino_real,
+            #  CAMPOS: COMERCIO EXTERIOR
+            "tipo_operacion": str(
+                getattr(viaje, "tipo_operacion", "nacional") or "nacional"
+            ).lower(),
+            "booking_referencia": getattr(viaje, "booking_referencia", "") or "",
+            "pedimento": getattr(viaje, "pedimento", "") or "",
         }
 
     # =========================================================================
@@ -724,11 +730,53 @@ class BillingService:
             .replace(" | ", " - ")
             .replace("|", "-")
         )
+
+        # 1. Inyectamos Contenedores y Pedimento en la descripción de la mercancía
+        desc_extra = ""
+        if d.get("contenedor_1"):
+            desc_extra += f" - Contenedor: {d['contenedor_1']}"
+        if d.get("contenedor_2"):
+            desc_extra += f" / {d['contenedor_2']}"
+        if d.get("pedimento"):
+            desc_extra += f" - Pedimento: {d['pedimento']}"
+
         desc_mercancia_xml = html.escape(
             str(d.get("descripcion_mercancia", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
+            + desc_extra
         )
+
+        # 2. Lógica Dinámica de Ubicaciones (Inversión para Exportación)
+        es_exportacion = d.get("tipo_operacion", "nacional") == "exportacion"
+        ref_bkg = (
+            f' Referencia="{d.get("booking_referencia")}"'
+            if d.get("booking_referencia")
+            else ""
+        )
+
+        if es_exportacion:
+            # INVERSIÓN: Origen = Cliente (Patio), Destino = Nosotros (Puerto)
+            ubicaciones_xml = f"""
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}"{ref_bkg} />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>"""
+        else:
+            # NORMAL (Nacional / Importación): Origen = Nosotros (Puerto), Destino = Cliente (Patio)
+            ubicaciones_xml = f"""
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
+                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}"{ref_bkg} />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>"""
 
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
@@ -786,14 +834,7 @@ class BillingService:
     </cfdi:Impuestos>
     <cfdi:Complemento>
         <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d.get('total_dist_rec', d.get('distancia_total'))}">
-            <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
-                </cartaporte31:Ubicacion>
-            </cartaporte31:Ubicaciones>
+            {ubicaciones_xml}
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
                 <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">

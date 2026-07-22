@@ -285,6 +285,7 @@ class TripTimelineEventResponse(TripTimelineEventBase):
 from app.models.models import TripStatus, TripLegType
 from app.modules.fleet.schemas import UnitResponse, OperatorResponse
 
+
 class TripLegBase(ORMBase):
     leg_type: TripLegType
     status: TripStatus = TripStatus.CREADO
@@ -350,6 +351,9 @@ class TripBase(ORMBase):
     referencia: Optional[str] = Field(default=None, max_length=100)
     contenedor_1: Optional[str] = Field(default=None, max_length=100)
     contenedor_2: Optional[str] = Field(default=None, max_length=100)
+    tipo_operacion: Optional[str] = Field(default="nacional", max_length=50)
+    booking_referencia: Optional[str] = Field(default=None, max_length=255)
+    pedimento: Optional[str] = Field(default=None, max_length=255)
 
     remolque_1_id: Optional[int] = None
     dolly_id: Optional[int] = None
@@ -426,6 +430,7 @@ class DocumentHistoryResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # 🚀 NUEVO: MODELO REFERENCIAL LIGERO PARA ROMPER LA RECURSIÓN 500 ERROR 🚀
 class ReceivableInvoiceRef(ORMBase):
     id: int
@@ -460,7 +465,7 @@ class ReceivableInvoiceLite(ORMBase):
     intentos_cancelacion: Optional[int] = 0
     detalle_sat: Optional[str] = None
     factura_padre_id: Optional[int] = None
-    
+
     # 🚀 FIX APLICADO: Utilizar la referencia ligera en lugar de "Any"
     factura_padre: Optional[ReceivableInvoiceRef] = None
     cartas_porte_hijas: List[ReceivableInvoiceRef] = Field(default_factory=list)
@@ -469,6 +474,7 @@ class ReceivableInvoiceLite(ORMBase):
 
 
 from app.modules.clients.schemas import ClientResponse
+
 
 class TripResponse(TripBase):
     id: int
@@ -514,6 +520,11 @@ class TripUpdate(ORMBase):
     referencia: Optional[str] = None
     contenedor_1: Optional[str] = None
     contenedor_2: Optional[str] = None
+
+    tipo_operacion: Optional[str] = Field(default=None, max_length=50)
+    booking_referencia: Optional[str] = Field(default=None, max_length=255)
+    pedimento: Optional[str] = Field(default=None, max_length=255)
+
     terminal_entrega_vacio: Optional[str] = None
     peso_toneladas: Optional[float] = None
 
@@ -559,8 +570,8 @@ class TripUpdate(ORMBase):
 
 class ConceptoPago(BaseModel):
     id: str
-    tipo: str  
-    categoria: str 
+    tipo: str
+    categoria: str
     descripcion: str
     monto: float
     referencia: Optional[str] = None
@@ -626,6 +637,7 @@ class BatchSettlementPayload(BaseModel):
 # FACTURACIÓN Y RELACIONES SAT
 # =========================================================
 
+
 class ReceivableInvoiceCreate(BaseModel):
     viaje_id: int
     is_nominal: bool = Field(default=False)
@@ -664,7 +676,7 @@ class SatCfdiPayload(BaseModel):
     retenciones: str = Field(default="0.00")
     total: str = Field(default="0.00")
     id_ccp: Optional[str] = None
-    
+
     forma_pago: str = Field(default="99")
     metodo_pago: str = Field(default="PPD")
     uso_cfdi: str = Field(default="G03")
@@ -811,5 +823,6 @@ class SatCfdiPayload(BaseModel):
                     f"Material peligroso: El camión DEBE tener registrada una Póliza de Medio Ambiente. Valor recibido: '{self.poliza_med_ambiente}'"
                 )
         return self
+
 
 TripResponse.model_rebuild()

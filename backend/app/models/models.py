@@ -680,6 +680,11 @@ class Trip(AuditMixin, Base):
     referencia = Column(String(100), nullable=True)
     contenedor_1 = Column(String(100), nullable=True)
     contenedor_2 = Column(String(100), nullable=True)
+
+    tipo_operacion = Column(String(50), default="nacional", nullable=True)
+    booking_referencia = Column(String(255), nullable=True)
+    pedimento = Column(String(255), nullable=True)
+
     clase_imo = Column(String(50), nullable=True)
     sat_clave_producto = Column(String(20), default="01010101")
     sat_clave_unidad = Column(String(10), default="E48")
