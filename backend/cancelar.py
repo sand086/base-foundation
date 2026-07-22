@@ -1,5 +1,4 @@
 import logging
-import time
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -10,112 +9,140 @@ except ImportError:
 
 from app.models.models import ReceivableInvoice
 from app.integrations.sat.billing_service import BillingService
+from app.integrations.sat.soap_client import get_timbrado_client
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("cancelacion_forzada")
+logger = logging.getLogger("cancelacion_simultanea")
 
 
-def ejecutar_cancelacion_exacta():
+def ejecutar_cancelacion_simultanea():
     db: Session = SessionLocal()
     try:
-        # IDs exactos según tu base de datos
-        id_padre_nominal = 883
-        id_hijo_comercial = 884
+        # IDs exactos de la BD
+        id_nominal = 883
+        id_comercial = 884
 
         logger.info("=========================================================")
-        logger.info(
-            f"1. BUSCANDO FACTURAS POR ID: {id_padre_nominal} y {id_hijo_comercial}"
-        )
+        logger.info(f"1. PREPARANDO CANCELACIÓN SIMULTÁNEA")
         logger.info("=========================================================")
 
-        # Búsqueda estricta por ID
-        factura_padre = (
+        nominal = (
             db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == id_padre_nominal)
+            .filter(ReceivableInvoice.id == id_nominal)
             .first()
         )
-        factura_hijo = (
+        comercial = (
             db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == id_hijo_comercial)
+            .filter(ReceivableInvoice.id == id_comercial)
             .first()
         )
 
-        if not factura_padre or not factura_hijo:
+        if not nominal or not comercial:
             logger.error("❌ Error: No se encontraron las facturas en la BD.")
             return
 
-        # Validamos los UUIDs en consola para estar 100% seguros
-        logger.info(
-            f"• PADRE ENCONTRADO: ID {factura_padre.id} | UUID: {factura_padre.uuid} (Debe ser E274FF8D...)"
-        )
-        logger.info(
-            f"• HIJO ENCONTRADO: ID {factura_hijo.id} | UUID: {factura_hijo.uuid} (Debe ser AFD65A3C...)"
-        )
+        logger.info(f"• UUID Nominal: {nominal.uuid}")
+        logger.info(f"• UUID Comercial: {comercial.uuid}")
 
+        # Instanciamos el servicio (para reutilizar sus configuraciones de CSD)
         billing_service = BillingService(db)
 
-        # ---------------------------------------------------------
-        # PASO 1: CANCELAR LA COMERCIAL (884)
-        # ---------------------------------------------------------
-        logger.info(
-            "\n2. CANCELANDO FACTURA COMERCIAL (HIJO - ID 884) EN EL SAT (Motivo 02)..."
-        )
-        res_cancel_hijo = billing_service.cancelar_factura_sat(
-            invoice_id=factura_hijo.id, motivo="02"
-        )
-        logger.info(f"✅ Respuesta SAT Comercial: {res_cancel_hijo}")
+        # Obtenemos las credenciales
+        config = billing_service.configs["timbrado"]
+        usuario = config["usuario"]
+        password = config["password"]
 
-        # ---------------------------------------------------------
-        # PASO 2: TIEMPO DE GRACIA PARA EL SAT
-        # ---------------------------------------------------------
-        logger.info(
-            "\n⏳ Esperando 20 segundos para que el SAT procese y libere el UUID Padre..."
-        )
-        time.sleep(20)
+        # Extraemos el CSD
+        csd_base64, key_base64, csd_pass = billing_service._get_csd_credentials()
 
-        # ---------------------------------------------------------
-        # PASO 3: CANCELAR LA NOMINAL (883)
-        # ---------------------------------------------------------
-        logger.info(
-            "\n3. CANCELANDO CARTA PORTE NOMINAL (PADRE - ID 883) EN EL SAT (Motivo 02)..."
-        )
-        res_cancel_padre = billing_service.cancelar_factura_sat(
-            invoice_id=factura_padre.id, motivo="02"
-        )
-        logger.info(f"✅ Respuesta SAT Nominal: {res_cancel_padre}")
+        # Construimos el payload especial para Solución Factible
+        # Formato esperado: UUID1|Motivo1|UUIDSustituto1, UUID2|Motivo2|UUIDSustituto2...
+        # Como usamos motivo 02, no enviamos UUID sustituto
+        uuids_payload = f"{comercial.uuid}|02|,{nominal.uuid}|02|"
 
-        # ---------------------------------------------------------
-        # PASO 4: ACTUALIZACIÓN EN BD
-        # ---------------------------------------------------------
-        logger.info("\n4. ACTUALIZANDO ESTATUS EN LA BASE DE DATOS...")
-        fecha_canc = datetime.utcnow()
+        logger.info(f"\n2. ENVIANDO PETICIÓN AL PAC CON EL PAYLOAD: {uuids_payload}")
 
-        factura_hijo.status_sat = "CANCELADO"
-        factura_hijo.estatus = "cancelado"
-        factura_hijo.fecha_cancelacion = fecha_canc
-        factura_hijo.motivo_cancelacion = "02"
-        factura_hijo.detalle_sat = "Cancelada exitosamente (Motivo 02)."
+        client = get_timbrado_client()
 
-        factura_padre.status_sat = "CANCELADO"
-        factura_padre.estatus = "cancelado"
-        factura_padre.fecha_cancelacion = fecha_canc
-        factura_padre.motivo_cancelacion = "02"
-        factura_padre.detalle_sat = (
-            "Cancelada exitosamente tras liberar al hijo (Motivo 02)."
+        # Llamada directa al método SOAP `cancelar`
+        response = client.service.cancelar(
+            usuario=usuario,
+            password=password,
+            uuids=uuids_payload,
+            derCertCSD=csd_base64,
+            derKeyCSD=key_base64,
+            contrasenaCSD=csd_pass,
         )
 
-        db.commit()
+        logger.info("\n3. PROCESANDO RESPUESTA DEL SAT:")
 
-        logger.info("=========================================================")
-        logger.info("🎉 ¡AMBAS FACTURAS FUERON CANCELADAS CORRECTAMENTE! 🎉")
-        logger.info("=========================================================")
+        # Validamos el estado general del PAC
+        if response.status != 200:
+            logger.error(
+                f"❌ Error de autenticación o conexión con el PAC: {response.mensaje}"
+            )
+            return
+
+        # Analizamos el resultado para CADA UUID (Solución Factible devuelve una lista en `resultados`)
+        errores_detectados = False
+
+        # Dependiendo de la librería Zeep, `resultados` puede ser una lista o un solo objeto
+        resultados_list = (
+            response.resultados
+            if isinstance(response.resultados, list)
+            else [response.resultados]
+        )
+
+        for res in resultados_list:
+            if res.statusUUID in (201, 202):
+                logger.info(
+                    f"✅ ÉXITO: {res.uuid} -> {res.mensaje} (Status: {res.statusUUID})"
+                )
+            else:
+                logger.error(
+                    f"⚠️ PROBLEMA CON: {res.uuid} -> {res.mensaje} (Status: {res.statusUUID})"
+                )
+                errores_detectados = True
+
+        # ---------------------------------------------------------
+        # PASO 4: ACTUALIZACIÓN EN BD SÓLO SI NO HUBO ERRORES
+        # ---------------------------------------------------------
+        if not errores_detectados:
+            logger.info("\n4. ACTUALIZANDO ESTATUS EN LA BASE DE DATOS...")
+            fecha_canc = datetime.utcnow()
+
+            comercial.status_sat = "CANCELADO"
+            comercial.estatus = "cancelado"
+            comercial.fecha_cancelacion = fecha_canc
+            comercial.motivo_cancelacion = "02"
+            comercial.detalle_sat = (
+                "Cancelada simultáneamente con Carta Porte (Motivo 02)."
+            )
+
+            nominal.status_sat = "CANCELADO"
+            nominal.estatus = "cancelado"
+            nominal.fecha_cancelacion = fecha_canc
+            nominal.motivo_cancelacion = "02"
+            nominal.detalle_sat = (
+                "Cancelada simultáneamente con la Comercial (Motivo 02)."
+            )
+
+            db.commit()
+
+            logger.info("=========================================================")
+            logger.info("🎉 ¡AMBAS FACTURAS FUERON CANCELADAS SIMULTÁNEAMENTE! 🎉")
+            logger.info("=========================================================")
+        else:
+            logger.warning(
+                "\n⚠️ SE DETECTARON ERRORES POR PARTE DEL SAT. NO SE ACTUALIZÓ LA BD LOCAL."
+            )
 
     except Exception as e:
-        logger.error(f"❌ Error crítico: {str(e)}")
+        logger.error(f"❌ Error crítico en ejecución: {str(e)}")
         db.rollback()
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    ejecutar_cancelacion_exacta()
+    ejecutar_cancelacion_simultanea()
