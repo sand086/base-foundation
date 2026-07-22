@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cancelacion_forzada")
 
-# 📋 LISTA DE LOS 6 UUIDS HUÉRFANOS QUE QUEDARON EN EL SAT
+# 📋 LISTA DE LOS 124 UUIDS QUE QUEDARON EN EL SAT
 UUIDS_A_CANCELAR = [
     "6B146ED2-6782-420D-AD1E-2EC4CE64F1C6",
     "B9DA96FD-E580-4149-B0BC-EE7627630842",
@@ -165,41 +165,48 @@ def disparar_cancelacion_sat():
         with open(service.path_key, "rb") as f_key:
             key_bytes = f_key.read()
 
-        # 2. Formatear los UUIDs bajo la especificación del PAC (UUID|Motivo|Sustituto)
-        # Usamos Motivo 02 (Comprobante emitido con errores sin relación)
-        uuids_formateados = [f"{uuid.strip()}|02|" for uuid in UUIDS_A_CANCELAR]
-
         logger.info(f"Conectando al PAC: {service.wsdl_timbrado}")
         client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
-        # 3. Disparar el SOAP Request al PAC (Se envían los 6 de golpe)
-        resultado = client_zeep.service.cancelar(
-            usuario=service.pac_user,
-            password=service.pac_pass,
-            uuids=uuids_formateados,
-            derCertCSD=cer_bytes,
-            derKeyCSD=key_bytes,
-            contrasenaCSD=service.key_password,
-        )
+        # Configurar tamaño de lote para evitar Timeouts del PAC (50 es seguro)
+        BATCH_SIZE = 50
 
-        logger.info(
-            f"Respuesta General PAC - Status: {getattr(resultado, 'status', 'S/S')} | Mensaje: {getattr(resultado, 'mensaje', 'S/M')}"
-        )
+        for i in range(0, len(UUIDS_A_CANCELAR), BATCH_SIZE):
+            lote = UUIDS_A_CANCELAR[i : i + BATCH_SIZE]
 
-        # 4. Desglosar el estatus de cada UUID de manera detallada
-        if hasattr(resultado, "resultados") and resultado.resultados:
-            print("\n" + "=" * 70)
-            print("📊 DETALLE DE CANCELACIÓN POR COMPROBANTE:")
-            print("=" * 70)
-            for res in resultado.resultados:
-                print(f"UUID: {getattr(res, 'uuid', 'DESCONOCIDO')}")
-                print(f"Status SAT: {getattr(res, 'status', 'Sin Status')}")
-                print(f"Mensaje Hacienda: {getattr(res, 'mensaje', 'Sin Mensaje')}")
-                print("-" * 70)
-        else:
-            logger.warning(
-                "El PAC procesó la solicitud pero no devolvió el desglose individual por UUID."
+            # 2. Formatear los UUIDs bajo la especificación del PAC (UUID|Motivo|Sustituto)
+            uuids_formateados = [f"{uuid.strip()}|02|" for uuid in lote]
+
+            logger.info(f"Enviando lote {i//BATCH_SIZE + 1} ({len(lote)} UUIDs)...")
+
+            # 3. Disparar el SOAP Request al PAC para el lote actual
+            resultado = client_zeep.service.cancelar(
+                usuario=service.pac_user,
+                password=service.pac_pass,
+                uuids=uuids_formateados,
+                derCertCSD=cer_bytes,
+                derKeyCSD=key_bytes,
+                contrasenaCSD=service.key_password,
             )
+
+            logger.info(
+                f"Respuesta Lote {i//BATCH_SIZE + 1} - Status: {getattr(resultado, 'status', 'S/S')} | Mensaje: {getattr(resultado, 'mensaje', 'S/M')}"
+            )
+
+            # 4. Desglosar el estatus de cada UUID de manera detallada
+            if hasattr(resultado, "resultados") and resultado.resultados:
+                print("\n" + "=" * 70)
+                print(f"📊 DETALLE DE CANCELACIÓN (LOTE {i//BATCH_SIZE + 1}):")
+                print("=" * 70)
+                for res in resultado.resultados:
+                    print(f"UUID: {getattr(res, 'uuid', 'DESCONOCIDO')}")
+                    print(f"Status SAT: {getattr(res, 'status', 'Sin Status')}")
+                    print(f"Mensaje Hacienda: {getattr(res, 'mensaje', 'Sin Mensaje')}")
+                    print("-" * 70)
+            else:
+                logger.warning(
+                    f"El PAC procesó el lote {i//BATCH_SIZE + 1} pero no devolvió el desglose individual por UUID."
+                )
 
     except Exception as e:
         logger.error(
