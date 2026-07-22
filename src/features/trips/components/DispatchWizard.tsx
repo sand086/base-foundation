@@ -616,7 +616,7 @@ export const DispatchWizard = ({
 
     // NUEVOS CAMPOS STATE (Faltaban aquí para que TypeScript no llore)
     iniciaEnPatioExportacion: initialData?.iniciaEnPatioExportacion ?? false,
-    tipo_operacion: initialData?.tipo_operacion || "nacional",
+    tipo_operacion: initialData?.tipo_operacion || "importacion",
     booking_referencia: initialData?.booking_referencia || "",
     pedimento: initialData?.pedimento || "",
   });
@@ -1381,31 +1381,28 @@ export const DispatchWizard = ({
 
                 {data.iniciaEnPatioExportacion && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 animate-in fade-in slide-in-from-top-2">
-                    <div className="space-y-1.5 md:col-span-2">
-                      <Label variant="brand">TIPO DE OPERACIÓN</Label>
-                      <Select
-                        value={data.tipo_operacion}
-                        onValueChange={(v) =>
-                          setData((prev) => ({ ...prev, tipo_operacion: v }))
+                    <div className="flex items-center gap-3 md:col-span-2">
+                      <Switch
+                        checked={data.tipo_operacion === "exportacion"}
+                        onCheckedChange={(checked) =>
+                          setData((prev) => ({
+                            ...prev,
+                            tipo_operacion: checked
+                              ? "exportacion"
+                              : "importacion",
+                            booking_referencia: checked
+                              ? prev.booking_referencia
+                              : "",
+                            pedimento: checked ? prev.pedimento : "",
+                          }))
                         }
-                      >
-                        <SelectTrigger className="font-semibold h-10 rounded-xl">
-                          <SelectValue placeholder="Selecciona..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="nacional">Nacional</SelectItem>
-                          <SelectItem value="importacion">
-                            Importación
-                          </SelectItem>
-                          <SelectItem value="exportacion">
-                            Exportación
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                      />
+                      <Label className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 cursor-pointer">
+                        Manejar como Exportación
+                      </Label>
                     </div>
 
-                    {(data.tipo_operacion === "importacion" ||
-                      data.tipo_operacion === "exportacion") && (
+                    {data.tipo_operacion === "exportacion" && (
                       <>
                         <div className="md:col-span-2">
                           <p className="text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-200 dark:border-amber-800">

@@ -513,6 +513,9 @@ class CartaPorteService:
         else:
             es_peligroso_final = usuario_marco_peligroso
 
+        raw_cve = str(getattr(viaje, "cve_material_peligroso", "") or "")
+        cve_limpia = raw_cve.upper().replace("UN", "").strip()
+
         serie_final = serie_forzada or "CP"
         folio_final = (
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
@@ -599,7 +602,7 @@ class CartaPorteService:
             "sat_clave_producto": clave_mercancia_final,
             "es_material_peligroso": es_peligroso_final,
             "flag_peligroso_catalogo": catalogo_peligroso,
-            "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
+            "cve_material_peligroso": cve_limpia,
             "embalaje": getattr(viaje, "embalaje", ""),
             "descripcion_mercancia": mercancia_real,
             # Unidad + Seguros
