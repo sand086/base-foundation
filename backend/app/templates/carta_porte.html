@@ -225,7 +225,8 @@
           class="bento-card-header"
           style="color: #0f172a; border-left-color: #cbd5e1"
         >
-          Destino Físico
+          {% if tipo_operacion is defined and tipo_operacion == 'exportacion' %}
+          Origen Físico (Punto de Carga) {% else %} Destino Físico {% endif %}
         </div>
         <table class="grid-table">
           <tr>
@@ -246,7 +247,11 @@
           </tr>
           <tr>
             <td colspan="3">
-              <span class="grid-label">Dirección de Entrega</span>
+              <span class="grid-label">
+                {% if tipo_operacion is defined and tipo_operacion ==
+                'exportacion' %} Dirección de Carga {% else %} Dirección de
+                Entrega {% endif %}
+              </span>
               <span class="text-dark" style="font-size: 6.5pt"
                 >{{ subcliente_direccion }}</span
               >
@@ -337,7 +342,7 @@
         </table>
       </div>
 
-      <!-- LÓGICA DINÁMICA DE ORIGEN/DESTINO -->
+      <!-- UBICACIONES DINÁMICAS SEGLÚN TIPO DE OPERACIÓN -->
       {% if tipo_operacion is defined and tipo_operacion == 'exportacion' %}
       <div class="bento-card">
         <div class="bento-card-header">Ubicación Origen (Salida)</div>
