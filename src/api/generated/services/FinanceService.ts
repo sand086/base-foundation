@@ -570,7 +570,7 @@ export class FinanceService {
     /**
      * Stamp Existing Payment
      * Toma un pago que se registró financieramente sin generar complemento
-     * y ejecuta el timbrado en el SAT (Generación Diferida).
+     * y ejecuta el timbrado en el SAT (Generación Diferida / Lote).
      * @param paymentId
      * @returns any Successful Response
      * @throws ApiError

@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-# Importaciones flexibles según la estructura del proyecto
 try:
     from app.db.database import SessionLocal
 except ImportError:
@@ -62,8 +61,8 @@ def ejecutar_sustitucion_par_espejo():
         logger.info("\n2. CONFIGURANDO VIAJE A 'EXPORTACION'...")
         viaje.tipo_operacion = "exportacion"
 
-        # Ocultamos temporalmente las facturas viejas para que el motor
-        # de timbrado no bloquee la creación de nuevos registros.
+        # Ocultamos temporalmente las facturas viejas para que el motor de timbrado
+        # no bloquee la creación de nuevos registros para el mismo viaje.
         old_nominal.record_status = "E"
         old_commercial.record_status = "E"
         db.commit()
@@ -82,9 +81,9 @@ def ejecutar_sustitucion_par_espejo():
             is_nominal=True,
             uuid_relacionado=old_uuid_nominal,
             tipo_relacion="04",  # Sustitución de CFDI previos
-            metodo_pago=old_nominal.metodo_pago or "PPD",
-            forma_pago=old_nominal.forma_pago or "99",
-            uso_cfdi=old_nominal.uso_cfdi or "G03",
+            metodo_pago=getattr(old_nominal, "metodo_pago", "PPD") or "PPD",
+            forma_pago=getattr(old_nominal, "forma_pago", "99") or "99",
+            uso_cfdi="G03",
             folio_forzado=18165,
         )
 
@@ -104,9 +103,9 @@ def ejecutar_sustitucion_par_espejo():
             is_nominal=False,
             uuid_relacionado=old_uuid_commercial,
             tipo_relacion="04",  # Sustitución de CFDI previos
-            metodo_pago=old_commercial.metodo_pago or "PPD",
-            forma_pago=old_commercial.forma_pago or "99",
-            uso_cfdi=old_commercial.uso_cfdi or "G03",
+            metodo_pago=getattr(old_commercial, "metodo_pago", "PPD") or "PPD",
+            forma_pago=getattr(old_commercial, "forma_pago", "99") or "99",
+            uso_cfdi="G03",
             folio_forzado=18166,
         )
 

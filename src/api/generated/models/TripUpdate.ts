@@ -18,6 +18,9 @@ export type TripUpdate = {
     referencia?: (string | null);
     contenedor_1?: (string | null);
     contenedor_2?: (string | null);
+    tipo_operacion?: (string | null);
+    booking_referencia?: (string | null);
+    pedimento?: (string | null);
     terminal_entrega_vacio?: (string | null);
     peso_toneladas?: (number | null);
     sat_clave_servicio?: (string | null);

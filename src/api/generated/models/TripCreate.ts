@@ -11,6 +11,9 @@ export type TripCreate = {
     referencia?: (string | null);
     contenedor_1?: (string | null);
     contenedor_2?: (string | null);
+    tipo_operacion?: (string | null);
+    booking_referencia?: (string | null);
+    pedimento?: (string | null);
     remolque_1_id?: (number | null);
     dolly_id?: (number | null);
     remolque_2_id?: (number | null);
