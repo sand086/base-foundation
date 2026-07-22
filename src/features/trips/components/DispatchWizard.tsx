@@ -82,7 +82,6 @@ export type WizardData = {
   origen: string;
   destino: string;
   fecha_programada: Date | undefined;
-
   descripcion_mercancia: string;
   detalle_mercancia: string;
   peso_toneladas: number;
@@ -93,39 +92,29 @@ export type WizardData = {
   cve_material_peligroso: string;
   embalaje: string;
   clase_imo: string;
-
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
-
   is_refrigerated_1: boolean;
   motogenerator_1_id: string;
   is_refrigerated_2: boolean;
   motogenerator_2_id: string;
-
   unitId: string;
   remolque1Id: string;
   dollyId: string;
   remolque2Id: string;
   driverId: string;
-
   leg_type: string;
-
   conoceRutaCompleta: boolean;
   unit2Id: string;
   driver2Id: string;
   remolque1Id_2: string;
   dollyId_2: string;
   remolque2Id_2: string;
-
   anticipo_casetas: number;
   anticipo_viaticos: number;
   anticipo_combustible: number;
-
   generarCartaPorte: boolean;
-
-  // NUEVOS CAMPOS COMERCIO EXTERIOR
-  iniciaEnPatioExportacion: boolean;
   tipo_operacion: string;
   booking_referencia: string;
   pedimento: string;
@@ -459,10 +448,10 @@ export const DispatchWizard = ({
           tripFromState.legs?.[0]?.anticipo_combustible || 0,
         generarCartaPorte: true,
         conoceRutaCompleta: (tripFromState.legs?.length || 0) > 1,
-        iniciaEnPatioExportacion:
-          tripFromState.tipo_operacion === "importacion" ||
-          tripFromState.tipo_operacion === "exportacion",
-        tipo_operacion: tripFromState.tipo_operacion || "nacional",
+        tipo_operacion:
+          tripFromState.tipo_operacion === "exportacion"
+            ? "exportacion"
+            : "importacion",
         booking_referencia:
           tripFromState.booking_referencia || tripFromState.referencia || "",
         pedimento: tripFromState.pedimento || "",
@@ -555,6 +544,7 @@ export const DispatchWizard = ({
       catMateriales.map((m) => ({
         label: `${m.clave} - ${m.descripcion}`,
         value: m.clave,
+        ...m, // Fix: mapping correctly
       })),
     [catMateriales],
   );
@@ -614,8 +604,7 @@ export const DispatchWizard = ({
     anticipo_combustible: initialData?.anticipo_combustible || 0,
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
 
-    // NUEVOS CAMPOS STATE (Faltaban aquí para que TypeScript no llore)
-    iniciaEnPatioExportacion: initialData?.iniciaEnPatioExportacion ?? false,
+    // COMERCIO EXTERIOR
     tipo_operacion: initialData?.tipo_operacion || "importacion",
     booking_referencia: initialData?.booking_referencia || "",
     pedimento: initialData?.pedimento || "",
@@ -956,9 +945,7 @@ export const DispatchWizard = ({
         referencia: data.referencia_cliente || null,
 
         // PAYLOAD COMERCIO EXTERIOR
-        tipo_operacion: data.iniciaEnPatioExportacion
-          ? data.tipo_operacion
-          : "nacional",
+        tipo_operacion: data.tipo_operacion,
         booking_referencia: data.booking_referencia || null,
         pedimento: data.pedimento || null,
 
@@ -1359,96 +1346,102 @@ export const DispatchWizard = ({
 
               {/* === SECCIÓN COMERCIO EXTERIOR === */}
               <div className="flex flex-col gap-4 mt-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-card p-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <Switch
-                    checked={data.iniciaEnPatioExportacion}
-                    onCheckedChange={(c) =>
-                      setData((p) => ({ ...p, iniciaEnPatioExportacion: c }))
-                    }
-                  />
-                  <Label
-                    className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 cursor-pointer"
-                    onClick={() =>
-                      setData((p) => ({
-                        ...p,
-                        iniciaEnPatioExportacion: !p.iniciaEnPatioExportacion,
-                      }))
-                    }
-                  >
-                    Inicia en Patio o Ruta (Comercio Exterior)
-                  </Label>
-                </div>
-
-                {data.iniciaEnPatioExportacion && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-3 animate-in fade-in slide-in-from-top-2">
-                    <div className="flex items-center gap-3 md:col-span-2">
-                      <Switch
-                        checked={data.tipo_operacion === "exportacion"}
-                        onCheckedChange={(checked) =>
-                          setData((prev) => ({
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="flex items-center gap-3 md:col-span-2">
+                    <Switch
+                      checked={data.tipo_operacion === "exportacion"}
+                      onCheckedChange={(checked) =>
+                        setData((prev) => ({
+                          ...prev,
+                          tipo_operacion: checked
+                            ? "exportacion"
+                            : "importacion",
+                          booking_referencia: checked
+                            ? prev.booking_referencia
+                            : "",
+                          pedimento: checked ? prev.pedimento : "",
+                        }))
+                      }
+                    />
+                    <Label
+                      className="text-xs font-black uppercase tracking-widest cursor-pointer"
+                      onClick={() =>
+                        setData((prev) => {
+                          const isExport =
+                            prev.tipo_operacion !== "exportacion";
+                          return {
                             ...prev,
-                            tipo_operacion: checked
+                            tipo_operacion: isExport
                               ? "exportacion"
                               : "importacion",
-                            booking_referencia: checked
+                            booking_referencia: isExport
                               ? prev.booking_referencia
                               : "",
-                            pedimento: checked ? prev.pedimento : "",
-                          }))
+                            pedimento: isExport ? prev.pedimento : "",
+                          };
+                        })
+                      }
+                    >
+                      Manejar como:{" "}
+                      <span
+                        className={
+                          data.tipo_operacion === "exportacion"
+                            ? "text-amber-600 dark:text-amber-500"
+                            : "text-blue-600 dark:text-blue-400"
                         }
-                      />
-                      <Label className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-300 cursor-pointer">
-                        Manejar como Exportación
-                      </Label>
-                    </div>
-
-                    {data.tipo_operacion === "exportacion" && (
-                      <>
-                        <div className="md:col-span-2">
-                          <p className="text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
-                            Nota: Estos campos se inyectarán en la descripción
-                            para Aduanas (Opcionales).
-                          </p>
-                        </div>
-
-                        <div className="space-y-1.5 border-l-2 border-blue-400 pl-3">
-                          <Label variant="brand" className="text-slate-500">
-                            BOOKING / REFERENCIA (Opcional)
-                          </Label>
-                          <Input
-                            placeholder="Ej. BKG-998877"
-                            value={data.booking_referencia}
-                            onChange={(e) =>
-                              setData((p) => ({
-                                ...p,
-                                booking_referencia:
-                                  e.target.value.toUpperCase(),
-                              }))
-                            }
-                            className="uppercase font-semibold h-10 rounded-xl"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5 border-l-2 border-blue-400 pl-3">
-                          <Label variant="brand" className="text-slate-500">
-                            PEDIMENTO (Opcional)
-                          </Label>
-                          <Input
-                            placeholder="Ej. 21  47  3807  8003832"
-                            value={data.pedimento}
-                            onChange={(e) =>
-                              setData((p) => ({
-                                ...p,
-                                pedimento: e.target.value,
-                              }))
-                            }
-                            className="font-semibold h-10 rounded-xl"
-                          />
-                        </div>
-                      </>
-                    )}
+                      >
+                        {data.tipo_operacion === "exportacion"
+                          ? "Exportación"
+                          : "Importación"}
+                      </span>
+                    </Label>
                   </div>
-                )}
+
+                  {data.tipo_operacion === "exportacion" && (
+                    <>
+                      <div className="md:col-span-2">
+                        <p className="text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                          Nota: Estos campos se inyectarán en la descripción
+                          para Aduanas (Opcionales).
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5 border-l-2 border-blue-400 pl-3">
+                        <Label variant="brand" className="text-slate-500">
+                          BOOKING / REFERENCIA (Opcional)
+                        </Label>
+                        <Input
+                          placeholder="Ej. BKG-998877"
+                          value={data.booking_referencia}
+                          onChange={(e) =>
+                            setData((p) => ({
+                              ...p,
+                              booking_referencia: e.target.value.toUpperCase(),
+                            }))
+                          }
+                          className="uppercase font-semibold h-10 rounded-xl"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 border-l-2 border-blue-400 pl-3">
+                        <Label variant="brand" className="text-slate-500">
+                          PEDIMENTO (Opcional)
+                        </Label>
+                        <Input
+                          placeholder="Ej. 21  47  3807  8003832"
+                          value={data.pedimento}
+                          onChange={(e) =>
+                            setData((p) => ({
+                              ...p,
+                              pedimento: e.target.value,
+                            }))
+                          }
+                          className="font-semibold h-10 rounded-xl"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               {/* === FIN COMERCIO EXTERIOR === */}
             </div>
@@ -2386,7 +2379,7 @@ export const DispatchWizard = ({
                                 ?.label?.split(" ")[0] || "N/A"}
                             </span>
                           </div>
-                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
                             <span className="text-muted-foreground font-bold">
                               Remolque 2:
                             </span>
@@ -2535,39 +2528,44 @@ export const DispatchWizard = ({
                       </span>
                     )}
 
-                    {data.iniciaEnPatioExportacion && (
-                      <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-white/10">
-                        <span className="font-bold text-slate-500 text-[10px] uppercase tracking-widest mb-1 block">
-                          Aduanas / Comce
-                        </span>
-                        <div className="text-xs space-y-0.5">
+                    <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-white/10">
+                      <span className="font-bold text-slate-500 text-[10px] uppercase tracking-widest mb-1 block">
+                        Aduanas / Comce
+                      </span>
+                      <div className="text-xs space-y-0.5">
+                        <p>
+                          <span className="font-semibold text-muted-foreground">
+                            Tipo:
+                          </span>{" "}
+                          <span
+                            className={cn(
+                              "uppercase font-bold",
+                              data.tipo_operacion === "exportacion"
+                                ? "text-amber-600 dark:text-amber-500"
+                                : "text-blue-600 dark:text-blue-400",
+                            )}
+                          >
+                            {data.tipo_operacion}
+                          </span>
+                        </p>
+                        {data.booking_referencia && (
                           <p>
                             <span className="font-semibold text-muted-foreground">
-                              Tipo:
+                              Booking:
                             </span>{" "}
-                            <span className="uppercase font-bold">
-                              {data.tipo_operacion}
-                            </span>
+                            {data.booking_referencia}
                           </p>
-                          {data.booking_referencia && (
-                            <p>
-                              <span className="font-semibold text-muted-foreground">
-                                Booking:
-                              </span>{" "}
-                              {data.booking_referencia}
-                            </p>
-                          )}
-                          {data.pedimento && (
-                            <p>
-                              <span className="font-semibold text-muted-foreground">
-                                Pedimento:
-                              </span>{" "}
-                              {data.pedimento}
-                            </p>
-                          )}
-                        </div>
+                        )}
+                        {data.pedimento && (
+                          <p>
+                            <span className="font-semibold text-muted-foreground">
+                              Pedimento:
+                            </span>{" "}
+                            {data.pedimento}
+                          </p>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2582,7 +2580,7 @@ export const DispatchWizard = ({
               <Button
                 variant="outline"
                 className="w-32 rounded-2xl font-black uppercase"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => setCurrentStep(1)}
                 disabled={isStamping}
               >
                 Atrás
