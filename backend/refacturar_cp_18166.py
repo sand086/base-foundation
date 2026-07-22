@@ -12,6 +12,19 @@ from app.integrations.sat.billing_service import BillingService
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("fix_pdf_938")
 
+# --- PARCHE AUTOMÁTICO PARA EVITAR EL ERROR DE 'usar_tramo_final' ---
+orig_obtener_datos = BillingService._obtener_datos_completos
+
+
+def _obtener_datos_completos_patched(self, *args, **kwargs):
+    # Eliminamos el argumento no reconocido si la función original no lo soporta
+    kwargs.pop("usar_tramo_final", None)
+    return orig_obtener_datos(self, *args, **kwargs)
+
+
+BillingService._obtener_datos_completos = _obtener_datos_completos_patched
+# --------------------------------------------------------------------
+
 
 def regenerar_pdf_factura_938():
     db: Session = SessionLocal()
@@ -35,7 +48,7 @@ def regenerar_pdf_factura_938():
         logger.info("\n2. REDIBUJANDO PDF DE LA FACTURA 938 (CP-18166)...")
         billing_service = BillingService(db)
 
-        # Se toma el XML guardado en disco de la factura 938 y se pasa por el HTML corregido
+        # Regenerar el archivo PDF leyendo el XML original
         resultado = billing_service.regenerar_pdf_factura(invoice_id)
 
         logger.info("=========================================================")
@@ -43,9 +56,7 @@ def regenerar_pdf_factura_938():
         logger.info(f"• ID Factura: {invoice_id}")
         logger.info("• Folio Interno: CP-18166")
         logger.info("• UUID SAT: C22E9512-593B-408E-96D0-51816C1EBBFE")
-        logger.info("• Origen Físico: Punto de Carga / Cliente (Frialsa)")
-        logger.info("• Destino Físico: Punto de Entrega / Rápidos 3T (Veracruz)")
-        logger.info("• Timbres consumidos: 0")
+        logger.info("• Timbres consumidos: 0 (Operación local)")
         logger.info("=========================================================")
 
     except Exception as e:
