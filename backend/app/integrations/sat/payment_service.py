@@ -1,7 +1,10 @@
 import os
 import base64
+import hashlib
+import json
 import logging
 import logging.config
+import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -12,6 +15,7 @@ import zeep
 from zeep.plugins import HistoryPlugin
 from lxml import etree
 from fastapi import HTTPException
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from cryptography import x509
@@ -39,9 +43,12 @@ from app.models.models import (
     SystemConfig,
     SatLocationCode,
     ReceivableInvoicePayment,
+    ReceivablePaymentBatch,
+    ReceivablePaymentDocumentHistory,
     BankAccount,
     BankMovement,
     RecordStatus,
+    SatFolioCounter,
 )
 
 # IMPORTAMOS EL MOTOR DE TESORERÍA PARA AFECTAR SALDOS ATÓMICAMENTE
@@ -172,6 +179,200 @@ class PaymentComplementService:
         )
         self.emisor_cp = cp_conf.value if cp_conf and cp_conf.value else "91808"
 
+    def _is_timeout_error(self, error_msg: str) -> bool:
+        error_msg = (error_msg or "").lower()
+        return any(
+            term in error_msg
+            for term in [
+                "timeout",
+                "time out",
+                "502",
+                "503",
+                "504",
+                "readtimeout",
+                "connection aborted",
+                "remote end closed",
+            ]
+        )
+
+    def _normalize_pagos(self, pagos_data) -> list[dict]:
+        normalized = []
+        for pago in pagos_data or []:
+            invoice_id = int(pago.get("invoice_id"))
+            monto = Decimal(str(pago.get("monto_pagado", 0))).quantize(
+                Decimal("0.01")
+            )
+            normalized.append({"invoice_id": invoice_id, "monto_pagado": str(monto)})
+        return sorted(normalized, key=lambda item: item["invoice_id"])
+
+    def _normalize_fecha_pago(self, fecha_pago) -> str:
+        return str(fecha_pago or "").replace("Z", "").split("T")[0]
+
+    def _build_operation_payload(
+        self,
+        *,
+        client_id,
+        pagos_data,
+        forma_pago,
+        fecha_pago,
+        referencia,
+        cuenta_deposito,
+        banco_ordenante,
+        cuenta_ordenante,
+    ) -> dict:
+        return {
+            "client_id": int(client_id),
+            "pagos": self._normalize_pagos(pagos_data),
+            "forma_pago": str(forma_pago or "").strip().zfill(2),
+            "fecha_pago": self._normalize_fecha_pago(fecha_pago),
+            "referencia": str(referencia or "").strip(),
+            "cuenta_deposito": str(cuenta_deposito or "").strip(),
+            "banco_ordenante": str(banco_ordenante or "").strip(),
+            "cuenta_ordenante": str(cuenta_ordenante or "").strip(),
+        }
+
+    def _operation_fingerprint(self, payload: dict) -> str:
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _advisory_lock(self, lock_key: str) -> None:
+        self.db.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+            {"lock_key": lock_key[:200]},
+        )
+
+    def _max_existing_com_folio(self) -> int:
+        max_seen = 2559
+        folios = []
+        folios.extend(
+            f[0]
+            for f in self.db.query(ReceivableInvoicePayment.folio_complemento)
+            .filter(ReceivableInvoicePayment.folio_complemento.like("COM-%"))
+            .all()
+        )
+        folios.extend(
+            f[0]
+            for f in self.db.query(ReceivablePaymentBatch.folio_complemento)
+            .filter(ReceivablePaymentBatch.folio_complemento.like("COM-%"))
+            .all()
+        )
+
+        for folio in folios:
+            match = re.fullmatch(r"COM-(\d+)", str(folio or "").strip())
+            if match:
+                max_seen = max(max_seen, int(match.group(1)))
+        return max_seen
+
+    def _next_folio_corto(self, series: str = "COM", user_id: int = 1) -> str:
+        self._advisory_lock(f"sat_folio_counter:{series}")
+        counter = (
+            self.db.query(SatFolioCounter)
+            .filter(SatFolioCounter.series == series)
+            .with_for_update()
+            .first()
+        )
+        if not counter:
+            counter = SatFolioCounter(
+                series=series,
+                next_value=self._max_existing_com_folio() + 1,
+                descripcion=f"Folios fiscales {series}",
+                created_by_id=user_id,
+            )
+            self.db.add(counter)
+            self.db.flush()
+
+        folio_num = int(counter.next_value or 1)
+        counter.next_value = folio_num + 1
+        counter.updated_by_id = user_id
+        self.db.add(counter)
+        return str(folio_num)
+
+    def _batch_success_response(
+        self,
+        batch: ReceivablePaymentBatch,
+        total_pagado: float | None = None,
+        facturas_afectadas: int | None = None,
+        message: str = "Pago registrado y Complemento timbrado exitosamente.",
+    ):
+        data = {
+            "complemento_uuid": batch.complemento_uuid,
+            "folio_complemento": batch.folio_complemento,
+            "batch_status": batch.status,
+            "payment_batch_id": batch.id,
+        }
+        if total_pagado is not None:
+            data["total_pagado"] = total_pagado
+        if facturas_afectadas is not None:
+            data["facturas_afectadas"] = facturas_afectadas
+        return {"status": "success", "message": message, "data": data}
+
+    def _get_existing_batch(
+        self, idempotency_key: str, operation_fingerprint: str
+    ) -> ReceivablePaymentBatch | None:
+        return (
+            self.db.query(ReceivablePaymentBatch)
+            .filter(
+                or_(
+                    ReceivablePaymentBatch.idempotency_key == idempotency_key,
+                    ReceivablePaymentBatch.operation_fingerprint
+                    == operation_fingerprint,
+                )
+            )
+            .with_for_update()
+            .first()
+        )
+
+    def _guard_existing_batch(self, batch: ReceivablePaymentBatch):
+        if batch.status == "TIMBRADO" and batch.complemento_uuid:
+            return self._batch_success_response(
+                batch,
+                message="Complemento de pago ya timbrado previamente.",
+            )
+
+        if batch.status in {"TIMBRANDO", "CONCILIACION_REQUERIDA"}:
+            raise HTTPException(
+                status_code=202,
+                detail=(
+                    "El REP ya fue enviado al PAC y no se reintentará para evitar "
+                    "duplicidad. Revisa/concílialo antes de generar otro."
+                ),
+            )
+
+        if batch.status == "ERROR_VALIDACION":
+            raise HTTPException(
+                status_code=400,
+                detail=batch.sat_error_log
+                or "El PAC/SAT rechazó este lote de pago previamente.",
+            )
+
+        return None
+
+    def _upsert_payment_document_history(
+        self, payment_id: int, document_type: str, uuid_value: str, file_url: str
+    ) -> None:
+        existing = (
+            self.db.query(ReceivablePaymentDocumentHistory)
+            .filter(
+                ReceivablePaymentDocumentHistory.payment_id == payment_id,
+                ReceivablePaymentDocumentHistory.document_type == document_type,
+                ReceivablePaymentDocumentHistory.file_url == file_url,
+            )
+            .first()
+        )
+        if existing:
+            existing.is_active = True
+            return
+
+        self.db.add(
+            ReceivablePaymentDocumentHistory(
+                payment_id=payment_id,
+                document_type=document_type,
+                filename=f"{uuid_value}.{document_type}",
+                file_url=file_url,
+                is_active=True,
+            )
+        )
+
     def _generar_sello_xslt(self, xml_bytes: bytes) -> tuple[str, str]:
         xslt_path = (
             Path(__file__).parent
@@ -214,7 +415,7 @@ class PaymentComplementService:
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
 
-    def registrar_pago_y_timbrar_complemento(
+    def _registrar_pago_y_timbrar_complemento_legacy(
         self,
         client_id,
         pagos_data,
@@ -551,6 +752,33 @@ class PaymentComplementService:
 
             complemento_uuid = res_sat.uuid
             raw_cfdi = res_sat.cfdiTimbrado
+            batch = (
+                self.db.query(ReceivablePaymentBatch)
+                .filter(ReceivablePaymentBatch.id == batch.id)
+                .with_for_update()
+                .first()
+            )
+            if batch:
+                batch.complemento_uuid = str(complemento_uuid)
+                batch.status = "TIMBRADO"
+                batch.sat_error_log = None
+                batch.locked_at = None
+                batch.completed_at = datetime.now()
+                self.db.add(batch)
+            pagos_confirmados = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(ReceivableInvoicePayment.id.in_(payment_ids))
+                .all()
+            )
+            for p in pagos_confirmados:
+                p.complemento_uuid = str(complemento_uuid)
+                p.folio_complemento = f"COM-{folio_corto}"
+                p.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+                p.estatus = "ACTIVO"
+                p.sat_error_log = None
+                self.db.add(p)
+            self.db.commit()
+
             cfdi_bytes = (
                 (
                     raw_cfdi.encode("utf-8")
@@ -722,6 +950,642 @@ class PaymentComplementService:
                 "facturas_afectadas": len(facturas_afectadas),
             },
         }
+
+    def registrar_pago_y_timbrar_complemento(
+        self,
+        client_id,
+        pagos_data,
+        forma_pago,
+        fecha_pago,
+        referencia,
+        cuenta_deposito,
+        banco_ordenante: str = "",
+        cuenta_ordenante: str = "",
+        user_id: int = 1,
+        idempotency_key: str | None = None,
+    ):
+        logger.info("--- INICIANDO TIMBRADO REP IDEMPOTENTE ---")
+        cliente = self.db.query(ClientModel).filter(ClientModel.id == client_id).first()
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+        control_payload = self._build_operation_payload(
+            client_id=client_id,
+            pagos_data=pagos_data,
+            forma_pago=forma_pago,
+            fecha_pago=fecha_pago,
+            referencia=referencia,
+            cuenta_deposito=cuenta_deposito,
+            banco_ordenante=banco_ordenante,
+            cuenta_ordenante=cuenta_ordenante,
+        )
+        operation_fingerprint = self._operation_fingerprint(control_payload)
+        idempotency_key = (idempotency_key or "").strip() or (
+            f"rep:auto:{operation_fingerprint}"
+        )
+        normalized_pagos = control_payload["pagos"]
+        invoice_ids = [int(p["invoice_id"]) for p in normalized_pagos]
+        if not invoice_ids:
+            raise HTTPException(status_code=400, detail="No hay pagos para timbrar.")
+        if len(invoice_ids) != len(set(invoice_ids)):
+            raise HTTPException(
+                status_code=400,
+                detail="No se permite repetir la misma factura en un REP.",
+            )
+
+        bank_account_id = cuenta_deposito
+        fecha_pago_clean = control_payload["fecha_pago"]
+        try:
+            fecha_pago_date = datetime.strptime(fecha_pago_clean, "%Y-%m-%d").date()
+        except Exception:
+            fecha_pago_date = datetime.now().date()
+
+        batch = None
+        facturas_afectadas = []
+        original_balances = {}
+        total_recibido = Decimal("0.0")
+        total_retenciones_iva = Decimal("0.0")
+        total_traslados_base_iva16 = Decimal("0.0")
+        total_traslados_impuesto_iva16 = Decimal("0.0")
+        doctos_relacionados = []
+        datos_pago = {}
+
+        try:
+            self._advisory_lock(f"rep:{idempotency_key}")
+            batch = self._get_existing_batch(idempotency_key, operation_fingerprint)
+            if batch:
+                if (
+                    batch.idempotency_key == idempotency_key
+                    and batch.operation_fingerprint != operation_fingerprint
+                ):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "La llave de idempotencia ya fue usada con un payload "
+                            "distinto. Cierra este intento y genera una nueva operación."
+                        ),
+                    )
+                guarded = self._guard_existing_batch(batch)
+                if guarded:
+                    return guarded
+
+            if not bank_account_id:
+                caja_general = (
+                    self.db.query(BankAccount)
+                    .filter(
+                        BankAccount.alias == "Caja General Virtual",
+                        BankAccount.record_status != RecordStatus.ELIMINADO,
+                    )
+                    .first()
+                )
+                if not caja_general:
+                    caja_general = BankAccount(
+                        banco="Efectivo / Virtual",
+                        numero_cuenta="0000000000",
+                        alias="Caja General Virtual",
+                        tipo_cuenta="virtual",
+                        saldo=0.0,
+                        created_by_id=user_id,
+                    )
+                    self.db.add(caja_general)
+                    self.db.flush()
+                bank_account_id = caja_general.id
+
+            try:
+                bank_account_id = int(bank_account_id)
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cuenta bancaria de depósito inválida.",
+                )
+
+            active_payment = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(
+                    ReceivableInvoicePayment.invoice_id.in_(invoice_ids),
+                    ReceivableInvoicePayment.estatus.in_(
+                        ["TIMBRANDO", "CONCILIACION_REQUERIDA"]
+                    ),
+                )
+                .first()
+            )
+            if active_payment:
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "Ya existe un REP enviado o en conciliación para una de "
+                        "estas facturas. No se generará otro timbre."
+                    ),
+                )
+
+            facturas = (
+                self.db.query(ReceivableInvoice)
+                .filter(
+                    ReceivableInvoice.id.in_(invoice_ids),
+                    ReceivableInvoice.record_status == RecordStatus.ACTIVO,
+                    ReceivableInvoice.is_nominal == False,
+                )
+                .with_for_update(of=ReceivableInvoice)
+                .all()
+            )
+            facturas_by_id = {f.id: f for f in facturas}
+
+            folio_corto = self._next_folio_corto("COM", user_id=user_id)
+            batch = ReceivablePaymentBatch(
+                idempotency_key=idempotency_key,
+                operation_fingerprint=operation_fingerprint,
+                folio_complemento=f"COM-{folio_corto}",
+                status="TIMBRANDO",
+                request_payload=control_payload,
+                locked_at=datetime.now(),
+                created_by_id=user_id,
+            )
+            self.db.add(batch)
+            self.db.flush()
+
+            for pago in normalized_pagos:
+                invoice_id = int(pago["invoice_id"])
+                monto_abono = Decimal(str(pago["monto_pagado"]))
+                factura = facturas_by_id.get(invoice_id)
+                if not factura:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Factura ID {invoice_id} rechazada. La factura fue "
+                            "eliminada, cancelada o es un Flete Nominal."
+                        ),
+                    )
+                if not factura.uuid:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Factura ID {invoice_id} sin timbrar.",
+                    )
+
+                saldo_anterior = Decimal(str(factura.saldo_pendiente))
+                if monto_abono <= 0 or monto_abono > saldo_anterior:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Monto inválido o supera el saldo restante para la "
+                            f"factura {factura.folio_interno}."
+                        ),
+                    )
+
+                original_balances[factura.id] = (
+                    factura.saldo_pendiente,
+                    factura.estatus,
+                )
+
+                inv_subtotal = (
+                    Decimal(str(factura.subtotal))
+                    if factura.subtotal
+                    else Decimal("0.0")
+                )
+                inv_iva = Decimal(str(factura.iva)) if factura.iva else Decimal("0.0")
+                inv_ret = (
+                    Decimal(str(factura.retenciones))
+                    if factura.retenciones
+                    else Decimal("0.0")
+                )
+                inv_total = (
+                    Decimal(str(factura.monto_total))
+                    if factura.monto_total
+                    else Decimal("1.0")
+                )
+                proporcion = (
+                    monto_abono / inv_total if inv_total > 0 else Decimal("1.0")
+                )
+                base_dr = (inv_subtotal * proporcion).quantize(Decimal("0.000001"))
+                iva_dr = (inv_iva * proporcion).quantize(Decimal("0.000001"))
+                ret_dr = (inv_ret * proporcion).quantize(Decimal("0.000001"))
+
+                total_retenciones_iva += ret_dr
+                total_traslados_base_iva16 += base_dr
+                total_traslados_impuesto_iva16 += iva_dr
+                total_recibido += monto_abono
+
+                folio_split = str(factura.folio_interno).split("-")
+                pagos_previos = (
+                    self.db.query(ReceivableInvoicePayment)
+                    .filter_by(invoice_id=factura.id)
+                    .count()
+                )
+                parcialidad = pagos_previos + 1
+                objeto_imp = "02" if (inv_iva > 0 or inv_ret > 0) else "01"
+
+                doc_rel = {
+                    "uuid": factura.uuid,
+                    "serie": folio_split[0] if len(folio_split) > 1 else "",
+                    "folio": folio_split[-1],
+                    "moneda": "MXN",
+                    "saldo_anterior": f"{saldo_anterior:.2f}",
+                    "monto_pagado": f"{monto_abono:.2f}",
+                    "saldo_insoluto": f"{(saldo_anterior - monto_abono):.2f}",
+                    "base_dr": f"{base_dr:.6f}",
+                    "iva_dr": f"{iva_dr:.6f}",
+                    "ret_dr": f"{ret_dr:.6f}",
+                    "tiene_iva": inv_iva > 0,
+                    "tiene_retencion": inv_ret > 0,
+                    "parcialidad": str(parcialidad),
+                    "objeto_imp": objeto_imp,
+                }
+                doctos_relacionados.append(doc_rel)
+
+                factura.saldo_pendiente = float(saldo_anterior - monto_abono)
+                factura.estatus = (
+                    "pagado" if factura.saldo_pendiente <= 0.01 else "pago_parcial"
+                )
+                if factura.saldo_pendiente <= 0.01:
+                    factura.saldo_pendiente = 0.0
+                factura.updated_by_id = user_id
+                facturas_afectadas.append(factura)
+                self.db.add(factura)
+
+                nuevo_pago = ReceivableInvoicePayment(
+                    invoice_id=factura.id,
+                    bank_account_id=bank_account_id,
+                    payment_batch_id=batch.id,
+                    fecha_pago=fecha_pago_date,
+                    monto=float(doc_rel["monto_pagado"]),
+                    metodo_pago=str(forma_pago),
+                    referencia=str(referencia) if referencia else "",
+                    cuenta_deposito=str(bank_account_id),
+                    complemento_uuid=None,
+                    folio_complemento=batch.folio_complemento,
+                    parcialidad=int(doc_rel["parcialidad"]),
+                    saldo_anterior=float(doc_rel["saldo_anterior"]),
+                    saldo_insoluto=float(doc_rel["saldo_insoluto"]),
+                    comprobante_url="",
+                    estatus="TIMBRANDO",
+                    created_by_id=user_id,
+                )
+                self.db.add(nuevo_pago)
+
+            banco_info = (
+                self.db.query(BankAccount)
+                .filter(BankAccount.id == bank_account_id)
+                .first()
+            )
+            cuenta_benef = ""
+            banco_benef = "NO IDENTIFICADO"
+            if banco_info:
+                banco_benef = banco_info.banco
+                clabe_limpia = (
+                    str(banco_info.clabe).strip() if banco_info.clabe else ""
+                )
+                cta_limpia = (
+                    str(banco_info.numero_cuenta).strip()
+                    if banco_info.numero_cuenta
+                    else ""
+                )
+                if len(clabe_limpia) == 18 and clabe_limpia.isdigit():
+                    cuenta_benef = clabe_limpia
+                elif len(cta_limpia) == 10 and cta_limpia.isdigit():
+                    cuenta_benef = cta_limpia
+
+            try:
+                fecha_pago_sat = datetime.fromisoformat(
+                    str(fecha_pago).replace("Z", "")
+                ).strftime("%Y-%m-%dT12:00:00")
+            except Exception:
+                fecha_pago_sat = datetime.now().strftime("%Y-%m-%dT12:00:00")
+
+            nombre_limpio = (
+                getattr(cliente, "razon_social", "PUBLICO EN GENERAL")
+                .upper()
+                .replace(" S.A. DE C.V.", "")
+                .replace(" SA DE CV", "")
+                .strip()
+            )
+            datos_pago = {
+                "serie": "COM",
+                "folio": folio_corto,
+                "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "rfc_cliente": getattr(cliente, "rfc", "XAXX010101000").upper(),
+                "nombre_cliente": nombre_limpio,
+                "cp_cliente": getattr(cliente, "codigo_postal_fiscal", self.emisor_cp),
+                "regimen_cliente": str(getattr(cliente, "regimen_fiscal", "601")),
+                "uso_cfdi": "CP01",
+                "fecha_pago": fecha_pago_sat,
+                "forma_pago": str(forma_pago).strip().zfill(2),
+                "monto_total": f"{total_recibido:.2f}",
+                "doctos_relacionados": doctos_relacionados,
+                "total_retenciones_iva": f"{total_retenciones_iva.quantize(Decimal('0.00')):.2f}",
+                "total_traslados_base_iva16": f"{total_traslados_base_iva16.quantize(Decimal('0.00')):.2f}",
+                "total_traslados_impuesto_iva16": f"{total_traslados_impuesto_iva16.quantize(Decimal('0.00')):.2f}",
+                "cuenta_deposito": bank_account_id,
+                "cuenta_beneficiario": cuenta_benef,
+                "banco_beneficiario": banco_benef,
+                "banco_ordenante": banco_ordenante,
+                "cuenta_ordenante": cuenta_ordenante,
+            }
+
+            self.db.flush()
+            self.db.commit()
+
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error preparando lote REP idempotente: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error preparando lote de pago: {str(e)}",
+            )
+
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
+            cert = x509.load_der_x509_certificate(cer_data, default_backend())
+            sn_hex = format(cert.serial_number, "x")
+            datos_pago["cert_emisor"] = "".join(
+                [sn_hex[i] for i in range(1, len(sn_hex), 2)]
+            )
+            datos_pago["certificado_b64"] = (
+                base64.b64encode(cer_data).decode("utf-8").replace("\n", "")
+            )
+
+        xml_base = self._armar_xml_pago_sin_sello(datos_pago)
+        xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
+        complemento_uuid = None
+        raw_cfdi = None
+
+        try:
+            client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
+            result = client_zeep.service.timbrar(
+                self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
+            )
+            if int(getattr(result, "status", 0)) != 200:
+                raise ValueError(f"Error PAC: {result.mensaje}")
+            res_sat = result.resultados[0]
+            if int(getattr(res_sat, "status", 0)) != 200:
+                raise ValueError(f"Error SAT: {res_sat.mensaje}")
+
+            complemento_uuid = str(res_sat.uuid)
+            raw_cfdi = res_sat.cfdiTimbrado
+            batch = (
+                self.db.query(ReceivablePaymentBatch)
+                .filter(ReceivablePaymentBatch.id == batch.id)
+                .with_for_update()
+                .first()
+            )
+            batch.complemento_uuid = complemento_uuid
+            batch.status = "TIMBRADO"
+            batch.sat_error_log = None
+            batch.pac_status_code = int(getattr(res_sat, "status", 200))
+            batch.locked_at = None
+            batch.completed_at = datetime.now()
+
+            pagos_confirmados = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(ReceivableInvoicePayment.payment_batch_id == batch.id)
+                .all()
+            )
+            for pp in pagos_confirmados:
+                pp.complemento_uuid = complemento_uuid
+                pp.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+                pp.folio_complemento = batch.folio_complemento
+                pp.estatus = "ACTIVO"
+                pp.sat_error_log = None
+                pp.updated_by_id = user_id
+                self.db.add(pp)
+            self.db.add(batch)
+            self.db.commit()
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Error PAC/SAT al timbrar REP {batch.folio_complemento}: {e}")
+            if complemento_uuid:
+                self.db.rollback()
+                batch = (
+                    self.db.query(ReceivablePaymentBatch)
+                    .filter(ReceivablePaymentBatch.id == batch.id)
+                    .with_for_update()
+                    .first()
+                )
+                if not batch:
+                    raise HTTPException(
+                        status_code=202,
+                        detail=(
+                            "El PAC entregó UUID, pero no se pudo confirmar el lote "
+                            "local. Requiere conciliación manual."
+                        ),
+                    )
+                pagos_lote = (
+                    self.db.query(ReceivableInvoicePayment)
+                    .filter(ReceivableInvoicePayment.payment_batch_id == batch.id)
+                    .all()
+                )
+                batch.complemento_uuid = complemento_uuid
+                batch.status = "TIMBRADO"
+                batch.sat_error_log = (
+                    "REP timbrado; fallo al confirmar post-respuesta PAC: "
+                    f"{error_msg[:3500]}"
+                )
+                batch.pac_status_code = 200
+                batch.locked_at = None
+                batch.completed_at = datetime.now()
+                for pp in pagos_lote:
+                    pp.complemento_uuid = complemento_uuid
+                    pp.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+                    pp.folio_complemento = batch.folio_complemento
+                    pp.estatus = "ACTIVO"
+                    pp.sat_error_log = None
+                    pp.updated_by_id = user_id
+                    self.db.add(pp)
+                self.db.add(batch)
+                self.db.commit()
+                return self._batch_success_response(
+                    batch,
+                    total_pagado=float(total_recibido),
+                    facturas_afectadas=len(facturas_afectadas),
+                    message=(
+                        "El REP fue timbrado y el UUID quedó guardado; revisa "
+                        "documentos locales si el PDF/XML no aparece."
+                    ),
+                )
+            batch = (
+                self.db.query(ReceivablePaymentBatch)
+                .filter(ReceivablePaymentBatch.id == batch.id)
+                .with_for_update()
+                .first()
+            )
+            pagos_lote = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(ReceivableInvoicePayment.payment_batch_id == batch.id)
+                .all()
+            )
+            if self._is_timeout_error(error_msg):
+                batch.status = "CONCILIACION_REQUERIDA"
+                batch.sat_error_log = error_msg[:4000]
+                batch.locked_at = None
+                for pp in pagos_lote:
+                    pp.estatus = "CONCILIACION_REQUERIDA"
+                    pp.sat_error_log = error_msg[:4000]
+                    self.db.add(pp)
+                self.db.add(batch)
+                self.db.commit()
+                raise HTTPException(
+                    status_code=202,
+                    detail=(
+                        "El REP fue enviado al PAC, pero la respuesta no fue "
+                        "concluyente. Se marcó para conciliación y NO se "
+                        "reintentará automáticamente para evitar duplicidad."
+                    ),
+                )
+
+            for invoice_id, (saldo, estatus) in original_balances.items():
+                factura = (
+                    self.db.query(ReceivableInvoice)
+                    .filter(ReceivableInvoice.id == invoice_id)
+                    .with_for_update(of=ReceivableInvoice)
+                    .first()
+                )
+                if factura:
+                    factura.saldo_pendiente = saldo
+                    factura.estatus = estatus
+                    factura.updated_by_id = user_id
+                    self.db.add(factura)
+
+            for pp in pagos_lote:
+                self.db.delete(pp)
+
+            batch.status = "ERROR_VALIDACION"
+            batch.sat_error_log = error_msg[:4000]
+            batch.locked_at = None
+            batch.completed_at = datetime.now()
+            self.db.add(batch)
+            self.db.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error al timbrar el pago ante el SAT: {str(e)}",
+            )
+
+        try:
+            cfdi_bytes = (
+                (
+                    raw_cfdi.encode("utf-8")
+                    if isinstance(raw_cfdi, str)
+                    and "<cfdi:Comprobante" in raw_cfdi
+                    else base64.b64decode(raw_cfdi)
+                )
+                if isinstance(raw_cfdi, str)
+                else raw_cfdi
+            )
+            self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
+
+            pagos_confirmados = (
+                self.db.query(ReceivableInvoicePayment)
+                .filter(ReceivableInvoicePayment.payment_batch_id == batch.id)
+                .all()
+            )
+            for pp in pagos_confirmados:
+                self._upsert_payment_document_history(
+                    pp.id,
+                    "xml",
+                    complemento_uuid,
+                    f"/api/sat/invoice/{complemento_uuid}/xml",
+                )
+                self._upsert_payment_document_history(
+                    pp.id,
+                    "pdf",
+                    complemento_uuid,
+                    f"/api/sat/invoice/{complemento_uuid}/pdf",
+                )
+
+            batch = (
+                self.db.query(ReceivablePaymentBatch)
+                .filter(ReceivablePaymentBatch.id == batch.id)
+                .first()
+            )
+            if not batch.bank_movements_created_at:
+                for pp in pagos_confirmados:
+                    mov_schema = finance_schemas.BankMovementCreate(
+                        bank_account_id=int(bank_account_id),
+                        tipo="ingreso",
+                        monto=pp.monto,
+                        concepto="Cobro Fra. (REP)",
+                        referencia=(referencia or f"REP {complemento_uuid[:8]}")[
+                            :100
+                        ],
+                        origen_modulo="CxC",
+                    )
+                    create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+                batch.bank_movements_created_at = datetime.now()
+            self.db.commit()
+
+            root = etree.fromstring(cfdi_bytes)
+            ns = {
+                "cfdi": "http://www.sat.gob.mx/cfd/4",
+                "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+            }
+            tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)[0]
+            s_sat = tfd_node.get("SelloSAT", "0000")
+            c_sat = tfd_node.get("NoCertificadoSAT", "0000")
+            s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+            fecha_certificacion = tfd_node.get("FechaTimbrado", "")
+            cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{complemento_uuid}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+            total_float = _clean_float(datos_pago["monto_total"])
+            if HAS_NUM2WORDS:
+                entero = int(total_float)
+                decimales = int(round((total_float - entero) * 100))
+                texto = num2words(entero, lang="es").upper().replace("UNO", "UN")
+                importe_letra = f"(*** {texto} PESOS {decimales:02d}/100 MXN ***)"
+            else:
+                importe_letra = f"(*** {total_float:,.2f} MXN ***)"
+
+            qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={complemento_uuid}&re={self.emisor_rfc}&rr={datos_pago['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+            qr = qrcode.QRCode(version=1, box_size=10, border=2)
+            qr.add_data(qr_string)
+            qr.make(fit=True)
+            buffer = BytesIO()
+            qr.make_image(fill_color="black", back_color="white").save(
+                buffer, format="PNG"
+            )
+            datos_pago.update(
+                {
+                    "subtotal": "0.00",
+                    "iva": "0.00",
+                    "retenciones": "0.00",
+                    "total": datos_pago["monto_total"],
+                    "descripcion_concepto": "COMPLEMENTO DE RECEPCIÓN DE PAGOS",
+                }
+            )
+            self._generar_pdf_pago(
+                datos_pago,
+                complemento_uuid,
+                buffer.getvalue(),
+                s_sat,
+                s_emi,
+                c_sat,
+                cadena_original_tfd,
+                importe_letra,
+                fecha_certificacion,
+            )
+
+        except Exception as post_e:
+            logger.error(
+                f"Postproceso REP falló para UUID {complemento_uuid}: {post_e}"
+            )
+            batch = (
+                self.db.query(ReceivablePaymentBatch)
+                .filter(ReceivablePaymentBatch.id == batch.id)
+                .first()
+            )
+            if batch:
+                batch.sat_error_log = (
+                    "REP timbrado; falló postproceso local: "
+                    f"{str(post_e)[:3500]}"
+                )
+                self.db.add(batch)
+                self.db.commit()
+
+        return self._batch_success_response(
+            batch,
+            total_pagado=float(total_recibido),
+            facturas_afectadas=len(facturas_afectadas),
+        )
 
     def _armar_xml_pago_sin_sello(self, d: dict) -> str:
         doctos_xml = ""
@@ -972,14 +1836,31 @@ class PaymentComplementService:
         logger.info(
             f"--- INICIANDO TIMBRADO DIFERIDO DE LOTE (FOLIO: {folio_complemento}) ---"
         )
+        self._advisory_lock(f"rep-deferred:{folio_complemento}")
+        operation_fingerprint = hashlib.sha256(
+            f"deferred-rep:{folio_complemento}".encode("utf-8")
+        ).hexdigest()
+        batch = (
+            self.db.query(ReceivablePaymentBatch)
+            .filter(ReceivablePaymentBatch.folio_complemento == folio_complemento)
+            .with_for_update()
+            .first()
+        )
+        if batch:
+            guarded = self._guard_existing_batch(batch)
+            if guarded:
+                return guarded
 
         # 1. Traer TODOS los pagos que pertenecen al mismo lote/folio
         pagos = (
             self.db.query(ReceivableInvoicePayment)
             .filter(
                 ReceivableInvoicePayment.folio_complemento == folio_complemento,
-                ReceivableInvoicePayment.complemento_uuid.in_(
-                    ["PENDIENTE_SAT", "RECHAZADO_SAT"]
+                or_(
+                    ReceivableInvoicePayment.complemento_uuid.in_(
+                        ["PENDIENTE_SAT", "RECHAZADO_SAT"]
+                    ),
+                    ReceivableInvoicePayment.complemento_uuid.is_(None),
                 ),
             )
             .all()
@@ -989,6 +1870,34 @@ class PaymentComplementService:
             raise ValueError(
                 f"No se encontraron pagos pendientes o rechazados para el folio {folio_complemento}."
             )
+
+        if not batch:
+            batch = ReceivablePaymentBatch(
+                idempotency_key=f"rep:deferred:{folio_complemento}",
+                operation_fingerprint=operation_fingerprint,
+                folio_complemento=folio_complemento,
+                status="TIMBRANDO",
+                request_payload={
+                    "source": "deferred-payment-stamp",
+                    "payment_ids": [p.id for p in pagos],
+                },
+                locked_at=datetime.now(),
+                created_by_id=user_id,
+            )
+            self.db.add(batch)
+            self.db.flush()
+        else:
+            batch.status = "TIMBRANDO"
+            batch.locked_at = datetime.now()
+
+        for p in pagos:
+            p.payment_batch_id = batch.id
+            p.estatus = "TIMBRANDO"
+            self.db.add(p)
+        self.db.add(batch)
+        self.db.commit()
+
+        payment_ids = [p.id for p in pagos]
 
         # Tomamos datos base del primer pago (aplica para todo el lote)
         pago_base = pagos[0]
@@ -1189,6 +2098,8 @@ class PaymentComplementService:
 
         xml_base = self._armar_xml_pago_sin_sello(datos_pago)
         xml_sellado = self._sellar_xml_pago(xml_base, datos_pago)
+        complemento_uuid = None
+        raw_cfdi = None
 
         # =========================================================================
         #  LLAMADA AL PAC AISLADA
@@ -1275,31 +2186,33 @@ class PaymentComplementService:
                 fecha_certificacion,
             )
 
-            # 7. Actualizar TODOS los pagos del lote en la BD
-            from app.models.models import ReceivablePaymentDocumentHistory
-
+            # 7. Registrar historial documental sin abrir puerta a retimbrado.
             for p in pagos:
-                p.complemento_uuid = str(complemento_uuid)
-                p.folio_complemento = f"COM-{folio_corto}"
-                p.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
-                p.sat_error_log = None  # Limpiamos el error si fue exitoso
-                self.db.add(p)
+                self._upsert_payment_document_history(
+                    p.id,
+                    "xml",
+                    str(complemento_uuid),
+                    f"/api/sat/invoice/{complemento_uuid}/xml",
+                )
+                self._upsert_payment_document_history(
+                    p.id,
+                    "pdf",
+                    str(complemento_uuid),
+                    f"/api/sat/invoice/{complemento_uuid}/pdf",
+                )
 
-                hist_xml = ReceivablePaymentDocumentHistory(
-                    payment_id=p.id,
-                    document_type="xml",
-                    filename=f"{complemento_uuid}.xml",
-                    file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
-                    is_active=True,
-                )
-                hist_pdf = ReceivablePaymentDocumentHistory(
-                    payment_id=p.id,
-                    document_type="pdf",
-                    filename=f"{complemento_uuid}.pdf",
-                    file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
-                    is_active=True,
-                )
-                self.db.add_all([hist_xml, hist_pdf])
+            batch = (
+                self.db.query(ReceivablePaymentBatch)
+                .filter(ReceivablePaymentBatch.id == batch.id)
+                .first()
+            )
+            if batch:
+                batch.complemento_uuid = str(complemento_uuid)
+                batch.status = "TIMBRADO"
+                batch.sat_error_log = None
+                batch.locked_at = None
+                batch.completed_at = datetime.now()
+                self.db.add(batch)
 
             self.db.commit()
 
@@ -1307,13 +2220,68 @@ class PaymentComplementService:
                 "status": "success",
                 "message": "Complemento de pago generado exitosamente.",
                 "uuid": complemento_uuid,
+                "data": {
+                    "complemento_uuid": complemento_uuid,
+                    "folio_complemento": f"COM-{folio_corto}",
+                    "batch_status": "TIMBRADO",
+                    "payment_batch_id": batch.id if batch else None,
+                },
             }
 
         except Exception as e:
             error_msg = str(e).lower()
 
-            # 🛠️ IMPRIMIR EL ERROR CRUDO PARA SABER QUÉ LE DUELE AL SAT
             logger.error(f"🔥 ERROR RAW DEL PAC/SAT: {str(e)}")
+            self.db.rollback()
+
+            if complemento_uuid:
+                logger.error(
+                    "Postproceso de REP diferido falló despues de UUID "
+                    f"{complemento_uuid}: {e}"
+                )
+                batch = (
+                    self.db.query(ReceivablePaymentBatch)
+                    .filter(ReceivablePaymentBatch.id == batch.id)
+                    .with_for_update()
+                    .first()
+                )
+                pagos_confirmados = (
+                    self.db.query(ReceivableInvoicePayment)
+                    .filter(ReceivableInvoicePayment.id.in_(payment_ids))
+                    .all()
+                )
+                if batch:
+                    batch.complemento_uuid = str(complemento_uuid)
+                    batch.status = "TIMBRADO"
+                    batch.sat_error_log = (
+                        "REP timbrado; falló postproceso local: "
+                        f"{str(e)[:3500]}"
+                    )
+                    batch.locked_at = None
+                    batch.completed_at = datetime.now()
+                    self.db.add(batch)
+                for p in pagos_confirmados:
+                    p.complemento_uuid = str(complemento_uuid)
+                    p.folio_complemento = f"COM-{folio_corto}"
+                    p.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+                    p.estatus = "ACTIVO"
+                    p.sat_error_log = None
+                    self.db.add(p)
+                self.db.commit()
+                return {
+                    "status": "success",
+                    "message": (
+                        "El REP fue timbrado y el UUID quedó guardado; revisa "
+                        "documentos locales si el PDF/XML no aparece."
+                    ),
+                    "uuid": complemento_uuid,
+                    "data": {
+                        "complemento_uuid": complemento_uuid,
+                        "folio_complemento": f"COM-{folio_corto}",
+                        "batch_status": "TIMBRADO",
+                        "payment_batch_id": batch.id if batch else None,
+                    },
+                }
 
             # Quitamos el '500' de aquí porque Zeep (SOAP) lo usa para Errores de Negocio
             if any(
@@ -1328,30 +2296,29 @@ class PaymentComplementService:
                 ]
             ):
                 logger.warning(
-                    f"Intermitencia SAT al timbrar diferido. Enviando a cola."
+                    "Intermitencia SAT al timbrar diferido. Requiere conciliación."
                 )
-                try:
-                    from app.integrations.sat.retry_queue import add_to_retry_queue
-
-                    add_to_retry_queue(
-                        self.db,
-                        entity_type="payment",
-                        entity_id=pago_base.id,
-                        xml_data=xml_sellado,
-                    )
-                except ImportError:
-                    pass
-
-                # Devolver el estado a todo el lote
                 for p in pagos:
-                    p.complemento_uuid = "PENDIENTE_SAT"
+                    p.complemento_uuid = None
+                    p.estatus = "CONCILIACION_REQUERIDA"
+                    p.sat_error_log = str(e)
                     self.db.add(p)
+                batch = (
+                    self.db.query(ReceivablePaymentBatch)
+                    .filter(ReceivablePaymentBatch.id == batch.id)
+                    .first()
+                )
+                if batch:
+                    batch.status = "CONCILIACION_REQUERIDA"
+                    batch.sat_error_log = str(e)[:4000]
+                    batch.locked_at = None
+                    self.db.add(batch)
 
                 self.db.commit()
 
                 raise HTTPException(
                     status_code=202,
-                    detail="El SAT está intermitente. El proceso continuará automáticamente en segundo plano. NO presione generar nuevamente.",
+                    detail="El SAT está intermitente. El lote quedó en conciliación y NO se reintentará automáticamente para evitar duplicidad.",
                 )
             else:
                 # =========================================================================
@@ -1364,8 +2331,20 @@ class PaymentComplementService:
                 # Aplicamos el error a todos los pagos del mismo folio
                 for p in pagos:
                     p.complemento_uuid = "RECHAZADO_SAT"
+                    p.estatus = "ERROR_VALIDACION"
                     p.sat_error_log = str(e)
                     self.db.add(p)
+                batch = (
+                    self.db.query(ReceivablePaymentBatch)
+                    .filter(ReceivablePaymentBatch.id == batch.id)
+                    .first()
+                )
+                if batch:
+                    batch.status = "ERROR_VALIDACION"
+                    batch.sat_error_log = str(e)[:4000]
+                    batch.locked_at = None
+                    batch.completed_at = datetime.now()
+                    self.db.add(batch)
 
                 self.db.commit()
 
