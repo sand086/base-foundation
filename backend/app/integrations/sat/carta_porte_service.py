@@ -723,15 +723,34 @@ class CartaPorteService:
             else ""
         )
 
+        # =========================================================
+        # 🛡️ FIX CP147: Omitir atributo Municipio si el SAT dice que es NULL
+        # =========================================================
+        mun_emi_attr = (
+            f' Municipio="{self.emisor_municipio}"'
+            if getattr(self, "emisor_municipio", "") not in [None, "", "None"]
+            else ""
+        )
+
+        cp_dest = str(d.get("cp_destino", ""))
+        mun_dest = str(d.get("municipio_destino", ""))
+
+        # Filtro especial para CPs que el SAT marca como NULL (ej. 54072)
+        if cp_dest == "54072" or mun_dest in ["None", "", "null"]:
+            mun_dest_attr = ""
+        else:
+            mun_dest_attr = f' Municipio="{mun_dest}"'
+        # =========================================================
+
         if es_exportacion:
             # INVERSIÓN: Origen = Cliente (Patio), Destino = Nosotros (Puerto)
             ubicaciones_xml = f"""
             <cartaporte31:Ubicaciones>
                 <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}"{ref_bkg} />
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}"{ref_bkg} />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['distancia_total']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                    <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>"""
         else:
@@ -739,10 +758,10 @@ class CartaPorteService:
             ubicaciones_xml = f"""
             <cartaporte31:Ubicaciones>
                 <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}"{ref_bkg} />
+                    <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}"{ref_bkg} />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['distancia_total']}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>"""
 
