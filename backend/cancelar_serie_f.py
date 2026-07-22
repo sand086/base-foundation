@@ -77,9 +77,6 @@ UUIDS_NO_CANCELABLES = [
     "1A5F3059-EB89-4639-87A5-54A41DC69F6B",
 ]
 
-# Puedes unir las dos primeras listas para tu script actual:
-UUIDS_A_CANCELAR = UUIDS_TIMEOUT
-
 
 def disparar_cancelacion_sat():
     logger.info(
