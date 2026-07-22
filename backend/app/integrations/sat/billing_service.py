@@ -2903,3 +2903,56 @@ class BillingService:
             is_active=True,
         )
         self.db.add_all([hist_xml, hist_pdf])
+
+    def consultar_estatus_sat(self, uuid: str) -> dict:
+        """
+        Consulta el estado real de un CFDI directamente en los servidores del SAT.
+        Se conecta al Web Service público (ConsultaCFDIService), por lo que es gratuito
+        y no consume timbres del PAC.
+        """
+        from app.models.models import ReceivableInvoice
+        from zeep import Client
+
+        # 1. Buscamos la factura en la BD para extraer los datos requeridos por el SAT
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.uuid == uuid)
+            .first()
+        )
+
+        if not factura:
+            return {
+                "estado": "Desconocido",
+                "mensaje": "Factura no encontrada en BD local.",
+            }
+
+        cliente = factura.client
+        rfc_emisor = self.emisor_rfc
+        rfc_receptor = cliente.rfc if cliente else "XAXX010101000"
+        total = float(factura.monto_total or 0.0)
+
+        # 2. El SAT requiere que le enviemos la expresión exacta que viene en el Código QR
+        expresion = f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total:.2f}&id={uuid}"
+
+        try:
+            # 3. Conexión directa al Web Service Público del SAT
+            sat_wsdl = "https://consultaqr.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc?wsdl"
+            cliente_sat = Client(sat_wsdl)
+
+            # 4. Ejecutamos la consulta
+            respuesta = cliente_sat.service.Consulta(expresionImpresa=expresion)
+
+            # El SAT responde con atributos como: Estado ('Vigente' o 'Cancelado'), CodigoEstatus, etc.
+            estado_real = getattr(respuesta, "Estado", "Desconocido")
+
+            return {
+                "estado": estado_real,
+                "codigo": getattr(respuesta, "CodigoEstatus", ""),
+                "es_cancelable": getattr(respuesta, "EsCancelable", ""),
+            }
+
+        except Exception as e:
+            logger.error(
+                f"Error al consultar el estatus directo en el SAT para {uuid}: {e}"
+            )
+            return {"estado": "Desconocido", "error": str(e)}
