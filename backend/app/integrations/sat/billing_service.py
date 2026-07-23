@@ -601,7 +601,7 @@ class BillingService:
                 or "DOMICILIO CONOCIDO"
             )
             .replace("|", "")
-            .strip()[:100]
+            .strip()[:110]
         )
         direccion_destino_real = (
             str(
@@ -610,7 +610,7 @@ class BillingService:
                 )
             )
             .replace("|", "")
-            .strip()[:100]
+            .strip()[:110]
         )
 
         return {
@@ -691,7 +691,7 @@ class BillingService:
             "municipio_destino": municipio_dest,
             "domicilio_origen": str(viaje.origin or "DOMICILIO CONOCIDO")
             .replace("|", "")
-            .strip()[:100],
+            .strip()[:110],
             "domicilio_destino": direccion_destino_real,
             "leyenda_legal": self.leyenda_legal_db,
             "ocultar_montos": ocultar_montos,

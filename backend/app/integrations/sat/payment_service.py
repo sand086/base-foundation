@@ -3,6 +3,7 @@ import base64
 import logging
 import logging.config
 import uuid
+import html
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -62,6 +63,14 @@ def _clean_float(val) -> float:
         return float(val)
     except (ValueError, TypeError):
         return 0.0
+
+
+def xml_clean(val: any) -> str:
+    if val is None:
+        return ""
+    return html.escape(
+        str(val).replace("\n", " ").replace("\r", "").strip(), quote=True
+    )
 
 
 class PaymentComplementService:
@@ -757,19 +766,21 @@ class PaymentComplementService:
 
         pago_attrs = f'FechaPago="{d["fecha_pago"]}" FormaDePagoP="{d["forma_pago"]}" MonedaP="MXN" Monto="{d["monto_total"]}" TipoCambioP="1"'
 
+        # ⚡ BLINDAJE EN ATRIBUTOS BANCARIOS
         if d.get("banco_ordenante"):
-            pago_attrs += f' NomBancoOrdExt="{d["banco_ordenante"]}"'
+            pago_attrs += f' NomBancoOrdExt="{xml_clean(d["banco_ordenante"])}"'
         if d.get("cuenta_ordenante") and len(d["cuenta_ordenante"]) >= 10:
-            pago_attrs += f' CtaOrdenante="{d["cuenta_ordenante"]}"'
+            pago_attrs += f' CtaOrdenante="{xml_clean(d["cuenta_ordenante"])}"'
 
         # Si la cuenta pasó nuestros filtros, garantizamos que es de 10 o 18 dígitos
         if d.get("cuenta_beneficiario"):
-            pago_attrs += f' CtaBeneficiario="{d["cuenta_beneficiario"]}"'
+            pago_attrs += f' CtaBeneficiario="{xml_clean(d["cuenta_beneficiario"])}"'
 
+        # ⚡ BLINDAJE LÁSER EN EMISOR Y RECEPTOR (Escapa el '&' a '&amp;')
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:pago20="http://www.sat.gob.mx/Pagos20" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/Pagos20 http://www.sat.gob.mx/sitio_internet/cfd/Pagos/Pagos20.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P" Exportacion="01" LugarExpedicion="{self.emisor_cp}">
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
         <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT" Descripcion="Pago" ValorUnitario="0" Importe="0" ObjetoImp="01" />
     </cfdi:Conceptos>
