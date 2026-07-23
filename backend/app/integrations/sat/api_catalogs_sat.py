@@ -172,12 +172,12 @@ def create_crud_endpoints(
     @router.get(f"{path}", response_model=List[schema_response], tags=[tag])
     def get_all(
         skip: int = Query(0, ge=0),
-        limit: int = Query(500, ge=1, le=5000),
+        limit: int = Query(5000, ge=1, le=50000),
         search: Optional[str] = "",
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
     ):
         query = db.query(model).filter(model.activo == True)
-        
+
         if search:
             condiciones = []
             if hasattr(model, "clave"):
@@ -186,10 +186,10 @@ def create_crud_endpoints(
                 condiciones.append(model.descripcion.ilike(f"%{search}%"))
             if hasattr(model, "nombre"):
                 condiciones.append(model.nombre.ilike(f"%{search}%"))
-                
+
             if condiciones:
                 query = query.filter(or_(*condiciones))
-                
+
         return query.offset(skip).limit(limit).all()
 
     @router.post(
@@ -384,7 +384,7 @@ def get_location_codes(db: Session = Depends(get_db)):
     return (
         db.query(models.SatLocationCode)
         .order_by(models.SatLocationCode.codigo_postal.asc())
-        .limit(500) # También protegemos los códigos postales
+        .limit(5000)  # También protegemos los códigos postales
         .all()
     )
 
