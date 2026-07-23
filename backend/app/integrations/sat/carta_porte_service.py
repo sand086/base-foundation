@@ -513,36 +513,54 @@ class CartaPorteService:
             .first()
         )
 
-        val_db = (
-            str(
-                getattr(producto_sat, "es_material_peligroso", "")
-                if producto_sat
-                else ""
+        # BLINDAJE 1: El producto DEBE existir. No asumimos defaults.
+        if not producto_sat:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error Catálogo SAT: La clave de producto '{clave_mercancia_final}' no existe en la base de datos local. Por favor sincronice los catálogos.",
             )
-            .strip()
-            .lower()
-        )
-        if val_db in ["0", "0.0", "no", "false", "f", "none", "null", ""]:
-            catalogo_peligroso = (
-                "1" if getattr(viaje, "es_material_peligroso", False) else "0"
+
+        val_db = str(getattr(producto_sat, "es_material_peligroso", "")).strip().lower()
+
+        # BLINDAJE 2: El valor en BD no puede ser nulo o vacío
+        if not val_db or val_db in ["none", "null"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error Integridad SAT: La clave '{clave_mercancia_final}' no tiene definida la bandera de Material Peligroso. Debe ser '0', '1' o '0,1'.",
             )
-        elif val_db in ["1", "1.0", "si", "sí", "true", "t", "yes"]:
-            catalogo_peligroso = "1"
-        else:
-            catalogo_peligroso = "0,1"
 
         usuario_marco_peligroso = getattr(viaje, "es_material_peligroso", False)
-        if catalogo_peligroso == "0":
+
+        # BLINDAJE 3: Evaluación estricta
+        if val_db in ["0", "0.0", "no", "false", "f"]:
+            catalogo_peligroso = "0"
             es_peligroso_final = False
-        elif catalogo_peligroso == "1":
+            if usuario_marco_peligroso:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Incongruencia: Marcaste el viaje como material peligroso, pero la clave SAT '{clave_mercancia_final}' dicta que NO lo es ('0').",
+                )
+
+        elif val_db in ["1", "1.0", "si", "sí", "true", "t", "yes"]:
+            catalogo_peligroso = "1"
             es_peligroso_final = True
-        else:
+
+        elif val_db == "0,1":
+            catalogo_peligroso = "0,1"
+            # Solo aquí respetamos la decisión del usuario
             es_peligroso_final = usuario_marco_peligroso
 
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Valor desconocido '{val_db}' en el catálogo SAT para la clave {clave_mercancia_final}.",
+            )
+
+        # Validación de Clave ONU (CP156)
         raw_cve = str(getattr(viaje, "cve_material_peligroso", "") or "").upper()
         match = re.search(r"\b([0-9A-Z]{4})\b", raw_cve)
 
-        if match and catalogo_peligroso != "0":
+        if match and catalogo_peligroso != "0" and es_peligroso_final:
             cve_limpia = match.group(1).zfill(4)
         else:
             cve_limpia = ""
@@ -550,7 +568,7 @@ class CartaPorteService:
         if es_peligroso_final and not cve_limpia:
             raise HTTPException(
                 status_code=400,
-                detail="Error SAT [CP156]: La clave de material peligroso es inválida. Debe tener 4 caracteres del catálogo (Ej: '1203' o '0004').",
+                detail="Error SAT [CP156]: La carga es material peligroso pero la clave ONU (ej. '1203') es inválida o está vacía.",
             )
 
         serie_final = serie_forzada or "CP"
