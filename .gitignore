@@ -89,6 +89,9 @@ app/storage/
 *.mp4
 *.pdf
 
+backend/*.xls
+backend/*.xlsx
+
 # =========================
 # ENTORNOS (ENV)
 # =========================
