@@ -525,7 +525,7 @@ class CartaPorteService:
         raw_cve = str(getattr(viaje, "cve_material_peligroso", "") or "").upper()
         match = re.search(r"\b([0-9A-Z]{4})\b", raw_cve)
 
-        if match:
+        if match and catalogo_peligroso != "0":
             cve_limpia = match.group(1).zfill(
                 4
             )  # Asegura los 4 caracteres exactos (ej. "1203")
@@ -769,10 +769,10 @@ class CartaPorteService:
             # INVERSIÓN: Origen = Cliente (Patio), Destino = Nosotros (Puerto)
             ubicaciones_xml = f"""
             <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}">
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}">
                     <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}"{ref_bkg} />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
                     <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>"""
@@ -780,10 +780,10 @@ class CartaPorteService:
             # NORMAL (Nacional / Importación): Origen = Nosotros (Puerto), Destino = Cliente (Patio)
             ubicaciones_xml = f"""
             <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}">
                     <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}"{ref_bkg} />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
                     <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>"""
@@ -809,8 +809,10 @@ class CartaPorteService:
         es_peligroso_final_xml = False
 
         if flag_cat == "0":
-            # El SAT prohíbe enviar el atributo si el catálogo dicta 0
+            # 🛡️ FIX CP155: Si el catálogo dicta 0, el SAT prohíbe TERMINANTEMENTE los atributos.
+            # Omitimos MaterialPeligroso, Clave ONU y Embalaje, sin importar qué seleccionó el usuario.
             mat_peligroso_attr = ""
+            es_peligroso_final_xml = False
         elif flag_cat == "1":
             # El SAT exige "Sí" si el catálogo dicta 1
             mat_peligroso_attr = ' MaterialPeligroso="Sí"'
@@ -864,7 +866,7 @@ class CartaPorteService:
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{xml_clean(d['nombre_operador'])}" NumLicencia="{d['licencia']}">
                     <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:TiposFigura>
             </cartaporte31:FiguraTransporte>
