@@ -1,148 +1,108 @@
+import pandas as pd
 import logging
-from datetime import datetime
+import sys
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import (
+    insert,
+)  # Usamos PostgreSQL para el Upsert masivo
 
-try:
-    from app.db.database import SessionLocal
-except ImportError:
-    from app.db.session import SessionLocal
+# Ajusta estas importaciones según la estructura real de tu proyecto
+from app.db.database import SessionLocal
+from app.models.models import SatProduct
 
-from app.models.models import ReceivableInvoice
-from app.integrations.sat.billing_service import BillingService
-from app.integrations.sat.soap_client import get_timbrado_client
+# Configuración básica de logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger(__name__)
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("cancelacion_simultanea")
 
+def sincronizar_productos_sat(ruta_excel: str):
+    """
+    Sincroniza ÚNICAMENTE la tabla SatProduct usando el catálogo oficial.
+    Actualiza la descripción y la bandera 'es_material_peligroso'.
+    """
+    logger.info(f"📂 Leyendo catálogo desde: {ruta_excel}")
 
-def ejecutar_cancelacion_simultanea():
-    db: Session = SessionLocal()
     try:
-        # IDs exactos de la BD
-        id_nominal = 883
-        id_comercial = 884
-
-        logger.info("=========================================================")
-        logger.info(f"1. PREPARANDO CANCELACIÓN SIMULTÁNEA")
-        logger.info("=========================================================")
-
-        nominal = (
-            db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == id_nominal)
-            .first()
+        # El SAT incluye 2 filas de títulos antes de los datos reales, usamos skiprows=2
+        # Forzamos dtype=str para que las claves como "01010101" no pierdan el cero inicial
+        df = pd.read_excel(
+            ruta_excel, sheet_name="c_ClaveProdServCP", skiprows=2, dtype=str
         )
-        comercial = (
-            db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == id_comercial)
-            .first()
-        )
+    except Exception as e:
+        logger.error(f"❌ Error al leer el archivo Excel: {e}")
+        return
 
-        if not nominal or not comercial:
-            logger.error("❌ Error: No se encontraron las facturas en la BD.")
-            return
+    # Limpiar nombres de columnas por si traen espacios ocultos
+    df.columns = df.columns.str.strip()
 
-        logger.info(f"• UUID Nominal: {nominal.uuid}")
-        logger.info(f"• UUID Comercial: {comercial.uuid}")
+    db: Session = SessionLocal()
 
-        # Instanciamos el servicio (para reutilizar sus configuraciones de CSD)
-        billing_service = BillingService(db)
+    try:
+        productos_a_procesar = []
 
-        # Obtenemos las credenciales
-        config = billing_service.configs["timbrado"]
-        usuario = config["usuario"]
-        password = config["password"]
+        for index, row in df.iterrows():
+            clave = str(row.get("Clave Producto/Servicio", "")).strip()
 
-        # Extraemos el CSD
-        csd_base64, key_base64, csd_pass = billing_service._get_csd_credentials()
+            # Solo procesamos claves válidas de 8 dígitos
+            if not clave or clave == "nan" or len(clave) != 8:
+                continue
 
-        # Construimos el payload especial para Solución Factible
-        # Formato esperado: UUID1|Motivo1|UUIDSustituto1, UUID2|Motivo2|UUIDSustituto2...
-        # Como usamos motivo 02, no enviamos UUID sustituto
-        uuids_payload = f"{comercial.uuid}|02|,{nominal.uuid}|02|"
+            descripcion = str(row.get("Descripción", "")).strip()
+            mat_peligroso_raw = str(row.get("Material Peligroso", "")).strip()
 
-        logger.info(f"\n2. ENVIANDO PETICIÓN AL PAC CON EL PAYLOAD: {uuids_payload}")
-
-        client = get_timbrado_client()
-
-        # Llamada directa al método SOAP `cancelar`
-        response = client.service.cancelar(
-            usuario=usuario,
-            password=password,
-            uuids=uuids_payload,
-            derCertCSD=csd_base64,
-            derKeyCSD=key_base64,
-            contrasenaCSD=csd_pass,
-        )
-
-        logger.info("\n3. PROCESANDO RESPUESTA DEL SAT:")
-
-        # Validamos el estado general del PAC
-        if response.status != 200:
-            logger.error(
-                f"❌ Error de autenticación o conexión con el PAC: {response.mensaje}"
-            )
-            return
-
-        # Analizamos el resultado para CADA UUID (Solución Factible devuelve una lista en `resultados`)
-        errores_detectados = False
-
-        # Dependiendo de la librería Zeep, `resultados` puede ser una lista o un solo objeto
-        resultados_list = (
-            response.resultados
-            if isinstance(response.resultados, list)
-            else [response.resultados]
-        )
-
-        for res in resultados_list:
-            if res.statusUUID in (201, 202):
-                logger.info(
-                    f"✅ ÉXITO: {res.uuid} -> {res.mensaje} (Status: {res.statusUUID})"
-                )
+            # Respetar estrictamente los valores del SAT: "0", "1", o "0,1"
+            if mat_peligroso_raw in ["0,1", "1", "0"]:
+                flag_peligroso = mat_peligroso_raw
             else:
-                logger.error(
-                    f"⚠️ PROBLEMA CON: {res.uuid} -> {res.mensaje} (Status: {res.statusUUID})"
-                )
-                errores_detectados = True
+                flag_peligroso = "0"
 
-        # ---------------------------------------------------------
-        # PASO 4: ACTUALIZACIÓN EN BD SÓLO SI NO HUBO ERRORES
-        # ---------------------------------------------------------
-        if not errores_detectados:
-            logger.info("\n4. ACTUALIZANDO ESTATUS EN LA BASE DE DATOS...")
-            fecha_canc = datetime.utcnow()
-
-            comercial.status_sat = "CANCELADO"
-            comercial.estatus = "cancelado"
-            comercial.fecha_cancelacion = fecha_canc
-            comercial.motivo_cancelacion = "02"
-            comercial.detalle_sat = (
-                "Cancelada simultáneamente con Carta Porte (Motivo 02)."
+            productos_a_procesar.append(
+                {
+                    "clave": clave,
+                    "descripcion": descripcion,
+                    "es_material_peligroso": flag_peligroso,
+                    "activo": True,  # Mantenemos el campo activo en true
+                }
             )
 
-            nominal.status_sat = "CANCELADO"
-            nominal.estatus = "cancelado"
-            nominal.fecha_cancelacion = fecha_canc
-            nominal.motivo_cancelacion = "02"
-            nominal.detalle_sat = (
-                "Cancelada simultáneamente con la Comercial (Motivo 02)."
-            )
+        logger.info(
+            f"📊 Se extrajeron {len(productos_a_procesar)} claves. Sincronizando BD..."
+        )
 
-            db.commit()
+        # -------------------------------------------------------------------
+        # UPSERT MASIVO (Solo para PostgreSQL)
+        # Si la clave ya existe, actualiza los valores. Si no, la inserta.
+        # -------------------------------------------------------------------
+        stmt = insert(SatProduct).values(productos_a_procesar)
 
-            logger.info("=========================================================")
-            logger.info("🎉 ¡AMBAS FACTURAS FUERON CANCELADAS SIMULTÁNEAMENTE! 🎉")
-            logger.info("=========================================================")
-        else:
-            logger.warning(
-                "\n⚠️ SE DETECTARON ERRORES POR PARTE DEL SAT. NO SE ACTUALIZÓ LA BD LOCAL."
-            )
+        # Le indicamos a la BD qué hacer si hay un conflicto (si la 'clave' ya existe)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                "clave"
+            ],  # <-- Asume que 'clave' es UNIQUE o Primary Key en tu modelo
+            set_={
+                "es_material_peligroso": stmt.excluded.es_material_peligroso,
+                "descripcion": stmt.excluded.descripcion,
+                "activo": stmt.excluded.activo,
+            },
+        )
+
+        db.execute(stmt)
+        db.commit()
+        logger.info("✅ Sincronización de productos completada con éxito.")
 
     except Exception as e:
-        logger.error(f"❌ Error crítico en ejecución: {str(e)}")
         db.rollback()
+        logger.error(f"❌ Error durante la inserción en BD: {e}")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    ejecutar_cancelacion_simultanea()
+    # Asegúrate de tener el Excel oficial de Carta Porte 3.1 descargado en esta ruta
+    # Descárgalo desde: http://omawww.sat.gob.mx/tramitesyservicios/Paginas/documentos/CatalogosCartaPorte31.xls
+    sincronizar_productos_sat("CatalogosCartaPorte31.xls")
