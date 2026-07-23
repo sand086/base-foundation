@@ -961,31 +961,6 @@ class CartaPorteService:
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
         logger.info("Generando XML Carta Porte y enviando al PAC...")
-
-        # =================================================================
-        # 🛡️ FIX DEFINITIVO SAT [CFDI40149]
-        # =================================================================
-        # Si el modelo de validación (SatCfdiPayload) forzó el RFC a genérico
-        # (por ejemplo, porque el original tenía un '&' como 'F&C0406106C6'),
-        # el SAT EXIGE que el CP Receptor sea idéntico al Lugar de Expedición.
-        rfc_final_xml = str(data.get("rfc_cliente", "")).strip().upper()
-        if rfc_final_xml in ["XAXX010101000", "XEXX010101000"]:
-            data["cp_cliente"] = str(self.emisor_cp).strip()
-            data["regimen_cliente"] = "616"
-            data["uso_cfdi"] = "S01"
-            logger.debug(
-                f"⚠️ Sincronizando CP a {data['cp_cliente']} por regla de RFC Genérico."
-            )
-        # =================================================================
-
-        xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
-
-        # ... (el resto de tu código sigue exactamente igual) ...
-        with open(self.path_cer, "rb") as f:
-            cer_data = f.read()
-
-    def _importar_comprobante_ws(self, data, relacion_uuid=None):
-        logger.info("Generando XML Carta Porte y enviando al PAC...")
         xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
 
         with open(self.path_cer, "rb") as f:
@@ -1283,6 +1258,17 @@ class CartaPorteService:
         try:
             validated_payload = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validated_payload.model_dump()}
+
+            # =====================================================================
+            # 🛡️ FIX AMPERSAND (&): BYPASS PYDANTIC
+            # Si el modelo Pydantic sobreescribió silenciosamente el RFC o Nombre
+            # por culpa del símbolo '&', forzamos a que conserve los valores reales.
+            # =====================================================================
+            if raw_data.get("rfc_cliente"):
+                data["rfc_cliente"] = raw_data["rfc_cliente"]
+            if raw_data.get("nombre_cliente"):
+                data["nombre_cliente"] = raw_data["nombre_cliente"]
+
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1382,6 +1368,17 @@ class CartaPorteService:
         try:
             validated_payload = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validated_payload.model_dump()}
+
+            # =====================================================================
+            # 🛡️ FIX AMPERSAND (&): BYPASS PYDANTIC
+            # Si el modelo Pydantic sobreescribió silenciosamente el RFC o Nombre
+            # por culpa del símbolo '&', forzamos a que conserve los valores reales.
+            # =====================================================================
+            if raw_data.get("rfc_cliente"):
+                data["rfc_cliente"] = raw_data["rfc_cliente"]
+            if raw_data.get("nombre_cliente"):
+                data["nombre_cliente"] = raw_data["nombre_cliente"]
+
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1531,6 +1528,17 @@ class CartaPorteService:
         try:
             validador = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validador.model_dump()}
+
+            # =====================================================================
+            # 🛡️ FIX AMPERSAND (&): BYPASS PYDANTIC
+            # Si el modelo Pydantic sobreescribió silenciosamente el RFC o Nombre
+            # por culpa del símbolo '&', forzamos a que conserve los valores reales.
+            # =====================================================================
+            if raw_data.get("rfc_cliente"):
+                data["rfc_cliente"] = raw_data["rfc_cliente"]
+            if raw_data.get("nombre_cliente"):
+                data["nombre_cliente"] = raw_data["nombre_cliente"]
+
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
