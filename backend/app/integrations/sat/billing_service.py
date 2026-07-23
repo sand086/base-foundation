@@ -1144,6 +1144,9 @@ class BillingService:
             "domicilio_destino": fallback_domicilio,
             "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
             "info_material_peligroso": info_material_peligroso,
+            "tipo_operacion": str(d.get("tipo_operacion", "nacional")).lower(),
+            "booking_referencia": d.get("booking_referencia", ""),
+            "pedimento": d.get("pedimento", ""),
         }
 
         env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
