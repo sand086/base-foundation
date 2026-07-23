@@ -498,10 +498,12 @@ class CartaPorteService:
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' NO existe en los catálogos del SAT.",
+                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' NO existe en los catálogos del SAT (tabla SatLocationCode).",
             )
 
-        # Lógica de Materiales Peligrosos
+        # =========================================================
+        # 🛡️ FIX CP155: Lógica Inteligente de Materiales Peligrosos
+        # =========================================================
         clave_mercancia_final = (
             getattr(viaje, "sat_clave_producto", "01010101") or "01010101"
         )
@@ -510,9 +512,24 @@ class CartaPorteService:
             .filter(SatProduct.clave == clave_mercancia_final)
             .first()
         )
-        catalogo_peligroso = (
-            str(producto_sat.es_material_peligroso).strip() if producto_sat else "0,1"
+
+        val_db = (
+            str(
+                getattr(producto_sat, "es_material_peligroso", "")
+                if producto_sat
+                else ""
+            )
+            .strip()
+            .lower()
         )
+        if val_db in ["0", "0.0", "no", "false", "f", "none", "null", ""]:
+            catalogo_peligroso = (
+                "1" if getattr(viaje, "es_material_peligroso", False) else "0"
+            )
+        elif val_db in ["1", "1.0", "si", "sí", "true", "t", "yes"]:
+            catalogo_peligroso = "1"
+        else:
+            catalogo_peligroso = "0,1"
 
         usuario_marco_peligroso = getattr(viaje, "es_material_peligroso", False)
         if catalogo_peligroso == "0":
@@ -526,13 +543,10 @@ class CartaPorteService:
         match = re.search(r"\b([0-9A-Z]{4})\b", raw_cve)
 
         if match and catalogo_peligroso != "0":
-            cve_limpia = match.group(1).zfill(
-                4
-            )  # Asegura los 4 caracteres exactos (ej. "1203")
+            cve_limpia = match.group(1).zfill(4)
         else:
             cve_limpia = ""
 
-        # Si el producto es peligroso, bloquea el timbrado si la clave ONU está vacía o inválida
         if es_peligroso_final and not cve_limpia:
             raise HTTPException(
                 status_code=400,
@@ -545,9 +559,6 @@ class CartaPorteService:
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        # =======================================================
-        # SEPARACIÓN DE CONCEPTOS: FACTURA VS CARTA PORTE
-        # =======================================================
         desc_concepto_factura = (
             "FLETE NOMINAL" if is_nominal else "FLETE DE CARGA GENERAL"
         )
@@ -565,7 +576,6 @@ class CartaPorteService:
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
         )
 
-        # Extracción segura de direcciones completas
         direccion_cliente_real = (
             str(
                 getattr(cliente, "direccion_fiscal", "DOMICILIO CONOCIDO")
@@ -584,7 +594,30 @@ class CartaPorteService:
             .strip()[:100]
         )
 
-        return {
+        # =========================================================
+        # 🛡️ LÓGICA SENIOR: Validación Fiscal Limpia (Sin sobreescrituras mágicas)
+        # =========================================================
+        raw_rfc_cli = str(getattr(cliente, "rfc", "") or "").strip().upper()
+        rfc_cli_final = raw_rfc_cli if raw_rfc_cli else "XAXX010101000"
+
+        if rfc_cli_final in ["XAXX010101000", "XEXX010101000"]:
+            # Mandato SAT: Para Público en General o Extranjeros, el CP DEBE SER IGUAL al LugarExpedicion
+            cp_cli_final = str(self.emisor_cp).strip()
+            regimen_cli_final = "616"  # Sin obligaciones fiscales
+            uso_cfdi_final = "S01"  # Sin efectos fiscales
+        else:
+            # Mandato SAT: Para RFC corporativo real, el CP DEBE SER IDÉNTICO a su CSF (Ficha del cliente)
+            cp_cli_final = str(getattr(cliente, "codigo_postal_fiscal", "")).strip()
+            regimen_cli_final = str(getattr(cliente, "regimen_fiscal", "601")).strip()
+            uso_cfdi_final = str(getattr(cliente, "uso_cfdi", "G03")).strip()
+
+            if not cp_cli_final or len(cp_cli_final) != 5:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error Fiscal [CFDI 4.0]: El cliente '{getattr(cliente, 'razon_social', 'N/A')}' no tiene un Código Postal Fiscal de 5 dígitos capturado en el sistema.",
+                )
+
+        data_final = {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": serie_final,
             "folio": str(folio_final),
@@ -611,13 +644,13 @@ class CartaPorteService:
             "clave_prod_serv": getattr(viaje, "sat_clave_servicio", "78101802")
             or "78101802",
             # Cliente y Destino
-            "rfc_cliente": getattr(cliente, "rfc", "") or "XAXX010101000",
+            "rfc_cliente": rfc_cli_final,
             "nombre_cliente": getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
-            "cp_cliente": getattr(cliente, "codigo_postal_fiscal", ""),
+            "cp_cliente": cp_cli_final,
             "direccion_cliente": direccion_cliente_real,
             "cp_destino": cp_destino_fisico,
-            "regimen_cliente": getattr(cliente, "regimen_fiscal", "601"),
-            "uso_cfdi": "G03",
+            "regimen_cliente": regimen_cli_final,
+            "uso_cfdi": uso_cfdi_final,
             # Operación Carta Porte
             "distancia_total": distancia_real,
             "peso_bruto": getattr(viaje, "peso_toneladas", 0) * 1000,
@@ -708,6 +741,24 @@ class CartaPorteService:
             "booking_referencia": getattr(viaje, "booking_referencia", "") or "",
             "pedimento": getattr(viaje, "pedimento", "") or "",
         }
+
+        # 🐞 DIAGNÓSTICO EN TIEMPO REAL
+        import json
+
+        print("\n" + "📦" * 30)
+        print("🔍 [DEBUG CARTA PORTE] DATOS FINALES PROCESADOS PARA XML:")
+        print(
+            f"👉 RFC Cliente: '{data_final['rfc_cliente']}' | CP Destino: '{data_final['cp_destino']}'"
+        )
+        print(
+            f"👉 Domicilio Receptor XML (CP): '{data_final['cp_cliente']}' | Régimen: '{data_final['regimen_cliente']}' | Uso: '{data_final['uso_cfdi']}'"
+        )
+        print(
+            f"👉 Mat. Peligroso Flag Cat: '{data_final['flag_peligroso_catalogo']}' | Es Peligroso XML: {data_final['es_material_peligroso']} | ONU: '{data_final['cve_material_peligroso']}'"
+        )
+        print("📦" * 30 + "\n")
+
+        return data_final
 
     # =========================================================================
     # LÓGICA CARTA PORTE (LOGÍSTICA)
