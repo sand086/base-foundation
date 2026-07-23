@@ -682,7 +682,8 @@ class SatCfdiPayload(BaseModel):
     uso_cfdi: str = Field(default="G03")
     moneda: str = Field(default="MXN")
 
-    rfc_cliente: str = Field(default="XAXX010101000")
+    # rfc_cliente: str = Field(default="XAXX010101000")
+    rfc_cliente: str = Field(..., pattern=r"^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{3}$")
     rfc_operador: str = Field(default="XAXX010101000")
     cp_cliente: str
     cp_destino: str

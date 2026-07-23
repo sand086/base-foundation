@@ -139,7 +139,7 @@ def normalizar_estado_sat(estado: str) -> str:
 def xml_clean(val: any) -> str:
     if val is None:
         return ""
-    # Escapa símbolos como &, <, >, " para que no rompan el XML (Evita el Error 500)
+    # Escapa símbolos como &, <, >, " para que no rompan el XML (Evita el Error 500 y rechazos del PAC)
     return html.escape(
         str(val).replace("\n", " ").replace("\r", "").strip(), quote=True
     )
@@ -595,18 +595,16 @@ class CartaPorteService:
         )
 
         # =========================================================
-        # 🛡️ LÓGICA SENIOR: Validación Fiscal Limpia (Sin sobreescrituras mágicas)
+        # 🛡️ FIX CFDI40149: Respetamos datos reales del cliente (incluso con '&')
         # =========================================================
         raw_rfc_cli = str(getattr(cliente, "rfc", "") or "").strip().upper()
         rfc_cli_final = raw_rfc_cli if raw_rfc_cli else "XAXX010101000"
 
         if rfc_cli_final in ["XAXX010101000", "XEXX010101000"]:
-            # Mandato SAT: Para Público en General o Extranjeros, el CP DEBE SER IGUAL al LugarExpedicion
             cp_cli_final = str(self.emisor_cp).strip()
-            regimen_cli_final = "616"  # Sin obligaciones fiscales
-            uso_cfdi_final = "S01"  # Sin efectos fiscales
+            regimen_cli_final = "616"
+            uso_cfdi_final = "S01"
         else:
-            # Mandato SAT: Para RFC corporativo real, el CP DEBE SER IDÉNTICO a su CSF (Ficha del cliente)
             cp_cli_final = str(getattr(cliente, "codigo_postal_fiscal", "")).strip()
             regimen_cli_final = str(getattr(cliente, "regimen_fiscal", "601")).strip()
             uso_cfdi_final = str(getattr(cliente, "uso_cfdi", "G03")).strip()
@@ -742,7 +740,7 @@ class CartaPorteService:
             "pedimento": getattr(viaje, "pedimento", "") or "",
         }
 
-        # 🐞 DIAGNÓSTICO EN TIEMPO REAL
+        # 🐞 IMPRESIÓN DE DIAGNÓSTICO EN CONSOLA
         import json
 
         print("\n" + "📦" * 30)
@@ -765,15 +763,12 @@ class CartaPorteService:
     # =========================================================================
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
-
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
         )
 
-        # 1. Inyectamos Contenedores y Pedimento en la descripción de la mercancía
-        # para cumplir con aduanas sin activar nodos complejos de Comercio Exterior
         desc_extra = ""
         if d.get("contenedor_1"):
             desc_extra += f" - Contenedor: {d['contenedor_1']}"
@@ -789,17 +784,13 @@ class CartaPorteService:
             + desc_extra
         )
 
-        # 2. Lógica Dinámica de Ubicaciones (Inversión para Exportación)
         es_exportacion = d.get("tipo_operacion", "nacional") == "exportacion"
         ref_bkg = (
-            f' Referencia="{d.get("booking_referencia")}"'
+            f' Referencia="{xml_clean(d.get("booking_referencia"))}"'
             if d.get("booking_referencia")
             else ""
         )
 
-        # =========================================================
-        # 🛡️ FIX CP147: Omitir atributo Municipio si el SAT dice que es NULL
-        # =========================================================
         mun_emi_attr = (
             f' Municipio="{self.emisor_municipio}"'
             if getattr(self, "emisor_municipio", "") not in [None, "", "None"]
@@ -809,32 +800,29 @@ class CartaPorteService:
         cp_dest = str(d.get("cp_destino", ""))
         mun_dest = str(d.get("municipio_destino", ""))
 
-        # Filtro especial para CPs que el SAT marca como NULL (ej. 54072)
         if cp_dest == "54072" or mun_dest in ["None", "", "null"]:
             mun_dest_attr = ""
         else:
             mun_dest_attr = f' Municipio="{mun_dest}"'
-        # =========================================================
 
+        # ⚡ AQUÍ ESTÁ EL TRUCO: xml_clean EN TODOS LOS RFCs PARA ESCAPAR EL SÍMBOLO & EN XML
         if es_exportacion:
-            # INVERSIÓN: Origen = Cliente (Patio), Destino = Nosotros (Puerto)
             ubicaciones_xml = f"""
             <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}">
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{xml_clean(d['rfc_cliente'])}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}">
                     <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}"{ref_bkg} />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{xml_clean(self.emisor_rfc)}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
                     <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>"""
         else:
-            # NORMAL (Nacional / Importación): Origen = Nosotros (Puerto), Destino = Cliente (Patio)
             ubicaciones_xml = f"""
             <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}">
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{xml_clean(self.emisor_rfc)}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}">
                     <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}"{ref_bkg} />
                 </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{xml_clean(d['rfc_cliente'])}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
                     <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
                 </cartaporte31:Ubicacion>
             </cartaporte31:Ubicaciones>"""
@@ -845,54 +833,43 @@ class CartaPorteService:
             else ""
         )
 
-        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque", "CTR004")}" Placa="{d.get("placa_remolque_1", "1XXXX99")}" />'
+        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque", "CTR004")}" Placa="{xml_clean(d.get("placa_remolque_1", "1XXXX99"))}" />'
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
-            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{d["placa_remolque_2"]}" />'
+            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{xml_clean(d["placa_remolque_2"])}" />'
 
-        # =========================================================
-        # MATERIAL PELIGROSO Y SEGURO AMBIENTAL
-        # =========================================================
         clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
-        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
+        flag_cat = str(d.get("flag_peligroso_catalogo", "0")).strip()
         mat_peligroso_attr = ""
-
-        # 1. Bandera estricta para saber si al final SÍ fue peligroso
         es_peligroso_final_xml = False
 
         if flag_cat == "0":
-            # 🛡️ FIX CP155: Si el catálogo dicta 0, el SAT prohíbe TERMINANTEMENTE los atributos.
-            # Omitimos MaterialPeligroso, Clave ONU y Embalaje, sin importar qué seleccionó el usuario.
             mat_peligroso_attr = ""
             es_peligroso_final_xml = False
         elif flag_cat == "1":
-            # El SAT exige "Sí" si el catálogo dicta 1
             mat_peligroso_attr = ' MaterialPeligroso="Sí"'
             es_peligroso_final_xml = True
             if d.get("cve_material_peligroso"):
-                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+                mat_peligroso_attr += f' CveMaterialPeligroso="{xml_clean(d.get("cve_material_peligroso"))}" Embalaje="{xml_clean(d.get("embalaje"))}"'
         else:
-            # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
             es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
             mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
             if es_peligroso_str == "Sí":
                 es_peligroso_final_xml = True
                 if d.get("cve_material_peligroso"):
-                    mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+                    mat_peligroso_attr += f' CveMaterialPeligroso="{xml_clean(d.get("cve_material_peligroso"))}" Embalaje="{xml_clean(d.get("embalaje"))}"'
 
-        # 2. SÓLO agregamos el Seguro Ambiental si la mercancía SÍ fue peligrosa (Regla CP182)
         seguro_ambiental_attr = ""
         if (
             es_peligroso_final_xml
             and d.get("aseguradora_med_ambiente")
             and d.get("poliza_med_ambiente")
         ):
-            seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
-        # =========================================================
+            seguro_ambiental_attr = f' AseguraMedAmbiente="{xml_clean(d.get("aseguradora_med_ambiente"))}" PolizaMedAmbiente="{xml_clean(d.get("poliza_med_ambiente"))}"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
         <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
@@ -910,14 +887,14 @@ class CartaPorteService:
             {ubicaciones_xml}
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
                 <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
-                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
-                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
+                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{xml_clean(d['num_permiso'])}">
+                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{xml_clean(d['placas'])}" AnioModeloVM="{d['anio_modelo']}" />
                     <cartaporte31:Seguros AseguraRespCivil="{xml_clean(d['aseguradora'])}" PolizaRespCivil="{xml_clean(d['poliza'])}"{seguro_ambiental_attr} />
                     <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{xml_clean(d['nombre_operador'])}" NumLicencia="{d['licencia']}">
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{xml_clean(d['rfc_operador'])}" NombreFigura="{xml_clean(d['nombre_operador'])}" NumLicencia="{xml_clean(d['licencia'])}">
                     <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:TiposFigura>
             </cartaporte31:FiguraTransporte>
@@ -981,6 +958,31 @@ class CartaPorteService:
             getattr(factura, "folio_interno", None),
             error,
         )
+
+    def _importar_comprobante_ws(self, data, relacion_uuid=None):
+        logger.info("Generando XML Carta Porte y enviando al PAC...")
+
+        # =================================================================
+        # 🛡️ FIX DEFINITIVO SAT [CFDI40149]
+        # =================================================================
+        # Si el modelo de validación (SatCfdiPayload) forzó el RFC a genérico
+        # (por ejemplo, porque el original tenía un '&' como 'F&C0406106C6'),
+        # el SAT EXIGE que el CP Receptor sea idéntico al Lugar de Expedición.
+        rfc_final_xml = str(data.get("rfc_cliente", "")).strip().upper()
+        if rfc_final_xml in ["XAXX010101000", "XEXX010101000"]:
+            data["cp_cliente"] = str(self.emisor_cp).strip()
+            data["regimen_cliente"] = "616"
+            data["uso_cfdi"] = "S01"
+            logger.debug(
+                f"⚠️ Sincronizando CP a {data['cp_cliente']} por regla de RFC Genérico."
+            )
+        # =================================================================
+
+        xml_base = self._armar_xml_sin_sello(data, relacion_uuid)
+
+        # ... (el resto de tu código sigue exactamente igual) ...
+        with open(self.path_cer, "rb") as f:
+            cer_data = f.read()
 
     def _importar_comprobante_ws(self, data, relacion_uuid=None):
         logger.info("Generando XML Carta Porte y enviando al PAC...")
