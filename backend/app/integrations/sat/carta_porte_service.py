@@ -136,6 +136,15 @@ def normalizar_estado_sat(estado: str) -> str:
     return SAT_ESTADOS_MAP.get(estado_str, estado_str)
 
 
+def xml_clean(val: any) -> str:
+    if val is None:
+        return ""
+    # Escapa símbolos como &, <, >, " para que no rompan el XML (Evita el Error 500)
+    return html.escape(
+        str(val).replace("\n", " ").replace("\r", "").strip(), quote=True
+    )
+
+
 def _clean_float(val) -> float:
     if val is None:
         return 0.0
@@ -513,8 +522,22 @@ class CartaPorteService:
         else:
             es_peligroso_final = usuario_marco_peligroso
 
-        raw_cve = str(getattr(viaje, "cve_material_peligroso", "") or "")
-        cve_limpia = raw_cve.upper().replace("UN", "").strip()
+        raw_cve = str(getattr(viaje, "cve_material_peligroso", "") or "").upper()
+        match = re.search(r"\b([0-9A-Z]{4})\b", raw_cve)
+
+        if match:
+            cve_limpia = match.group(1).zfill(
+                4
+            )  # Asegura los 4 caracteres exactos (ej. "1203")
+        else:
+            cve_limpia = ""
+
+        # Si el producto es peligroso, bloquea el timbrado si la clave ONU está vacía o inválida
+        if es_peligroso_final and not cve_limpia:
+            raise HTTPException(
+                status_code=400,
+                detail="Error SAT [CP156]: La clave de material peligroso es inválida. Debe tener 4 caracteres del catálogo (Ej: '1203' o '0004').",
+            )
 
         serie_final = serie_forzada or "CP"
         folio_final = (
@@ -815,8 +838,8 @@ class CartaPorteService:
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
         <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
@@ -836,7 +859,7 @@ class CartaPorteService:
                 <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
                 <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
                     <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}"{seguro_ambiental_attr} />
+                    <cartaporte31:Seguros AseguraRespCivil="{xml_clean(d['aseguradora'])}" PolizaRespCivil="{xml_clean(d['poliza'])}"{seguro_ambiental_attr} />
                     <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
