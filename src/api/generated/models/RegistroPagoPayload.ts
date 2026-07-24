@@ -10,5 +10,9 @@ export type RegistroPagoPayload = {
     fecha_pago: string;
     referencia?: (string | null);
     cuenta_deposito?: (string | null);
+    banco_ordenante?: (string | null);
+    cuenta_ordenante?: (string | null);
+    generar_complemento?: boolean;
+    idempotency_key?: (string | null);
 };
 

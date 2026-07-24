@@ -22,7 +22,7 @@ export class SatUbicacionesService {
      */
     public static getAllApiSatSatMunicipalitiesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatLocationResponse>> {
         return __request(OpenAPI, {
@@ -111,7 +111,7 @@ export class SatUbicacionesService {
      */
     public static getAllApiSatSatLocalitiesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatLocationResponse>> {
         return __request(OpenAPI, {
@@ -200,7 +200,7 @@ export class SatUbicacionesService {
      */
     public static getAllApiSatSatNeighborhoodsGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatNeighborhoodResponse>> {
         return __request(OpenAPI, {

@@ -14,5 +14,6 @@ export type BankMovementCreate = {
     monto: number;
     concepto: string;
     referencia?: (string | null);
+    origen_modulo?: (string | null);
 };
 

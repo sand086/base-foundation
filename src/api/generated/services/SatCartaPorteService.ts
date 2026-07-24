@@ -28,7 +28,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatServicesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
@@ -117,7 +117,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatCargoTypesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
@@ -206,7 +206,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatTrailerSubtypesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
@@ -295,7 +295,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatTruckConfigsGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatTruckConfigResponse>> {
         return __request(OpenAPI, {
@@ -384,7 +384,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatPermitTypesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatPermitTypeResponse>> {
         return __request(OpenAPI, {
@@ -473,7 +473,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatPackagingTypesGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatGenericResponse>> {
         return __request(OpenAPI, {
@@ -562,7 +562,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatHazardousMaterialsGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatHazardousMaterialResponse>> {
         return __request(OpenAPI, {
@@ -651,7 +651,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatStationsGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatStationResponse>> {
         return __request(OpenAPI, {
@@ -740,7 +740,7 @@ export class SatCartaPorteService {
      */
     public static getAllApiSatSatUnitWeightsGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatUnitWeightResponse>> {
         return __request(OpenAPI, {

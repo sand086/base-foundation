@@ -18,7 +18,7 @@ export class SatProductosCpService {
      */
     public static getAllApiSatSatProductsGet(
         skip?: number,
-        limit: number = 500,
+        limit: number = 50000,
         search?: (string | null),
     ): CancelablePromise<Array<SatProductResponse>> {
         return __request(OpenAPI, {
