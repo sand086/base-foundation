@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +77,7 @@ export function ClientRegisterPaymentModal({
   const [generarComplemento, setGenerarComplemento] = useState(true);
   const [abonos, setAbonos] = useState<Record<number, number>>({});
   const [error, setError] = useState("");
+  const activeSubmitKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (open && invoices.length > 0) {
@@ -101,6 +102,7 @@ export function ClientRegisterPaymentModal({
         cuenta_ordenante: "",
       }));
       setError("");
+      activeSubmitKeyRef.current = null;
     }
   }, [invoices, open]);
 
@@ -159,6 +161,13 @@ export function ClientRegisterPaymentModal({
         monto_pagado: Number(abonos[inv.id]),
       }));
 
+    if (!activeSubmitKeyRef.current) {
+      activeSubmitKeyRef.current =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
     const payloadBackend = {
       client_id: Number(finalClientId),
       pagos: payloadPagos,
@@ -169,6 +178,7 @@ export function ClientRegisterPaymentModal({
       banco_ordenante: formData.banco_ordenante,
       cuenta_ordenante: formData.cuenta_ordenante,
       generar_complemento: generarComplemento,
+      idempotency_key: activeSubmitKeyRef.current,
     };
 
     await onSubmit(payloadBackend);
