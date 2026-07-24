@@ -86,6 +86,10 @@ class RegistroPagoPayload(BaseModel):
     fecha_pago: str
     referencia: Optional[str] = ""
     cuenta_deposito: Optional[str] = ""
+    banco_ordenante: Optional[str] = ""
+    cuenta_ordenante: Optional[str] = ""
+    generar_complemento: bool = True
+    idempotency_key: Optional[str] = None
 
 
 def parse_sat_error(e: Exception) -> str:
@@ -924,9 +928,6 @@ def registrar_pago_multiple(
     (Bypass desactivado para ver el error real del SAT)
     """
 
-    factura_id = payload.pagos[0].invoice_id if payload.pagos else "vacio"
-    verificar_doble_clic(f"pago_cliente_{payload.client_id}_factura_{factura_id}")
-    import uuid
     from datetime import datetime
     from fastapi import HTTPException
     from app.models import models
@@ -944,6 +945,132 @@ def registrar_pago_multiple(
             if len(clean_uuid) != 36:
                 pass
 
+    if not payload.generar_complemento:
+        factura_id = payload.pagos[0].invoice_id if payload.pagos else "vacio"
+        verificar_doble_clic(
+            f"pago_financiero_{payload.client_id}_factura_{factura_id}"
+        )
+        try:
+            if not payload.cuenta_deposito:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Debes especificar la cuenta bancaria de depósito.",
+                )
+
+            try:
+                bank_account_id = int(payload.cuenta_deposito)
+            except Exception:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cuenta bancaria de depósito inválida.",
+                )
+
+            try:
+                fecha_pago_date = datetime.strptime(
+                    str(payload.fecha_pago).replace("Z", "").split("T")[0],
+                    "%Y-%m-%d",
+                ).date()
+            except Exception:
+                fecha_pago_date = datetime.now().date()
+
+            total_pagado = 0.0
+            pagos_creados = []
+            for pago in payload.pagos:
+                factura = (
+                    db.query(models.ReceivableInvoice)
+                    .filter(
+                        models.ReceivableInvoice.id == pago.invoice_id,
+                        models.ReceivableInvoice.record_status
+                        == models.RecordStatus.ACTIVO,
+                    )
+                    .with_for_update(of=models.ReceivableInvoice)
+                    .first()
+                )
+                if not factura:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Factura {pago.invoice_id} no encontrada.",
+                    )
+
+                monto_pago = float(pago.monto_pagado or 0)
+                if monto_pago <= 0 or monto_pago > float(factura.saldo_pendiente or 0):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Monto inválido o supera el saldo pendiente para "
+                            f"{factura.folio_interno or factura.id}."
+                        ),
+                    )
+
+                pagos_previos = (
+                    db.query(models.ReceivableInvoicePayment)
+                    .filter_by(invoice_id=factura.id)
+                    .count()
+                )
+                saldo_anterior = float(factura.saldo_pendiente or 0)
+                saldo_insoluto = max(0.0, saldo_anterior - monto_pago)
+                nuevo_pago = models.ReceivableInvoicePayment(
+                    invoice_id=factura.id,
+                    bank_account_id=bank_account_id,
+                    fecha_pago=fecha_pago_date,
+                    monto=monto_pago,
+                    metodo_pago=payload.forma_pago,
+                    referencia=payload.referencia or "",
+                    cuenta_deposito=str(bank_account_id),
+                    parcialidad=pagos_previos + 1,
+                    saldo_anterior=saldo_anterior,
+                    saldo_insoluto=saldo_insoluto,
+                    estatus="ACTIVO",
+                    created_by_id=1,
+                )
+                db.add(nuevo_pago)
+                pagos_creados.append(nuevo_pago)
+
+                factura.saldo_pendiente = saldo_insoluto
+                factura.estatus = (
+                    models.InvoiceStatus.PAGADO
+                    if saldo_insoluto <= 0.01
+                    else models.InvoiceStatus.PAGO_PARCIAL
+                )
+                factura.updated_by_id = 1
+                total_pagado += monto_pago
+
+                mov_schema = finance_schemas.BankMovementCreate(
+                    bank_account_id=bank_account_id,
+                    tipo="ingreso",
+                    monto=monto_pago,
+                    concepto=(
+                        "Cobro Fra. "
+                        f"{factura.folio_interno or str(factura.uuid or factura.id)[:8]} "
+                        "(Sin REP)"
+                    ),
+                    referencia=payload.referencia or "",
+                    origen_modulo="CxC",
+                )
+                create_bank_movement(db, mov_schema, 1)
+
+            db.commit()
+            return {
+                "status": "success",
+                "message": "Cobro financiero registrado sin timbrar REP.",
+                "data": {
+                    "batch_status": "SOLO_COBRO",
+                    "total_pagado": total_pagado,
+                    "facturas_afectadas": len(pagos_creados),
+                    "complemento_uuid": None,
+                    "folio_complemento": None,
+                },
+            }
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error registrando cobro sin REP: {str(e)}",
+            )
+
     service = PaymentComplementService(db)
 
     try:
@@ -955,10 +1082,15 @@ def registrar_pago_multiple(
             fecha_pago=payload.fecha_pago,
             referencia=payload.referencia,
             cuenta_deposito=payload.cuenta_deposito,
+            banco_ordenante=payload.banco_ordenante or "",
+            cuenta_ordenante=payload.cuenta_ordenante or "",
             user_id=1,
+            idempotency_key=payload.idempotency_key,
         )
         return resultado
 
+    except HTTPException:
+        raise
     except Exception as e:
         #  TRUCO DE DEBUG: Lanzamos el error directo a la pantalla
         raise HTTPException(
