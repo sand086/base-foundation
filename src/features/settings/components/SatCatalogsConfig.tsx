@@ -259,7 +259,13 @@ export function SatCatalogsConfig() {
 
   // Estados Tabla y Multi-select
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
   const [pageSize, setPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [sortConfig, setSortConfig] = useState<{
@@ -284,7 +290,10 @@ export function SatCatalogsConfig() {
     setIsFetching(true);
     setSelectedIds([]);
     try {
-      const data = await fetchCatalog(activeCatalog.endpoint);
+      const url = debouncedSearch
+        ? `${activeCatalog.endpoint}?search=${encodeURIComponent(debouncedSearch)}`
+        : activeCatalog.endpoint;
+      const data = await fetchCatalog(url);
       setLocalData(data || []);
     } catch (e) {
       setLocalData([]);
@@ -295,27 +304,19 @@ export function SatCatalogsConfig() {
 
   useEffect(() => {
     loadData();
-    setSearchTerm("");
     setCurrentPage(1);
     setSortConfig(null);
+  }, [activeCatalogId, debouncedSearch]);
+
+  useEffect(() => {
+    setSearchTerm("");
   }, [activeCatalogId]);
 
   // ==========================================
   // FILTRADO Y PAGINACIÓN
   // ==========================================
   const processedData = useMemo(() => {
-    let result = [...localData];
-
-    if (searchTerm) {
-      const lowercasedTerm = searchTerm.toLowerCase();
-      result = result.filter((item) =>
-        activeCatalog.fields.some((f) =>
-          String(item[f.key] || "")
-            .toLowerCase()
-            .includes(lowercasedTerm),
-        ),
-      );
-    }
+    const result = [...localData];
 
     if (sortConfig !== null) {
       result.sort((a, b) => {
@@ -327,7 +328,7 @@ export function SatCatalogsConfig() {
       });
     }
     return result;
-  }, [localData, searchTerm, sortConfig, activeCatalog]);
+  }, [localData, sortConfig, activeCatalog]);
 
   const totalPages =
     pageSize === 0 ? 1 : Math.ceil(processedData.length / pageSize);

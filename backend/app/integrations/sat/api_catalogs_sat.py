@@ -172,7 +172,7 @@ def create_crud_endpoints(
     @router.get(f"{path}", response_model=List[schema_response], tags=[tag])
     def get_all(
         skip: int = Query(0, ge=0),
-        limit: int = Query(50000, ge=1, le=100000),
+        limit: int = Query(500, ge=1, le=100000),  # <-- Bajamos de 50000 a 500
         search: Optional[str] = "",
         db: Session = Depends(get_db),
     ):
@@ -380,13 +380,20 @@ create_crud_endpoints(
     response_model=List[SatPostalCodeResponse],
     tags=["SAT - Ubicaciones"],
 )
-def get_location_codes(db: Session = Depends(get_db)):
-    return (
-        db.query(models.SatLocationCode)
-        .order_by(models.SatLocationCode.codigo_postal.asc())
-        .limit(50000)  # También protegemos los códigos postales
-        .all()
-    )
+def get_location_codes(search: str = "", db: Session = Depends(get_db)):
+    query = db.query(models.SatLocationCode)
+
+    if search:
+        query = query.filter(
+            or_(
+                models.SatLocationCode.codigo_postal.ilike(f"%{search}%"),
+                models.SatLocationCode.estado_clave.ilike(f"%{search}%"),
+                models.SatLocationCode.municipio_clave.ilike(f"%{search}%"),
+                models.SatLocationCode.localidad_clave.ilike(f"%{search}%"),
+            )
+        )
+
+    return query.order_by(models.SatLocationCode.codigo_postal.asc()).limit(500).all()
 
 
 @router.post(
