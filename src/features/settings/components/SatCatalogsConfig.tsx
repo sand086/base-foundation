@@ -290,10 +290,8 @@ export function SatCatalogsConfig() {
     setIsFetching(true);
     setSelectedIds([]);
     try {
-      const url = debouncedSearch
-        ? `${activeCatalog.endpoint}?search=${encodeURIComponent(debouncedSearch)}`
-        : activeCatalog.endpoint;
-      const data = await fetchCatalog(url);
+      // Ahora pasamos el catálogo y la búsqueda por separado
+      const data = await fetchCatalog(activeCatalog.endpoint, debouncedSearch);
       setLocalData(data || []);
     } catch (e) {
       setLocalData([]);
