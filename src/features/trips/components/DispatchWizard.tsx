@@ -525,24 +525,30 @@ export const DispatchWizard = ({
   // ---> NUEVO: ESTADOS PARA LA BÚSQUEDA DINÁMICA DE PRODUCTOS SAT
   const [dynamicSatProducts, setDynamicSatProducts] = useState<any[]>([]);
   const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const [hasInitProducts, setHasInitProducts] = useState(false); // <-- EVITA QUE SE RE-ESCRIBA LA TABLA AL VACIARSE
 
-  // Inicializar los productos con la primera carga (los primeros 500)
+  // Inicializar los productos con la primera carga (SOLO UNA VEZ)
   useEffect(() => {
-    if (satProducts?.length > 0 && dynamicSatProducts.length === 0) {
+    if (satProducts?.length > 0 && !hasInitProducts) {
       setDynamicSatProducts(satProducts);
+      setHasInitProducts(true);
     }
-  }, [satProducts]);
+  }, [satProducts, hasInitProducts]);
 
   // Función para buscar en la API mientras el usuario teclea
-  const handleSearchSatProducts = async (term: string) => {
-    setIsSearchingProducts(true);
-    try {
-      const results = await fetchCatalog("sat-products", term);
-      setDynamicSatProducts(results || []);
-    } finally {
-      setIsSearchingProducts(false);
-    }
-  };
+  // EL USECALLBACK EVITA EL BUCLE INFINITO DE PETICIONES AL SERVIDOR
+  const handleSearchSatProducts = useCallback(
+    async (term: string) => {
+      setIsSearchingProducts(true);
+      try {
+        const results = await fetchCatalog("sat-products", term);
+        setDynamicSatProducts(results || []);
+      } finally {
+        setIsSearchingProducts(false);
+      }
+    },
+    [fetchCatalog],
+  );
   // <--- FIN NUEVO
 
   // Estados locales para los catálogos nuevos
