@@ -189,14 +189,30 @@ function SearchableSelect({
   onSelect,
   placeholder,
   className,
+  onSearch, // <-- NUEVO
+  loading, // <-- NUEVO
 }: {
   items: SearchableItem[];
   value: string;
   onSelect: (val: string) => void;
   placeholder: string;
   className?: string;
+  onSearch?: (val: string) => void; // <-- NUEVO
+  loading?: boolean; // <-- NUEVO
 }) {
   const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // <-- NUEVO
+
+  // <-- NUEVO: Debounce para buscar en la API
+  useEffect(() => {
+    if (onSearch) {
+      const timer = setTimeout(() => {
+        onSearch(searchTerm);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchTerm, onSearch]);
+
   const selectedItem = items.find((item) => item.value === value);
 
   return (
@@ -228,31 +244,47 @@ function SearchableSelect({
         align="start"
         sideOffset={8}
       >
-        <Command>
-          <CommandInput placeholder="Escribe para buscar..." />
+        {/* NUEVO: shouldFilter={!onSearch} desactiva el filtro local si estamos buscando en la API */}
+        <Command shouldFilter={!onSearch}>
+          <CommandInput
+            placeholder="Escribe para buscar..."
+            value={searchTerm}
+            onValueChange={setSearchTerm}
+          />
           <CommandList className="max-h-[280px]">
-            <CommandEmpty />
-            <CommandGroup>
-              {items.map((item) => (
-                <CommandItem
-                  key={item.value}
-                  value={item.label}
-                  onSelect={() => {
-                    onSelect(item.value);
-                    setOpen(false);
-                  }}
-                  className="rounded-xl"
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === item.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  {item.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {/* NUEVO: Estado de carga */}
+            {loading && (
+              <div className="p-4 text-sm text-center text-slate-500 flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Buscando en el
+                SAT...
+              </div>
+            )}
+            {!loading && (
+              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+            )}
+            {!loading && (
+              <CommandGroup>
+                {items.map((item) => (
+                  <CommandItem
+                    key={item.value}
+                    value={item.label}
+                    onSelect={() => {
+                      onSelect(item.value);
+                      setOpen(false);
+                    }}
+                    className="rounded-xl"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === item.value ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {item.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -490,6 +522,29 @@ export const DispatchWizard = ({
   // === EXTRACCIÓN DINÁMICA DE CATÁLOGOS SAT ===
   const { products: satProducts, fetchCatalog, saveItem } = useSatCatalogs();
 
+  // ---> NUEVO: ESTADOS PARA LA BÚSQUEDA DINÁMICA DE PRODUCTOS SAT
+  const [dynamicSatProducts, setDynamicSatProducts] = useState<any[]>([]);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+
+  // Inicializar los productos con la primera carga (los primeros 500)
+  useEffect(() => {
+    if (satProducts?.length > 0 && dynamicSatProducts.length === 0) {
+      setDynamicSatProducts(satProducts);
+    }
+  }, [satProducts]);
+
+  // Función para buscar en la API mientras el usuario teclea
+  const handleSearchSatProducts = async (term: string) => {
+    setIsSearchingProducts(true);
+    try {
+      const results = await fetchCatalog("sat-products", term);
+      setDynamicSatProducts(results || []);
+    } finally {
+      setIsSearchingProducts(false);
+    }
+  };
+  // <--- FIN NUEVO
+
   // Estados locales para los catálogos nuevos
   const [catMateriales, setCatMateriales] = useState<any[]>([]);
   const [catEmbalajes, setCatEmbalajes] = useState<any[]>([]);
@@ -530,12 +585,13 @@ export const DispatchWizard = ({
 
   const availableSatProducts = useMemo(
     () =>
-      satProducts.map((p) => ({
+      dynamicSatProducts.map((p) => ({
+        // <-- Cambiado a dynamicSatProducts
         label: `${p.clave} - ${p.descripcion}`,
         value: p.clave,
         ...p,
       })),
-    [satProducts],
+    [dynamicSatProducts], // <-- Cambiado a dynamicSatProducts
   );
 
   // Mapear la info para los CreatableSelects
@@ -1545,6 +1601,8 @@ export const DispatchWizard = ({
                     items={availableSatProducts}
                     value={data.sat_clave_producto}
                     placeholder="Buscar producto SAT..."
+                    onSearch={handleSearchSatProducts} // <-- NUEVA PROP
+                    loading={isSearchingProducts} // <-- NUEVA PROP
                     onSelect={(val) => {
                       const prod = availableSatProducts.find(
                         (p) => p.value === val,
