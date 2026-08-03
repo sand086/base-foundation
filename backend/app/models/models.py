@@ -1702,6 +1702,43 @@ class SatRetryQueue(AuditMixin, Base):
     trip = relationship("Trip")
 
 
+class SatFolioCounter(AuditMixin, Base):
+    __tablename__ = "sat_folio_counters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    series = Column(String(20), nullable=False, unique=True, index=True)
+    next_value = Column(Integer, nullable=False, default=1, server_default="1")
+    descripcion = Column(String(120), nullable=True)
+
+
+class ReceivablePaymentBatch(AuditMixin, Base):
+    __tablename__ = "receivable_payment_batches"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_rep_batch_idempotency_key"),
+        UniqueConstraint(
+            "operation_fingerprint", name="uq_rep_batch_operation_fingerprint"
+        ),
+        UniqueConstraint("folio_complemento", name="uq_rep_batch_folio_complemento"),
+        UniqueConstraint("complemento_uuid", name="uq_rep_batch_complemento_uuid"),
+        Index("ix_rep_batch_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    idempotency_key = Column(String(160), nullable=False)
+    operation_fingerprint = Column(String(64), nullable=False)
+    folio_complemento = Column(String(50), nullable=False)
+    complemento_uuid = Column(String(36), nullable=True)
+    status = Column(String(40), nullable=False, default="TIMBRANDO", server_default="TIMBRANDO")
+    request_payload = Column(JSONB, default=dict, server_default="{}")
+    sat_error_log = Column(Text, nullable=True)
+    pac_status_code = Column(Integer, nullable=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    bank_movements_created_at = Column(DateTime(timezone=True), nullable=True)
+
+    payments = relationship("ReceivableInvoicePayment", back_populates="payment_batch")
+
+
 class ReceivableInvoicePayment(AuditMixin, Base):
     __tablename__ = "receivable_invoice_payments"
 
@@ -1713,6 +1750,12 @@ class ReceivableInvoicePayment(AuditMixin, Base):
     )
     bank_account_id = Column(
         Integer, ForeignKey("bank_accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    payment_batch_id = Column(
+        Integer,
+        ForeignKey("receivable_payment_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     fecha_pago = Column(Date, default=date.today)
@@ -1755,6 +1798,7 @@ class ReceivableInvoicePayment(AuditMixin, Base):
 
     invoice = relationship("ReceivableInvoice", back_populates="payments")
     bank_account = relationship("BankAccount")
+    payment_batch = relationship("ReceivablePaymentBatch", back_populates="payments")
 
 
 class AlertConfig(AuditMixin, Base):

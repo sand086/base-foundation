@@ -1120,10 +1120,18 @@ export default function CFDIVault() {
         }}
         onStampPayment={async (paymentId) => {
           try {
-            await axiosClient.post(
+            const response = await axiosClient.post(
               `/api/finance/receivables/payments/${paymentId}/stamp`,
             );
-            toast.success("Complemento timbrado en el SAT con éxito");
+            const batchStatus = response.data?.data?.batch_status;
+            if (response.status === 202 || batchStatus === "CONCILIACION_REQUERIDA") {
+              toast.warning(
+                response.data?.detail ||
+                  "El REP quedó en conciliación. No se reintentará automáticamente.",
+              );
+            } else {
+              toast.success("Complemento timbrado en el SAT con éxito");
+            }
             if (refetch) refetch();
           } catch (error: any) {
             const errorMsg =
