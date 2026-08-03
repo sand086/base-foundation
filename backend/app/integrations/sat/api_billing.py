@@ -86,6 +86,9 @@ class RegistroPagoPayload(BaseModel):
     fecha_pago: str
     referencia: Optional[str] = ""
     cuenta_deposito: Optional[str] = ""
+    banco_ordenante: Optional[str] = ""  # <-- Añadido
+    cuenta_ordenante: Optional[str] = ""  # <-- Añadido
+    generar_complemento: bool = True
 
 
 def parse_sat_error(e: Exception) -> str:
@@ -955,6 +958,9 @@ def registrar_pago_multiple(
             fecha_pago=payload.fecha_pago,
             referencia=payload.referencia,
             cuenta_deposito=payload.cuenta_deposito,
+            banco_ordenante=payload.banco_ordenante,  # <-- Pasamos el valor
+            cuenta_ordenante=payload.cuenta_ordenante,  # <-- Pasamos el valor
+            generar_complemento=payload.generar_complemento,  # <-- PASAMOS EL VALOR DEL SWITCH
             user_id=1,
         )
         return resultado

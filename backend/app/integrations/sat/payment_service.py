@@ -233,6 +233,7 @@ class PaymentComplementService:
         cuenta_deposito,
         banco_ordenante: str = "",
         cuenta_ordenante: str = "",
+        generar_complemento: bool = True,
         user_id: int = 1,
     ):
         logger.info(
@@ -500,6 +501,10 @@ class PaymentComplementService:
         #  CANDADO 3: CREAR PAGOS "PENDIENTES" EN BD (Evitar rollback destructivo)
         # =========================================================================
         pagos_pendientes = []
+
+        # Evaluar el estatus inicial según el switch del frontend
+        estatus_inicial_uuid = "PENDIENTE_SAT" if generar_complemento else "NO TIMBRADO"
+
         for factura in facturas_afectadas:
             doc_rel = next(
                 (d for d in doctos_relacionados if d["uuid"] == factura.uuid), None
@@ -513,8 +518,10 @@ class PaymentComplementService:
                     metodo_pago=str(forma_pago),
                     referencia=str(referencia) if referencia else "",
                     cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
-                    complemento_uuid="PENDIENTE_SAT",  # <- MARCADOR CLAVE
-                    folio_complemento=f"COM-{folio_corto}",
+                    complemento_uuid=estatus_inicial_uuid,
+                    folio_complemento=(
+                        f"COM-{folio_corto}" if generar_complemento else None
+                    ),
                     parcialidad=int(doc_rel["parcialidad"]),
                     saldo_anterior=float(doc_rel["saldo_anterior"]),
                     saldo_insoluto=float(doc_rel["saldo_insoluto"]),
@@ -526,7 +533,42 @@ class PaymentComplementService:
         self.db.flush()
         self.db.commit()  # Guardamos la transacción local temporalmente
 
-        # Sellado de XML
+        # =========================================================================
+        # 🛑 FRENO DE MANO: SI EL SWITCH ESTÁ APAGADO, REGISTRAMOS BANCOS Y SALIMOS
+        # =========================================================================
+        if not generar_complemento:
+            for pp in pagos_pendientes:
+                try:
+                    mov_schema = finance_schemas.BankMovementCreate(
+                        bank_account_id=int(bank_account_id),
+                        tipo="ingreso",
+                        monto=pp.monto,
+                        concepto="Cobro Fra. (Interno)",
+                        referencia=(referencia or f"INT {pp.id}")[:100],
+                        origen_modulo="CxC",
+                    )
+                    create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+                except Exception as bank_e:
+                    logger.error(
+                        f"Movimiento bancario fallido para pago {pp.id}: {bank_e}"
+                    )
+
+            self.db.commit()
+
+            logger.info(
+                "Cobro registrado de forma interna exitosamente. (Timbrado omitido)"
+            )
+            return {
+                "status": "success",
+                "message": "Cobro registrado correctamente (Sin Timbrar).",
+                "data": {
+                    "complemento_uuid": "NO TIMBRADO",
+                    "total_pagado": float(total_recibido),
+                    "facturas_afectadas": len(facturas_afectadas),
+                },
+            }
+
+        # 4. Sellado y Timbrado
         with open(self.path_cer, "rb") as f:
             cer_data = f.read()
             cert = x509.load_der_x509_certificate(cer_data, default_backend())
@@ -554,7 +596,6 @@ class PaymentComplementService:
                 raise ValueError(f"Error PAC: {result.mensaje}")
 
             res_sat = result.resultados[0]
-
             if int(getattr(res_sat, "status", 0)) != 200:
                 raise ValueError(f"Error SAT: {res_sat.mensaje}")
 
@@ -570,9 +611,10 @@ class PaymentComplementService:
                 else raw_cfdi
             )
 
+            # 5. Guardar Archivos
             self._guardar_xml_disco(cfdi_bytes, complemento_uuid)
 
-            # Matemáticas de Letras y QR
+            # 6. Generar el PDF y QRs
             root = etree.fromstring(cfdi_bytes)
             ns = {
                 "cfdi": "http://www.sat.gob.mx/cfd/4",
@@ -625,6 +667,56 @@ class PaymentComplementService:
                 importe_letra,
                 fecha_certificacion,
             )
+
+            # 7. Actualizar TODOS los pagos del lote en la BD
+            from app.models.models import ReceivablePaymentDocumentHistory
+
+            for p in pagos_pendientes:
+                p.complemento_uuid = str(complemento_uuid)
+                p.folio_complemento = f"COM-{folio_corto}"
+                p.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
+                self.db.add(p)
+
+                hist_xml = ReceivablePaymentDocumentHistory(
+                    payment_id=p.id,
+                    document_type="xml",
+                    filename=f"{complemento_uuid}.xml",
+                    file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
+                    is_active=True,
+                )
+                hist_pdf = ReceivablePaymentDocumentHistory(
+                    payment_id=p.id,
+                    document_type="pdf",
+                    filename=f"{complemento_uuid}.pdf",
+                    file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
+                    is_active=True,
+                )
+                self.db.add_all([hist_xml, hist_pdf])
+
+            try:
+                mov_schema = finance_schemas.BankMovementCreate(
+                    bank_account_id=int(bank_account_id),
+                    tipo="ingreso",
+                    monto=total_float,
+                    concepto=f"Cobro Fra. (REP)",
+                    referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
+                    origen_modulo="CxC",
+                )
+                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
+            except Exception as bank_e:
+                logger.error(f"Movimiento bancario fallido para lote: {bank_e}")
+
+            self.db.commit()
+
+            return {
+                "status": "success",
+                "message": "Pago registrado y Complemento timbrado exitosamente.",
+                "data": {
+                    "complemento_uuid": complemento_uuid,
+                    "total_pagado": float(total_recibido),
+                    "facturas_afectadas": len(facturas_afectadas),
+                },
+            }
 
         except Exception as e:
             error_msg = str(e).lower()
@@ -680,57 +772,6 @@ class PaymentComplementService:
                     status_code=400,
                     detail=f"Error al timbrar el pago ante el SAT: {str(e)}",
                 )
-
-        # =========================================================================
-        #  ÉXITO: CONFIRMAR PAGOS Y CREAR MOVIMIENTOS EN BODEGA BANCARIA
-        # =========================================================================
-        from app.models.models import ReceivablePaymentDocumentHistory
-
-        for pp in pagos_pendientes:
-            pp.complemento_uuid = complemento_uuid
-            pp.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
-            self.db.add(pp)
-
-            hist_xml = ReceivablePaymentDocumentHistory(
-                payment_id=pp.id,
-                document_type="xml",
-                filename=f"{complemento_uuid}.xml",
-                file_url=f"/api/sat/invoice/{complemento_uuid}/xml",
-                is_active=True,
-            )
-            hist_pdf = ReceivablePaymentDocumentHistory(
-                payment_id=pp.id,
-                document_type="pdf",
-                filename=f"{complemento_uuid}.pdf",
-                file_url=f"/api/sat/invoice/{complemento_uuid}/pdf",
-                is_active=True,
-            )
-            self.db.add_all([hist_xml, hist_pdf])
-
-            try:
-                mov_schema = finance_schemas.BankMovementCreate(
-                    bank_account_id=int(bank_account_id),
-                    tipo="ingreso",
-                    monto=pp.monto,
-                    concepto=f"Cobro Fra. (REP)",
-                    referencia=(referencia or f"REP {complemento_uuid[:8]}")[:100],
-                    origen_modulo="CxC",
-                )
-                create_bank_movement(self.db, mov_schema, current_user_id=user_id)
-            except Exception as bank_e:
-                logger.error(f"Movimiento bancario fallido para pago {pp.id}: {bank_e}")
-
-        self.db.commit()
-
-        return {
-            "status": "success",
-            "message": "Pago registrado y Complemento timbrado exitosamente.",
-            "data": {
-                "complemento_uuid": complemento_uuid,
-                "total_pagado": float(total_recibido),
-                "facturas_afectadas": len(facturas_afectadas),
-            },
-        }
 
     def _armar_xml_pago_sin_sello(self, d: dict) -> str:
         doctos_xml = ""

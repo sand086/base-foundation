@@ -292,6 +292,10 @@ export function InvoiceDetailSheet({
 
   const handleStamp = async (paymentId: number) => {
     if (!onStampPayment) return;
+
+    // 🔒 CANDADO SÍNCRONO: Si ya hay un ID procesándose, abortar inmediatamente.
+    if (stampingId) return;
+
     setStampingId(paymentId);
     try {
       await onStampPayment(paymentId);
