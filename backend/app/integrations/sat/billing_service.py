@@ -1187,12 +1187,15 @@ class BillingService:
             .order_by(ReceivableInvoice.id.desc())
             .first()
         )
-        if factura_pendiente:
+        if factura_pendiente and factura_pendiente.status_sat in [
+            "PROCESANDO",
+            "PENDIENTE_TIMBRADO",
+        ]:
             raise HTTPException(
-                status_code=202,
+                status_code=409,
                 detail=(
-                    f"La factura {factura_pendiente.folio_interno} sigue en PENDIENTE_TIMBRADO. "
-                    "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                    f"La factura {factura_pendiente.folio_interno} ya está en proceso de timbrado o pendiente. "
+                    "Por favor NO dé doble clic y espere la respuesta del sistema."
                 ),
             )
 
@@ -1330,12 +1333,12 @@ class BillingService:
         )
 
         if factura:
-            if factura.status_sat == "PENDIENTE_TIMBRADO":
+            if factura.status_sat in ["PROCESANDO", "PENDIENTE_TIMBRADO"]:
                 raise HTTPException(
-                    status_code=202,
+                    status_code=409,
                     detail=(
-                        f"La factura {factura.folio_interno} sigue en PENDIENTE_TIMBRADO. "
-                        "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                        f"La factura {factura.folio_interno} ya está en proceso de timbrado o pendiente. "
+                        "Por favor NO dé doble clic y espere la respuesta del sistema."
                     ),
                 )
             factura.status_sat = "PROCESANDO"
@@ -1818,12 +1821,12 @@ class BillingService:
         )
 
         if factura:
-            if factura.status_sat == "PENDIENTE_TIMBRADO":
+            if factura.status_sat in ["PROCESANDO", "PENDIENTE_TIMBRADO"]:
                 raise HTTPException(
-                    status_code=202,
+                    status_code=409,
                     detail=(
-                        f"La factura {factura.folio_interno} sigue en PENDIENTE_TIMBRADO. "
-                        "No se generará otro timbre hasta conciliar/reintentar ese registro."
+                        f"La factura {factura.folio_interno} ya está en proceso de timbrado o pendiente. "
+                        "Por favor NO dé doble clic y espere la respuesta del sistema."
                     ),
                 )
             factura.status_sat = "PROCESANDO"

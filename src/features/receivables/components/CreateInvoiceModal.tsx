@@ -500,6 +500,9 @@ export function CreateInvoiceModal({
           ? uuidRelacionado.trim()
           : null,
       tipo_relacion: esRefacturacion ? tipoRelacion : null,
+      viaje_id: invoiceToRefactor
+        ? invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id
+        : null,
     };
 
     try {
