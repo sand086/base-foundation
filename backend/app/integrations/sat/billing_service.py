@@ -1414,6 +1414,147 @@ class BillingService:
                 status_code=500, detail=f"Fallo el timbrado ante el PAC. {str(e)}"
             )
 
+    def generar_factura_libre(
+        self, invoice_data: ReceivableInvoiceCreate
+    ) -> ReceivableInvoice:
+        """
+        Genera y timbra un CFDI 4.0 de Ingreso (Factura Libre / Independiente)
+        sin complemento de Carta Porte.
+        """
+        cliente = (
+            self.db.query(ClientModel)
+            .filter(ClientModel.id == invoice_data.client_id)
+            .first()
+        )
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado.")
+
+        # 1. Determinar datos fiscales del cliente
+        rfc_cliente = (cliente.rfc or "XAXX010101000").strip().upper()
+        if rfc_cliente in ["XAXX010101000", "XEXX010101000"]:
+            cp_cliente = str(self.emisor_cp).strip()
+            regimen_cliente = "616"
+            uso_cfdi = "S01"
+        else:
+            cp_cliente = str(cliente.codigo_postal_fiscal or "").strip()
+            regimen_cliente = str(cliente.regimen_fiscal or "601").strip()
+            uso_cfdi = str(cliente.uso_cfdi or "G03").strip()
+
+        if not cp_cliente or len(cp_cliente) != 5:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El cliente '{cliente.razon_social}' no tiene un C.P. fiscal de 5 dígitos valido.",
+            )
+
+        # 2. Folio interno
+        serie = "F"
+        folio_num = self._get_y_avanzar_folio(serie)
+        folio_interno = f"{serie}-{folio_num}"
+
+        # 3. Cálculo de montos
+        subtotal = float(getattr(invoice_data, "subtotal", 0) or 0)
+        iva = float(getattr(invoice_data, "iva", 0) or 0)
+        retenciones = float(getattr(invoice_data, "retenciones", 0) or 0)
+        total = subtotal + iva - retenciones
+
+        monto_total_dec = Decimal(str(total))
+        subtotal_dec = Decimal(str(subtotal))
+        iva_dec = Decimal(str(iva))
+        ret_dec = Decimal(str(retenciones))
+
+        # 4. Preparar payload para armar el XML
+        data = {
+            "serie": serie,
+            "folio": str(folio_num),
+            "folio_interno": folio_interno,
+            "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "subtotal": f"{subtotal:.2f}",
+            "iva": f"{iva:.2f}",
+            "retenciones": f"{retenciones:.2f}",
+            "total": f"{total:.2f}",
+            "forma_pago": invoice_data.forma_pago or cliente.forma_pago or "99",
+            "metodo_pago": invoice_data.metodo_pago or cliente.metodo_pago or "PPD",
+            "moneda": invoice_data.moneda or cliente.moneda or "MXN",
+            "tc": "1",
+            "tipo_comprobante": "I",
+            "condiciones_pago": (
+                f"EN {cliente.dias_credito or 0} DIAS"
+                if (cliente.dias_credito or 0) > 0
+                else "CONTADO"
+            ),
+            "descripcion_concepto": invoice_data.concepto
+            or "SERVICIOS DE LOGISTICA Y TRANSPORTE",
+            "clave_prod_serv": getattr(invoice_data, "sat_clave_servicio", "78101802")
+            or "78101802",
+            "rfc_cliente": rfc_cliente,
+            "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
+            "cp_cliente": cp_cliente,
+            "regimen_cliente": regimen_cliente,
+            "uso_cfdi": uso_cfdi,
+        }
+
+        # 5. Crear la factura en BD en estado PROCESANDO
+        dias_credito = cliente.dias_credito or 0
+        factura = ReceivableInvoice(
+            client_id=cliente.id,
+            sub_client_id=getattr(invoice_data, "sub_client_id", None),
+            folio_interno=folio_interno,
+            viaje_id=getattr(invoice_data, "viaje_id", None),
+            uuid=None,
+            is_nominal=False,
+            status_sat="PROCESANDO",
+            estatus="pendiente",
+            concepto=data["descripcion_concepto"],
+            monto_total=monto_total_dec,
+            saldo_pendiente=monto_total_dec,
+            subtotal=subtotal_dec,
+            iva=iva_dec,
+            retenciones=ret_dec,
+            moneda=data["moneda"],
+            fecha_emision=date.today(),
+            fecha_vencimiento=date.today() + timedelta(days=dias_credito),
+            metodo_pago=data["metodo_pago"],
+            forma_pago=data["forma_pago"],
+            tipo_comprobante="I",
+        )
+        self.db.add(factura)
+        self.db.commit()
+        self.db.refresh(factura)
+
+        # 6. Timbrado con el PAC
+        try:
+            resultado_pac = self._importar_comprobante_ws(data)
+            uuid_generado = getattr(resultado_pac, "uuid", None)
+
+            serie_real = getattr(resultado_pac, "serie", None)
+            folio_real = getattr(resultado_pac, "folio", None)
+            if serie_real and folio_real:
+                factura.folio_interno = f"{serie_real}-{folio_real}"
+
+            factura.uuid = uuid_generado
+            factura.status_sat = "TIMBRADA"
+            if uuid_generado:
+                factura.pdf_url = f"/api/sat/invoice/{uuid_generado}/pdf"
+                factura.xml_url = f"/api/sat/invoice/{uuid_generado}/xml"
+
+            self.db.commit()
+            self.db.refresh(factura)
+            return factura
+
+        except Exception as e:
+            if is_pac_timeout_error(e):
+                self._marcar_timbrado_pendiente(factura, e, data)
+                raise HTTPException(
+                    status_code=202,
+                    detail="El PAC tardó en responder. La factura quedó en PENDIENTE_TIMBRADO para conciliación.",
+                )
+            factura.status_sat = "ERROR_SAT"
+            self.db.commit()
+            logger.error(f"Error timbrando factura libre ID {factura.id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Fallo el timbrado ante el PAC: {str(e)}"
+            )
+
     def generar_factura_final_relacionada(
         self, invoice_data: ReceivableInvoiceCreate
     ) -> ReceivableInvoice:
