@@ -311,7 +311,7 @@ class IndirectCategoryResponse(IndirectCategoryBase):
 
 
 class ConceptoLibre(BaseModel):
-    claveProdServ: str = Field(default="84111506")
+    claveProdServ: str = Field(default="78121601")
     cantidad: float = Field(default=1.0)
     claveUnidad: str = Field(default="E48")
     descripcion: str

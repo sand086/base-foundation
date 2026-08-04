@@ -293,7 +293,7 @@ export function CreateInvoiceModal({
             claveProdServ:
               c.claveProdServ ||
               c.clave_prod_serv ||
-              (invoiceToRefactor.retenciones > 0 ? "78101802" : "84111506"),
+              (invoiceToRefactor.retenciones > 0 ? "78101802" : "78121601"),
             claveUnidad: c.claveUnidad || c.clave_unidad || "E48",
             descripcion:
               c.descripcion || invoiceToRefactor.concepto || "Servicio",

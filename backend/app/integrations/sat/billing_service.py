@@ -1058,7 +1058,7 @@ class BillingService:
             for c in d["conceptos"]:
                 conceptos_render.append(
                     {
-                        "clave": c.get("claveProdServ", "84111506"),
+                        "clave": c.get("claveProdServ") or "78121601",
                         "cantidad": str(c.get("cantidad", "1.00")),
                         "unidad": c.get("claveUnidad", "E48"),
                         "descripcion": c.get("descripcion", ""),
@@ -1472,7 +1472,7 @@ class BillingService:
     <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="{d.get('clave_prod_serv', '84111506')}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="{objeto_imp}">
+        <cfdi:Concepto ClaveProdServ="{d.get('clave_prod_serv') or '78121601'}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="{objeto_imp}">
             {concepto_impuestos}
         </cfdi:Concepto>
     </cfdi:Conceptos>
@@ -1612,7 +1612,7 @@ class BillingService:
         conceptos_array = invoice_data.get("conceptos", [])
         if conceptos_array and len(conceptos_array) > 0:
             concepto_texto = conceptos_array[0].get("descripcion", "SERVICIOS")
-            clave_sat = conceptos_array[0].get("claveProdServ", "84111506")
+            clave_sat = conceptos_array[0].get("claveProdServ") or "78121601"
         else:
             concepto_texto = invoice_data.get("concepto", "SERVICIOS")
             clave_sat = invoice_data.get("sat_clave_servicio", "84111506")
