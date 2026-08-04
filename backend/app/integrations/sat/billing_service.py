@@ -1590,12 +1590,29 @@ class BillingService:
             raise e
 
     def generar_factura_libre(self, invoice_data: dict) -> ReceivableInvoice:
+        """
+        Genera y timbra un CFDI 4.0 de Ingreso (Factura Libre / Independiente).
+        Toma la descripción exactamente como la escribe el usuario.
+        """
         client_id = invoice_data.get("client_id")
         uuid_relacionado = invoice_data.get("uuid_relacionado")
+        viaje_id = invoice_data.get("viaje_id")
+
+        from app.models.models import Client as ClientModel, ReceivableInvoice
 
         cliente = self.db.query(ClientModel).filter(ClientModel.id == client_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado.")
+
+        # Tomar el concepto EXACTAMENTE como lo escribió el operador en pantalla
+        # Si mandaron varios conceptos, tomamos el primero (o lo ideal es iterar si mandaron más)
+        conceptos_array = invoice_data.get("conceptos", [])
+        if conceptos_array and len(conceptos_array) > 0:
+            concepto_texto = conceptos_array[0].get("descripcion", "SERVICIOS")
+            clave_sat = conceptos_array[0].get("claveProdServ", "84111506")
+        else:
+            concepto_texto = invoice_data.get("concepto", "SERVICIOS")
+            clave_sat = invoice_data.get("sat_clave_servicio", "84111506")
 
         rfc_cliente = (cliente.rfc or "XAXX010101000").strip().upper()
         if rfc_cliente in ["XAXX010101000", "XEXX010101000"]:
@@ -1622,6 +1639,7 @@ class BillingService:
         retenciones = float(invoice_data.get("retenciones", 0) or 0)
         total = subtotal + iva - retenciones
 
+        # DICCIONARIO CRUZO PARA EL XML Y EL PDF
         data = {
             "serie": serie,
             "folio": str(folio_num),
@@ -1647,32 +1665,43 @@ class BillingService:
                 if (cliente.dias_credito or 0) > 0
                 else "CONTADO"
             ),
-            "descripcion_concepto": invoice_data.get("concepto") or "SERVICIOS",
-            "clave_prod_serv": invoice_data.get("sat_clave_servicio", "84111506")
-            or "84111506",
+            # --- MANDAMOS EL TEXTO EN TODAS LAS VARIABLES POSIBLES PARA QUE EL PDF NO FALLE ---
+            "descripcion_concepto": concepto_texto,
+            "concepto": concepto_texto,
+            "conceptos": [
+                {
+                    "clave": clave_sat,
+                    "descripcion": concepto_texto,
+                    "cantidad": "1.00",
+                    "unidad": "E48 - SRV",
+                    "precio": f"{subtotal:.2f}",
+                    "importe": f"{subtotal:.2f}",
+                }
+            ],
+            # ----------------------------------------------------------------------------------
+            "clave_prod_serv": clave_sat,
             "rfc_cliente": rfc_cliente,
             "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
             "cp_cliente": cp_cliente,
             "regimen_cliente": regimen_cliente,
             "uso_cfdi": uso_cfdi,
-            # Rellenamos los campos que el PDF espera para no crashear
-            "peso_bruto": 0,
-            "distancia_total": 0,
-            "es_material_peligroso": False,
         }
 
         dias_credito = cliente.dias_credito or 0
+        from datetime import date, timedelta
+        from decimal import Decimal
+
         factura = ReceivableInvoice(
             client_id=cliente.id,
             sub_client_id=invoice_data.get("sub_client_id"),
             folio_interno=folio_interno,
-            viaje_id=invoice_data.get("viaje_id"),
+            viaje_id=viaje_id,
             uuid_relacionado=uuid_relacionado,
             uuid=None,
             is_nominal=False,
             status_sat="PROCESANDO",
             estatus="pendiente",
-            concepto=data["descripcion_concepto"],
+            concepto=concepto_texto,
             monto_total=Decimal(str(total)),
             saldo_pendiente=Decimal(str(total)),
             subtotal=Decimal(str(subtotal)),
@@ -1690,7 +1719,6 @@ class BillingService:
         self.db.refresh(factura)
 
         try:
-            # Mandamos llamar al nuevo método dedicado, no al de la Carta Porte
             resultado_pac = self._importar_factura_libre_ws(
                 data, relacion_uuid=uuid_relacionado
             )
