@@ -1414,18 +1414,13 @@ class BillingService:
                 status_code=500, detail=f"Fallo el timbrado ante el PAC. {str(e)}"
             )
 
-    def generar_factura_libre(
-        self, invoice_data: ReceivableInvoiceCreate
-    ) -> ReceivableInvoice:
+    def generar_factura_libre(self, invoice_data: dict) -> ReceivableInvoice:
         """
         Genera y timbra un CFDI 4.0 de Ingreso (Factura Libre / Independiente)
         sin complemento de Carta Porte.
         """
-        cliente = (
-            self.db.query(ClientModel)
-            .filter(ClientModel.id == invoice_data.client_id)
-            .first()
-        )
+        client_id = invoice_data.get("client_id")
+        cliente = self.db.query(ClientModel).filter(ClientModel.id == client_id).first()
         if not cliente:
             raise HTTPException(status_code=404, detail="Cliente no encontrado.")
 
@@ -1452,9 +1447,9 @@ class BillingService:
         folio_interno = f"{serie}-{folio_num}"
 
         # 3. Cálculo de montos
-        subtotal = float(getattr(invoice_data, "subtotal", 0) or 0)
-        iva = float(getattr(invoice_data, "iva", 0) or 0)
-        retenciones = float(getattr(invoice_data, "retenciones", 0) or 0)
+        subtotal = float(invoice_data.get("subtotal", 0) or 0)
+        iva = float(invoice_data.get("iva", 0) or 0)
+        retenciones = float(invoice_data.get("retenciones", 0) or 0)
         total = subtotal + iva - retenciones
 
         monto_total_dec = Decimal(str(total))
@@ -1472,9 +1467,11 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            "forma_pago": invoice_data.forma_pago or cliente.forma_pago or "99",
-            "metodo_pago": invoice_data.metodo_pago or cliente.metodo_pago or "PPD",
-            "moneda": invoice_data.moneda or cliente.moneda or "MXN",
+            "forma_pago": invoice_data.get("forma_pago") or cliente.forma_pago or "99",
+            "metodo_pago": invoice_data.get("metodo_pago")
+            or cliente.metodo_pago
+            or "PPD",
+            "moneda": invoice_data.get("moneda") or cliente.moneda or "MXN",
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": (
@@ -1482,9 +1479,9 @@ class BillingService:
                 if (cliente.dias_credito or 0) > 0
                 else "CONTADO"
             ),
-            "descripcion_concepto": invoice_data.concepto
+            "descripcion_concepto": invoice_data.get("concepto")
             or "SERVICIOS DE LOGISTICA Y TRANSPORTE",
-            "clave_prod_serv": getattr(invoice_data, "sat_clave_servicio", "78101802")
+            "clave_prod_serv": invoice_data.get("sat_clave_servicio", "78101802")
             or "78101802",
             "rfc_cliente": rfc_cliente,
             "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
@@ -1497,9 +1494,9 @@ class BillingService:
         dias_credito = cliente.dias_credito or 0
         factura = ReceivableInvoice(
             client_id=cliente.id,
-            sub_client_id=getattr(invoice_data, "sub_client_id", None),
+            sub_client_id=invoice_data.get("sub_client_id"),
             folio_interno=folio_interno,
-            viaje_id=getattr(invoice_data, "viaje_id", None),
+            viaje_id=invoice_data.get("viaje_id"),
             uuid=None,
             is_nominal=False,
             status_sat="PROCESANDO",
