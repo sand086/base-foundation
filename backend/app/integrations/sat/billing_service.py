@@ -1423,23 +1423,58 @@ class BillingService:
         if relacion_uuid:
             relacion_xml = f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{str(relacion_uuid).strip()}" />\n    </cfdi:CfdiRelacionados>'
 
+        subtotal_float = float(d["subtotal"])
+        iva_float = float(d["iva"])
+        ret_float = float(d["retenciones"])
+
+        # 1. Armar nodos de impuestos a nivel CONCEPTO
+        concepto_traslados = ""
+        concepto_retenciones = ""
+
+        if iva_float > 0:
+            concepto_traslados = f'<cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados>'
+        if ret_float > 0:
+            concepto_retenciones = f'<cfdi:Retenciones><cfdi:Retencion Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d["retenciones"]}" /></cfdi:Retenciones>'
+
+        concepto_impuestos = ""
+        if concepto_traslados or concepto_retenciones:
+            concepto_impuestos = f"<cfdi:Impuestos>\n                {concepto_traslados}\n                {concepto_retenciones}\n            </cfdi:Impuestos>"
+
+        # 2. Armar nodos de impuestos a nivel GLOBAL (Totales)
+        global_traslados = ""
+        global_retenciones = ""
+
+        if iva_float > 0:
+            global_traslados = f'<cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados>'
+        if ret_float > 0:
+            global_retenciones = f'<cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d["retenciones"]}" /></cfdi:Retenciones>'
+
+        global_impuestos = ""
+        if global_traslados or global_retenciones:
+            attr_ret = (
+                f' TotalImpuestosRetenidos="{d["retenciones"]}"'
+                if ret_float > 0
+                else ""
+            )
+            attr_tras = (
+                f' TotalImpuestosTrasladados="{d["iva"]}"' if iva_float > 0 else ""
+            )
+            global_impuestos = f"<cfdi:Impuestos{attr_ret}{attr_tras}>\n        {global_retenciones}\n        {global_traslados}\n    </cfdi:Impuestos>"
+
+        # 3. Determinar Objeto de Impuesto (02 = Sí, 01 = No)
+        objeto_imp = "02" if (iva_float > 0 or ret_float > 0) else "01"
+
         return f"""<?xml version="1.0" encoding="UTF-8"?>
-    <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="{d.get('condiciones_pago', 'CONTADO')}" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-        <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
-        <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
-        <cfdi:Conceptos>
-            <cfdi:Concepto ClaveProdServ="{d.get('clave_prod_serv', '84111506')}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
-                <cfdi:Impuestos>
-                    <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-                    <cfdi:Retenciones><cfdi:Retencion Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-                </cfdi:Impuestos>
-            </cfdi:Concepto>
-        </cfdi:Conceptos>
-        <cfdi:Impuestos TotalImpuestosRetenidos="{d['retenciones']}" TotalImpuestosTrasladados="{d['iva']}">
-            <cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d['retenciones']}" /></cfdi:Retenciones>
-            <cfdi:Traslados><cfdi:Traslado Base="{d['subtotal']}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d['iva']}" /></cfdi:Traslados>
-        </cfdi:Impuestos>
-    </cfdi:Comprobante>""".strip()
+<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="{d.get('condiciones_pago', 'CONTADO')}" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
+    <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Conceptos>
+        <cfdi:Concepto ClaveProdServ="{d.get('clave_prod_serv', '84111506')}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="{objeto_imp}">
+            {concepto_impuestos}
+        </cfdi:Concepto>
+    </cfdi:Conceptos>
+    {global_impuestos}
+</cfdi:Comprobante>""".strip()
 
     def _importar_factura_libre_ws(self, data: dict, relacion_uuid: str = None):
         logger.info("Generando XML Factura Libre y enviando al PAC...")
