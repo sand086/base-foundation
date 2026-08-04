@@ -1,7 +1,5 @@
 import sys
-
 import os
-
 import logging
 import csv
 from datetime import datetime
@@ -10,6 +8,7 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.db.database import SessionLocal
+from app.models.models import ReceivableInvoice  # 👈 IMPORTAMOS EL MODELO DE LA BD
 from app.integrations.sat.payment_service import PaymentComplementService
 from app.integrations.sat.soap_client import create_pac_client
 
@@ -25,16 +24,9 @@ UUIDS_ERROR_CERTIFICADO = [
 ]
 
 UUIDS_A_CANCELAR = [
-    "CD0ACDEC-8DCD-4625-B4D2-17068488A997",
-    "224ACF23-D2A7-4896-84FC-88BC5EB58916",
-    "1093A3BB-F9F6-441E-B1C9-7F8946D70769",
-    "0E84E197-0696-4A7F-B1B4-885B95FB9711",
     "AFD65A3C-E1E5-4438-9BD7-227B1F89AA35",
-    "C22E9512-593B-408E-96D0-51816C1EBBFE",
-    "17F5AAB8-B202-4FC6-ADE4-7352E1C0EB9A",
     "3A04D26A-ABC3-40A6-B70F-7E55C88B053F",
 ]
-
 
 UUIDS_NO_CANCELABLES = [
     # Error 305: Fecha fuera del rango de validez del certificado
@@ -61,7 +53,6 @@ UUIDS_NO_CANCELABLES = [
 
 
 def disparar_cancelacion_sat():
-    # 1. Limpieza de UUIDs: mayúsculas, sin espacios y sin duplicados
     uuids_limpios = list(
         dict.fromkeys([u.strip().upper() for u in UUIDS_A_CANCELAR if u.strip()])
     )
@@ -70,7 +61,6 @@ def disparar_cancelacion_sat():
         f"Iniciando proceso de cancelación forzada para {len(uuids_limpios)} UUIDs únicos en el SAT..."
     )
 
-    # Preparar archivo de evidencia CSV
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_filename = f"evidencia_cancelacion_{timestamp}.csv"
 
@@ -78,7 +68,6 @@ def disparar_cancelacion_sat():
     service = PaymentComplementService(db)
 
     try:
-        # Leer Certificados de la empresa (CSD)
         with open(service.path_cer, "rb") as f_cer:
             cer_bytes = f_cer.read()
         with open(service.path_key, "rb") as f_key:
@@ -89,7 +78,6 @@ def disparar_cancelacion_sat():
 
         BATCH_SIZE = 50
 
-        # Abrimos el CSV para ir guardando conforme responde el PAC
         with open(csv_filename, mode="w", newline="", encoding="utf-8") as f_csv:
             writer = csv.writer(f_csv)
             writer.writerow(["Num_Lote", "UUID", "Status_SAT", "Mensaje_SAT"])
@@ -102,7 +90,6 @@ def disparar_cancelacion_sat():
                 logger.info(f"Enviando lote {num_lote} ({len(lote)} UUIDs)...")
 
                 try:
-                    # Disparar el SOAP Request por lote de manera aislada
                     resultado = client_zeep.service.cancelar(
                         usuario=service.pac_user,
                         password=service.pac_pass,
@@ -122,16 +109,66 @@ def disparar_cancelacion_sat():
                         print("=" * 70)
 
                         for res in resultado.resultados:
-                            u_res = getattr(res, "uuid", "DESCONOCIDO")
-                            st_res = getattr(res, "status", "Sin Status")
-                            msg_res = getattr(res, "mensaje", "Sin Mensaje")
+                            u_res = (
+                                str(getattr(res, "uuid", "DESCONOCIDO")).strip().upper()
+                            )
+                            st_res = str(getattr(res, "status", "Sin Status"))
+                            msg_res = str(
+                                getattr(res, "mensaje", "Sin Mensaje")
+                            ).lower()
 
                             print(f"UUID: {u_res}")
                             print(f"Status SAT: {st_res}")
                             print(f"Mensaje Hacienda: {msg_res}")
                             print("-" * 70)
 
-                            # Escribir en evidencia CSV inmediatamente
+                            # =========================================================
+                            # 🛠️ ACTUALIZACIÓN DIRECTA EN BASE DE DATOS
+                            # =========================================================
+                            factura = (
+                                db.query(ReceivableInvoice)
+                                .filter(ReceivableInvoice.uuid == u_res)
+                                .first()
+                            )
+
+                            if factura:
+                                # Escenario 1: Solicitud recibida y en proceso por el SAT
+                                if st_res == "201" or "proceso" in msg_res:
+                                    factura.status_sat = "PROCESO_CANCELACION"
+                                    factura.detalle_sat = (
+                                        f"En proceso ante el SAT: {msg_res}"
+                                    )
+
+                                # Escenario 2: Cancelación exitosa o ya estaba cancelada previamente
+                                elif (
+                                    st_res in ["202", "200"]
+                                    or "previamente cancelado" in msg_res
+                                    or "ya se encuentra cancelado" in msg_res
+                                ):
+                                    factura.status_sat = "CANCELADO"
+                                    factura.estatus = "cancelado"
+                                    factura.saldo_pendiente = 0.0
+                                    factura.detalle_sat = (
+                                        f"Cancelación confirmada: {msg_res}"
+                                    )
+
+                                # Escenario 3: Rechazo u otro estado
+                                else:
+                                    factura.detalle_sat = (
+                                        f"Respuesta SAT ({st_res}): {msg_res}"
+                                    )
+
+                                factura.fecha_cancelacion = datetime.utcnow()
+                                db.commit()  # 👈 ¡GUARDA EL CAMBIO EN LA BD!
+                                logger.info(
+                                    f"✅ BD actualizada para UUID {u_res} -> status_sat: {factura.status_sat}"
+                                )
+                            else:
+                                logger.warning(
+                                    f"⚠️ UUID {u_res} no fue encontrado en la tabla receivable_invoices."
+                                )
+                            # =========================================================
+
                             writer.writerow([num_lote, u_res, st_res, msg_res])
                     else:
                         logger.warning(
@@ -139,7 +176,6 @@ def disparar_cancelacion_sat():
                         )
 
                 except Exception as e_lote:
-                    # El fallo de un lote no mata al script; continúa con el siguiente
                     logger.error(
                         f"❌ Error crítico en el Lote {num_lote}: {e_lote}. Saltando al siguiente bloque..."
                     )
