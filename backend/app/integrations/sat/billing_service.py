@@ -1487,6 +1487,172 @@ class BillingService:
     {global_impuestos}
 </cfdi:Comprobante>""".strip()
 
+    def timbrar_factura_existente(self, invoice_id: int) -> ReceivableInvoice:
+        """
+        Intenta timbrar una factura que ya fue creada en la BD pero que se quedó
+        en ERROR_SAT, PENDIENTE_TIMBRADO o como borrador.
+        """
+        from app.modules.logistics.schemas import SatCfdiPayload
+        from fastapi import HTTPException
+
+        # 1. Buscar la factura en la BD
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.id == invoice_id)
+            .first()
+        )
+        if not factura:
+            raise HTTPException(
+                status_code=404, detail="Factura no encontrada en la base de datos."
+            )
+
+        # 2. Validar que sea elegible para timbrarse
+        if factura.status_sat == "TIMBRADA" and factura.uuid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La factura {factura.folio_interno} ya se encuentra timbrada.",
+            )
+        if factura.record_status == "E" or factura.estatus == "cancelado":
+            raise HTTPException(
+                status_code=400,
+                detail="No puedes timbrar una factura eliminada o cancelada.",
+            )
+
+        factura.status_sat = "PROCESANDO"
+        self.db.commit()
+
+        # 3. Extraer folio y serie de la factura existente
+        serie_parts = str(factura.folio_interno).split("-")
+        serie_forzada = serie_parts[0] if len(serie_parts) > 1 else "F"
+        folio_forzado = (
+            serie_parts[1] if len(serie_parts) > 1 else factura.folio_interno
+        )
+
+        # CASO A: Es una FACTURA LIBRE (No está ligada a un viaje)
+        if not factura.viaje_id:
+            cliente = factura.client
+            data = {
+                "serie": serie_forzada,
+                "folio": folio_forzado,
+                "folio_interno": factura.folio_interno,
+                "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                "subtotal": f"{factura.subtotal:.2f}",
+                "iva": f"{factura.iva:.2f}",
+                "retenciones": f"{factura.retenciones:.2f}",
+                "total": f"{factura.monto_total:.2f}",
+                "forma_pago": factura.forma_pago
+                or getattr(cliente, "forma_pago", "99")
+                or "99",
+                "metodo_pago": factura.metodo_pago
+                or getattr(cliente, "metodo_pago", "PPD")
+                or "PPD",
+                "moneda": factura.moneda or "MXN",
+                "condiciones_pago": (
+                    f"EN {cliente.dias_credito or 0} DIAS"
+                    if getattr(cliente, "dias_credito", 0) > 0
+                    else "CONTADO"
+                ),
+                "descripcion_concepto": factura.concepto,
+                "clave_prod_serv": "84111506",  # Ajustable según tu sistema de factura libre
+                "rfc_cliente": (cliente.rfc or "XAXX010101000").strip().upper(),
+                "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
+                "cp_cliente": cliente.codigo_postal_fiscal or self.emisor_cp,
+                "regimen_cliente": cliente.regimen_fiscal or "601",
+                "uso_cfdi": cliente.uso_cfdi or "G03",
+            }
+
+            try:
+                resultado_pac = self._importar_factura_libre_ws(
+                    data, relacion_uuid=factura.uuid_relacionado
+                )
+                factura.uuid = resultado_pac.uuid
+                factura.status_sat = "TIMBRADA"
+                factura.pdf_url = f"/api/sat/invoice/{factura.uuid}/pdf"
+                factura.xml_url = f"/api/sat/invoice/{factura.uuid}/xml"
+                self.db.commit()
+                return factura
+            except Exception as e:
+                if is_pac_timeout_error(e):
+                    self._marcar_timbrado_pendiente(
+                        factura, e, data, factura.uuid_relacionado
+                    )
+                    raise HTTPException(
+                        status_code=202,
+                        detail="Timeout del PAC. La factura quedó en PENDIENTE_TIMBRADO.",
+                    )
+
+                factura.status_sat = "ERROR_SAT"
+                factura.detalle_sat = str(e)
+                self.db.commit()
+                raise HTTPException(
+                    status_code=500, detail=f"Fallo el timbrado libre: {str(e)}"
+                )
+
+        # CASO B: Es una CARTA PORTE (Nominal, One Shot o Relacionada)
+        else:
+            viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
+                factura.viaje_id, buscar_tramo_carretera=True
+            )
+
+            raw_data = self._build_dict_from_models(
+                viaje,
+                cliente,
+                unidad,
+                operador,
+                r1,
+                r2,
+                is_nominal=factura.is_nominal,
+                ocultar_montos=False,
+                serie_forzada=serie_forzada,
+                folio_forzado=folio_forzado,
+            )
+
+            try:
+                validador = SatCfdiPayload(**raw_data)
+                data = {**raw_data, **validador.model_dump()}
+                # 🛡️ FIX AMPERSAND (&)
+                if raw_data.get("rfc_cliente"):
+                    data["rfc_cliente"] = raw_data["rfc_cliente"]
+                if raw_data.get("nombre_cliente"):
+                    data["nombre_cliente"] = raw_data["nombre_cliente"]
+            except ValidationError as e:
+                factura.status_sat = "ERROR_SAT"
+                self.db.commit()
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error validando Carta Porte: {e.errors()[0]['msg']}",
+                )
+
+            try:
+                resultado_pac = self._importar_comprobante_ws(
+                    data, relacion_uuid=factura.uuid_relacionado
+                )
+                factura.uuid = resultado_pac.uuid
+                factura.status_sat = "TIMBRADA"
+                factura.pdf_url = f"/api/sat/invoice/{factura.uuid}/pdf"
+                factura.xml_url = f"/api/sat/invoice/{factura.uuid}/xml"
+                viaje.uuid_fiscal = factura.uuid
+                viaje.estatus = "facturado"
+                self.db.commit()
+                return factura
+            except Exception as e:
+                if is_pac_timeout_error(e):
+                    self._marcar_timbrado_pendiente(
+                        factura, e, data, factura.uuid_relacionado
+                    )
+                    raise HTTPException(
+                        status_code=202,
+                        detail="Timeout del PAC. La factura quedó en PENDIENTE_TIMBRADO.",
+                    )
+
+                factura.status_sat = "ERROR_SAT"
+                factura.detalle_sat = str(e)
+                self.db.commit()
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Fallo el timbrado de Carta Porte: {str(e)}",
+                )
+
     def _importar_factura_libre_ws(self, data: dict, relacion_uuid: str = None):
         logger.info("Generando XML Factura Libre y enviando al PAC...")
 
