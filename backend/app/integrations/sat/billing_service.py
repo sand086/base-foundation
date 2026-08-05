@@ -151,7 +151,13 @@ def xml_clean(val: any) -> str:
     if val is None:
         return ""
     return html.escape(
-        str(val).replace("\n", " ").replace("\r", "").strip(), quote=True
+        str(val)
+        .replace("\n", " ")
+        .replace("\r", "")
+        .replace(" | ", " - ")
+        .replace("|", "-")
+        .strip(),
+        quote=True,
     )
 
 
@@ -1420,6 +1426,8 @@ class BillingService:
     def _armar_xml_libre_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", "SERVICIOS DE LOGISTICA Y TRANSPORTE"))
+            .replace(" | ", " - ")
+            .replace("|", "-")
         )
 
         relacion_xml = ""
