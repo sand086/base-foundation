@@ -915,9 +915,30 @@ class BillingService:
 
         try:
             client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
+
+            # --- INICIO DE LOGS AÑADIDOS ---
+            logger.debug("======================================================")
+            logger.debug("⬆️ [SAT/PAC] ENVIANDO PETICIÓN TIMBRADO CARTA PORTE ⬆️")
+            logger.debug(f"XML Sellado (Payload): \n{xml_sellado}")
+            logger.debug("======================================================")
+
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
+
+            logger.debug("======================================================")
+            logger.debug("⬇️ [SAT/PAC] RESPUESTA RECIBIDA CARTA PORTE ⬇️")
+            logger.debug(
+                f"Status General PAC: {getattr(result, 'status', 'N/A')} | Mensaje: {getattr(result, 'mensaje', 'N/A')}"
+            )
+
+            if self.history.last_received:
+                raw_response = etree.tostring(
+                    self.history.last_received["envelope"], pretty_print=True
+                ).decode()
+                logger.debug(f"SOAP Response RAW: \n{raw_response}")
+            logger.debug("======================================================")
+            # --- FIN DE LOGS AÑADIDOS ---
 
             if int(getattr(result, "status", 0)) != 200:
                 raise HTTPException(
@@ -1686,9 +1707,30 @@ class BillingService:
 
         try:
             client_zeep = create_pac_client(self.wsdl_timbrado, self.history)
+
+            # --- INICIO DE LOGS AÑADIDOS ---
+            logger.debug("======================================================")
+            logger.debug("⬆️ [SAT/PAC] ENVIANDO PETICIÓN TIMBRADO FACTURA LIBRE ⬆️")
+            logger.debug(f"XML Sellado (Payload): \n{xml_sellado}")
+            logger.debug("======================================================")
+
             result = client_zeep.service.timbrar(
                 self.pac_user, self.pac_pass, xml_sellado.encode("utf-8"), False
             )
+
+            logger.debug("======================================================")
+            logger.debug("⬇️ [SAT/PAC] RESPUESTA RECIBIDA FACTURA LIBRE ⬇️")
+            logger.debug(
+                f"Status General PAC: {getattr(result, 'status', 'N/A')} | Mensaje: {getattr(result, 'mensaje', 'N/A')}"
+            )
+
+            if self.history.last_received:
+                raw_response = etree.tostring(
+                    self.history.last_received["envelope"], pretty_print=True
+                ).decode()
+                logger.debug(f"SOAP Response RAW: \n{raw_response}")
+            logger.debug("======================================================")
+            # --- FIN DE LOGS AÑADIDOS ---
 
             if int(getattr(result, "status", 0)) != 200:
                 raise ValueError(f"Error PAC: {result.mensaje}")
