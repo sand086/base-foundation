@@ -7,23 +7,25 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.db.database import SessionLocal
-from app.models.models import ReceivableInvoicePayment
+from app.models.models import ReceivableInvoice
 from app.integrations.sat.payment_service import PaymentComplementService
 from app.integrations.sat.soap_client import create_pac_client
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("matar_ultimo_rep")
+logger = logging.getLogger("reintento_final")
 
 
-def cancelar_rep_rebelde():
+def cancelar_uuid_rebelde():
     db = SessionLocal()
     service = PaymentComplementService(db)
 
-    # El REP secuestrador
-    uuid_rep = "554C256A-F77E-44CB-A635-D231EB1D2148"
-    param = f"{uuid_rep}|02|"
+    # La Carta Porte que se resistía
+    target_uuid = "BE6CF903-F5DC-4692-925B-045B1771ABC2"
+
+    # Formato Motivo 02 (Cancelación sin relación)
+    param_cancelacion = f"{target_uuid}|02|"
 
     try:
         with open(service.path_cer, "rb") as f_cer:
@@ -33,12 +35,14 @@ def cancelar_rep_rebelde():
 
         client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
-        logger.info(f"🔪 Enviando petición al SAT para matar el REP: {uuid_rep}")
+        logger.info(
+            f"🚀 Enviando a cancelar Carta Porte rebelde con MOTIVO 02: {target_uuid}"
+        )
 
         resultado = client_zeep.service.cancelar(
             usuario=service.pac_user,
             password=service.pac_pass,
-            uuids=[param],
+            uuids=[param_cancelacion],
             derCertCSD=cer_bytes,
             derKeyCSD=key_bytes,
             contrasenaCSD=service.key_password,
@@ -50,37 +54,44 @@ def cancelar_rep_rebelde():
 
         logger.info(f"📡 Respuesta SAT -> Código: {codigo} | Mensaje: {mensaje}")
 
-        # Actualizar en BD local (Registro ID 182)
-        pago = (
-            db.query(ReceivableInvoicePayment)
-            .filter(ReceivableInvoicePayment.id == 182)
+        # Actualización en BD Local
+        factura = (
+            db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.uuid == target_uuid)
             .first()
         )
-        if pago:
+        if factura:
             if (
                 codigo in [201, 202, 211]
                 or "proceso" in mensaje
                 or "previamente" in mensaje
                 or "exito" in mensaje
             ):
-                pago.estatus = "cancelado"
-                pago.motivo_cancelacion = "02"
-                pago.detalle_sat = f"SAT: {mensaje}"
-                pago.fecha_cancelacion = datetime.utcnow()
+                factura.status_sat = (
+                    "PROCESO_CANCELACION"
+                    if codigo != 202 and "previamente" not in mensaje
+                    else "CANCELADO"
+                )
+                factura.estatus = "cancelado"
+                factura.saldo_pendiente = 0.0
+                factura.detalle_sat = f"SAT (Motivo 02): {mensaje}"
+                factura.fecha_cancelacion = datetime.utcnow()
                 db.commit()
-                logger.info("✅ ¡ÉXITO! Registro ID 182 actualizado a 'cancelado'.")
+                logger.info(
+                    f"✅ ¡ÉXITO! Base de datos actualizada a {factura.estatus}."
+                )
             else:
-                pago.detalle_sat = f"Rechazo: {mensaje}"
+                factura.detalle_sat = f"Rechazo Motivo 02: {mensaje}"
                 db.commit()
-                logger.warning("⚠️ SAT rechazó la cancelación del REP.")
+                logger.warning("⚠️ SAT rechazó la petición. Revisa el mensaje arriba.")
         else:
-            logger.error("❌ No se encontró el registro ID 182 en la BD.")
+            logger.error("❌ Factura no encontrada en la BD.")
 
     except Exception as e:
-        logger.error(f"❌ Error crítico: {e}")
+        logger.error(f"❌ Error crítico ejecutando la petición: {e}")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    cancelar_rep_rebelde()
+    cancelar_uuid_rebelde()
