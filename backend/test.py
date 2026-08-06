@@ -1,149 +1,128 @@
 import os
 import sys
 import time
-import requests
 import pandas as pd
-import xml.etree.ElementTree as ET
-from datetime import datetime
 import logging
+from datetime import datetime
+
+# Asegurar que el script encuentre la app
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from app.db.database import SessionLocal
+from app.integrations.sat.payment_service import PaymentComplementService
+from app.integrations.sat.soap_client import create_pac_client
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("sat_read_only_audit")
+logger = logging.getLogger("solucion_factible_obtener_datos")
 
-# 📌 RUTA ABSOLUTA AUTOMÁTICA (Busca en la misma carpeta donde esté este .py)
+# 📌 Rutas absolutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago.xlsx")
-OUTPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago_AUDITADO_SAT.xlsx")
-
-URL_SAT_CONSULTA = (
-    "https://consultaqf.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc"
+OUTPUT_EXCEL = os.path.join(
+    BASE_DIR, "libro_status_PAC_2026_ago_SOLUCION_FACTIBLE.xlsx"
 )
 
-HEADERS_SOAP = {
-    "Content-Type": "text/xml;charset=UTF-8",
-    "SOAPAction": "http://tempuri.org/IConsultaCFDIService/Consulta",
-}
 
-
-def auditar_excel_solo_lectura():
-    logger.info(f"📂 Buscando archivo en: {INPUT_EXCEL}")
+def consultar_solucion_factible():
+    logger.info(f"📂 Buscando archivo Excel en: {INPUT_EXCEL}")
 
     if not os.path.exists(INPUT_EXCEL):
-        logger.error(f"❌ No se encontró el archivo en la ruta: {INPUT_EXCEL}")
+        logger.error(f"❌ No se encontró el archivo: {INPUT_EXCEL}")
         return
 
-    logger.info(f"📊 Cargando archivo Excel exitosamente...")
     df = pd.read_excel(INPUT_EXCEL)
 
-    # Crear columnas nuevas para almacenar la auditoría del SAT
-    columnas_nuevas = [
-        "ESTADO_SAT",
-        "ES_CANCELABLE",
-        "ESTATUS_CANCELACION",
-        "RESPUESTA_OFICIAL_SAT",
-    ]
-    for col in columnas_nuevas:
+    # Columnas nuevas para registrar la respuesta de Solución Factible
+    for col in ["CANCELADO_PAC", "AUTORIZADA_PAC", "ESTATUS_PAC", "MENSAJE_PAC"]:
         if col not in df.columns:
             df[col] = ""
 
-    total_rows = len(df)
-    logger.info(
-        f"🔍 Iniciando auditoría de SOLO LECTURA para {total_rows} comprobantes..."
-    )
+    db = SessionLocal()
+    service = PaymentComplementService(db)
 
-    namespaces = {
-        "a": "http://schemas.datacontract.org/2004/07/Sat.Cfdi.Negocio.ConsultaCfdi.Servicio"
-    }
+    try:
+        # Instanciar el cliente SOAP del PAC Solución Factible
+        client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
-    for idx, row in df.iterrows():
-        uuid = str(row["TFD UUID"]).strip().upper()
-        rfc_emisor = str(row["RFC EMISOR"]).strip().upper()
-        rfc_receptor = str(row["RFC CLIENTE"]).strip().upper()
-        total = row["IMPORTE TOTAL"]
+        pac_user = service.pac_user
+        pac_pass = service.pac_pass
 
-        if not uuid or uuid == "NAN" or len(uuid) < 30:
-            continue
-
-        try:
-            total_str = f"{float(total):.6f}"
-        except Exception:
-            total_str = str(total)
-
-        expresion_impresa = (
-            f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&id={uuid}"
+        total_rows = len(df)
+        logger.info(
+            f"🚀 Consultando 'obtenerDatos' en Solución Factible para {total_rows} folios..."
         )
 
-        soap_envelope = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tem="http://tempuri.org/">
-   <soapenv:Header/>
-   <soapenv:Body>
-      <tem:Consulta>
-         <tem:expresionImpresa><![CDATA[{expresion_impresa}]]></tem:expresionImpresa>
-      </tem:Consulta>
-   </soapenv:Body>
-</soapenv:Envelope>"""
+        for idx, row in df.iterrows():
+            uuid = str(row["TFD UUID"]).strip().upper()
 
-        try:
-            response = requests.post(
-                URL_SAT_CONSULTA, data=soap_envelope, headers=HEADERS_SOAP, timeout=12
-            )
+            if not uuid or uuid == "NAN" or len(uuid) < 30:
+                continue
 
-            if response.status_code == 200:
-                root = ET.fromstring(response.text)
-
-                estado = root.find(".//a:Estado", namespaces)
-                es_cancelable = root.find(".//a:EsCancelable", namespaces)
-                estatus_canc = root.find(".//a:EstatusCancelacion", namespaces)
-                codigo = root.find(".//a:CodigoEstatus", namespaces)
-
-                txt_estado = (
-                    estado.text if estado is not None and estado.text else "Desconocido"
-                )
-                txt_cancelable = (
-                    es_cancelable.text
-                    if es_cancelable is not None and es_cancelable.text
-                    else "N/A"
-                )
-                txt_estatus_canc = (
-                    estatus_canc.text
-                    if estatus_canc is not None and estatus_canc.text
-                    else "Sin estatus"
-                )
-                txt_codigo = codigo.text if codigo is not None and codigo.text else ""
-
-                df.at[idx, "ESTADO_SAT"] = txt_estado
-                df.at[idx, "ES_CANCELABLE"] = txt_cancelable
-                df.at[idx, "ESTATUS_CANCELACION"] = txt_estatus_canc
-                df.at[idx, "RESPUESTA_OFICIAL_SAT"] = (
-                    f"{txt_codigo} | {txt_estatus_canc}"
+            try:
+                # 📡 Llamada estricta de SOLO LECTURA al método obtenerDatos del PAC
+                # Parámetros: usuario, password, uuid, folio (None), serie (None)
+                respuesta = client_zeep.service.obtenerDatos(
+                    usuario=pac_user,
+                    password=pac_pass,
+                    uuid=uuid,
+                    folio=None,
+                    serie=None,
                 )
 
-                if txt_estado.lower() == "cancelado":
-                    df.at[idx, "CANCELADO"] = True
-                    if pd.isna(df.at[idx, "FECHA CANCELACION"]):
+                codigo_status = getattr(respuesta, "status", None)
+                mensaje_pac = getattr(respuesta, "mensaje", "OK")
+
+                df.at[idx, "ESTATUS_PAC"] = f"Código {codigo_status}"
+                df.at[idx, "MENSAJE_PAC"] = mensaje_pac
+
+                comprobantes = getattr(respuesta, "comprobantes", [])
+
+                if comprobantes and len(comprobantes) > 0:
+                    cfdi = comprobantes[0]
+
+                    # Atributos oficiales de la respuesta CFDI de Solución Factible
+                    is_cancelada = getattr(cfdi, "cancelada", False)
+                    is_autorizada = getattr(cfdi, "autorizada", True)
+
+                    df.at[idx, "CANCELADO_PAC"] = bool(is_cancelada)
+                    df.at[idx, "CANCELADO"] = bool(is_cancelada)
+                    df.at[idx, "AUTORIZADA_PAC"] = bool(is_autorizada)
+
+                    # Si está cancelada en el PAC y no tenía fecha en el Excel, asignar timestamp
+                    if is_cancelada and pd.isna(df.at[idx, "FECHA CANCELACION"]):
                         df.at[idx, "FECHA CANCELACION"] = datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S"
                         )
-                elif txt_estado.lower() == "vigente":
-                    df.at[idx, "CANCELADO"] = False
 
-            else:
-                df.at[idx, "RESPUESTA_OFICIAL_SAT"] = (
-                    f"HTTP Error {response.status_code}"
+                else:
+                    df.at[idx, "CANCELADO_PAC"] = "NO_ENCONTRADO"
+
+            except Exception as e_pac:
+                err_msg = str(e_pac)
+                logger.error(f"   ⚠️ Error leyendo UUID [{uuid}]: {err_msg}")
+                df.at[idx, "MENSAJE_PAC"] = f"Error WS: {err_msg}"
+
+            # Bitácora de avance cada 50 filas
+            if (idx + 1) % 50 == 0:
+                logger.info(
+                    f"⏳ Avance: {idx + 1}/{total_rows} consultados en el PAC..."
                 )
 
-        except Exception as e:
-            df.at[idx, "RESPUESTA_OFICIAL_SAT"] = f"Error de conexión: {str(e)}"
+            time.sleep(0.05)  # Pausa ligera para no saturar la conexión
 
-        if (idx + 1) % 50 == 0:
-            logger.info(f"⏳ Avance de lectura: {idx + 1}/{total_rows} auditados...")
+        # Guardar reporte
+        df.to_excel(OUTPUT_EXCEL, index=False)
+        logger.info(
+            f"✅ ¡Auditoría completada exitosamente! Guardada en: {OUTPUT_EXCEL}"
+        )
 
-        time.sleep(0.05)
-
-    df.to_excel(OUTPUT_EXCEL, index=False)
-    logger.info(f"✅ Auditoría completada. Excel guardado en: {OUTPUT_EXCEL}")
+    except Exception as e_crit:
+        logger.error(f"❌ Error crítico en el proceso: {e_crit}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    auditar_excel_solo_lectura()
+    consultar_solucion_factible()
