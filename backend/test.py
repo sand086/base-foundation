@@ -4,28 +4,24 @@ import time
 import pandas as pd
 import logging
 from datetime import datetime
-
-# Asegurar que el script encuentre la app
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from app.db.database import SessionLocal
-from app.integrations.sat.payment_service import PaymentComplementService
-from app.integrations.sat.soap_client import create_pac_client
+from zeep import Client
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("solucion_factible_obtener_datos")
+logger = logging.getLogger("sat_soap_audit")
 
-# 📌 Rutas absolutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago.xlsx")
-OUTPUT_EXCEL = os.path.join(
-    BASE_DIR, "libro_status_PAC_2026_ago_SOLUCION_FACTIBLE.xlsx"
+OUTPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago_SAT_OFICIAL.xlsx")
+
+# WSDL Oficial del SAT para Consultas
+WSDL_SAT_CONSULTA = (
+    "https://consultaqf.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc?wsdl"
 )
 
 
-def consultar_solucion_factible():
+def consultar_sat_oficial():
     logger.info(f"📂 Buscando archivo Excel en: {INPUT_EXCEL}")
 
     if not os.path.exists(INPUT_EXCEL):
@@ -34,95 +30,84 @@ def consultar_solucion_factible():
 
     df = pd.read_excel(INPUT_EXCEL)
 
-    # Columnas nuevas para registrar la respuesta de Solución Factible
-    for col in ["CANCELADO_PAC", "AUTORIZADA_PAC", "ESTATUS_PAC", "MENSAJE_PAC"]:
+    for col in ["ESTADO_SAT", "ES_CANCELABLE", "ESTATUS_CANCELACION_SAT", "CODIGO_SAT"]:
         if col not in df.columns:
             df[col] = ""
 
-    db = SessionLocal()
-    service = PaymentComplementService(db)
-
     try:
-        # Instanciar el cliente SOAP del PAC Solución Factible
-        client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
-
-        pac_user = service.pac_user
-        pac_pass = service.pac_pass
+        # Inicializamos el cliente SOAP conectándonos al validador del SAT
+        logger.info("📡 Conectando con el Webservice Oficial del SAT...")
+        client = Client(WSDL_SAT_CONSULTA)
 
         total_rows = len(df)
-        logger.info(
-            f"🚀 Consultando 'obtenerDatos' en Solución Factible para {total_rows} folios..."
-        )
+        logger.info(f"🚀 Escaneando {total_rows} folios de forma inofensiva...")
 
         for idx, row in df.iterrows():
             uuid = str(row["TFD UUID"]).strip().upper()
+            rfc_emisor = str(row["RFC EMISOR"]).strip().upper()
+            rfc_receptor = str(row["RFC CLIENTE"]).strip().upper()
+            total = row["IMPORTE TOTAL"]
 
             if not uuid or uuid == "NAN" or len(uuid) < 30:
                 continue
 
+            # Formatear el total para que el SAT lo acepte
             try:
-                # 📡 Llamada estricta de SOLO LECTURA al método obtenerDatos del PAC
-                # Parámetros: usuario, password, uuid, folio (None), serie (None)
-                respuesta = client_zeep.service.obtenerDatos(
-                    usuario=pac_user,
-                    password=pac_pass,
-                    uuid=uuid,
-                    folio=None,
-                    serie=None,
+                total_float = float(total)
+                # Omitir los miles, usar decimales completos
+                total_str = (
+                    f"{total_float:.6f}".rstrip("0").rstrip(".")
+                    if total_float % 1 == 0
+                    else f"{total_float:.6f}"
                 )
+            except:
+                total_str = str(total)
 
-                codigo_status = getattr(respuesta, "status", None)
-                mensaje_pac = getattr(respuesta, "mensaje", "OK")
+            expresion = f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&id={uuid}"
 
-                df.at[idx, "ESTATUS_PAC"] = f"Código {codigo_status}"
-                df.at[idx, "MENSAJE_PAC"] = mensaje_pac
+            try:
+                # 📡 Llamada al método Consulta del SAT
+                resultado = client.service.Consulta(expresionImpresa=expresion)
 
-                comprobantes = getattr(respuesta, "comprobantes", [])
+                estado = getattr(resultado, "Estado", "Desconocido")
+                es_cancelable = getattr(resultado, "EsCancelable", "Desconocido")
+                estatus_cancelacion = getattr(resultado, "EstatusCancelacion", "N/A")
+                codigo_estatus = getattr(resultado, "CodigoEstatus", "N/A")
 
-                if comprobantes and len(comprobantes) > 0:
-                    cfdi = comprobantes[0]
+                df.at[idx, "ESTADO_SAT"] = str(estado)
+                df.at[idx, "ES_CANCELABLE"] = str(es_cancelable)
+                df.at[idx, "ESTATUS_CANCELACION_SAT"] = str(estatus_cancelacion)
+                df.at[idx, "CODIGO_SAT"] = str(codigo_estatus)
 
-                    # Atributos oficiales de la respuesta CFDI de Solución Factible
-                    is_cancelada = getattr(cfdi, "cancelada", False)
-                    is_autorizada = getattr(cfdi, "autorizada", True)
-
-                    df.at[idx, "CANCELADO_PAC"] = bool(is_cancelada)
-                    df.at[idx, "CANCELADO"] = bool(is_cancelada)
-                    df.at[idx, "AUTORIZADA_PAC"] = bool(is_autorizada)
-
-                    # Si está cancelada en el PAC y no tenía fecha en el Excel, asignar timestamp
-                    if is_cancelada and pd.isna(df.at[idx, "FECHA CANCELACION"]):
+                # Clasificar la bandera de Excel según lo que dice el SAT
+                if str(estado).lower() == "cancelado":
+                    df.at[idx, "CANCELADO"] = True
+                    if pd.isna(df.at[idx, "FECHA CANCELACION"]):
                         df.at[idx, "FECHA CANCELACION"] = datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S"
                         )
+                elif str(estado).lower() == "vigente":
+                    df.at[idx, "CANCELADO"] = False
 
-                else:
-                    df.at[idx, "CANCELADO_PAC"] = "NO_ENCONTRADO"
+            except Exception as e_soap:
+                err_msg = str(e_soap)
+                logger.error(f"   ⚠️ Error de red con UUID [{uuid}]: {err_msg}")
+                df.at[idx, "CODIGO_SAT"] = f"Error: {err_msg}"
 
-            except Exception as e_pac:
-                err_msg = str(e_pac)
-                logger.error(f"   ⚠️ Error leyendo UUID [{uuid}]: {err_msg}")
-                df.at[idx, "MENSAJE_PAC"] = f"Error WS: {err_msg}"
-
-            # Bitácora de avance cada 50 filas
             if (idx + 1) % 50 == 0:
-                logger.info(
-                    f"⏳ Avance: {idx + 1}/{total_rows} consultados en el PAC..."
-                )
+                logger.info(f"⏳ Avance: {idx + 1}/{total_rows} procesados...")
 
-            time.sleep(0.05)  # Pausa ligera para no saturar la conexión
+            time.sleep(0.1)
 
-        # Guardar reporte
+        # Guardar archivo auditado
         df.to_excel(OUTPUT_EXCEL, index=False)
         logger.info(
-            f"✅ ¡Auditoría completada exitosamente! Guardada en: {OUTPUT_EXCEL}"
+            f"✅ ¡Auditoría SAT completada exitosamente! Guardada en: {OUTPUT_EXCEL}"
         )
 
     except Exception as e_crit:
-        logger.error(f"❌ Error crítico en el proceso: {e_crit}")
-    finally:
-        db.close()
+        logger.error(f"❌ Error crítico inicializando Zeep: {e_crit}")
 
 
 if __name__ == "__main__":
-    consultar_solucion_factible()
+    consultar_sat_oficial()
