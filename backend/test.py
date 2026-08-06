@@ -1,26 +1,41 @@
 import sys
 import os
-
-# Asegurar que el script encuentre la app
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from app.db.database import SessionLocal
-from app.integrations.sat.payment_service import PaymentComplementService
 from zeep import Client
 
-db = SessionLocal()
-service = PaymentComplementService(db)
-wsdl = service.wsdl_timbrado
+# Lista de WSDLs oficiales de Solución Factible
+WSDLS_SOLUCION_FACTIBLE = [
+    "https://solucionfactible.com/ws/services/Cancelacion?wsdl",
+    "https://solucionfactible.com/ws/services/CFDI?wsdl",
+    "https://solucionfactible.com/ws/services/Timbrado?wsdl",
+]
 
-print("=" * 60)
-print(f"WSDL Cargado en tu base de datos: {wsdl}")
-print("=" * 60)
-client = Client(wsdl)
 
-print("\n✅ MÉTODOS DISPONIBLES EN ESTE WEBSERVICE:")
-for service_name, service_obj in client.wsdl.services.items():
-    for port_name, port_obj in service_obj.ports.items():
-        print(f"\n➡️  Puerto: {port_name}")
-        for op_name, op_obj in port_obj.binding._operations.items():
-            print(f"   - {op_name}")
-print("=" * 60)
+def probar_wsdls():
+    print("=" * 70)
+    print("🔍 ESCANEO DE WSDLS DE SOLUCIÓN FACTIBLE")
+    print("=" * 70)
+
+    for wsdl_url in WSDLS_SOLUCION_FACTIBLE:
+        print(f"\n📡 Probando conexión a: {wsdl_url}")
+        try:
+            client = Client(wsdl_url)
+            print("   ✅ Conexión SOAP Exitosa!")
+            print("   📋 Funciones encontradas:")
+
+            operaciones = set()
+            for service_obj in client.wsdl.services.values():
+                for port_obj in service_obj.ports.values():
+                    for op_name in port_obj.binding._operations.keys():
+                        operaciones.add(op_name)
+
+            for op in sorted(operaciones):
+                print(f"      🔹 {op}")
+
+        except Exception as e:
+            print(f"   ❌ No se pudo conectar: {e}")
+
+    print("\n" + "=" * 70)
+
+
+if __name__ == "__main__":
+    probar_wsdls()
