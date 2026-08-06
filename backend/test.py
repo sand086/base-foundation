@@ -1,6 +1,8 @@
 import sys
 import os
+import pandas as pd
 import logging
+import time
 from datetime import datetime
 
 # Asegurar que el script encuentre la app
@@ -14,18 +16,28 @@ from app.integrations.sat.soap_client import create_pac_client
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("reintento_final")
+logger = logging.getLogger("excel_pac_match")
+
+INPUT_EXCEL = "libro_status_PAC_2026_ago.xlsx"
+OUTPUT_EXCEL = "libro_status_PAC_2026_ago_ACTUALIZADO.xlsx"
 
 
-def cancelar_uuid_rebelde():
+def ejecutar_match_excel():
+    if not os.path.exists(INPUT_EXCEL):
+        logger.error(f"❌ No se encontró el archivo de entrada: {INPUT_EXCEL}")
+        return
+
+    logger.info(f"📊 Cargando archivo Excel: {INPUT_EXCEL}...")
+    df = pd.read_excel(INPUT_EXCEL)
+
+    # Asegurar que existan las columnas de destino
+    if "STATUS_SAT" not in df.columns:
+        df["STATUS_SAT"] = ""
+    if "ACUSE_CANCELACION" not in df.columns:
+        df["ACUSE_CANCELACION"] = ""
+
     db = SessionLocal()
     service = PaymentComplementService(db)
-
-    # La Carta Porte que se resistía
-    target_uuid = "BE6CF903-F5DC-4692-925B-045B1771ABC2"
-
-    # Formato Motivo 02 (Cancelación sin relación)
-    param_cancelacion = f"{target_uuid}|02|"
 
     try:
         with open(service.path_cer, "rb") as f_cer:
@@ -35,63 +47,87 @@ def cancelar_uuid_rebelde():
 
         client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
-        logger.info(
-            f"🚀 Enviando a cancelar Carta Porte rebelde con MOTIVO 02: {target_uuid}"
-        )
+        total_rows = len(df)
+        logger.info(f"🔍 Procesando match para {total_rows} registros...")
 
-        resultado = client_zeep.service.cancelar(
-            usuario=service.pac_user,
-            password=service.pac_pass,
-            uuids=[param_cancelacion],
-            derCertCSD=cer_bytes,
-            derKeyCSD=key_bytes,
-            contrasenaCSD=service.key_password,
-        )
+        for idx, row in df.iterrows():
+            uuid = str(row["TFD UUID"]).strip().upper()
 
-        res_sat = resultado.resultados[0]
-        codigo = getattr(res_sat, "status", 0)
-        mensaje = str(getattr(res_sat, "mensaje", "")).lower()
+            # Si el registro no tiene UUID válido, saltar
+            if not uuid or uuid == "NAN" or len(uuid) < 30:
+                continue
 
-        logger.info(f"📡 Respuesta SAT -> Código: {codigo} | Mensaje: {mensaje}")
+            # Buscar información en la Base de Datos Local primero
+            factura_bd = (
+                db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.uuid == uuid)
+                .first()
+            )
 
-        # Actualización en BD Local
-        factura = (
-            db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.uuid == target_uuid)
-            .first()
-        )
-        if factura:
-            if (
-                codigo in [201, 202, 211]
-                or "proceso" in mensaje
-                or "previamente" in mensaje
-                or "exito" in mensaje
-            ):
-                factura.status_sat = (
-                    "PROCESO_CANCELACION"
-                    if codigo != 202 and "previamente" not in mensaje
-                    else "CANCELADO"
-                )
-                factura.estatus = "cancelado"
-                factura.saldo_pendiente = 0.0
-                factura.detalle_sat = f"SAT (Motivo 02): {mensaje}"
-                factura.fecha_cancelacion = datetime.utcnow()
-                db.commit()
+            if factura_bd:
+                df.at[idx, "CANCELADO"] = factura_bd.estatus == "cancelado"
+                if factura_bd.fecha_cancelacion:
+                    df.at[idx, "FECHA CANCELACION"] = factura_bd.fecha_cancelacion
+                if factura_bd.status_sat:
+                    df.at[idx, "STATUS_SAT"] = factura_bd.status_sat
+                if factura_bd.detalle_sat:
+                    df.at[idx, "ACUSE_CANCELACION"] = factura_bd.detalle_sat
+
+            # Si en Excel no está marcado como cancelado, hacer la verificación directa con el PAC
+            if not df.at[idx, "CANCELADO"]:
+                try:
+                    # Petición de estado al PAC
+                    param = f"{uuid}|02|"
+                    res = client_zeep.service.cancelar(
+                        usuario=service.pac_user,
+                        password=service.pac_pass,
+                        uuids=[param],
+                        derCertCSD=cer_bytes,
+                        derKeyCSD=key_bytes,
+                        contrasenaCSD=service.key_password,
+                    )
+
+                    res_sat = res.resultados[0]
+                    codigo = getattr(res_sat, "status", 0)
+                    mensaje = str(getattr(res_sat, "mensaje", "")).strip()
+
+                    df.at[idx, "ACUSE_CANCELACION"] = f"Código {codigo}: {mensaje}"
+
+                    if (
+                        "previamente" in mensaje.lower()
+                        or "exito" in mensaje.lower()
+                        or codigo == 202
+                    ):
+                        df.at[idx, "CANCELADO"] = True
+                        df.at[idx, "STATUS_SAT"] = "CANCELADO"
+                        if pd.isna(df.at[idx, "FECHA CANCELACION"]):
+                            df.at[idx, "FECHA CANCELACION"] = datetime.now().strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
+                    elif "proceso" in mensaje.lower():
+                        df.at[idx, "STATUS_SAT"] = "EN_PROCESO"
+                    else:
+                        df.at[idx, "STATUS_SAT"] = f"RECHAZO_{codigo}"
+
+                except Exception as e_pac:
+                    df.at[idx, "ACUSE_CANCELACION"] = f"Error PAC: {str(e_pac)}"
+
+            if (idx + 1) % 50 == 0:
                 logger.info(
-                    f"✅ ¡ÉXITO! Base de datos actualizada a {factura.estatus}."
+                    f"⏳ Avance: {idx + 1}/{total_rows} registros procesados..."
                 )
-            else:
-                factura.detalle_sat = f"Rechazo Motivo 02: {mensaje}"
-                db.commit()
-                logger.warning("⚠️ SAT rechazó la petición. Revisa el mensaje arriba.")
-        else:
-            logger.error("❌ Factura no encontrada en la BD.")
+
+        # Guardar resultado final en el Excel
+        df.to_excel(OUTPUT_EXCEL, index=False)
+        logger.info(
+            f"✅ ¡Proceso completado con éxito! Excel actualizado guardado en: {OUTPUT_EXCEL}"
+        )
 
     except Exception as e:
-        logger.error(f"❌ Error crítico ejecutando la petición: {e}")
+        logger.error(f"❌ Error crítico en el procesamiento: {e}")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    cancelar_uuid_rebelde()
+    ejecutar_match_excel()
