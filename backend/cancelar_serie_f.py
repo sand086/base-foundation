@@ -22,6 +22,7 @@ logger = logging.getLogger("cancelacion_forzada")
 # =====================================================================
 UUIDS_A_CANCELAR_MAPEADOS = [
     "EA5985B4-C9CD-435B-BC91-3A2FEB5D6031|02|",
+    "E51913EA-44CA-4ACA-B86D-DF6A0F4E51E5|02|",
 ]
 
 
