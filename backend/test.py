@@ -9,47 +9,36 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.db.database import SessionLocal
-from app.models.models import ReceivableInvoice
+from app.models.models import ReceivableInvoicePayment
 from app.integrations.sat.payment_service import PaymentComplementService
 from app.integrations.sat.soap_client import create_pac_client
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("cancelacion_motivo01_cp")
+logger = logging.getLogger("cancelar_reps")
 
 # =====================================================================
-# 📌 PAREJAS DE SUSTITUCCIÓN (UUID_VIEJO_CP_UN_PESO | 01 | UUID_FACTURA_CHIDA)
+# 📌 LOS 2 COMPLEMENTOS DE PAGO (REPs) HIJOS A CANCELAR (MOTIVO 02)
 # =====================================================================
-PAREJAS_A_CANCELAR = [
-    # (UUID_VIEJO_CP_UN_PESO , UUID_FACTURA_CHIDA_SUSTITUTA)
-    ("3EFDA751-DAD0-4B44-8005-EB1FFC75F7C2", "DA0D965B-6C80-4CE3-9770-7D4EB9ECF83B"),
-    ("BE6CF903-F5DC-4692-925B-045B1771ABC2", "49100456-EF69-458B-84B5-8A20F5389BB0"),
-    ("3A4F7A92-8245-45FA-9F5C-DC8281A5E432", "E5E6964B-07C2-4365-9BD4-B6677DF35ED3"),
-    ("2C529061-CBF8-498D-AE86-767D87BBE1FD", "31E39A79-C1DA-47DA-9279-365D8B021793"),
-    ("75834706-6320-4E26-BABA-3B3A7C8AF4AC", "B2E2B407-563B-42DB-939C-0548B05F981F"),
-    ("A7BD2256-A76E-4D3B-8771-31863EFDA81A", "3F224FE1-22DE-4AD5-B580-1C9A5CED30FF"),
-    ("3BA79113-20D3-43E5-9BF3-CFEFBE6D7D6C", "0B9B62F0-750E-45AA-8047-B5FF0CF3B12C"),
-    ("3C81534F-C65F-4245-BE90-3127B10CBA31", "4F70ED02-3503-438D-995A-44DABD9187A5"),
-    ("89474C8C-FDAC-4A0B-890F-0B915D66A513", "FA9FD203-1A5D-4A9A-8181-0E80D7EC6392"),
-    ("AA2FFEBD-5CC3-42ED-AFD7-9017253A1E28", "DD22F58A-0831-40B3-87AB-4F2F0B0430F7"),
-    ("E53258D5-9011-42C7-A1D2-16263DB5361F", "3DE591D1-B2E9-484E-BAC8-8BFF9EC8DF78"),
-    ("83D726BC-40A0-4688-BE2A-E5ECE56812E5", "2624E912-4210-46B4-86C1-AC9AEBA9E604"),
-    ("CB771797-B8B8-45A0-A115-32BBEB7AA5B8", "1B827D22-3C25-4E7E-BD92-2D925B25771D"),
-    ("E48FEB83-E11F-477A-B9AB-65EA84C8101B", "053133D5-1620-4843-8A36-FE2A4799830E"),
-    ("9215013E-AEC3-4ABB-8BB9-423C4C9C7570", "E26E9F38-FBEB-40DA-AC05-6907076CB061"),
+REPS_A_CANCELAR = [
+    "80D0623C-523C-4626-93F9-4941CF38640D|02|",
+    "2EE7E4C8-3343-4129-8EE2-52362B9749F3|02|",
 ]
 
+# IDs de los registros en la tabla receivable_invoice_payments para verificar
+PAGOS_IDS_BD = [185, 186, 187, 223]
 
-def disparar_cancelacion_motivo01():
+
+def disparar_cancelacion_reps():
     db = SessionLocal()
     service = PaymentComplementService(db)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = f"evidencia_cancelacion_cp_m01_{timestamp}.csv"
+    csv_filename = f"evidencia_cancelacion_reps_{timestamp}.csv"
 
     logger.info(
-        f"🚀 Cancelando {len(PAREJAS_A_CANCELAR)} Cartas Porte con MOTIVO 01 y relacionando a la factura chida..."
+        f"🚀 Iniciando cancelación de {len(REPS_A_CANCELAR)} Complementos de Pago (REPs)..."
     )
 
     try:
@@ -64,18 +53,16 @@ def disparar_cancelacion_motivo01():
             writer = csv.writer(f_csv)
             writer.writerow(
                 [
-                    "UUID_Viejo_CP",
-                    "UUID_Nuevo_Chido",
+                    "UUID_REP_Hijo",
                     "Status_SAT",
                     "Mensaje_SAT",
-                    "Estatus_BD",
+                    "Registros_BD_Actualizados",
                 ]
             )
 
-            for uuid_viejo, uuid_nuevo in PAREJAS_A_CANCELAR:
-                # Estructura del SAT: UUID_VIEJO|01|UUID_NUEVO
-                param = f"{uuid_viejo}|01|{uuid_nuevo}"
-                logger.info(f"🔪 Enviando: {uuid_viejo} (Motivo 01 -> {uuid_nuevo})")
+            for param in REPS_A_CANCELAR:
+                uuid_puro = param.split("|")[0]
+                logger.info(f"🔪 Enviando cancelación para REP Hijo: {uuid_puro}")
 
                 try:
                     resultado = client_zeep.service.cancelar(
@@ -91,58 +78,52 @@ def disparar_cancelacion_motivo01():
                     codigo = getattr(res_sat, "status", 0)
                     mensaje = str(getattr(res_sat, "mensaje", "")).lower()
 
-                    # Actualizar en BD solo la Carta Porte vieja
-                    factura_vieja = (
-                        db.query(ReceivableInvoice)
-                        .filter(ReceivableInvoice.uuid == uuid_viejo)
-                        .first()
-                    )
-                    estatus_bd = "NO_ENCONTRADA"
+                    actualizados_count = 0
 
-                    if factura_vieja:
-                        if (
-                            codigo in [201, 202, 211]
-                            or "proceso" in mensaje
-                            or "previamente" in mensaje
-                            or "exito" in mensaje
-                        ):
-                            factura_vieja.status_sat = (
-                                "PROCESO_CANCELACION"
-                                if codigo != 202 and "previamente" not in mensaje
-                                else "CANCELADO"
-                            )
-                            factura_vieja.estatus = "cancelado"
-                            factura_vieja.saldo_pendiente = 0.0
-                            factura_vieja.detalle_sat = f"Cancelada Motivo 01 (Sustituida por {uuid_nuevo}): {mensaje}"
-                            factura_vieja.fecha_cancelacion = datetime.utcnow()
-                            db.commit()
-                            estatus_bd = f"ACTUALIZADA ({factura_vieja.estatus})"
-                            logger.info(
-                                f"   ✅ ÉXITO: {mensaje} -> BD como {factura_vieja.estatus}"
-                            )
-                        else:
-                            factura_vieja.detalle_sat = f"Rechazo Motivo 01: {mensaje}"
-                            db.commit()
-                            estatus_bd = "RECHAZO SAT"
-                            logger.warning(f"   ⚠️ RECHAZO SAT: {mensaje}")
-
-                    writer.writerow(
-                        [uuid_viejo, uuid_nuevo, codigo, mensaje, estatus_bd]
+                    # Buscar y actualizar en receivable_invoice_payments
+                    pagos_bd = (
+                        db.query(ReceivableInvoicePayment)
+                        .filter(ReceivableInvoicePayment.complemento_uuid == uuid_puro)
+                        .all()
                     )
+
+                    if pagos_bd:
+                        for pago in pagos_bd:
+                            if (
+                                codigo in [201, 202, 211]
+                                or "proceso" in mensaje
+                                or "previamente" in mensaje
+                                or "exito" in mensaje
+                            ):
+                                pago.estatus = "cancelado"
+                                pago.motivo_cancelacion = "02"
+                                pago.detalle_sat = f"REP Cancelado SAT: {mensaje}"
+                                pago.fecha_cancelacion = datetime.utcnow()
+                                actualizados_count += 1
+                                logger.info(
+                                    f"   ✅ Pago ID BD [{pago.id}] de REP {uuid_puro} -> Marcado como 'cancelado'"
+                                )
+                            else:
+                                pago.detalle_sat = f"Rechazo Cancelacion REP: {mensaje}"
+                                logger.warning(
+                                    f"   ⚠️ Rechazo en Pago ID BD [{pago.id}]: {mensaje}"
+                                )
+
+                        db.commit()
+                    else:
+                        logger.error(
+                            f"   ❌ No se encontraron pagos en BD con el REP UUID: {uuid_puro}"
+                        )
+
+                    writer.writerow([uuid_puro, codigo, mensaje, actualizados_count])
 
                 except Exception as e_peticion:
-                    logger.error(f"   ❌ Error enviando {uuid_viejo}: {e_peticion}")
-                    writer.writerow(
-                        [
-                            uuid_viejo,
-                            uuid_nuevo,
-                            "ERROR",
-                            str(e_peticion),
-                            "SIN_CAMBIOS",
-                        ]
+                    logger.error(
+                        f"   ❌ Error al enviar petición para {uuid_puro}: {e_peticion}"
                     )
+                    writer.writerow([uuid_puro, "ERROR", str(e_peticion), 0])
 
-                time.sleep(1.5)  # Pausa estratégica para no saturar al PAC
+                time.sleep(1.5)
 
         logger.info(f"\n📁 Proceso finalizado. Evidencia guardada en: {csv_filename}")
 
@@ -153,4 +134,4 @@ def disparar_cancelacion_motivo01():
 
 
 if __name__ == "__main__":
-    disparar_cancelacion_motivo01()
+    disparar_cancelacion_reps()
