@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import requests
 import pandas as pd
@@ -11,8 +12,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sat_read_only_audit")
 
-INPUT_EXCEL = "libro_status_PAC_2026_ago.xlsx"
-OUTPUT_EXCEL = "libro_status_PAC_2026_ago_AUDITADO_SAT.xlsx"
+# 📌 RUTA ABSOLUTA AUTOMÁTICA (Busca en la misma carpeta donde esté este .py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago.xlsx")
+OUTPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago_AUDITADO_SAT.xlsx")
 
 URL_SAT_CONSULTA = (
     "https://consultaqf.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc"
@@ -25,11 +28,13 @@ HEADERS_SOAP = {
 
 
 def auditar_excel_solo_lectura():
+    logger.info(f"📂 Buscando archivo en: {INPUT_EXCEL}")
+
     if not os.path.exists(INPUT_EXCEL):
-        logger.error(f"❌ No se encontró el archivo de entrada: {INPUT_EXCEL}")
+        logger.error(f"❌ No se encontró el archivo en la ruta: {INPUT_EXCEL}")
         return
 
-    logger.info(f"📊 Leyendo Excel: {INPUT_EXCEL}...")
+    logger.info(f"📊 Cargando archivo Excel exitosamente...")
     df = pd.read_excel(INPUT_EXCEL)
 
     # Crear columnas nuevas para almacenar la auditoría del SAT
@@ -61,13 +66,11 @@ def auditar_excel_solo_lectura():
         if not uuid or uuid == "NAN" or len(uuid) < 30:
             continue
 
-        # Formatear el importe total a expresión float
         try:
             total_str = f"{float(total):.6f}"
         except Exception:
             total_str = str(total)
 
-        # Expresión Impresa requerida por el SAT para consulta
         expresion_impresa = (
             f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&id={uuid}"
         )
@@ -116,7 +119,6 @@ def auditar_excel_solo_lectura():
                     f"{txt_codigo} | {txt_estatus_canc}"
                 )
 
-                # Actualizar bandera de CANCELADO basado únicamente en la respuesta del SAT
                 if txt_estado.lower() == "cancelado":
                     df.at[idx, "CANCELADO"] = True
                     if pd.isna(df.at[idx, "FECHA CANCELACION"]):
@@ -137,14 +139,10 @@ def auditar_excel_solo_lectura():
         if (idx + 1) % 50 == 0:
             logger.info(f"⏳ Avance de lectura: {idx + 1}/{total_rows} auditados...")
 
-        # Pausa ligera entre peticiones HTTP
         time.sleep(0.05)
 
-    # Guardar reporte limpio
     df.to_excel(OUTPUT_EXCEL, index=False)
-    logger.info(
-        f"✅ Auditoría finalizada. Resultado seguro guardado en: {OUTPUT_EXCEL}"
-    )
+    logger.info(f"✅ Auditoría completada. Excel guardado en: {OUTPUT_EXCEL}")
 
 
 if __name__ == "__main__":
