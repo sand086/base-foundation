@@ -21,8 +21,7 @@ logger = logging.getLogger("cancelacion_forzada")
 # 📌 MAPEO EXACTO: UUID_A_CANCELAR | MOTIVO | UUID_SUSTITUTO (Si aplica)
 # =====================================================================
 UUIDS_A_CANCELAR_MAPEADOS = [
-    "CE75F2A6-B285-4ABD-B944-48A738E8F23B|02|",
-    "DBE67F83-82B3-4BD6-B5A5-B95D5138B5D2|02|",
+    "EA5985B4-C9CD-435B-BC91-3A2FEB5D6031|02|",
 ]
 
 
