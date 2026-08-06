@@ -16,35 +16,101 @@ from app.integrations.sat.soap_client import create_pac_client
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("cancelacion_mixta")
+logger = logging.getLogger("cancelacion_parejas")
 
 # =====================================================================
-# 📌 LISTA MIXTA: 4 Nuevas (Motivo 02) + 4 Timeouts (Motivo 01)
+# 📌 1. FACTURAS NUEVAS (Se cancelan primero con Motivo 02)
 # =====================================================================
-UUIDS_A_PROCESAR = [
-    # --- 1. LAS 4 NUEVAS CARTAS PORTE A CANCELAR (MOTIVO 02) ---
+NUEVAS_MOTIVO_02 = [
     "3A4F7A92-8245-45FA-9F5C-DC8281A5E432|02|",
     "AB2DBA8B-0DC3-4B27-8BBD-14FE9E6F3AB4|02|",
     "9B15BE22-E81B-4976-BCA5-AB67999EF007|02|",
     "021187BA-D746-406D-813D-31A033B93E6C|02|",
-    # --- 2. LOS 4 TIMEOUTS DEL INTENTO ANTERIOR (MOTIVO 01 CON SUSTITUTO) ---
-    "C9ECD3BD-A1EA-4CF0-9A26-95672D18E03D|01|135B69E5-3EDE-432D-81FD-9A438504635B",
-    "FFE352ED-48AE-473C-9759-A17D50CBD9AF|01|38F1C9A5-AE01-4EB0-B431-74BBC67C192A",
-    "3F224FE1-22DE-4AD5-B580-1C9A5CED30FF|01|A7BD2256-A76E-4D3B-8771-31863EFDA81A",
-    "C567C900-047C-4B0D-A0BE-F4446C2AE69A|01|9A746BF0-9F2A-4297-B536-ABC2728F22E5",
+]
+
+# =====================================================================
+# 📌 2. FACTURAS VIEJAS (Una vez libres, se cancelan con Motivo 02)
+# =====================================================================
+VIEJAS_MOTIVO_02 = [
+    "E5E6964B-07C2-4365-9BD4-B6677DF35ED3|02|",
+    "EF1E811E-A51E-4371-89CF-868D7F6681F4|02|",
+    "C4EA4AB8-3DC4-4CFD-942E-735052420725|02|",
+    "A4B6E278-4D46-45DF-9613-94F6D0FF19BD|02|",
 ]
 
 
-def disparar_cancelacion_mixta():
-    uuids_limpios = [u.strip().upper() for u in UUIDS_A_PROCESAR if u.strip()]
+def procesar_lote(client_zeep, db, pac_config, uuids, tipo, writer):
+    logger.info(f"\n--- Procesando Lote de Facturas {tipo} ({len(uuids)} folios) ---")
 
-    logger.info(f"🚀 Iniciando proceso para {len(uuids_limpios)} UUIDs...")
+    for param_cancelacion in uuids:
+        uuid_puro = param_cancelacion.split("|")[0]
+        logger.info(f"🔪 Enviando a cancelar: {uuid_puro}")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = f"evidencia_reintentos_{timestamp}.csv"
+        try:
+            resultado = client_zeep.service.cancelar(
+                usuario=pac_config["user"],
+                password=pac_config["pass"],
+                uuids=[param_cancelacion],
+                derCertCSD=pac_config["cer"],
+                derKeyCSD=pac_config["key"],
+                contrasenaCSD=pac_config["key_pass"],
+            )
 
+            res_sat = resultado.resultados[0]
+            codigo = getattr(res_sat, "status", 0)
+            mensaje = str(getattr(res_sat, "mensaje", "")).lower()
+            actualizado = "NO"
+
+            # ACTUALIZAR BD
+            factura = (
+                db.query(ReceivableInvoice)
+                .filter(ReceivableInvoice.uuid == uuid_puro)
+                .first()
+            )
+            if factura:
+                if (
+                    codigo in [201, 202, 211]
+                    or "proceso" in mensaje
+                    or "previamente" in mensaje
+                    or "exito" in mensaje
+                ):
+                    factura.status_sat = (
+                        "PROCESO_CANCELACION"
+                        if codigo != 202 and "previamente" not in mensaje
+                        else "CANCELADO"
+                    )
+                    factura.estatus = "cancelado"
+                    factura.saldo_pendiente = 0.0
+                    factura.detalle_sat = f"SAT: {mensaje}"
+                    factura.fecha_cancelacion = datetime.utcnow()
+                    db.commit()
+                    actualizado = f"SÍ ({factura.estatus})"
+                    logger.info(
+                        f"   ✅ ÉXITO: {mensaje} -> Guardado en BD como {factura.estatus}"
+                    )
+                else:
+                    factura.detalle_sat = f"Rechazo: {mensaje}"
+                    db.commit()
+                    actualizado = "SÍ (RECHAZO)"
+                    logger.warning(f"   ⚠️ RECHAZO: {mensaje}")
+            else:
+                logger.error(f"   ❌ El UUID {uuid_puro} no está en la BD.")
+
+            writer.writerow([tipo, uuid_puro, codigo, mensaje, actualizado])
+
+        except Exception as e:
+            logger.error(f"   ❌ Error de conexión: {str(e)}")
+            writer.writerow([tipo, uuid_puro, "ERROR", str(e), "NO"])
+
+        time.sleep(2)  # Pausa obligatoria para que el SAT asimile la cancelación
+
+
+def disparar_parejas():
     db = SessionLocal()
     service = PaymentComplementService(db)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_filename = f"evidencia_4_parejas_{timestamp}.csv"
 
     try:
         with open(service.path_cer, "rb") as f_cer:
@@ -54,96 +120,50 @@ def disparar_cancelacion_mixta():
 
         client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
+        pac_config = {
+            "user": service.pac_user,
+            "pass": service.pac_pass,
+            "cer": cer_bytes,
+            "key": key_bytes,
+            "key_pass": service.key_password,
+        }
+
         with open(csv_filename, mode="w", newline="", encoding="utf-8") as f_csv:
             writer = csv.writer(f_csv)
-            writer.writerow(["Parametro_Enviado", "Status_SAT", "Mensaje_SAT"])
+            writer.writerow(
+                [
+                    "Tipo_Factura",
+                    "UUID",
+                    "Status_SAT",
+                    "Mensaje_SAT",
+                    "Actualizado_En_BD",
+                ]
+            )
 
-            logger.info("Enviando bloque al PAC Solución Factible...")
+            # 1. Matar las nuevas primero
+            procesar_lote(
+                client_zeep, db, pac_config, NUEVAS_MOTIVO_02, "NUEVAS", writer
+            )
 
-            try:
-                resultado = client_zeep.service.cancelar(
-                    usuario=service.pac_user,
-                    password=service.pac_pass,
-                    uuids=uuids_limpios,
-                    derCertCSD=cer_bytes,
-                    derKeyCSD=key_bytes,
-                    contrasenaCSD=service.key_password,
-                )
+            logger.info(
+                "\n⏳ Esperando 10 segundos para que el SAT procese la ruptura de relación..."
+            )
+            time.sleep(10)
 
-                if hasattr(resultado, "resultados") and resultado.resultados:
-                    print("\n" + "=" * 70)
-                    print("📊 DETALLE DE CANCELACIÓN:")
-                    print("=" * 70)
+            # 2. Matar las viejas ahora que están libres
+            procesar_lote(
+                client_zeep, db, pac_config, VIEJAS_MOTIVO_02, "VIEJAS", writer
+            )
 
-                    for res in resultado.resultados:
-                        u_res = str(getattr(res, "uuid", "DESCONOCIDO")).strip().upper()
-                        st_res = str(getattr(res, "status", "Sin Status"))
-                        msg_res = str(getattr(res, "mensaje", "Sin Mensaje")).lower()
-
-                        print(f"Petición: {u_res}")
-                        print(f"Status SAT: {st_res}")
-                        print(f"Mensaje Hacienda: {msg_res}")
-                        print("-" * 70)
-
-                        # Actualizar base de datos
-                        uuid_puro = u_res.split("|")[0].strip()
-                        factura = (
-                            db.query(ReceivableInvoice)
-                            .filter(ReceivableInvoice.uuid == uuid_puro)
-                            .first()
-                        )
-
-                        if factura:
-                            if (
-                                "error" in msg_res
-                                or "no cancelable" in msg_res
-                                or "rechaz" in msg_res
-                            ):
-                                factura.status_sat = "ERROR_CANCELACION"
-                                factura.estatus = "pendiente"
-                                factura.detalle_sat = (
-                                    f"Rechazo SAT ({st_res}): {msg_res}"
-                                )
-                            elif st_res == "201" or "proceso" in msg_res:
-                                factura.status_sat = "PROCESO_CANCELACION"
-                                factura.detalle_sat = (
-                                    f"En proceso ante el SAT: {msg_res}"
-                                )
-                                factura.fecha_cancelacion = datetime.utcnow()
-                            elif (
-                                st_res == "202"
-                                or "previamente cancelado" in msg_res
-                                or (st_res == "200" and "exito" in msg_res)
-                            ):
-                                factura.status_sat = "CANCELADO"
-                                factura.estatus = "cancelado"
-                                factura.saldo_pendiente = 0.0
-                                factura.detalle_sat = (
-                                    f"Cancelación confirmada: {msg_res}"
-                                )
-                                factura.fecha_cancelacion = datetime.utcnow()
-                            else:
-                                factura.detalle_sat = (
-                                    f"Respuesta SAT ({st_res}): {msg_res}"
-                                )
-
-                            db.commit()
-
-                        writer.writerow([u_res, st_res, msg_res])
-                else:
-                    logger.warning("El SAT no devolvió desglose individual.")
-
-            except Exception as e_peticion:
-                logger.error(f"❌ Error al conectar con el PAC: {e_peticion}")
-
-        logger.info(f"📁 Evidencia guardada en: {csv_filename}")
+        logger.info(
+            f"\n✅ PROCESO COMPLETADO. Base de datos actualizada. Evidencia en {csv_filename}"
+        )
 
     except Exception as e_general:
         logger.error(f"❌ Error crítico: {e_general}")
     finally:
         db.close()
-        logger.info("Proceso terminado.")
 
 
 if __name__ == "__main__":
-    disparar_cancelacion_mixta()
+    disparar_parejas()
