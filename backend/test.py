@@ -4,131 +4,146 @@ import time
 import pandas as pd
 import logging
 from datetime import datetime
-from zeep import Client
-
-logging.basicConfig(
-    level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("auditoria_pac_cfdi")
 
 # 📌 Rutas absolutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 
-INPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago.xlsx")
-OUTPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago_PAC_REALIDAD.xlsx")
-
-# 🌐 WSDL Confirmado de Consultas (CFDI)
-WSDL_SF_CFDI = "https://solucionfactible.com/ws/services/CFDI?wsdl"
-
 from app.db.database import SessionLocal
 from app.integrations.sat.payment_service import PaymentComplementService
+from app.integrations.sat.soap_client import create_pac_client
+
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("obtener_acuses")
+
+INPUT_EXCEL = os.path.join(BASE_DIR, "libro_status_PAC_2026_ago_cancelados.xlsx")
+OUTPUT_EXCEL = os.path.join(
+    BASE_DIR, "libro_status_PAC_2026_ago_cancelados_ACUSES.xlsx"
+)
 
 
-def auditar_pac_definitivo():
-    logger.info(f"📂 Cargando archivo Excel: {INPUT_EXCEL}")
-
+def procesar_acuses():
     if not os.path.exists(INPUT_EXCEL):
-        logger.error(f"❌ No se encontró el archivo: {INPUT_EXCEL}")
+        logger.error(f"❌ No se encontró el archivo de entrada: {INPUT_EXCEL}")
         return
 
+    logger.info(f"📂 Cargando archivo Excel: {INPUT_EXCEL}")
     df = pd.read_excel(INPUT_EXCEL)
 
-    # Crear columnas nuevas para almacenar el estatus oficial del PAC
-    for col in ["CANCELADO_PAC", "AUTORIZADA_PAC", "ESTATUS_PAC", "MENSAJE_PAC"]:
+    # Columnas de diagnóstico y acuse
+    columnas_resultado = [
+        "ESTATUS_PROCESO",
+        "CODIGO_SAT",
+        "MENSAJE_PAC_SAT",
+        "ACUSE_DETALLE",
+        "FECHA_CONSULTA",
+    ]
+    for col in columnas_resultado:
         if col not in df.columns:
             df[col] = ""
 
-    # Obtener credenciales desde la configuración de la app
     db = SessionLocal()
     service = PaymentComplementService(db)
-    pac_user = service.pac_user
-    pac_pass = service.pac_pass
-    db.close()
 
     try:
-        logger.info(
-            f"📡 Conectando al Webservice de Consultas de Solución Factible ({WSDL_SF_CFDI})..."
-        )
-        client = Client(WSDL_SF_CFDI)
+        # Cargar certificados CSD para autenticación ante el SAT
+        with open(service.path_cer, "rb") as f_cer:
+            cer_bytes = f_cer.read()
+        with open(service.path_key, "rb") as f_key:
+            key_bytes = f_key.read()
 
-        total_rows = len(df)
-        logger.info(
-            f"🚀 Iniciando escaneo de SÓLO LECTURA 'obtenerDatos' para {total_rows} registros..."
-        )
+        client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
+
+        total = len(df)
+        logger.info(f"🚀 Iniciando extracción de acuses para {total} registros...")
 
         for idx, row in df.iterrows():
-            uuid = str(row["TFD UUID"]).strip().upper()
+            # Buscar la columna del UUID sin importar si se llama 'TFD UUID', 'UUID' o 'uuid'
+            uuid = None
+            for col_candidate in ["TFD UUID", "UUID", "uuid", "TFD_UUID"]:
+                if col_candidate in df.columns and pd.notna(row[col_candidate]):
+                    uuid = str(row[col_candidate]).strip().upper()
+                    break
 
-            if not uuid or uuid == "NAN" or len(uuid) < 30:
+            if not uuid or len(uuid) < 30:
                 continue
 
-            try:
-                # 📡 Parámetros para obtenerDatos
-                params = {
-                    "usuario": pac_user,
-                    "password": pac_pass,
-                    "uuid": uuid,
-                    "folio": None,
-                    "serie": None,
-                }
+            param = f"{uuid}|02|"
+            max_retries = 2
 
-                # Llamada de sólo lectura
-                respuesta = client.service.obtenerDatos(**params)
-
-                codigo_status = getattr(respuesta, "status", None)
-                mensaje_pac = getattr(respuesta, "mensaje", "OK")
-
-                comprobantes = getattr(respuesta, "comprobantes", [])
-
-                if comprobantes and len(comprobantes) > 0:
-                    cfdi = comprobantes[0]
-
-                    # Extraer estatus real desde la respuesta del PAC
-                    is_cancelada = getattr(cfdi, "cancelada", False)
-                    is_autorizada = getattr(cfdi, "autorizada", True)
-
-                    df.at[idx, "CANCELADO_PAC"] = bool(is_cancelada)
-                    df.at[idx, "CANCELADO"] = bool(is_cancelada)
-                    df.at[idx, "AUTORIZADA_PAC"] = bool(is_autorizada)
-                    df.at[idx, "ESTATUS_PAC"] = (
-                        "CANCELADO" if is_cancelada else "VIGENTE"
+            for intento in range(max_retries):
+                try:
+                    resultado = client_zeep.service.cancelar(
+                        usuario=service.pac_user,
+                        password=service.pac_pass,
+                        uuids=[param],
+                        derCertCSD=cer_bytes,
+                        derKeyCSD=key_bytes,
+                        contrasenaCSD=service.key_password,
                     )
-                    df.at[idx, "MENSAJE_PAC"] = f"Código {codigo_status}: {mensaje_pac}"
 
-                    # Asignar fecha actual a las canceladas que no tenían fecha previa
-                    if is_cancelada and pd.isna(df.at[idx, "FECHA CANCELACION"]):
-                        df.at[idx, "FECHA CANCELACION"] = datetime.now().strftime(
-                            "%Y-%m-%d %H:%M:%S"
+                    res_sat = resultado.resultados[0]
+                    codigo = getattr(res_sat, "status", 0)
+                    mensaje = str(getattr(res_sat, "mensaje", "")).strip()
+                    acuse = getattr(res_sat, "acuse", "")
+
+                    df.at[idx, "CODIGO_SAT"] = codigo
+                    df.at[idx, "MENSAJE_PAC_SAT"] = mensaje
+                    df.at[idx, "ACUSE_DETALLE"] = str(acuse) if acuse else mensaje
+                    df.at[idx, "FECHA_CONSULTA"] = datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
+
+                    msg_lower = mensaje.lower()
+
+                    # Clasificación inteligente de la respuesta
+                    if (
+                        "previamente cancelado" in msg_lower
+                        or "exito" in msg_lower
+                        or codigo in [201, 202, 200]
+                    ):
+                        df.at[idx, "ESTATUS_PROCESO"] = "CANCELADO / ACUSE OBTENIDO"
+                        if "CANCELADO" in df.columns:
+                            df.at[idx, "CANCELADO"] = True
+                    elif "proceso" in msg_lower or codigo == 211:
+                        df.at[idx, "ESTATUS_PROCESO"] = "EN_PROCESO_EN_SAT"
+                    elif "no cancelable" in msg_lower or codigo == 204:
+                        df.at[idx, "ESTATUS_PROCESO"] = "BLOQUEADO_POR_RELACION"
+                    else:
+                        df.at[idx, "ESTATUS_PROCESO"] = f"RECHAZO_SAT ({codigo})"
+
+                    break
+
+                except Exception as e:
+                    if intento < max_retries - 1:
+                        logger.warning(
+                            f"   ⚠️ Reintentando UUID {uuid} por tiempo de espera..."
                         )
+                        time.sleep(1.5)
+                    else:
+                        logger.error(f"   ❌ Error en fila {idx + 1} [{uuid}]: {e}")
+                        df.at[idx, "ESTATUS_PROCESO"] = "ERROR_RED_PAC"
+                        df.at[idx, "MENSAJE_PAC_SAT"] = str(e)
 
-                else:
-                    df.at[idx, "CANCELADO_PAC"] = False
-                    df.at[idx, "ESTATUS_PAC"] = "NO_ENCONTRADO_EN_PAC"
-                    df.at[idx, "MENSAJE_PAC"] = f"Código {codigo_status}: {mensaje_pac}"
+            # Pausa de seguridad (0.5 segundos por registro)
+            time.sleep(0.5)
 
-            except Exception as e_pac:
-                err_msg = str(e_pac)
-                logger.error(f"   ⚠️ Error en fila {idx + 1} [{uuid}]: {err_msg}")
-                df.at[idx, "ESTATUS_PAC"] = "ERROR_PETICION"
-                df.at[idx, "MENSAJE_PAC"] = f"Error: {err_msg}"
+            if (idx + 1) % 25 == 0:
+                logger.info(f"⏳ Avance: {idx + 1}/{total} acuses procesados...")
 
-            if (idx + 1) % 50 == 0:
-                logger.info(
-                    f"⏳ Avance: {idx + 1}/{total_rows} comprobantes auditados..."
-                )
-
-            time.sleep(0.05)
-
-        # Guardar reporte
+        # Guardar resultado final
         df.to_excel(OUTPUT_EXCEL, index=False)
         logger.info(
-            f"✅ ¡Auditoría completada exitosamente! Guardada en: {OUTPUT_EXCEL}"
+            f"✅ ¡Proceso completado! Archivo final guardado en: {OUTPUT_EXCEL}"
         )
 
     except Exception as e_crit:
-        logger.error(f"❌ Error crítico en el proceso: {e_crit}")
+        logger.error(f"❌ Error crítico cargando certificados o cliente SOAP: {e_crit}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    auditar_pac_definitivo()
+    procesar_acuses()
