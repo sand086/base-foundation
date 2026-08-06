@@ -2,6 +2,8 @@ import sys
 import os
 import logging
 import time
+import csv
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -208,6 +210,9 @@ def cancelar_viejas_con_sustitucion():
     print("🚀 CANCELANDO FACTURAS VIEJAS (MOTIVO 01 CON SUSTITUCIÓN)...")
     print("===================================================================\n")
 
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_filename = f"evidencia_cancelacion_motivo01_{timestamp}.csv"
+
     client_zeep = create_pac_client(pac.wsdl_timbrado, pac.history)
 
     with open(pac.path_cer, "rb") as f_cer:
@@ -217,57 +222,78 @@ def cancelar_viejas_con_sustitucion():
 
     from app.models.models import ReceivableInvoice
 
-    for idx, (uuid_viejo, uuid_nuevo) in enumerate(pares_cancelacion, 1):
-        print(
-            f"[{idx}/46] 🔪 Cancelando vieja {uuid_viejo} (Sustituida por: {uuid_nuevo})"
+    # Abrimos el archivo CSV para ir escribiendo línea por línea
+    with open(csv_filename, mode="w", newline="", encoding="utf-8") as f_csv:
+        writer = csv.writer(f_csv)
+        # Escribimos los encabezados del CSV
+        writer.writerow(
+            [
+                "Num",
+                "UUID_Viejo_A_Cancelar",
+                "UUID_Nuevo_Sustituto",
+                "Status_SAT",
+                "Mensaje_SAT",
+            ]
         )
 
-        # El PAC Solución Factible exige el formato "UUID_VIEJO|01|UUID_NUEVO"
-        param_cancelacion = f"{uuid_viejo}|01|{uuid_nuevo}"
-
-        try:
-            resultado = client_zeep.service.cancelar(
-                usuario=pac.pac_user,
-                password=pac.pac_pass,
-                uuids=[param_cancelacion],
-                derCertCSD=cer_bytes,
-                derKeyCSD=key_bytes,
-                contrasenaCSD=pac.key_password,
+        for idx, (uuid_viejo, uuid_nuevo) in enumerate(pares_cancelacion, 1):
+            print(
+                f"[{idx}/46] 🔪 Cancelando vieja {uuid_viejo} (Sustituida por: {uuid_nuevo})"
             )
 
-            res_sat = resultado.resultados[0]
-            codigo = getattr(res_sat, "status", 0)
-            mensaje = getattr(res_sat, "mensaje", "")
+            # El PAC Solución Factible exige el formato "UUID_VIEJO|01|UUID_NUEVO"
+            param_cancelacion = f"{uuid_viejo}|01|{uuid_nuevo}"
 
-            if (
-                codigo in [201, 202, 211]
-                or "proceso" in mensaje.lower()
-                or "previamente" in mensaje.lower()
-            ):
-                print(f"   ✅ ÉXITO: {mensaje}")
-                # Marcamos la vieja como cancelada en la BD local
-                db.query(ReceivableInvoice).filter(
-                    ReceivableInvoice.uuid == uuid_viejo
-                ).update(
-                    {
-                        "status_sat": (
-                            "PROCESO_CANCELACION" if codigo != 202 else "CANCELADO"
-                        ),
-                        "estatus": "cancelado",
-                    }
+            try:
+                resultado = client_zeep.service.cancelar(
+                    usuario=pac.pac_user,
+                    password=pac.pac_pass,
+                    uuids=[param_cancelacion],
+                    derCertCSD=cer_bytes,
+                    derKeyCSD=key_bytes,
+                    contrasenaCSD=pac.key_password,
                 )
-                db.commit()
-            else:
-                print(f"   ❌ RECHAZO SAT: {mensaje} (Código: {codigo})")
 
-        except Exception as e:
-            print(f"   ⚠️ Error de conexión en este UUID: {str(e)}")
+                res_sat = resultado.resultados[0]
+                codigo = getattr(res_sat, "status", 0)
+                mensaje = getattr(res_sat, "mensaje", "")
 
-        time.sleep(1)
+                if (
+                    codigo in [201, 202, 211]
+                    or "proceso" in str(mensaje).lower()
+                    or "previamente" in str(mensaje).lower()
+                ):
+                    print(f"   ✅ ÉXITO: {mensaje}")
+                    # Marcamos la vieja como cancelada en la BD local
+                    db.query(ReceivableInvoice).filter(
+                        ReceivableInvoice.uuid == uuid_viejo
+                    ).update(
+                        {
+                            "status_sat": (
+                                "PROCESO_CANCELACION" if codigo != 202 else "CANCELADO"
+                            ),
+                            "estatus": "cancelado",
+                        }
+                    )
+                    db.commit()
+                else:
+                    print(f"   ❌ RECHAZO SAT: {mensaje} (Código: {codigo})")
+
+                # Escribimos el resultado en el CSV
+                writer.writerow([idx, uuid_viejo, uuid_nuevo, codigo, mensaje])
+
+            except Exception as e:
+                error_msg = str(e)
+                print(f"   ⚠️ Error de conexión en este UUID: {error_msg}")
+                # Si hay error en la red o el PAC falla, lo guardamos en el CSV
+                writer.writerow([idx, uuid_viejo, uuid_nuevo, "ERROR", error_msg])
+
+            time.sleep(1)
 
     db.close()
+    print(f"\n📁 Evidencia guardada exitosamente en: {csv_filename}")
     print(
-        "\n✅ PROCESO COMPLETADO. Las facturas viejas han sido enviadas a cancelar con el Motivo 01 correcto."
+        "✅ PROCESO COMPLETADO. Las facturas viejas han sido enviadas a cancelar con el Motivo 01 correcto."
     )
 
 
