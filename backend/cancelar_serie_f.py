@@ -23,6 +23,20 @@ logger = logging.getLogger("cancelacion_forzada")
 UUIDS_A_CANCELAR_MAPEADOS = [
     "EA5985B4-C9CD-435B-BC91-3A2FEB5D6031|02|",
     "E51913EA-44CA-4ACA-B86D-DF6A0F4E51E5|02|",
+    "438d6580-56b8-4298-a7c2-0b46f5bde9cf|02|",
+    "45460ac5-6d2b-4fed-a026-80f03f8f2efb|02|",
+    "77d8e9e9-9845-47d7-8faa-6bfa8e4cdd9d|02|",
+    "c29b0d75-9bae-4dc9-9c50-b95142a9d5dd|02|",
+    "ce26475b-982a-4d50-bee3-81e7c0fcd828|02|",
+    "cf7bcdf9-78ca-4809-a0ab-1396f79629f3|02|",
+    "dd0dddbf-e716-4cf7-8900-5a4ca33221db|02|",
+    "f6232e76-c7b7-449f-902d-bc7a9ec94a6e|02|",
+    "f695b5a0-5e88-42cf-89b9-7eb32264a36b|02|",
+    "554c256a-f77e-44cb-a635-d231eb1d2148|02|",
+    "3d7a959f-fb14-4f84-9954-37dfa62a5e39|02|",
+    "088ebdba-8fb5-4ff1-ab0d-60c2cffacc20|02|",
+    "539a1b18-552a-4f0e-9f29-75d44256e1d1|02|",
+    "b4195876-3ce6-406c-888c-14a7cebf232a|02|",
 ]
 
 
