@@ -22,10 +22,13 @@ logger = logging.getLogger("cancelacion_forzada")
 # =====================================================================
 UUIDS_A_CANCELAR = [
     {
-        "uuid": "75834706-6320-4E26-BABA-3B3A7C8AF4AC",
+        "uuid": "3BA79113-20D3-43E5-9BF3-CFEFBE6D7D6C",
         "motivo": "01",
-        "sustitucion": "B2E2B407-563B-42DB-939C-0548B05F981F",
-    }
+        "sustitucion": "0B9B62F0-750E-45AA-8047-B5FF0CF3B12C",
+    },
+    {"uuid": "4CC84F95-BBAA-49E7-A76D-76158D8BE01F", "motivo": "02", "sustitucion": ""},
+    {"uuid": "3C81534F-C65F-4245-BE90-3127B10CBA31", "motivo": "02", "sustitucion": ""},
+    {"uuid": "57D89083-2887-4EC6-8E8C-CFDEA0541C71", "motivo": "02", "sustitucion": ""},
 ]
 
 
