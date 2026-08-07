@@ -21,6 +21,11 @@ logger = logging.getLogger("cancelacion_forzada")
 # 📌 MAPEO EXACTO REESTRUCTURADO
 # =====================================================================
 UUIDS_A_CANCELAR = [
+    {
+        "uuid": "3BA79113-20D3-43E5-9BF3-CFEFBE6D7D6C",
+        "motivo": "01",
+        "sustitucion": "0B9B62F0-750E-45AA-8047-B5FF0CF3B12C",
+    },
     {"uuid": "E53258D5-9011-42C7-A1D2-16263DB5361F", "motivo": "02", "sustitucion": ""},
     {"uuid": "CB771797-B8B8-45A0-A115-32BBEB7AA5B8", "motivo": "02", "sustitucion": ""},
     {"uuid": "AA2FFEBD-5CC3-42ED-AFD7-9017253A1E28", "motivo": "02", "sustitucion": ""},
