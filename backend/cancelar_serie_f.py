@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger("cancelacion_forzada")
 
 # =====================================================================
-# 📌 MAPEO EXACTO REESTRUCTURADO (Diccionarios para Zeep/SOAP)
+# 📌 MAPEO EXACTO REESTRUCTURADO
 # =====================================================================
 UUIDS_A_CANCELAR = [
     {"uuid": "4CC84F95-BBAA-49E7-A76D-76158D8BE01F", "motivo": "02", "sustitucion": ""},
@@ -72,11 +72,18 @@ def disparar_cancelacion_sat():
                 num_lote = i // BATCH_SIZE + 1
                 lote_dicts = UUIDS_A_CANCELAR[i : i + BATCH_SIZE]
 
-                # Construir el array de cadenas EXACTAMENTE como lo quiere SF: "UUID|Motivo|Sustitucion"
-                # Pero asegurándonos de que Zeep lo envíe como un ArrayOfString válido
+                # Construir el array de cadenas inteligentemente
                 lote_cadenas = []
                 for item in lote_dicts:
-                    cadena = f"{item['uuid']}|{item['motivo']}|{item['sustitucion']}"
+                    if item["sustitucion"]:
+                        # Si hay sustitución, van los 3 elementos
+                        cadena = (
+                            f"{item['uuid']}|{item['motivo']}|{item['sustitucion']}"
+                        )
+                    else:
+                        # Si NO hay sustitución, solo mandamos 2 elementos (sin | al final)
+                        cadena = f"{item['uuid']}|{item['motivo']}"
+
                     lote_cadenas.append(cadena)
 
                 logger.info(f"Enviando lote {num_lote} ({len(lote_cadenas)} UUIDs)...")
@@ -85,9 +92,7 @@ def disparar_cancelacion_sat():
                     resultado = client_zeep.service.cancelar(
                         usuario=service.pac_user,
                         password=service.pac_pass,
-                        uuids={
-                            "string": lote_cadenas
-                        },  # 👈 AQUÍ ESTÁ LA MAGIA PARA ZEEP
+                        uuids=lote_cadenas,  # <-- Pasamos la lista limpia y directa
                         derCertCSD=cer_bytes,
                         derKeyCSD=key_bytes,
                         contrasenaCSD=service.key_password,
@@ -116,7 +121,7 @@ def disparar_cancelacion_sat():
                             print(f"Mensaje Hacienda: {msg_res}")
                             print("-" * 70)
 
-                            # Actualización en BD (Misma lógica tuya)
+                            # Actualización en BD
                             uuid_puro_busqueda = u_res.split("|")[0].strip()
                             factura = (
                                 db.query(ReceivableInvoice)
