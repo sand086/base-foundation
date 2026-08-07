@@ -25,7 +25,18 @@ UUIDS_A_CANCELAR = [
     {"uuid": "081DF8A4-4C28-4054-A4EC-FD72F3E10CE9", "motivo": "02", "sustitucion": ""},
     {"uuid": "0A8C41FB-9599-42B3-94EC-8696F997DFD9", "motivo": "02", "sustitucion": ""},
     # 2. Matar a la factura hija que estorba a la carta porte 3C81534F
-    {"uuid": "4F70ED02-3503-438D-995A-44DABD9187A5", "motivo": "02", "sustitucion": ""},
+    {"uuid": "F4830BB2-C67D-49FC-846D-E5A613C2CB08", "motivo": "02", "sustitucion": ""},
+    {"uuid": "7445D9F3-0FD8-4258-836D-E0F01E7A9F2A", "motivo": "02", "sustitucion": ""},
+    {
+        "uuid": "3C81534F-C65F-4245-BE90-3127B10CBA31",
+        "motivo": "01",
+        "sustitucion": "4F70ED02-3503-438D-995A-44DABD9187A5",
+    },
+    {
+        "uuid": "C11127D3-D498-41E7-81AA-16025AC40DFB",
+        "motivo": "01",
+        "sustitucion": "4F70ED02-3503-438D-995A-44DABD9187A5",
+    },
 ]
 
 
