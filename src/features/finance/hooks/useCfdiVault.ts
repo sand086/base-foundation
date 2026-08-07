@@ -21,6 +21,7 @@ export interface CFDIHistoryRecord {
   folio_interno?: string | null; // 💡 AGREGADO AQUÍ PARA SOLUCIONAR ts(2339) en la raíz
   uuid: string | null;
   fecha_emision: string | null;
+  created_at?: string;
   estatus: string;
   cliente_proveedor_nombre: string;
   cliente_proveedor_rfc?: string | null; // Guardado preventivo para mapeos locales

@@ -185,25 +185,17 @@ export default function CFDIVault() {
     dateRange,
   ]);
 
-  // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla
+  // 5. Pre-ordenamos los padres por fecha de creación / emisión
   const sortedFilteredRecords = useMemo(() => {
     return [...filteredRecords].sort((a, b) => {
-      const folioA = a.folio || a.folio_interno || "";
-      const folioB = b.folio || b.folio_interno || "";
+      // Tomamos la fecha de creación (o fecha de emisión como respaldo)
+      // y la convertimos a milisegundos para poder restarlas matemáticamente
+      const dateA = new Date(a.created_at || a.fecha_emision || 0).getTime();
+      const dateB = new Date(b.created_at || b.fecha_emision || 0).getTime();
 
-      // Extraemos solo los dígitos numéricos del string
-      const numA = parseInt(String(folioA).replace(/[^0-9]/g, ""), 10) || 0;
-      const numB = parseInt(String(folioB).replace(/[^0-9]/g, ""), 10) || 0;
-
-      if (numA !== numB) {
-        return numB - numA; // El número de folio más alto sube al inicio
-      }
-
-      // Respaldo alfabético inverso en caso de folios idénticos o sin números
-      return String(folioB).localeCompare(String(folioA), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
+      // dateB - dateA ordena de forma Descendente (Los más recientes arriba)
+      // Si quieres los más viejos arriba, cámbialo a: dateA - dateB
+      return dateB - dateA;
     });
   }, [filteredRecords]);
 
