@@ -4,6 +4,7 @@ import time
 import pandas as pd
 import logging
 from datetime import datetime
+from zeep import Client
 
 # 📌 Rutas absolutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,7 +12,6 @@ sys.path.append(BASE_DIR)
 
 from app.db.database import SessionLocal
 from app.integrations.sat.payment_service import PaymentComplementService
-from app.integrations.sat.soap_client import create_pac_client
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
@@ -21,6 +21,9 @@ logger = logging.getLogger("recuperar_acuses")
 ARCHIVO_SALIDA = os.path.join(
     BASE_DIR, "libro_status_PAC_2026_ago_cancelados2_PARTE2.xlsx"
 )
+
+# 🌐 WSDL Específico donde VIVE la función Asíncrona (Descubierto en el escaneo)
+WSDL_CANCELACION = "https://solucionfactible.com/ws/services/Cancelacion?wsdl"
 
 # 📋 Lista directa de los 91 UUIDs problemáticos
 LISTA_UUIDS = [
@@ -135,8 +138,9 @@ def recuperar_acuses_desde_lista():
     service = PaymentComplementService(db)
 
     try:
-        # Cliente SOAP apuntando al WSDL asíncrono
-        client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
+        # Cliente SOAP apuntando al WSDL CORRECTO de Cancelación
+        logger.info(f"📡 Conectando a WSDL: {WSDL_CANCELACION}")
+        client_zeep = Client(WSDL_CANCELACION)
 
         total = len(df)
         logger.info(
@@ -147,22 +151,26 @@ def recuperar_acuses_desde_lista():
             uuid = str(row["UUID"]).strip()
 
             try:
-                # 📡 Llamada directa al método asíncrono del PAC
+                # 📡 Llamada directa al método asíncrono
                 params_soap = {
-                    "user": service.pac_user,
-                    "pass": service.pac_pass,
-                    "uuid": uuid,
+                    "usuario": service.pac_user,
+                    "password": service.pac_pass,
+                    "transactionId": uuid,
                 }
 
                 try:
                     res = client_zeep.service.getStatusCancelacionAsincrona(
                         **params_soap
                     )
-                except Exception:
+                except TypeError:
+                    # Intento alternativo de parámetros usando diccionario para evitar el "pass="
+                    params_alt = {
+                        "user": service.pac_user,
+                        "pass": service.pac_pass,
+                        "uuid": uuid,
+                    }
                     res = client_zeep.service.getStatusCancelacionAsincrona(
-                        usuario=service.pac_user,
-                        password=service.pac_pass,
-                        transactionId=uuid,
+                        **params_alt
                     )
 
                 status_code = getattr(res, "status", None)
@@ -177,7 +185,7 @@ def recuperar_acuses_desde_lista():
                     "%Y-%m-%d %H:%M:%S"
                 )
 
-                # Interpretación Oficial del PAC para Asíncronos
+                # Interpretación Oficial del PAC
                 if status_code in [200, 201, 202]:
                     df.at[idx, "ESTATUS_ASINCRONO_PAC"] = "ACUSE_RECUPERADO"
                 elif status_code == 211:
@@ -186,7 +194,7 @@ def recuperar_acuses_desde_lista():
                     df.at[idx, "ESTATUS_ASINCRONO_PAC"] = "NO_CANCELABLE"
                 elif status_code == 702:
                     df.at[idx, "ESTATUS_ASINCRONO_PAC"] = (
-                        "TRANSACCION_NO_ENCONTRADA (VIGENTE / ERROR SAT)"
+                        "TRANSACCION_NO_ENCONTRADA_O_VIGENTE"
                     )
                 else:
                     df.at[idx, "ESTATUS_ASINCRONO_PAC"] = (
