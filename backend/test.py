@@ -4,28 +4,26 @@ import time
 import pandas as pd
 import logging
 from datetime import datetime
-from zeep import Client
 from io import StringIO
 
 # 📌 Rutas absolutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
 
+from app.db.database import SessionLocal
+from app.integrations.sat.payment_service import PaymentComplementService
+from app.integrations.sat.soap_client import create_pac_client
+
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
 )
-logger = logging.getLogger("consulta_sat")
+logger = logging.getLogger("cancelacion_lenta")
 
 ARCHIVO_SALIDA = os.path.join(
-    BASE_DIR, "libro_status_PAC_2026_ago_cancelados2_SAT_OFICIAL.xlsx"
+    BASE_DIR, "libro_status_PAC_2026_ago_cancelados2_ACUSES_FINALES.xlsx"
 )
 
-# 🌐 WSDL Público y Oficial de Consultas del SAT
-WSDL_SAT = (
-    "https://consultaqf.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc?wsdl"
-)
-
-# 📋 Los datos crudos que pasaste pegados aquí para que el script los lea directamente
+# 📋 Los datos crudos (91 UUIDs rebeldes)
 DATOS_CRUDOS = """FOLIO\tNOMBRE SERIE\tRFC EMISOR\tNOMBRE EMISOR\tRFC CLIENTE\tNOMBRE CLIENTE\tTFD UUID\tFECHA EMISION\tIMPORTE TOTAL
 18402\tCP\tRTX110624KP5\tRAPIDOS 3T\tSME170119M83\tSEAFRIGO MEXICO\t637C4C6B-8656-4D3F-81FD-E3CAB9EED207\t2026-08-05 14:56:01\t1.12
 9824\tF\tRTX110624KP5\tRAPIDOS 3T\tKME9312091A1\tKARCHER MEXICO\tF56357D4-2843-4F19-86B7-630ACAE90F0F\t2026-08-04 17:02:42\t1856.00
@@ -120,74 +118,138 @@ DATOS_CRUDOS = """FOLIO\tNOMBRE SERIE\tRFC EMISOR\tNOMBRE EMISOR\tRFC CLIENTE\tN
 CP-138N\tCP\tRTX110624KP5\tRAPIDOS 3T\tCSJ871008UQ4\tCREMERIA SAN JOSE\tFA63F082-6AAA-4B63-8C64-374108568413\t2026-04-23 17:19:50\t1.12"""
 
 
-def consulta_sat():
+def reintentar_cancelaciones_lentamente():
+    # Cargar los datos crudos a un DataFrame
     df = pd.read_csv(StringIO(DATOS_CRUDOS), sep="\t")
 
-    for col in [
-        "ESTADO_SAT",
-        "ES_CANCELABLE",
-        "ESTATUS_CANCELACION_SAT",
-        "FECHA_CONSULTA_SAT",
-    ]:
-        df[col] = ""
+    # Crear columnas para el resultado
+    columnas_resultado = [
+        "ESTATUS_PROCESO",
+        "CODIGO_SAT",
+        "MENSAJE_PAC_SAT",
+        "ACUSE_DETALLE",
+        "FECHA_CONSULTA",
+    ]
+    for col in columnas_resultado:
+        if col not in df.columns:
+            df[col] = ""
+
+    db = SessionLocal()
+    service = PaymentComplementService(db)
 
     try:
-        logger.info(f"📡 Conectando a Portal Público SAT: {WSDL_SAT}")
-        client = Client(WSDL_SAT)
+        # Cargar los bytes de los certificados CSD
+        with open(service.path_cer, "rb") as f_cer:
+            cer_bytes = f_cer.read()
+        with open(service.path_key, "rb") as f_key:
+            key_bytes = f_key.read()
+
+        # Conectar al WSDL de Timbrado/Cancelación (El que sí acepta CSDs)
+        client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
         total = len(df)
         logger.info(
-            f"🚀 Verificando vigencia de {total} folios directamente en el SAT..."
+            f"🚀 Iniciando Petición de Cancelación / Rescate de Acuses para {total} registros..."
+        )
+        logger.info(
+            f"⏳ MODO LENTO ACTIVADO: Pausas de 5 segundos para evitar bloqueos del SAT."
         )
 
         for idx, row in df.iterrows():
             uuid = str(row["TFD UUID"]).strip()
-            rfc_emisor = str(row["RFC EMISOR"]).strip()
-            rfc_receptor = str(row["RFC CLIENTE"]).strip()
-            total_importe = float(row["IMPORTE TOTAL"])
 
-            # Formato estricto para el SAT
-            total_str = (
-                f"{total_importe:.6f}".rstrip("0").rstrip(".")
-                if total_importe % 1 == 0
-                else f"{total_importe:.6f}"
-            )
+            if not uuid or len(uuid) < 30:
+                continue
 
-            expresion = f"?re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&id={uuid}"
+            # Parámetro estándar de cancelación "UUID|MOTIVO|"
+            # 02 = Comprobante emitido con errores sin relación (el más seguro para rescate)
+            param = f"{uuid}|02|"
 
-            try:
-                # 📡 Llamada directa al método Consulta del SAT
-                resultado = client.service.Consulta(expresionImpresa=expresion)
+            # Sistema de 3 reintentos si el SAT tarda en responder
+            max_retries = 3
 
-                df.at[idx, "ESTADO_SAT"] = getattr(resultado, "Estado", "Desconocido")
-                df.at[idx, "ES_CANCELABLE"] = getattr(
-                    resultado, "EsCancelable", "Desconocido"
-                )
-                df.at[idx, "ESTATUS_CANCELACION_SAT"] = getattr(
-                    resultado, "EstatusCancelacion", "N/A"
-                )
-                df.at[idx, "FECHA_CONSULTA_SAT"] = datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+            for intento in range(max_retries):
+                try:
+                    resultado = client_zeep.service.cancelar(
+                        usuario=service.pac_user,
+                        password=service.pac_pass,
+                        uuids=[param],
+                        derCertCSD=cer_bytes,
+                        derKeyCSD=key_bytes,
+                        contrasenaCSD=service.key_password,
+                    )
 
-                logger.info(f"   ✅ UUID {uuid[:8]}... : {df.at[idx, 'ESTADO_SAT']}")
+                    res_sat = resultado.resultados[0]
+                    codigo = getattr(res_sat, "status", 0)
+                    mensaje = str(getattr(res_sat, "mensaje", "")).strip()
+                    acuse = getattr(res_sat, "acuse", "")
 
-            except Exception as e:
-                logger.error(
-                    f"   ❌ Error de red en UUID {uuid[:8]}... : {str(e)[:50]}"
-                )
-                df.at[idx, "ESTADO_SAT"] = "ERROR_SAT"
+                    df.at[idx, "CODIGO_SAT"] = codigo
+                    df.at[idx, "MENSAJE_PAC_SAT"] = mensaje
+                    df.at[idx, "ACUSE_DETALLE"] = str(acuse) if acuse else mensaje
+                    df.at[idx, "FECHA_CONSULTA"] = datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    )
 
-            time.sleep(0.3)
+                    msg_lower = mensaje.lower()
 
+                    # Clasificación inteligente del resultado
+                    if (
+                        "previamente cancelado" in msg_lower
+                        or "exito" in msg_lower
+                        or codigo in [201, 202, 200]
+                    ):
+                        df.at[idx, "ESTATUS_PROCESO"] = "CANCELADO / ACUSE OBTENIDO"
+                        logger.info(
+                            f"   ✅ UUID {uuid[:8]}... ¡Acuse rescatado! (Código {codigo})"
+                        )
+                    elif "proceso" in msg_lower or codigo == 211:
+                        df.at[idx, "ESTATUS_PROCESO"] = "EN_PROCESO_EN_SAT"
+                        logger.warning(
+                            f"   ⚠️ UUID {uuid[:8]}... En proceso de SAT (Código {codigo})"
+                        )
+                    elif "no cancelable" in msg_lower or codigo == 204:
+                        df.at[idx, "ESTATUS_PROCESO"] = "BLOQUEADO_POR_RELACION"
+                        logger.warning(
+                            f"   ⚠️ UUID {uuid[:8]}... Bloqueado por relación (Código {codigo})"
+                        )
+                    else:
+                        df.at[idx, "ESTATUS_PROCESO"] = f"RECHAZO_SAT ({codigo})"
+                        logger.error(f"   ❌ UUID {uuid[:8]}... Rechazado: {mensaje}")
+
+                    break  # Si pasó sin errores de red, salimos del ciclo de reintentos
+
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if intento < max_retries - 1:
+                        logger.warning(
+                            f"   ⏳ SAT Lento / Timeout en UUID {uuid[:8]}... Reintentando en 6 segundos (Intento {intento+2}/{max_retries})"
+                        )
+                        time.sleep(6.0)  # Pausa larga antes del reintento
+                    else:
+                        logger.error(
+                            f"   ❌ Fallo final en UUID {uuid[:8]}... después de {max_retries} intentos: {str(e)[:60]}"
+                        )
+                        df.at[idx, "ESTATUS_PROCESO"] = "ERROR_RED_PAC_SAT"
+                        df.at[idx, "MENSAJE_PAC_SAT"] = str(e)
+                        df.at[idx, "CODIGO_SAT"] = "TIMEOUT_SAT"
+
+            # 💾 Guardar progreso cada 5 registros
+            if (idx + 1) % 5 == 0:
+                df.to_excel(ARCHIVO_SALIDA, index=False)
+
+            # 🛑 MODO LENTO: Respiro profundo entre comprobantes para no saturar al SAT/PAC
+            time.sleep(5.0)
+
+        # Guardado final
         df.to_excel(ARCHIVO_SALIDA, index=False)
-        logger.info(
-            f"✅ ¡Proceso finalizado! Los folios auditados se guardaron en: {ARCHIVO_SALIDA}"
-        )
+        logger.info(f"✅ ¡Proceso finalizado! Resultado completo en: {ARCHIVO_SALIDA}")
 
     except Exception as e_crit:
-        logger.error(f"❌ Error crítico: {e_crit}")
+        logger.error(f"❌ Error crítico cargando certificados o cliente SOAP: {e_crit}")
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    consulta_sat()
+    reintentar_cancelaciones_lentamente()
