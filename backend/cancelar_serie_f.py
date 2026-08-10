@@ -23,14 +23,9 @@ logger = logging.getLogger("cancelacion_forzada")
 UUIDS_A_CANCELAR = [
     # 1. Matar a los dos Complementos de Pago (Hijos de la 4CC84F95)
     {
-        "uuid": "F34AC46D-AF5B-48D8-A1D6-742AFEDDCA4B",
+        "uuid": "7445D9F3-0FD8-4258-836D-E0F01E7A9F2A",
         "motivo": "01",
         "sustitucion": "65EB5C6B-0121-4C58-ADEF-473253C5B85A",
-    },
-    {
-        "uuid": "997A4457-1E3E-401A-892F-CE64203321FB",
-        "motivo": "01",
-        "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
     },
     {
         "uuid": "F4830BB2-C67D-49FC-846D-E5A613C2CB08",
@@ -38,9 +33,14 @@ UUIDS_A_CANCELAR = [
         "sustitucion": "65EB5C6B-0121-4C58-ADEF-473253C5B85A",
     },
     {
-        "uuid": "7445D9F3-0FD8-4258-836D-E0F01E7A9F2A",
+        "uuid": "F34AC46D-AF5B-48D8-A1D6-742AFEDDCA4B",
         "motivo": "01",
         "sustitucion": "65EB5C6B-0121-4C58-ADEF-473253C5B85A",
+    },
+    {
+        "uuid": "E5D9A238-8C00-4D31-8506-D014564C6DF1",
+        "motivo": "01",
+        "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
     },
     {
         "uuid": "B196EFE4-2170-40E9-BC99-B96824781121",
@@ -48,7 +48,7 @@ UUIDS_A_CANCELAR = [
         "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
     },
     {
-        "uuid": "E5D9A238-8C00-4D31-8506-D014564C6DF1",
+        "uuid": "997A4457-1E3E-401A-892F-CE64203321FB",
         "motivo": "01",
         "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
     },
