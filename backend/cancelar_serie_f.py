@@ -22,10 +22,36 @@ logger = logging.getLogger("cancelacion_forzada")
 # =====================================================================
 UUIDS_A_CANCELAR = [
     # 1. Matar a los dos Complementos de Pago (Hijos de la 4CC84F95)
-    {"uuid": "081DF8A4-4C28-4054-A4EC-FD72F3E10CE9", "motivo": "02", "sustitucion": ""},
-    {"uuid": "0A8C41FB-9599-42B3-94EC-8696F997DFD9", "motivo": "02", "sustitucion": ""},
-    # 2. Matar a la Carta Porte (Padre de los dos anteriores)
-    {"uuid": "4CC84F95-BBAA-49E7-A76D-76158D8BE01F", "motivo": "02", "sustitucion": ""},
+    {
+        "uuid": "F34AC46D-AF5B-48D8-A1D6-742AFEDDCA4B",
+        "motivo": "01",
+        "sustitucion": "65EB5C6B-0121-4C58-ADEF-473253C5B85A",
+    },
+    {
+        "uuid": "997A4457-1E3E-401A-892F-CE64203321FB",
+        "motivo": "01",
+        "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
+    },
+    {
+        "uuid": "F4830BB2-C67D-49FC-846D-E5A613C2CB08",
+        "motivo": "01",
+        "sustitucion": "65EB5C6B-0121-4C58-ADEF-473253C5B85A",
+    },
+    {
+        "uuid": "7445D9F3-0FD8-4258-836D-E0F01E7A9F2A",
+        "motivo": "01",
+        "sustitucion": "65EB5C6B-0121-4C58-ADEF-473253C5B85A",
+    },
+    {
+        "uuid": "B196EFE4-2170-40E9-BC99-B96824781121",
+        "motivo": "01",
+        "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
+    },
+    {
+        "uuid": "E5D9A238-8C00-4D31-8506-D014564C6DF1",
+        "motivo": "01",
+        "sustitucion": "900E7196-8DF8-4AEC-8197-9686C5120495",
+    },
 ]
 
 
@@ -49,6 +75,7 @@ def disparar_cancelacion_sat():
         logger.info(f"Conectando al PAC: {service.wsdl_timbrado}")
         client_zeep = create_pac_client(service.wsdl_timbrado, service.history)
 
+        # ✅ LÍNEA CORREGIDA
         with open(csv_filename, mode="w", newline="", encoding="utf-8") as f_csv:
             writer = csv.writer(f_csv)
             writer.writerow(["UUID", "Status_SAT", "Mensaje_SAT"])

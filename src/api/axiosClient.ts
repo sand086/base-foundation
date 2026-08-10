@@ -129,9 +129,9 @@ axiosClient.interceptors.response.use(
       }
     } else if (error.request) {
       // La petición salió, pero el backend nunca respondió (Servidor caído o sin internet)
-      toast.error("Sin conexión", {
+      /*   toast.error("Sin conexión", {
         description: "No se pudo conectar con el servidor. Revisa tu red.",
-      });
+      }); */
     } else {
       // Error interno de React al intentar armar la petición
       toast.error("Error de aplicación", { description: error.message });
