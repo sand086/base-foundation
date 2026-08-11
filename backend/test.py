@@ -1,5 +1,4 @@
 import os
-import sys
 import logging
 from zeep import Client
 from zeep.transports import Transport
@@ -7,7 +6,7 @@ from zeep.plugins import HistoryPlugin
 from lxml import etree
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger("DEBUG_PAC")
+logger = logging.getLogger("DEBUG_PAC_STATUS")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. CREDENCIALES DE PRODUCCIÓN DEL PAC
@@ -15,43 +14,20 @@ logger = logging.getLogger("DEBUG_PAC")
 PAC_USER = "trafico2@3t.com.mx"
 PAC_PASS = "iMbm2Z49.2_"
 
-RFC_EMISOR = "RTX110624KP5"
-UUID_FACTURA = "0872026F-B4A3-4773-ACAC-6B4E710F8D0D"  # CP-17661
-MOTIVO_CANCELACION = "02"
+# El UUID que quieres consultar (El que nos devolvió el PAC en el paso anterior)
+UUID_TRANSACCION = "0872026F-B4A3-4773-ACAC-6B4E710F8D0D"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. RUTAS EXACTAS DEL CSD DE PRODUCCIÓN (Tomadas de la BD)
-# ─────────────────────────────────────────────────────────────────────────────
-CSD_CER_PATH = (
-    "/home/desarrolloas/base-foundation/backend/app/certs/CSD_PROD_20260527_110946.cer"
-)
-CSD_KEY_PATH = (
-    "/home/desarrolloas/base-foundation/backend/app/certs/CSD_PROD_20260527_110946.key"
-)
-CSD_PASSWORD = "RTX110624"
-
+# URL EXACTA DEL WSDL DE CANCELACIÓN
 PAC_WSDL = "https://solucionfactible.com/ws/services/Cancelacion?wsdl"
 
 
-def depurar_cancelacion():
+def obtener_status_cancelacion():
     logger.info("===================================================================")
-    logger.info("🔍 DEBUG DE CONEXIÓN AL WSDL DE CANCELACIÓN (SOLUCIÓN FACTIBLE)")
+    logger.info("🔍 CONSULTANDO ESTADO DE CANCELACIÓN (getStatusCancelacionAsincrona)")
     logger.info("===================================================================\n")
 
-    cadena_uuid = f"{UUID_FACTURA}|{MOTIVO_CANCELACION}|"
-    logger.info(f"👉 URL Destino : {PAC_WSDL}")
-    logger.info(f"👉 Cadena UUID : {cadena_uuid}\n")
-
-    # Leer los archivos del CSD en formato binario
-    try:
-        with open(CSD_CER_PATH, "rb") as f_cer:
-            cer_bytes = f_cer.read()
-        with open(CSD_KEY_PATH, "rb") as f_key:
-            key_bytes = f_key.read()
-        logger.info("✅ Archivos CSD leídos correctamente.")
-    except Exception as e:
-        logger.error(f"❌ Error al leer los archivos CSD físicos: {e}")
-        return
+    logger.info(f"👉 URL Destino     : {PAC_WSDL}")
+    logger.info(f"👉 UUID Transacción: {UUID_TRANSACCION}\n")
 
     history = HistoryPlugin()
     transport = Transport(timeout=20)
@@ -63,30 +39,70 @@ def depurar_cancelacion():
         return
 
     try:
-        logger.info("\n⏳ Enviando petición firmada a Solución Factible...")
-        resultado = client.service.cancelarAsincrono(
-            usuario=PAC_USER,
-            password=PAC_PASS,
-            uuid=cadena_uuid,
-            rfcEmisor=RFC_EMISOR,
-            emailNotifica="trafico2@3t.com.mx",
-            csdCer=cer_bytes,
-            csdKey=key_bytes,
-            csdPassword=CSD_PASSWORD,
+        logger.info("⏳ Solicitando el estatus al PAC...")
+
+        # OJO: Los nombres de los parámetros deben coincidir con la documentación:
+        # 'usuario', 'password', 'transactionId' (o 'uuid' en el XML de ejemplo)
+        # Probaremos con user/pass/uuid como dicta el ejemplo XML de su web.
+        resultado = client.service.getStatusCancelacionAsincrona(
+            user=PAC_USER,
+            pass_=PAC_PASS,  # Zeep usa pass_ en lugar de pass
+            uuid=UUID_TRANSACCION,
         )
 
         status_code = getattr(resultado, "status", None)
         mensaje = getattr(resultado, "mensaje", None)
+        acuse_sat = getattr(resultado, "acuseSAT", None)
 
         logger.info("\n🟢 RESPUESTA PARSEADA DEL PAC:")
-        logger.info(f"   Status  : {status_code}")
-        logger.info(f"   Mensaje : {mensaje}\n")
+        logger.info(f"   Status HTTP : {status_code}")
+        logger.info(f"   Mensaje     : {mensaje}")
+
+        if acuse_sat:
+            logger.info("   📜 ¡Acuse del SAT disponible! (Base64)")
+            # Descomenta esto si quieres imprimir la cadena Base64 inmensa
+            # logger.info(f"   Acuse Base64: {acuse_sat[:100]}... [Truncado]")
+        else:
+            logger.info("   📜 Acuse SAT : No disponible aún o vacío.")
+
+        # Interpretación rápida basada en la documentación oficial
+        logger.info("\n--- INTERPRETACIÓN OFICIAL ---")
+        if status_code == 200:
+            logger.info(
+                "✅ 200: La solicitud de cancelación se registró exitosamente y/o está completada."
+            )
+        elif status_code == 204:
+            logger.info(
+                "❌ 204: El comprobante NO SE PUEDE CANCELAR (Bloqueado por el SAT)."
+            )
+        elif status_code == 211:
+            logger.info(
+                "⏳ 211: La cancelación está EN PROCESO (Pendiente de aceptación por el receptor)."
+            )
+        elif status_code == 213:
+            logger.info(
+                "❌ 213: La solicitud de cancelación fue RECHAZADA por el receptor."
+            )
+        elif status_code == 702:
+            logger.warning(
+                "⚠️ 702: No se encuentra la transacción con el UUID especificado."
+            )
+        else:
+            logger.warning(
+                f"ℹ️ Código {status_code}: Revisa la tabla de errores en la documentación."
+            )
 
     except Exception as e:
         logger.error(f"\n❌ Excepción durante la llamada SOAP: {e}")
 
+        # En caso de error por nombres de parámetros (ej: si el WSDL pedía "usuario" en vez de "user")
+        if "pass_" in str(e) or "uuid" in str(e):
+            logger.error(
+                "Tip: Intenta cambiar los parámetros en la línea 46. Ej: usuario=PAC_USER, password=PAC_PASS, transactionId=UUID_TRANSACCION"
+            )
+
     finally:
-        # AQUI SE IMPRIMEN LOS XMLs SIN IMPORTAR SI FUE EXITO O ERROR
+        # AQUI SE IMPRIMEN LOS XMLs DE RED PARA VER EL DETALLE EXACTO
         if hasattr(history, "_buffer") and len(history._buffer) > 0:
             if history.last_sent:
                 logger.info("\n--- XML ENVIADO AL PAC ---")
@@ -110,4 +126,4 @@ def depurar_cancelacion():
 
 
 if __name__ == "__main__":
-    depurar_cancelacion()
+    obtener_status_cancelacion()
