@@ -456,6 +456,165 @@ class BillingService:
             error,
         )
 
+    def regenerar_pdf_factura(self, invoice_id: int):
+        from app.models.models import ReceivableInvoice
+        import qrcode
+        from io import BytesIO
+        from lxml import etree
+
+        factura = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.id == invoice_id)
+            .first()
+        )
+        if not factura or not factura.uuid:
+            raise ValueError("Factura no encontrada o no tiene UUID timbrado.")
+
+        # 1. Verificar que exista el XML físico
+        xml_path = self.storage_dir / f"{factura.uuid}.xml"
+        if not xml_path.exists():
+            raise ValueError(f"No se encontró el archivo XML en {xml_path}")
+
+        with open(xml_path, "rb") as f:
+            cfdi_bytes = f.read()
+
+        # 2. Reconstruir el diccionario "d" (contexto del PDF)
+        if factura.viaje_id:
+            viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
+                factura.viaje_id, buscar_tramo_carretera=not factura.is_nominal
+            )
+            folio_partes = (
+                factura.folio_interno.split("-")
+                if factura.folio_interno
+                else ["CP", "0"]
+            )
+            serie = folio_partes[0]
+            folio = folio_partes[1] if len(folio_partes) > 1 else "0"
+
+            d = self._build_dict_from_models(
+                viaje,
+                cliente,
+                unidad,
+                operador,
+                r1,
+                r2,
+                is_nominal=factura.is_nominal,
+                ocultar_montos=False,
+                serie_forzada=serie,
+                folio_forzado=int(folio) if folio.isdigit() else folio,
+            )
+        else:
+            cliente = factura.client
+            folio_partes = (
+                factura.folio_interno.split("-")
+                if factura.folio_interno
+                else ["F", "0"]
+            )
+            d = {
+                "serie": folio_partes[0],
+                "folio": folio_partes[1] if len(folio_partes) > 1 else "0",
+                "folio_interno": factura.folio_interno,
+                "fecha": (
+                    factura.fecha_emision.strftime("%Y-%m-%dT%H:%M:%S")
+                    if factura.fecha_emision
+                    else ""
+                ),
+                "subtotal": f"{factura.subtotal:.2f}",
+                "iva": f"{factura.iva:.2f}",
+                "retenciones": f"{factura.retenciones:.2f}",
+                "total": f"{factura.monto_total:.2f}",
+                "forma_pago": factura.forma_pago or "99",
+                "metodo_pago": factura.metodo_pago or "PPD",
+                "moneda": factura.moneda or "MXN",
+                "descripcion_concepto": factura.concepto or "Servicios",
+                "descripcion_concepto_pdf": factura.concepto or "Servicios",
+                "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
+                "nombre_cliente": (
+                    cliente.razon_social if cliente else "PUBLICO EN GENERAL"
+                ),
+                "cp_cliente": (
+                    cliente.codigo_postal_fiscal if cliente else self.emisor_cp
+                ),
+                "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
+                "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
+            }
+
+        # 3. Leer los sellos del XML
+        root = etree.fromstring(cfdi_bytes)
+        ns = {
+            "cfdi": "http://www.sat.gob.mx/cfd/4",
+            "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+        }
+        tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
+        if not tfd_node:
+            raise ValueError("El XML no tiene complemento de TimbreFiscalDigital.")
+        tfd_node = tfd_node[0]
+
+        s_sat = tfd_node.get("SelloSAT", "")
+        c_sat = tfd_node.get("NoCertificadoSAT", "")
+        s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+        fecha_timbrado = tfd_node.get("FechaTimbrado", "")
+        d["fecha_sat_con_hora"] = fecha_timbrado
+
+        cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{factura.uuid}|{fecha_timbrado}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+        # 4. Importe en Letra
+        total_float = _clean_float(factura.monto_total)
+        if HAS_NUM2WORDS:
+            entero = int(total_float)
+            decimales = int(round((total_float - entero) * 100))
+            texto = num2words(entero, lang="es").upper()
+            if texto == "UNO":
+                texto = "UN"
+            importe_letra = (
+                f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+            )
+        else:
+            importe_letra = f"({total_float:,.2f} MXN)"
+
+        # 5. Generar QR
+        qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={factura.uuid}&re={self.emisor_rfc}&rr={d['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(qr_string)
+        qr.make(fit=True)
+        buffer = BytesIO()
+        qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+
+        # 6. Crear PDF
+        self._generar_pdf_con_diseno(
+            d,
+            factura.uuid,
+            buffer.getvalue(),
+            s_sat,
+            s_emi,
+            c_sat,
+            cadena_original_tfd,
+            importe_letra,
+        )
+
+        return {
+            "status": "success",
+            "message": f"PDF reconstruido exitosamente para {factura.folio_interno}",
+        }
+
+    def regenerar_todos_los_pdfs(self):
+        from app.models.models import ReceivableInvoice
+
+        facturas = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.uuid.isnot(None))
+            .all()
+        )
+        exitos = 0
+        errores = []
+        for fac in facturas:
+            try:
+                self.regenerar_pdf_factura(fac.id)
+                exitos += 1
+            except Exception as e:
+                errores.append(f"{fac.folio_interno}: {str(e)}")
+        return {"status": "success", "reconstruidos": exitos, "errores": errores}
+
     def _obtener_datos_completos(
         self, viaje_id: int, buscar_tramo_carretera: bool = False
     ):
