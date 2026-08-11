@@ -83,21 +83,30 @@ def depurar_cancelacion():
         logger.info(f"   Mensaje : {mensaje}\n")
 
     except Exception as e:
-        logger.error(f"❌ Excepción durante la llamada SOAP: {e}")
+        logger.error(f"\n❌ Excepción durante la llamada SOAP: {e}")
 
-        if (
-            hasattr(history, "_buffer")
-            and len(history._buffer) > 0
-            and history.last_received
-        ):
-            logger.error("\n--- EL PAC RESPONDIÓ CON ESTE XML ---")
-            logger.error(
-                etree.tostring(
-                    history.last_received["envelope"],
-                    pretty_print=True,
-                    encoding="unicode",
+    finally:
+        # AQUI SE IMPRIMEN LOS XMLs SIN IMPORTAR SI FUE EXITO O ERROR
+        if hasattr(history, "_buffer") and len(history._buffer) > 0:
+            if history.last_sent:
+                logger.info("\n--- XML ENVIADO AL PAC ---")
+                logger.info(
+                    etree.tostring(
+                        history.last_sent["envelope"],
+                        pretty_print=True,
+                        encoding="unicode",
+                    )
                 )
-            )
+
+            if history.last_received:
+                logger.info("\n--- XML CRUDO RECIBIDO DEL PAC ---")
+                logger.info(
+                    etree.tostring(
+                        history.last_received["envelope"],
+                        pretty_print=True,
+                        encoding="unicode",
+                    )
+                )
 
 
 if __name__ == "__main__":
