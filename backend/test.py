@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger("DEBUG_PAC")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. TUS CREDENCIALES (Ajusta si es necesario)
+# 1. TUS CREDENCIALES
 # ─────────────────────────────────────────────────────────────────────────────
 PAC_USER = os.getenv("PAC_USER", "trafico2@3t.com.mx")
 PAC_PASS = os.getenv("PAC_PASS", "timbrado.SF.16672")
@@ -18,7 +18,7 @@ RFC_EMISOR = "RTX110624KP5"
 UUID_FACTURA = "0872026F-B4A3-4773-ACAC-6B4E710F8D0D"  # CP-17661
 MOTIVO_CANCELACION = "02"
 
-# URL EXACTA DEL WSDL DE CANCELACIÓN DE SOLUCIÓN FACTIBLE
+# URL EXACTA DEL WSDL DE CANCELACIÓN
 PAC_WSDL = "https://solucionfactible.com/ws/services/Cancelacion?wsdl"
 
 
@@ -41,10 +41,10 @@ def depurar_cancelacion():
         return
 
     try:
-        # Llamada exacta usando los nombres de parámetros dictados por la documentación
-        resultado = client.service.cancelacionAsincrona(
-            usuario=PAC_USER,  # <--- La doc oficial dice "usuario"
-            password=PAC_PASS,  # <--- La doc oficial dice "password"
+        # AQUI ESTÁ LA CORRECCIÓN: El método real expuesto en el WSDL es cancelarAsincrono
+        resultado = client.service.cancelarAsincrono(
+            usuario=PAC_USER,
+            password=PAC_PASS,
             uuid=cadena_uuid,
             rfcEmisor=RFC_EMISOR,
             emailNotifica="trafico2@3t.com.mx",
@@ -58,19 +58,18 @@ def depurar_cancelacion():
         logger.info(f"   Mensaje : {mensaje}\n")
 
         logger.info("📄 LOG XML DE RED (REQUEST Y RESPONSE CRUDA):")
-        if history.last_sent:
+        if len(history._buffer) > 0 and history.last_sent:
             logger.info("\n--- ENVIADO AL PAC ---")
             logger.info(history.last_sent["envelope"].decode("utf-8"))
 
-        if history.last_received:
+        if len(history._buffer) > 0 and history.last_received:
             logger.info("\n--- RECIBIDO DEL PAC ---")
             logger.info(history.last_received["envelope"].decode("utf-8"))
 
     except Exception as e:
         logger.error(f"❌ Excepción durante la llamada SOAP: {e}")
 
-        # En caso de error, siempre imprimir el XML de respuesta para ver qué nos está diciendo el PAC
-        if hasattr(history, "last_received") and history.last_received:
+        if len(history._buffer) > 0 and history.last_received:
             logger.error("\n--- EL PAC RESPONDIÓ CON ESTE XML ---")
             logger.error(history.last_received["envelope"].decode("utf-8"))
 
