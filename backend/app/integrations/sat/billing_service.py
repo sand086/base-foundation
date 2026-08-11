@@ -503,6 +503,23 @@ class BillingService:
                 serie_forzada=serie,
                 folio_forzado=int(folio) if folio.isdigit() else folio,
             )
+
+            # 👇 BLOQUE DE SEGURIDAD INYECTADO 👇
+            # Forzamos los montos reales de la factura guardada, ignorando el cálculo del viaje
+            d["subtotal"] = f"{factura.subtotal:.2f}"
+            d["iva"] = f"{factura.iva:.2f}"
+            d["retenciones"] = f"{factura.retenciones:.2f}"
+            d["total"] = f"{factura.monto_total:.2f}"
+
+            if (
+                d.get("conceptos")
+                and isinstance(d["conceptos"], list)
+                and len(d["conceptos"]) > 0
+            ):
+                d["conceptos"][0]["precio"] = f"{factura.subtotal:.2f}"
+                d["conceptos"][0]["importe"] = f"{factura.subtotal:.2f}"
+            # 👆 FIN DEL BLOQUE DE SEGURIDAD 👆
+
         else:
             cliente = factura.client
             folio_partes = (
