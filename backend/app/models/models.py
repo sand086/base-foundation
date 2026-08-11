@@ -523,7 +523,6 @@ class Tire(AuditMixin, Base):
     unit_id = Column(
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
-    posicion = Column(Integer, nullable=True)
 
     estado = Column(
         pg_enum(TireStatus, "tirestatus"),
@@ -577,7 +576,7 @@ class TireHistory(AuditMixin, Base):
     responsable = Column(String(100))
 
     tire = relationship("Tire", back_populates="history")
-    unidad = relationship("Unit", foreign_keys=[unit_id])
+    unidad = relationship("Unit", foreign_keys="[TireHistory.unit_id]")
 
 
 class Operator(AuditMixin, Base):
