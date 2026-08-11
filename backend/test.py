@@ -1,115 +1,207 @@
+import os
+import sys
+import csv
 import logging
-import base64
 import requests
-from zeep import Client
+from datetime import datetime
+from zeep import Client as ZeepClient
 from zeep.transports import Transport
-from zeep.plugins import HistoryPlugin
-from lxml import etree
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
-logger = logging.getLogger("VERIFICADOR_COMPLETO")
+# Asegurar que el script encuentre la app para importar la BD
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from app.db.database import SessionLocal
+from app.models.models import ReceivableInvoice, ReceivableInvoicePayment, Client
+
+logging.basicConfig(
+    level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
+)
+logger = logging.getLogger("AUDITORIA_DB")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DATOS DE LA FACTURA CP-18166
+# CONFIGURACIÓN
 # ─────────────────────────────────────────────────────────────────────────────
 PAC_USER = "trafico2@3t.com.mx"
 PAC_PASS = "iMbm2Z49.2_"
-
 RFC_EMISOR = "RTX110624KP5"
-RFC_RECEPTOR = "HMG980427Q42"
-TOTAL_FACTURA = "44800.00"
-UUID_FACTURA = "AFD65A3C-E1E5-4438-9BD7-227B1F89AA35"
 
-# ENDPOINT SOLICITADO
 PAC_WSDL = "https://solucionfactible.com/ws/services/Cancelacion?wsdl"
+SAT_WSDL = (
+    "https://consultaqr.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc?wsdl"
+)
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+REPORTE_PAC = f"auditoria_pac_{timestamp}.csv"
+REPORTE_SAT = f"auditoria_sat_{timestamp}.csv"
 
 
-def consultar_pac_getStatusCancelacionAsincrona():
-    logger.info("===================================================================")
-    logger.info("1️⃣ CONSULTA PAC: getStatusCancelacionAsincrona")
-    logger.info("===================================================================\n")
-
-    history = HistoryPlugin()
-    transport = Transport(timeout=20)
+def extraer_comprobantes_db():
+    """Extrae todas las facturas y pagos de la BD con UUID válido"""
+    logger.info("📦 Conectando a la Base de Datos para extraer comprobantes...")
+    db = SessionLocal()
+    comprobantes = []
 
     try:
-        client = Client(PAC_WSDL, transport=transport, plugins=[history])
-
-        # Invocación exacta al método requerido por la documentación
-        resultado = client.service.getStatusCancelacionAsincrona(
-            usuario=PAC_USER, password=PAC_PASS, transactionId=UUID_FACTURA
+        # 1. Extraer Facturas (Ingresos, Egresos, Traslados)
+        facturas = (
+            db.query(ReceivableInvoice)
+            .join(Client)
+            .filter(ReceivableInvoice.uuid.isnot(None), ReceivableInvoice.uuid != "")
+            .all()
         )
 
-        status_code = getattr(resultado, "status", None)
-        mensaje = getattr(resultado, "mensaje", None)
-        acuse_sat = getattr(resultado, "acuseSAT", None)
-
-        logger.info("🟢 RESPUESTA DEL PAC:")
-        logger.info(f"   • Status  : {status_code}")
-        logger.info(f"   • Mensaje : {mensaje}")
-
-        if acuse_sat:
-            logger.info("\n   📜 Decodificando Acuse SAT (Base64)...")
-            try:
-                xml_str = base64.b64decode(acuse_sat).decode("utf-8")
-                logger.info(xml_str)
-            except Exception as b64_err:
-                logger.error(f"Error decodificando acuse: {b64_err}")
-        else:
-            logger.info("   • Acuse SAT : No disponible en la respuesta")
-
-    except Exception as e:
-        logger.error(f"❌ Excepción al consultar el PAC: {e}")
-
-    finally:
-        if (
-            hasattr(history, "_buffer")
-            and len(history._buffer) > 0
-            and history.last_received
-        ):
-            logger.info("\n--- XML CRUDO DE RESPUESTA DEL PAC ---")
-            logger.info(
-                etree.tostring(
-                    history.last_received["envelope"],
-                    pretty_print=True,
-                    encoding="unicode",
-                )
+        for f in facturas:
+            comprobantes.append(
+                {
+                    "tipo": "FACTURA/CARTA_PORTE",
+                    "id_interno": f.id,
+                    "uuid": str(f.uuid).strip().upper(),
+                    "rfc_receptor": str(f.client.rfc).strip().upper(),
+                    "total": str(f.monto_total),
+                }
             )
 
-
-def consultar_sat_oficial():
-    logger.info("\n===================================================================")
-    logger.info("2️⃣ CONSULTA OFICIAL SAT (SERVICIO PÚBLICO)")
-    logger.info("===================================================================\n")
-
-    sat_wsdl = (
-        "https://consultaqr.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc?wsdl"
-    )
-    expresion = (
-        f"?re={RFC_EMISOR}&rr={RFC_RECEPTOR}&tt={TOTAL_FACTURA}&id={UUID_FACTURA}"
-    )
-
-    try:
-        session = requests.Session()
-        session.verify = True
-        transport = Transport(session=session, timeout=15)
-        client = Client(sat_wsdl, transport=transport)
-
-        resultado = client.service.Consulta(expresionImpresa=expresion)
-
-        logger.info("🟢 RESPUESTA DEL SAT:")
-        logger.info(f"   • Estado CFDI         : {getattr(resultado, 'Estado', 'N/A')}")
-        logger.info(
-            f"   • Estatus Cancelación : {getattr(resultado, 'EstatusCancelacion', 'N/A')}"
+        # 2. Extraer Complementos de Pago
+        pagos = (
+            db.query(ReceivableInvoicePayment)
+            .join(ReceivableInvoice)
+            .join(Client)
+            .filter(
+                ReceivableInvoicePayment.complemento_uuid.isnot(None),
+                ReceivableInvoicePayment.complemento_uuid != "",
+            )
+            .all()
         )
-        logger.info(
-            f"   • Es Cancelable       : {getattr(resultado, 'EsCancelable', 'N/A')}"
-        )
+
+        for p in pagos:
+            comprobantes.append(
+                {
+                    "tipo": "COMPLEMENTO_PAGO",
+                    "id_interno": p.id,
+                    "uuid": str(p.complemento_uuid).strip().upper(),
+                    "rfc_receptor": str(p.invoice.client.rfc).strip().upper(),
+                    "total": str(p.monto),  # El SAT usa el monto del pago
+                }
+            )
+
+        logger.info(f"✅ Se extrajeron {len(facturas)} Facturas y {len(pagos)} Pagos.")
+        logger.info(f"📊 Total a auditar: {len(comprobantes)} comprobantes.")
+        return comprobantes
 
     except Exception as e:
-        logger.error(f"❌ Error al consultar el SAT: {e}")
+        logger.error(f"❌ Error al consultar la BD: {e}")
+        return []
+    finally:
+        db.close()
+
+
+def ejecutar_auditoria():
+    comprobantes = extraer_comprobantes_db()
+
+    if not comprobantes:
+        logger.warning("⚠️ No hay comprobantes para auditar. Terminando.")
+        return
+
+    logger.info("🌐 Preparando conexiones a SAT y Solución Factible...")
+    session = requests.Session()
+    session.verify = True
+    transport_sat = Transport(session=session, timeout=15)
+    transport_pac = Transport(timeout=15)
+
+    try:
+        client_sat = ZeepClient(SAT_WSDL, transport=transport_sat)
+        client_pac = ZeepClient(PAC_WSDL, transport=transport_pac)
+    except Exception as e:
+        logger.error(f"❌ Error al levantar los Web Services: {e}")
+        return
+
+    logger.info(f"📝 Creando archivos de reporte: {REPORTE_PAC} y {REPORTE_SAT}")
+    with open(REPORTE_PAC, mode="w", newline="", encoding="utf-8") as f_pac, open(
+        REPORTE_SAT, mode="w", newline="", encoding="utf-8"
+    ) as f_sat:
+
+        pac_writer = csv.writer(f_pac)
+        sat_writer = csv.writer(f_sat)
+
+        # Encabezados
+        pac_writer.writerow(
+            ["Tipo_Documento", "ID_Interno_BD", "UUID", "Status_PAC", "Mensaje_PAC"]
+        )
+        sat_writer.writerow(
+            [
+                "Tipo_Documento",
+                "ID_Interno_BD",
+                "UUID",
+                "RFC_Receptor",
+                "Total",
+                "Estado_CFDI",
+                "Estatus_Cancelacion",
+                "Es_Cancelable",
+            ]
+        )
+
+        for idx, comp in enumerate(comprobantes, 1):
+            tipo = comp["tipo"]
+            id_int = comp["id_interno"]
+            uuid = comp["uuid"]
+            rfc_rec = comp["rfc_receptor"]
+            total = comp["total"]
+
+            logger.info(f"[{idx}/{len(comprobantes)}] Auditando UUID: {uuid} ...")
+
+            # ---------------------------------------------------------
+            # 1. CONSULTA PAC (getStatusCancelacionAsincrona)
+            # ---------------------------------------------------------
+            status_pac = "Error"
+            mensaje_pac = "No consultado"
+            try:
+                res_pac = client_pac.service.getStatusCancelacionAsincrona(
+                    usuario=PAC_USER, password=PAC_PASS, transactionId=uuid
+                )
+                status_pac = str(getattr(res_pac, "status", "N/A"))
+                mensaje_pac = str(getattr(res_pac, "mensaje", "N/A"))
+            except Exception as e:
+                logger.error(f"  ❌ Error PAC en UUID {uuid}: {e}")
+
+            pac_writer.writerow([tipo, id_int, uuid, status_pac, mensaje_pac])
+
+            # ---------------------------------------------------------
+            # 2. CONSULTA SAT
+            # ---------------------------------------------------------
+            estado_sat = "Error"
+            estatus_canc_sat = "Error"
+            cancelable_sat = "Error"
+
+            expresion_sat = f"?re={RFC_EMISOR}&rr={rfc_rec}&tt={total}&id={uuid}"
+
+            try:
+                res_sat = client_sat.service.Consulta(expresionImpresa=expresion_sat)
+                estado_sat = str(getattr(res_sat, "Estado", "N/A"))
+                estatus_canc_sat = str(getattr(res_sat, "EstatusCancelacion", "N/A"))
+                cancelable_sat = str(getattr(res_sat, "EsCancelable", "N/A"))
+            except Exception as e:
+                logger.error(f"  ❌ Error SAT en UUID {uuid}: {e}")
+
+            sat_writer.writerow(
+                [
+                    tipo,
+                    id_int,
+                    uuid,
+                    rfc_rec,
+                    total,
+                    estado_sat,
+                    estatus_canc_sat,
+                    cancelable_sat,
+                ]
+            )
+
+    logger.info("\n===================================================================")
+    logger.info("🎉 ¡AUDITORÍA FINALIZADA CON ÉXITO!")
+    logger.info(f"📁 Reporte PAC : {REPORTE_PAC}")
+    logger.info(f"📁 Reporte SAT : {REPORTE_SAT}")
+    logger.info("Ya puedes descargar estos archivos para analizarlos.")
+    logger.info("===================================================================")
 
 
 if __name__ == "__main__":
-    consultar_pac_getStatusCancelacionAsincrona()
-    consultar_sat_oficial()
+    ejecutar_auditoria()
