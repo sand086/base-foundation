@@ -14,8 +14,8 @@ logger = logging.getLogger("DEBUG_PAC_STATUS")
 PAC_USER = "trafico2@3t.com.mx"
 PAC_PASS = "iMbm2Z49.2_"
 
-# El UUID que quieres consultar (El que nos devolvió el PAC en el paso anterior)
-UUID_TRANSACCION = "0872026F-B4A3-4773-ACAC-6B4E710F8D0D"
+# El UUID que nos devolvió el PAC como acuse (En tu caso fue en minúsculas, lo enviamos igual)
+UUID_TRANSACCION = "0872026f-b4a3-4773-acac-6b4e710f8d0d"
 
 # URL EXACTA DEL WSDL DE CANCELACIÓN
 PAC_WSDL = "https://solucionfactible.com/ws/services/Cancelacion?wsdl"
@@ -41,13 +41,9 @@ def obtener_status_cancelacion():
     try:
         logger.info("⏳ Solicitando el estatus al PAC...")
 
-        # OJO: Los nombres de los parámetros deben coincidir con la documentación:
-        # 'usuario', 'password', 'transactionId' (o 'uuid' en el XML de ejemplo)
-        # Probaremos con user/pass/uuid como dicta el ejemplo XML de su web.
+        # CORRECCIÓN: Nombres de parámetros exactos del WSDL
         resultado = client.service.getStatusCancelacionAsincrona(
-            user=PAC_USER,
-            pass_=PAC_PASS,  # Zeep usa pass_ en lugar de pass
-            uuid=UUID_TRANSACCION,
+            usuario=PAC_USER, password=PAC_PASS, transactionId=UUID_TRANSACCION
         )
 
         status_code = getattr(resultado, "status", None)
@@ -60,16 +56,16 @@ def obtener_status_cancelacion():
 
         if acuse_sat:
             logger.info("   📜 ¡Acuse del SAT disponible! (Base64)")
-            # Descomenta esto si quieres imprimir la cadena Base64 inmensa
-            # logger.info(f"   Acuse Base64: {acuse_sat[:100]}... [Truncado]")
+            # Descomenta esto si quieres imprimir el Base64
+            # logger.info(f"   Acuse Base64: {acuse_sat}")
         else:
             logger.info("   📜 Acuse SAT : No disponible aún o vacío.")
 
-        # Interpretación rápida basada en la documentación oficial
+        # Interpretación
         logger.info("\n--- INTERPRETACIÓN OFICIAL ---")
         if status_code == 200:
             logger.info(
-                "✅ 200: La solicitud de cancelación se registró exitosamente y/o está completada."
+                "✅ 200: La solicitud de cancelación se completó exitosamente ante el SAT."
             )
         elif status_code == 204:
             logger.info(
@@ -88,18 +84,10 @@ def obtener_status_cancelacion():
                 "⚠️ 702: No se encuentra la transacción con el UUID especificado."
             )
         else:
-            logger.warning(
-                f"ℹ️ Código {status_code}: Revisa la tabla de errores en la documentación."
-            )
+            logger.warning(f"ℹ️ Código {status_code}: Revisa la tabla de errores.")
 
     except Exception as e:
         logger.error(f"\n❌ Excepción durante la llamada SOAP: {e}")
-
-        # En caso de error por nombres de parámetros (ej: si el WSDL pedía "usuario" en vez de "user")
-        if "pass_" in str(e) or "uuid" in str(e):
-            logger.error(
-                "Tip: Intenta cambiar los parámetros en la línea 46. Ej: usuario=PAC_USER, password=PAC_PASS, transactionId=UUID_TRANSACCION"
-            )
 
     finally:
         # AQUI SE IMPRIMEN LOS XMLs DE RED PARA VER EL DETALLE EXACTO
