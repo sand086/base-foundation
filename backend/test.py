@@ -1,207 +1,155 @@
-import os
-import sys
-import csv
-import logging
-import requests
+import pandas as pd
 from datetime import datetime
-from zeep import Client as ZeepClient
-from zeep.transports import Transport
 
-# Asegurar que el script encuentre la app para importar la BD
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+print("Iniciando análisis y generación de Excel con pestañas...")
 
-from app.db.database import SessionLocal
-from app.models.models import ReceivableInvoice, ReceivableInvoicePayment, Client
+try:
+    # 1. Leer los archivos
+    df_excel = pd.read_excel(
+        "Reporte_SAT_3T.xlsx", sheet_name="Conciliacion_solicitada_SF_SAT"
+    )
+    df_db = pd.read_csv("data-1786571040919.csv")
+except Exception as e:
+    print(f"Error al leer los archivos: {e}")
+    exit()
 
-logging.basicConfig(
-    level=logging.INFO, format="[%(asctime)s] %(levelname)s - %(message)s"
+# 2. Normalizar UUIDs para el cruce
+df_excel["UUID_NORM"] = df_excel["UUID_NORM"].astype(str).str.strip().str.upper()
+df_db["uuid"] = df_db["uuid"].astype(str).str.strip().str.upper()
+
+# Eliminar duplicados para un cruce limpio
+df_excel_clean = df_excel.drop_duplicates(subset="UUID_NORM")
+df_db_clean = df_db.drop_duplicates(subset="uuid")
+
+# 3. Cruce general (incluyendo los que faltan usando left join)
+df_merge = pd.merge(
+    df_excel_clean,
+    df_db_clean,
+    left_on="UUID_NORM",
+    right_on="uuid",
+    how="left",
+    indicator=True,
 )
-logger = logging.getLogger("AUDITORIA_DB")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CONFIGURACIÓN
-# ─────────────────────────────────────────────────────────────────────────────
-PAC_USER = "trafico2@3t.com.mx"
-PAC_PASS = "iMbm2Z49.2_"
-RFC_EMISOR = "RTX110624KP5"
-
-PAC_WSDL = "https://solucionfactible.com/ws/services/Cancelacion?wsdl"
-SAT_WSDL = (
-    "https://consultaqr.facturaelectronica.sat.gob.mx/ConsultaCFDIService.svc?wsdl"
+# 4. Normalizar campos para comparación
+df_merge["sat_excel"] = df_merge["SAT_ESTATUS"].astype(str).str.strip().str.upper()
+df_merge["sat_db"] = df_merge["estatus_sat"].astype(str).str.strip().str.upper()
+df_merge["imp_excel"] = (
+    pd.to_numeric(df_merge["IMPORTE TOTAL"], errors="coerce").fillna(0.0).round(2)
 )
+df_merge["imp_db"] = (
+    pd.to_numeric(df_merge["total"], errors="coerce").fillna(0.0).round(2)
+)
+
+# ==========================================
+# 5. FILTRAR CADA CASO EN PESTAÑAS SEPARADAS
+# ==========================================
+# A. Falsos Vigentes (137 casos)
+df_falso_vigente = df_merge[
+    (df_merge["sat_excel"] == "CANCELADO") & (df_merge["sat_db"] == "TIMBRADA")
+]
+
+# B. Atorados en Proceso (110 casos)
+df_atorados = df_merge[
+    (df_merge["sat_excel"] == "CANCELADO")
+    & (df_merge["sat_db"].isin(["PROCESO_CANCELACION", "PENDIENTE_CANCELAR_SAT"]))
+]
+
+# C. Falsos Errores (4 casos)
+df_falso_error = df_merge[
+    (df_merge["sat_excel"] == "CANCELADO") & (df_merge["sat_db"] == "ERROR_CANCELACION")
+]
+
+# D. Errores Reales (6 casos)
+df_error_real = df_merge[
+    (df_merge["sat_excel"] == "VIGENTE") & (df_merge["sat_db"] == "ERROR_CANCELACION")
+]
+
+# E. Discrepancias de Importe (81 casos)
+df_importe = df_merge[
+    (abs(df_merge["imp_excel"] - df_merge["imp_db"]) > 0.05)
+    & (df_merge["_merge"] == "both")
+]
+
+# F. Faltantes en Base de Datos (82 casos)
+df_faltantes = df_merge[df_merge["_merge"] == "left_only"]
+
+# ==========================================
+# 6. EXPORTACIÓN A EXCEL
+# ==========================================
+# Definir qué columnas mostrar para mayor claridad (CORREGIDO: Usando 'FOLIO' en lugar de 'FOLIO_x')
+cols = [
+    "UUID_NORM",
+    "FOLIO",
+    "folio_interno",
+    "RFC CLIENTE",
+    "imp_excel",
+    "imp_db",
+    "sat_excel",
+    "sat_db",
+]
+cols_rename = {
+    "UUID_NORM": "UUID",
+    "FOLIO": "FOLIO_EXCEL",
+    "folio_interno": "FOLIO_BD",
+    "RFC CLIENTE": "RFC_RECEPTOR",
+    "imp_excel": "IMPORTE_EXCEL",
+    "imp_db": "IMPORTE_BD",
+    "sat_excel": "ESTATUS_SAT",
+    "sat_db": "ESTATUS_BD",
+}
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-REPORTE_PAC = f"auditoria_pac_{timestamp}.csv"
-REPORTE_SAT = f"auditoria_sat_{timestamp}.csv"
+nombre_excel = f"Reporte_Desfases_CFDI_{timestamp}.xlsx"
 
+# Generar el Excel multipestaña
+with pd.ExcelWriter(nombre_excel, engine="openpyxl") as writer:
+    if not df_falso_vigente.empty:
+        df_falso_vigente[cols].rename(columns=cols_rename).to_excel(
+            writer, sheet_name="Falsos Vigentes", index=False
+        )
+    if not df_atorados.empty:
+        df_atorados[cols].rename(columns=cols_rename).to_excel(
+            writer, sheet_name="Atorados Proceso", index=False
+        )
+    if not df_falso_error.empty:
+        df_falso_error[cols].rename(columns=cols_rename).to_excel(
+            writer, sheet_name="Falsos Errores", index=False
+        )
+    if not df_error_real.empty:
+        df_error_real[cols].rename(columns=cols_rename).to_excel(
+            writer, sheet_name="Errores Reales", index=False
+        )
+    if not df_importe.empty:
+        df_importe[cols].rename(columns=cols_rename).to_excel(
+            writer, sheet_name="Desfase Importes", index=False
+        )
+    if not df_faltantes.empty:
+        # Para los faltantes (CORREGIDO: Usando 'FOLIO' en lugar de 'FOLIO_x')
+        cols_faltantes = [
+            "UUID_NORM",
+            "FOLIO",
+            "RFC CLIENTE",
+            "IMPORTE TOTAL",
+            "SAT_ESTATUS",
+        ]
+        df_faltantes[cols_faltantes].rename(
+            columns={"UUID_NORM": "UUID", "FOLIO": "FOLIO_EXCEL"}
+        ).to_excel(writer, sheet_name="Faltantes BD", index=False)
 
-def extraer_comprobantes_db():
-    """Extrae todas las facturas y pagos de la BD con UUID válido"""
-    logger.info("📦 Conectando a la Base de Datos para extraer comprobantes...")
-    db = SessionLocal()
-    comprobantes = []
-
-    try:
-        # 1. Extraer Facturas (Ingresos, Egresos, Traslados)
-        facturas = (
-            db.query(ReceivableInvoice)
-            .join(Client)
-            .filter(ReceivableInvoice.uuid.isnot(None), ReceivableInvoice.uuid != "")
-            .all()
+    # En caso de que todo estuviera perfecto (para evitar el error "At least one sheet must be visible")
+    if all(
+        [
+            df_falso_vigente.empty,
+            df_atorados.empty,
+            df_falso_error.empty,
+            df_error_real.empty,
+            df_importe.empty,
+            df_faltantes.empty,
+        ]
+    ):
+        pd.DataFrame({"Mensaje": ["No se encontraron desfases"]}).to_excel(
+            writer, sheet_name="Sin Desfases", index=False
         )
 
-        for f in facturas:
-            comprobantes.append(
-                {
-                    "tipo": "FACTURA/CARTA_PORTE",
-                    "id_interno": f.id,
-                    "uuid": str(f.uuid).strip().upper(),
-                    "rfc_receptor": str(f.client.rfc).strip().upper(),
-                    "total": str(f.monto_total),
-                }
-            )
-
-        # 2. Extraer Complementos de Pago
-        pagos = (
-            db.query(ReceivableInvoicePayment)
-            .join(ReceivableInvoice)
-            .join(Client)
-            .filter(
-                ReceivableInvoicePayment.complemento_uuid.isnot(None),
-                ReceivableInvoicePayment.complemento_uuid != "",
-            )
-            .all()
-        )
-
-        for p in pagos:
-            comprobantes.append(
-                {
-                    "tipo": "COMPLEMENTO_PAGO",
-                    "id_interno": p.id,
-                    "uuid": str(p.complemento_uuid).strip().upper(),
-                    "rfc_receptor": str(p.invoice.client.rfc).strip().upper(),
-                    "total": str(p.monto),  # El SAT usa el monto del pago
-                }
-            )
-
-        logger.info(f"✅ Se extrajeron {len(facturas)} Facturas y {len(pagos)} Pagos.")
-        logger.info(f"📊 Total a auditar: {len(comprobantes)} comprobantes.")
-        return comprobantes
-
-    except Exception as e:
-        logger.error(f"❌ Error al consultar la BD: {e}")
-        return []
-    finally:
-        db.close()
-
-
-def ejecutar_auditoria():
-    comprobantes = extraer_comprobantes_db()
-
-    if not comprobantes:
-        logger.warning("⚠️ No hay comprobantes para auditar. Terminando.")
-        return
-
-    logger.info("🌐 Preparando conexiones a SAT y Solución Factible...")
-    session = requests.Session()
-    session.verify = True
-    transport_sat = Transport(session=session, timeout=15)
-    transport_pac = Transport(timeout=15)
-
-    try:
-        client_sat = ZeepClient(SAT_WSDL, transport=transport_sat)
-        client_pac = ZeepClient(PAC_WSDL, transport=transport_pac)
-    except Exception as e:
-        logger.error(f"❌ Error al levantar los Web Services: {e}")
-        return
-
-    logger.info(f"📝 Creando archivos de reporte: {REPORTE_PAC} y {REPORTE_SAT}")
-    with open(REPORTE_PAC, mode="w", newline="", encoding="utf-8") as f_pac, open(
-        REPORTE_SAT, mode="w", newline="", encoding="utf-8"
-    ) as f_sat:
-
-        pac_writer = csv.writer(f_pac)
-        sat_writer = csv.writer(f_sat)
-
-        # Encabezados
-        pac_writer.writerow(
-            ["Tipo_Documento", "ID_Interno_BD", "UUID", "Status_PAC", "Mensaje_PAC"]
-        )
-        sat_writer.writerow(
-            [
-                "Tipo_Documento",
-                "ID_Interno_BD",
-                "UUID",
-                "RFC_Receptor",
-                "Total",
-                "Estado_CFDI",
-                "Estatus_Cancelacion",
-                "Es_Cancelable",
-            ]
-        )
-
-        for idx, comp in enumerate(comprobantes, 1):
-            tipo = comp["tipo"]
-            id_int = comp["id_interno"]
-            uuid = comp["uuid"]
-            rfc_rec = comp["rfc_receptor"]
-            total = comp["total"]
-
-            logger.info(f"[{idx}/{len(comprobantes)}] Auditando UUID: {uuid} ...")
-
-            # ---------------------------------------------------------
-            # 1. CONSULTA PAC (getStatusCancelacionAsincrona)
-            # ---------------------------------------------------------
-            status_pac = "Error"
-            mensaje_pac = "No consultado"
-            try:
-                res_pac = client_pac.service.getStatusCancelacionAsincrona(
-                    usuario=PAC_USER, password=PAC_PASS, transactionId=uuid
-                )
-                status_pac = str(getattr(res_pac, "status", "N/A"))
-                mensaje_pac = str(getattr(res_pac, "mensaje", "N/A"))
-            except Exception as e:
-                logger.error(f"  ❌ Error PAC en UUID {uuid}: {e}")
-
-            pac_writer.writerow([tipo, id_int, uuid, status_pac, mensaje_pac])
-
-            # ---------------------------------------------------------
-            # 2. CONSULTA SAT
-            # ---------------------------------------------------------
-            estado_sat = "Error"
-            estatus_canc_sat = "Error"
-            cancelable_sat = "Error"
-
-            expresion_sat = f"?re={RFC_EMISOR}&rr={rfc_rec}&tt={total}&id={uuid}"
-
-            try:
-                res_sat = client_sat.service.Consulta(expresionImpresa=expresion_sat)
-                estado_sat = str(getattr(res_sat, "Estado", "N/A"))
-                estatus_canc_sat = str(getattr(res_sat, "EstatusCancelacion", "N/A"))
-                cancelable_sat = str(getattr(res_sat, "EsCancelable", "N/A"))
-            except Exception as e:
-                logger.error(f"  ❌ Error SAT en UUID {uuid}: {e}")
-
-            sat_writer.writerow(
-                [
-                    tipo,
-                    id_int,
-                    uuid,
-                    rfc_rec,
-                    total,
-                    estado_sat,
-                    estatus_canc_sat,
-                    cancelable_sat,
-                ]
-            )
-
-    logger.info("\n===================================================================")
-    logger.info("🎉 ¡AUDITORÍA FINALIZADA CON ÉXITO!")
-    logger.info(f"📁 Reporte PAC : {REPORTE_PAC}")
-    logger.info(f"📁 Reporte SAT : {REPORTE_SAT}")
-    logger.info("Ya puedes descargar estos archivos para analizarlos.")
-    logger.info("===================================================================")
-
-
-if __name__ == "__main__":
-    ejecutar_auditoria()
+print(f"¡Archivo generado exitosamente en: {nombre_excel}!")
