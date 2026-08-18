@@ -23,20 +23,50 @@ logger = logging.getLogger("cancelacion_forzada")
 
 UUIDS_A_CANCELAR = [
     {
-        "uuid": "83399CF6-E7C1-42C3-B642-2820B513FDB0",
-        "motivo": "01",
-        "sustitucion": "A0E4A0D7-3B73-42CD-9888-10D3EA04D325",
-    },
+        "uuid": "831223C3-B209-4E8B-B442-F091FD4ABF9F",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18462
     {
-        "uuid": "123F30B7-404D-45BE-B60B-597518CCEF4A",
-        "motivo": "01",
-        "sustitucion": "170645FF-FB9F-438F-BE61-B66B15B20121",
-    },
+        "uuid": "74B4F5C5-FCA9-41FB-823B-93FE0B992E7C",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18441
     {
-        "uuid": "17CFE298-59CC-41F4-AB30-5E425859DEDB",
-        "motivo": "01",
-        "sustitucion": "CD82FC57-1653-4FF4-86CD-F60EF629C88C",
-    },
+        "uuid": "9C8D3C47-D76D-4C10-AA16-D124EA49197A",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18442
+    {
+        "uuid": "9B788A26-B182-47D2-95A2-F86324F53963",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18566
+    {
+        "uuid": "D06E604D-5B38-4F50-B568-D1EE7ED8D418",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18567
+    {
+        "uuid": "555AA63C-4F95-476D-8AFC-A2284ADE37E6",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18451
+    {
+        "uuid": "FB29F32E-DE9F-4887-B844-58434BC65483",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18476
+    {
+        "uuid": "4A793986-91D3-4E9B-868A-123A3F25AA4B",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18477
+    {
+        "uuid": "886CBF5C-C28B-4430-BA3C-2019CA140419",
+        "motivo": "02",
+        "sustitucion": "",
+    },  # CP-18530
 ]
 
 
