@@ -1,5 +1,6 @@
 import sys
 import os
+import datetime
 
 # Asegurar que Python reconozca los módulos de la aplicación
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -13,8 +14,8 @@ from app.modules.logistics.schemas import ReceivableInvoiceCreate
 def ejecutar_sustitucion():
     db = SessionLocal()
     try:
-        uuid_a_sustituir = "FA9FD203-1A5D-4A9A-8181-0E80D7EC6392"
-        folio_objetivo = "18370"
+        uuid_a_sustituir = "423DE075-C083-4A84-82BA-9A918B8771EC"
+        folio_objetivo = "18363"
 
         print(f"🔍 1. Buscando factura cancelada en BD (UUID {uuid_a_sustituir})...")
         factura_vieja = (
@@ -22,12 +23,6 @@ def ejecutar_sustitucion():
             .filter(ReceivableInvoice.uuid == uuid_a_sustituir)
             .first()
         )
-
-        # Respaldo por si se busca por ID (sabemos que era el ID 1085 por los logs anteriores)
-        if not factura_vieja:
-            factura_vieja = (
-                db.query(ReceivableInvoice).filter(ReceivableInvoice.id == 1085).first()
-            )
 
         if not factura_vieja:
             print("❌ No se encontró la factura cancelada en la base de datos.")
@@ -42,7 +37,7 @@ def ejecutar_sustitucion():
         print(
             f"🛠️ 2. Liberando el Viaje {viaje_id_objetivo} y reasignando folio viejo..."
         )
-        # Renombramos el folio de la cancelada para liberar '18370' sin borrar su historial
+        # Renombramos el folio de la cancelada para liberar '18363'
         factura_vieja.folio_interno = f"CP-{folio_objetivo}-CANCELADA"
         factura_vieja.viaje_id = None
         factura_vieja.record_status = RecordStatus.ELIMINADO
@@ -62,10 +57,14 @@ def ejecutar_sustitucion():
         # Inyección dinámica del folio deseado
         setattr(payload, "folio_forzado", folio_objetivo)
 
-        # Invocación del motor oficial de timbrado One-Shot de tu servicio
+        # Invocación del motor oficial de timbrado One-Shot
         nueva_factura = billing_service.generar_carta_porte_one_shot(
             invoice_data=payload
         )
+
+        # 🚀 TRUCO AUTOMÁTICO: Planchamos la fecha a la original para tu sistema
+        nueva_factura.fecha_emision = datetime.date(2026, 8, 3)
+        db.commit()
 
         print("\n" + "=" * 60)
         print("🎉 ¡PROCESO DE SUSTITUCIÓN COMPLETADO CON ÉXITO!")
@@ -77,7 +76,7 @@ def ejecutar_sustitucion():
         print(f"• Asignada al Viaje   : {nueva_factura.viaje_id}")
         print("=" * 60)
         print(
-            "👉 La nueva factura está timbrada y lista para recibir su Complemento de Pago."
+            "👉 La nueva factura está timbrada y con fecha del 3 de agosto en sistema."
         )
 
     except Exception as e:
