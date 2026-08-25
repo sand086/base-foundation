@@ -783,11 +783,10 @@ export default function CFDIVault() {
               "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
           else if (s === "PROCESO_CANCELACION") {
             badgeClass =
-              "bg-amber-100 text-amber-800 border-amber-300 animate-pulse font-black";
+              "bg-amber-100 text-amber-800 border-amber-300 font-black";
             displayLabel = "EN PROCESO DE CANCELACIÓN";
           } else if (s === "PENDIENTE_CANCELAR_SAT") {
-            badgeClass =
-              "bg-blue-100 text-blue-800 border-blue-300 animate-pulse font-black";
+            badgeClass = "bg-blue-100 text-blue-800 border-blue-300 font-black";
             displayLabel = "EN COLA (REINTENTO)";
           } else if (s === "RECHAZADO_SAT") {
             badgeClass = "bg-rose-100 text-rose-800 border-rose-300 font-black";
