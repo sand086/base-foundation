@@ -13,23 +13,37 @@ from app.modules.logistics.schemas import ReceivableInvoiceCreate
 def ejecutar_sustitucion():
     db = SessionLocal()
     try:
-        print("🔍 1. Buscando factura cancelada por error (ID 1084)...")
+        uuid_a_sustituir = "FA9FD203-1A5D-4A9A-8181-0E80D7EC6392"
+        folio_objetivo = "18370"
+
+        print(f"🔍 1. Buscando factura cancelada en BD (UUID {uuid_a_sustituir})...")
         factura_vieja = (
-            db.query(ReceivableInvoice).filter(ReceivableInvoice.id == 1084).first()
+            db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.uuid == uuid_a_sustituir)
+            .first()
         )
 
+        # Respaldo por si se busca por ID (sabemos que era el ID 1085 por los logs anteriores)
         if not factura_vieja:
-            print("❌ No se encontró la factura con ID 1084 en la base de datos.")
+            factura_vieja = (
+                db.query(ReceivableInvoice).filter(ReceivableInvoice.id == 1085).first()
+            )
+
+        if not factura_vieja:
+            print("❌ No se encontró la factura cancelada en la base de datos.")
             return
 
-        viaje_id_objetivo = factura_vieja.viaje_id or 275
-        uuid_a_sustituir = "DD22F58A-0831-40B3-87AB-4F2F0B0430F7"
+        viaje_id_objetivo = factura_vieja.viaje_id
+
+        if not viaje_id_objetivo:
+            print("❌ La factura vieja no tiene un viaje asociado (viaje_id es None).")
+            return
 
         print(
             f"🛠️ 2. Liberando el Viaje {viaje_id_objetivo} y reasignando folio viejo..."
         )
-        # Renombramos el folio de la cancelada para liberar '18369' sin borrar su historial
-        factura_vieja.folio_interno = "CP-18369-CANCELADA"
+        # Renombramos el folio de la cancelada para liberar '18370' sin borrar su historial
+        factura_vieja.folio_interno = f"CP-{folio_objetivo}-CANCELADA"
         factura_vieja.viaje_id = None
         factura_vieja.record_status = RecordStatus.ELIMINADO
         db.add(factura_vieja)
@@ -41,14 +55,14 @@ def ejecutar_sustitucion():
         )
         billing_service = BillingService(db)
 
-        # Construcción del payload oficial
+        # Construcción del payload oficial relacionando con tipo 04
         payload = ReceivableInvoiceCreate(
             viaje_id=viaje_id_objetivo, uuid_relacionado=uuid_a_sustituir
         )
         # Inyección dinámica del folio deseado
-        setattr(payload, "folio_forzado", "18369")
+        setattr(payload, "folio_forzado", folio_objetivo)
 
-        # Invocación del motor oficial de timbrado One-Shot
+        # Invocación del motor oficial de timbrado One-Shot de tu servicio
         nueva_factura = billing_service.generar_carta_porte_one_shot(
             invoice_data=payload
         )
