@@ -595,6 +595,7 @@ export function InvoiceDetailSheet({
                 <Network className="w-4 h-4" /> Árbol de Documentos del Viaje
               </h4>
 
+              {/* FACTURA PADRE */}
               {inv.factura_padre && (
                 <div className="flex flex-col gap-1 mb-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex items-center gap-2">
@@ -614,14 +615,27 @@ export function InvoiceDetailSheet({
                   </div>
                   <div className="flex justify-between items-center text-[10px] font-mono text-slate-500 mt-1">
                     <span>UUID: {inv.factura_padre.uuid || "NO TIMBRADA"}</span>
-                    <StatusBadge
-                      status={getInvoiceStatusInfo(inv.factura_padre).status}
-                      className="text-[9px] py-0 px-2 h-5"
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[9px] py-0 px-2 h-5 font-black uppercase tracking-widest",
+                        (
+                          inv.factura_padre.status_sat ||
+                          inv.factura_padre.estatus ||
+                          ""
+                        ).toUpperCase() === "CANCELADO"
+                          ? "bg-red-100 text-red-800 border-red-300"
+                          : (inv.factura_padre.status_sat || "")
+                                .toUpperCase()
+                                .includes("PROCESO")
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                            : "bg-green-100 text-green-800 border-green-300",
+                      )}
                     >
                       {inv.factura_padre.status_sat ||
                         inv.factura_padre.estatus ||
                         "TIMBRADA"}
-                    </StatusBadge>
+                    </Badge>
                   </div>
                   {/* Motivo Cancelación de Padre */}
                   {(inv.factura_padre.estatus === "CANCELADO" ||
@@ -634,47 +648,70 @@ export function InvoiceDetailSheet({
                 </div>
               )}
 
-              {inv.cartas_porte_hijas?.map((hija: any, idx: number) => (
-                <div
-                  key={idx}
-                  className="flex flex-col gap-1 mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4 relative shadow-sm"
-                >
-                  <div className="absolute w-4 h-6 border-l-2 border-b-2 border-slate-300 dark:border-slate-700 rounded-bl-lg -left-4 top-0"></div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50"
-                    >
-                      HIJA (C. Porte)
-                    </Badge>
-                    <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">
-                      {hija.folio_interno || hija.folio || "S/F"}
-                    </span>
-                    <StatusBadge
-                      status={getInvoiceStatusInfo(hija).status}
-                      className="ml-auto text-[9px] px-2 py-0.5 h-5"
-                    >
-                      {hija.status_sat || hija.estatus || "TIMBRADA"}
-                    </StatusBadge>
-                  </div>
-                  <div className="flex justify-between items-center pl-1 text-[10px] font-mono text-slate-500 mt-1">
-                    <span>UUID: {hija.uuid || "NO TIMBRADA"}</span>
-                    {hija.monto_total !== undefined && (
-                      <span className="font-bold text-slate-700 dark:text-slate-300">
-                        {fC(hija.monto_total)}
-                      </span>
-                    )}
-                  </div>
-                  {/* Motivo Cancelación de Hija */}
-                  {(hija.estatus === "CANCELADO" ||
-                    hija.status_sat === "CANCELADO") &&
-                    hija.motivo_cancelacion && (
-                      <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-1.5 rounded-md w-fit border border-rose-100 dark:border-rose-900/50">
-                        Motivo SAT: {hija.motivo_cancelacion}
+              {/* ÚLTIMA CARTA PORTE HIJA (Se omite el .map) */}
+              {inv.cartas_porte_hijas &&
+                inv.cartas_porte_hijas.length > 0 &&
+                (() => {
+                  // Obtenemos exclusivamente la última hija del arreglo
+                  const ultimaHija =
+                    inv.cartas_porte_hijas[inv.cartas_porte_hijas.length - 1];
+
+                  return (
+                    <div className="flex flex-col gap-1 mt-2 p-3 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 ml-4 relative shadow-sm">
+                      <div className="absolute w-4 h-6 border-l-2 border-b-2 border-slate-300 dark:border-slate-700 rounded-bl-lg -left-4 top-0"></div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50"
+                        >
+                          HIJA (C. Porte)
+                        </Badge>
+                        <span className="font-mono text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {ultimaHija.folio_interno ||
+                            ultimaHija.folio ||
+                            "S/F"}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "ml-auto text-[9px] px-2 py-0.5 h-5 font-black uppercase tracking-widest",
+                            (
+                              ultimaHija.status_sat ||
+                              ultimaHija.estatus ||
+                              ""
+                            ).toUpperCase() === "CANCELADO"
+                              ? "bg-red-100 text-red-800 border-red-300"
+                              : (ultimaHija.status_sat || "")
+                                    .toUpperCase()
+                                    .includes("PROCESO")
+                                ? "bg-amber-100 text-amber-800 border-amber-300"
+                                : "bg-green-100 text-green-800 border-green-300",
+                          )}
+                        >
+                          {ultimaHija.status_sat ||
+                            ultimaHija.estatus ||
+                            "TIMBRADA"}
+                        </Badge>
                       </div>
-                    )}
-                </div>
-              ))}
+                      <div className="flex justify-between items-center pl-1 text-[10px] font-mono text-slate-500 mt-1">
+                        <span>UUID: {ultimaHija.uuid || "NO TIMBRADA"}</span>
+                        {ultimaHija.monto_total !== undefined && (
+                          <span className="font-bold text-slate-700 dark:text-slate-300">
+                            {fC(ultimaHija.monto_total)}
+                          </span>
+                        )}
+                      </div>
+                      {/* Motivo Cancelación de Hija */}
+                      {(ultimaHija.estatus === "CANCELADO" ||
+                        ultimaHija.status_sat === "CANCELADO") &&
+                        ultimaHija.motivo_cancelacion && (
+                          <div className="mt-2 text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/30 px-2 py-1.5 rounded-md w-fit border border-rose-100 dark:border-rose-900/50">
+                            Motivo SAT: {ultimaHija.motivo_cancelacion}
+                          </div>
+                        )}
+                    </div>
+                  );
+                })()}
             </div>
           )}
 
