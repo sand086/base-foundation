@@ -749,15 +749,22 @@ export default function CFDIVault() {
         key: "estatus",
         header: "Estatus",
         render: (val, row) => {
-          // 🚀 FIX: Priorizamos el status_sat si hay un proceso de cancelación o error con el SAT
+          // 🚀 FIX DEFINITIVO: Evaluamos también el detalle_sat por si el backend nos miente con un "TIMBRADO"
           const satStatus = (row.status_sat || "").toUpperCase();
-          const s = (
+          const detalleSat = (row.detalle_sat || "").toUpperCase();
+
+          let s = (val || "").toUpperCase();
+
+          if (
             satStatus === "PROCESO_CANCELACION" ||
-            satStatus === "PENDIENTE_CANCELAR_SAT" ||
-            satStatus === "RECHAZADO_SAT"
-              ? satStatus
-              : val || ""
-          ).toUpperCase();
+            detalleSat.includes("EN PROCESO")
+          ) {
+            s = "PROCESO_CANCELACION";
+          } else if (satStatus === "PENDIENTE_CANCELAR_SAT") {
+            s = "PENDIENTE_CANCELAR_SAT";
+          } else if (satStatus === "RECHAZADO_SAT") {
+            s = "RECHAZADO_SAT";
+          }
 
           let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
           let displayLabel = s;
@@ -777,7 +784,7 @@ export default function CFDIVault() {
           else if (s === "PROCESO_CANCELACION") {
             badgeClass =
               "bg-amber-100 text-amber-800 border-amber-300 animate-pulse font-black";
-            displayLabel = "EN PROCESO DE CANCELACIÓN"; // <-- CAMBIO APLICADO
+            displayLabel = "EN PROCESO DE CANCELACIÓN";
           } else if (s === "PENDIENTE_CANCELAR_SAT") {
             badgeClass =
               "bg-blue-100 text-blue-800 border-blue-300 animate-pulse font-black";
