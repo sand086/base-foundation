@@ -1151,23 +1151,43 @@ class CartaPorteService:
         retenciones_str = f"{_clean_float(d.get('retenciones', 0)):,.2f}"
         total_str = f"{_clean_float(d.get('total', 0)):,.2f}"
 
-        conceptos_render = [
-            {
-                "clave": d.get("clave_prod_serv", "78101802"),
-                "cantidad": "1.00",
-                "unidad": (
-                    "ACT"
-                    if "Pago" in d.get("descripcion_concepto", "")
-                    else "E48 - SRV"
-                ),
-                "descripcion": d.get(
-                    "descripcion_concepto_pdf", d.get("descripcion_concepto", "PAGO")
-                ),
-                "detalles_extra": f"Folio: {d.get('folio', '')}",
-                "precio": subtotal_str,
-                "importe": subtotal_str,
-            }
-        ]
+        conceptos_render = []
+        if (
+            d.get("conceptos")
+            and isinstance(d["conceptos"], list)
+            and len(d["conceptos"]) > 0
+        ):
+            for c in d["conceptos"]:
+                conceptos_render.append(
+                    {
+                        "clave": c.get("claveProdServ", "84111506"),
+                        "cantidad": str(c.get("cantidad", "1.00")),
+                        "unidad": c.get("claveUnidad", "E48"),
+                        "descripcion": c.get("descripcion", ""),
+                        "detalles_extra": f"Folio: {d.get('folio_interno', d.get('folio', ''))}",
+                        "precio": f"{float(c.get('precioUnitario', c.get('importe', 0))):,.2f}",
+                        "importe": f"{float(c.get('importe', 0)):,.2f}",
+                    }
+                )
+        else:
+            conceptos_render = [
+                {
+                    "clave": d.get("clave_prod_serv", "78101802"),
+                    "cantidad": "1.00",
+                    "unidad": (
+                        "ACT"
+                        if "Pago" in d.get("descripcion_concepto", "")
+                        else "E48 - SRV"
+                    ),
+                    "descripcion": d.get(
+                        "descripcion_concepto_pdf",
+                        d.get("descripcion_concepto", "PAGO"),
+                    ),
+                    "detalles_extra": f"Folio: {d.get('folio', '')}",
+                    "precio": subtotal_str,
+                    "importe": subtotal_str,
+                }
+            ]
 
         es_pel_pdf = "Sí" if d.get("es_material_peligroso") else "No"
         info_material_peligroso = f"Material Peligroso: {es_pel_pdf}"
