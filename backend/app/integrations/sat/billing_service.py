@@ -456,163 +456,160 @@ class BillingService:
             error,
         )
 
-    def regenerar_pdf_factura(self, invoice_id: int):
-        from app.models.models import ReceivableInvoice
-        import qrcode
-        from io import BytesIO
-        from lxml import etree
+    def _generar_pdf_con_diseno(
+        self,
+        d: dict,
+        uuid,
+        qr_bytes,
+        s_sat,
+        s_emi,
+        c_sat,
+        cadena_original,
+        importe_letra,
+    ):
+        import re
 
-        factura = (
-            self.db.query(ReceivableInvoice)
-            .filter(ReceivableInvoice.id == invoice_id)
-            .first()
+        dir_cliente = d.get("direccion_cliente", "")
+        cp_cliente = d.get("cp_cliente", "")
+
+        if dir_cliente and cp_cliente:
+            tiene_cp_texto = re.search(
+                r"(?i)\b(c\.?\s*p\.?|código\s*postal|codigo\s*postal)\b",
+                str(dir_cliente),
+            )
+            tiene_cp_numero = str(cp_cliente).strip() in str(dir_cliente)
+
+            if not (tiene_cp_texto or tiene_cp_numero):
+                d["direccion_cliente"] = (
+                    f"{str(dir_cliente).rstrip(', ')}, C.P. {cp_cliente}"
+                )
+
+        logo_path = self.templates_dir / "assets" / "logo-black.png"
+        logo_src = (
+            f"data:image/png;base64,{base64.b64encode(open(logo_path, 'rb').read()).decode('utf-8')}"
+            if logo_path.exists()
+            else ""
         )
-        if not factura or not factura.uuid:
-            raise ValueError("Factura no encontrada o no tiene UUID timbrado.")
+        qr_src = f"data:image/png;base64,{base64.b64encode(qr_bytes).decode('utf-8')}"
 
-        # 1. Verificar que exista el XML físico
-        xml_path = self.storage_dir / f"{factura.uuid}.xml"
-        if not xml_path.exists():
-            raise ValueError(f"No se encontró el archivo XML en {xml_path}")
+        def chunk_b64(text, length=105):
+            if not text:
+                return ""
+            text = str(text).replace(" ", "").replace("\n", "").replace("\r", "")
+            return " ".join([text[i : i + length] for i in range(0, len(text), length)])
 
-        with open(xml_path, "rb") as f:
-            cfdi_bytes = f.read()
+        subtotal_str = f"{_clean_float(d.get('subtotal', 0)):,.2f}"
+        iva_str = f"{_clean_float(d.get('iva', 0)):,.2f}"
+        retenciones_str = f"{_clean_float(d.get('retenciones', 0)):,.2f}"
 
-        # 2. Reconstruir el diccionario "d" (contexto del PDF)
-        if factura.viaje_id:
-            viaje, cliente, unidad, operador, r1, r2 = self._obtener_datos_completos(
-                factura.viaje_id, buscar_tramo_carretera=not factura.is_nominal
-            )
-            folio_partes = (
-                factura.folio_interno.split("-")
-                if factura.folio_interno
-                else ["CP", "0"]
-            )
-            serie = folio_partes[0]
-            folio = folio_partes[1] if len(folio_partes) > 1 else "0"
+        # 1. FIX DE TOTAL PARA FACTURAS LIBRES
+        total_str = f"{_clean_float(d.get('total', d.get('monto_total', 0))):,.2f}"
 
-            d = self._build_dict_from_models(
-                viaje,
-                cliente,
-                unidad,
-                operador,
-                r1,
-                r2,
-                is_nominal=factura.is_nominal,
-                ocultar_montos=False,
-                serie_forzada=serie,
-                folio_forzado=int(folio) if folio.isdigit() else folio,
-            )
-
-            # 👇 BLOQUE DE SEGURIDAD INYECTADO 👇
-            # Forzamos los montos reales de la factura guardada, ignorando el cálculo del viaje
-            d["subtotal"] = f"{factura.subtotal:.2f}"
-            d["iva"] = f"{factura.iva:.2f}"
-            d["retenciones"] = f"{factura.retenciones:.2f}"
-            d["total"] = f"{factura.monto_total:.2f}"
-
-            if (
-                d.get("conceptos")
-                and isinstance(d["conceptos"], list)
-                and len(d["conceptos"]) > 0
-            ):
-                d["conceptos"][0]["precio"] = f"{factura.subtotal:.2f}"
-                d["conceptos"][0]["importe"] = f"{factura.subtotal:.2f}"
-            # 👆 FIN DEL BLOQUE DE SEGURIDAD 👆
-
+        # 2. LECTURA DINÁMICA DE CONCEPTOS PARA QUE MUESTRE LOS CAMBIOS DE LA BD
+        conceptos_render = []
+        if (
+            d.get("conceptos")
+            and isinstance(d["conceptos"], list)
+            and len(d["conceptos"]) > 0
+        ):
+            for c in d["conceptos"]:
+                conceptos_render.append(
+                    {
+                        "clave": c.get("claveProdServ", "84111506"),
+                        "cantidad": str(c.get("cantidad", "1.00")),
+                        "unidad": c.get("claveUnidad", "E48"),
+                        "descripcion": c.get("descripcion", ""),
+                        "detalles_extra": f"Folio: {d.get('folio_interno', d.get('folio', ''))}",
+                        "precio": f"{float(c.get('precioUnitario', c.get('importe', 0))):,.2f}",
+                        "importe": f"{float(c.get('importe', 0)):,.2f}",
+                    }
+                )
         else:
-            cliente = factura.client
-            folio_partes = (
-                factura.folio_interno.split("-")
-                if factura.folio_interno
-                else ["F", "0"]
-            )
-            d = {
-                "serie": folio_partes[0],
-                "folio": folio_partes[1] if len(folio_partes) > 1 else "0",
-                "folio_interno": factura.folio_interno,
-                "fecha": (
-                    factura.fecha_emision.strftime("%Y-%m-%dT%H:%M:%S")
-                    if factura.fecha_emision
-                    else ""
-                ),
-                "subtotal": f"{factura.subtotal:.2f}",
-                "iva": f"{factura.iva:.2f}",
-                "retenciones": f"{factura.retenciones:.2f}",
-                "total": f"{factura.monto_total:.2f}",
-                "forma_pago": factura.forma_pago or "99",
-                "metodo_pago": factura.metodo_pago or "PPD",
-                "moneda": factura.moneda or "MXN",
-                "descripcion_concepto": factura.concepto or "Servicios",
-                "descripcion_concepto_pdf": factura.concepto or "Servicios",
-                "rfc_cliente": cliente.rfc if cliente else "XAXX010101000",
-                "nombre_cliente": (
-                    cliente.razon_social if cliente else "PUBLICO EN GENERAL"
-                ),
-                "cp_cliente": (
-                    cliente.codigo_postal_fiscal if cliente else self.emisor_cp
-                ),
-                "regimen_cliente": cliente.regimen_fiscal if cliente else "601",
-                "uso_cfdi": cliente.uso_cfdi if cliente else "G03",
-            }
+            conceptos_render = [
+                {
+                    "clave": d.get("clave_prod_serv", "78101802"),
+                    "cantidad": "1.00",
+                    "unidad": (
+                        "ACT"
+                        if "Pago" in d.get("descripcion_concepto", "")
+                        else "E48 - SRV"
+                    ),
+                    "descripcion": d.get(
+                        "descripcion_concepto_pdf",
+                        d.get("descripcion_concepto", "PAGO"),
+                    ),
+                    "detalles_extra": f"Folio: {d.get('folio', '')}",
+                    "precio": subtotal_str,
+                    "importe": subtotal_str,
+                }
+            ]
 
-        # 3. Leer los sellos del XML
-        root = etree.fromstring(cfdi_bytes)
-        ns = {
-            "cfdi": "http://www.sat.gob.mx/cfd/4",
-            "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
-        }
-        tfd_node = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
-        if not tfd_node:
-            raise ValueError("El XML no tiene complemento de TimbreFiscalDigital.")
-        tfd_node = tfd_node[0]
+        es_pel_pdf = "Sí" if d.get("es_material_peligroso") else "No"
+        info_material_peligroso = f"Material Peligroso: {es_pel_pdf}"
+        if es_pel_pdf == "Sí":
+            info_material_peligroso += f" | Clave ONU: {d.get('cve_material_peligroso', '')} | Embalaje: {d.get('embalaje', '')}"
 
-        s_sat = tfd_node.get("SelloSAT", "")
-        c_sat = tfd_node.get("NoCertificadoSAT", "")
-        s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
-        fecha_timbrado = tfd_node.get("FechaTimbrado", "")
-        d["fecha_sat_con_hora"] = fecha_timbrado
-
-        cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{factura.uuid}|{fecha_timbrado}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
-
-        # 4. Importe en Letra
-        total_float = _clean_float(factura.monto_total)
-        if HAS_NUM2WORDS:
-            entero = int(total_float)
-            decimales = int(round((total_float - entero) * 100))
-            texto = num2words(entero, lang="es").upper()
-            if texto == "UNO":
-                texto = "UN"
-            importe_letra = (
-                f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
-            )
-        else:
-            importe_letra = f"({total_float:,.2f} MXN)"
-
-        # 5. Generar QR
-        qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={factura.uuid}&re={self.emisor_rfc}&rr={d['rfc_cliente']}&tt={total_float:.2f}&fe={s_emi[-8:]}"
-        qr = qrcode.QRCode(version=1, box_size=10, border=2)
-        qr.add_data(qr_string)
-        qr.make(fit=True)
-        buffer = BytesIO()
-        qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
-
-        # 6. Crear PDF
-        self._generar_pdf_con_diseno(
-            d,
-            factura.uuid,
-            buffer.getvalue(),
-            s_sat,
-            s_emi,
-            c_sat,
-            cadena_original_tfd,
-            importe_letra,
+        # 3. FIX DOMICILIO DESTINO FALLBACK
+        fallback_domicilio = d.get(
+            "domicilio_destino"
+        ) or f"{d.get('municipio_destino', '')}, {d.get('estado_destino', '')}, C.P. {d.get('cp_destino', '')}".strip(
+            ", "
         )
 
-        return {
-            "status": "success",
-            "message": f"PDF reconstruido exitosamente para {factura.folio_interno}",
+        raw_fecha = d.get("fecha_sat_con_hora") or d.get("fecha", "")
+        fecha_limpia = raw_fecha.replace("T", " ")
+
+        context = {
+            **d,
+            "subtotal": subtotal_str,
+            "iva": iva_str,
+            "retenciones": retenciones_str,
+            "total": total_str,
+            "peso_bruto": f"{_clean_float(d.get('peso_bruto', 0)):,.2f}",
+            "distancia_total": f"{int(_clean_float(d.get('total_dist_rec', d.get('distancia_total', 0)))):,}",
+            "conceptos": conceptos_render,
+            "rfc_emisor": self.emisor_rfc,
+            "nombre_emisor": self.emisor_nombre,
+            "cp_emisor": self.emisor_cp,
+            "regimen_emisor": self.emisor_regimen,
+            "uuid": uuid,
+            "folio_interno": d.get(
+                "folio_interno", f"{d.get('serie', 'F')}-{d.get('folio', '')}"
+            ),
+            "fecha_emision": fecha_limpia,
+            "logo_src": logo_src,
+            "qr_src": qr_src,
+            "metodo_pago": d.get("metodo_pago", "PPD"),
+            "tipo_comprobante": "I (Ingreso)",
+            "moneda": d.get("moneda", "MXN"),
+            "tc": "1",
+            "forma_pago": d.get("forma_pago", "99"),
+            "condiciones_pago": d.get("condiciones_pago", "CONTADO"),
+            "cert_sat": c_sat,
+            "cert_emisor": d.get("cert_emisor", "00001000000000000000"),
+            "sello_sat": chunk_b64(s_sat),
+            "sello_emisor": chunk_b64(s_emi),
+            "cadena_original": chunk_b64(cadena_original),
+            "importe_letra": importe_letra,
+            "id_ccp": d.get("id_ccp", ""),
+            "remitente_nombre": self.emisor_nombre,
+            "remitente_rfc": self.emisor_rfc,
+            "fecha_salida": d.get("fecha", ""),
+            "domicilio_origen": d.get("domicilio_origen", "N/A"),
+            "destinatario_nombre": d.get("nombre_cliente", ""),
+            "destinatario_rfc": d.get("rfc_cliente", ""),
+            "fecha_llegada": d.get("fecha", ""),
+            "domicilio_destino": fallback_domicilio,
+            "leyenda_legal": d.get("leyenda_legal", self.leyenda_legal_db),
+            "info_material_peligroso": info_material_peligroso,
         }
+
+        env = Environment(loader=FileSystemLoader(str(self.templates_dir)))
+        html_out = env.get_template("carta_porte.html").render(context)
+        pdf_path = self.storage_dir / f"{uuid}.pdf"
+        HTML(string=html_out, base_url=self.templates_dir.as_uri()).write_pdf(
+            str(pdf_path)
+        )
 
     def regenerar_todos_los_pdfs(self):
         from app.models.models import ReceivableInvoice
