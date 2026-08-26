@@ -505,7 +505,7 @@ class BillingService:
         # 1. FIX DE TOTAL PARA FACTURAS LIBRES
         total_str = f"{_clean_float(d.get('total', d.get('monto_total', 0))):,.2f}"
 
-        # 2. LECTURA DINÁMICA DE CONCEPTOS PARA QUE MUESTRE LOS CAMBIOS DE LA BD
+        # 👇 REEMPLAZA TODO CONCEPTOS_RENDER POR ESTO 👇
         conceptos_render = []
         if (
             d.get("conceptos")
@@ -515,7 +515,7 @@ class BillingService:
             for c in d["conceptos"]:
                 conceptos_render.append(
                     {
-                        "clave": c.get("claveProdServ", "84111506"),
+                        "clave": c.get("claveProdServ", c.get("clave", "84111506")),
                         "cantidad": str(c.get("cantidad", "1.00")),
                         "unidad": c.get("claveUnidad", "E48"),
                         "descripcion": c.get("descripcion", ""),
