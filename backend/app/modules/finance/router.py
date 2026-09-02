@@ -704,6 +704,7 @@ def register_receivable_payment(
                 banco_ordenante=payment.get("banco_ordenante", ""),
                 cuenta_ordenante=payment.get("cuenta_ordenante", ""),
                 user_id=current_user.id,
+                idempotency_key=payment.get("idempotency_key"),
             )
 
             db.refresh(invoice)
@@ -1761,20 +1762,35 @@ def stamp_existing_payment(
         pago = (
             db.query(ReceivableInvoicePayment)
             .filter(ReceivableInvoicePayment.id == payment_id)
+            .with_for_update()
             .first()
         )
 
         if not pago:
             raise HTTPException(status_code=404, detail="Pago no encontrado.")
 
-        if not pago.folio_complemento:
-            raise HTTPException(
-                status_code=400,
-                detail="El pago no tiene un folio de complemento (COM-XXXX) asignado.",
-            )
-
         # 2. Instanciamos el servicio blindado
         sat_service = PaymentComplementService(db)
+
+        if pago.complemento_uuid and len(str(pago.complemento_uuid)) == 36:
+            return {
+                "status": "success",
+                "message": "El pago ya tiene REP timbrado.",
+                "uuid": pago.complemento_uuid,
+                "data": {
+                    "complemento_uuid": pago.complemento_uuid,
+                    "folio_complemento": pago.folio_complemento,
+                    "batch_status": "TIMBRADO",
+                },
+            }
+
+        if not pago.folio_complemento:
+            folio_corto = sat_service._next_folio_corto("COM", current_user.id)
+            pago.folio_complemento = f"COM-{folio_corto}"
+            pago.updated_by_id = current_user.id
+            db.add(pago)
+            db.commit()
+            db.refresh(pago)
 
         # 3. TRUCO SENIOR: Traducimos el ID a Folio para procesar el lote completo
         resultado = sat_service.timbrar_pago_existente(

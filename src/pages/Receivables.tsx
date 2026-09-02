@@ -102,6 +102,7 @@ export default function Receivables() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isRegisteringPayment, setIsRegisteringPayment] = useState(false);
 
   const [isRefactorModalOpen, setIsRefactorModalOpen] = useState(false);
   const [invoiceToRefactor, setInvoiceToRefactor] = useState<any>(null);
@@ -430,11 +431,16 @@ export default function Receivables() {
 
   const handleRegisterPayment = async (payload: any) => {
     if (invoicesToPay.length === 0) return;
-    const success = await registerMultiplePaymentRep(payload);
-    if (success) {
-      setIsPaymentModalOpen(false);
-      setInvoicesToPay([]);
-      setSelectedRows([]);
+    setIsRegisteringPayment(true);
+    try {
+      const success = await registerMultiplePaymentRep(payload);
+      if (success) {
+        setIsPaymentModalOpen(false);
+        setInvoicesToPay([]);
+        setSelectedRows([]);
+      }
+    } finally {
+      setIsRegisteringPayment(false);
     }
   };
 
@@ -1216,10 +1222,18 @@ export default function Receivables() {
         }}
         onStampPayment={async (paymentId) => {
           try {
-            await axiosClient.post(
+            const response = await axiosClient.post(
               `/api/finance/receivables/payments/${paymentId}/stamp`,
             );
-            toast.success("Complemento timbrado en el SAT con éxito");
+            const batchStatus = response.data?.data?.batch_status;
+            if (response.status === 202 || batchStatus === "CONCILIACION_REQUERIDA") {
+              toast.warning(
+                response.data?.detail ||
+                  "El REP quedó en conciliación. No se reintentará automáticamente.",
+              );
+            } else {
+              toast.success("Complemento timbrado en el SAT con éxito");
+            }
             if (refreshReceivables) await refreshReceivables();
           } catch (error: any) {
             const errorMsg =
@@ -1238,6 +1252,7 @@ export default function Receivables() {
         clientName={invoicesToPay[0]?.cliente}
         clientId={invoicesToPay[0]?.client_id || invoicesToPay[0]?.client?.id}
         onSubmit={handleRegisterPayment}
+        isSubmitting={isRegisteringPayment}
       />
 
       {(() => {
