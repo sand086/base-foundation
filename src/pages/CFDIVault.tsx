@@ -185,25 +185,17 @@ export default function CFDIVault() {
     dateRange,
   ]);
 
-  // 5. Pre-ordenamos los padres por fecha para no usar el "initialSort" de la tabla
+  // 5. Pre-ordenamos los padres por fecha de creación / emisión
   const sortedFilteredRecords = useMemo(() => {
     return [...filteredRecords].sort((a, b) => {
-      const folioA = a.folio || a.folio_interno || "";
-      const folioB = b.folio || b.folio_interno || "";
+      // Tomamos la fecha de creación (o fecha de emisión como respaldo)
+      // y la convertimos a milisegundos para poder restarlas matemáticamente
+      const dateA = new Date(a.created_at || a.fecha_emision || 0).getTime();
+      const dateB = new Date(b.created_at || b.fecha_emision || 0).getTime();
 
-      // Extraemos solo los dígitos numéricos del string
-      const numA = parseInt(String(folioA).replace(/[^0-9]/g, ""), 10) || 0;
-      const numB = parseInt(String(folioB).replace(/[^0-9]/g, ""), 10) || 0;
-
-      if (numA !== numB) {
-        return numB - numA; // El número de folio más alto sube al inicio
-      }
-
-      // Respaldo alfabético inverso en caso de folios idénticos o sin números
-      return String(folioB).localeCompare(String(folioA), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
+      // dateB - dateA ordena de forma Descendente (Los más recientes arriba)
+      // Si quieres los más viejos arriba, cámbialo a: dateA - dateB
+      return dateB - dateA;
     });
   }, [filteredRecords]);
 
@@ -757,7 +749,23 @@ export default function CFDIVault() {
         key: "estatus",
         header: "Estatus",
         render: (val, row) => {
-          const s = (val || "").toUpperCase();
+          // 🚀 FIX DEFINITIVO: Evaluamos también el detalle_sat por si el backend nos miente con un "TIMBRADO"
+          const satStatus = (row.status_sat || "").toUpperCase();
+          const detalleSat = (row.detalle_sat || "").toUpperCase();
+
+          let s = (val || "").toUpperCase();
+
+          if (
+            satStatus === "PROCESO_CANCELACION" ||
+            detalleSat.includes("EN PROCESO")
+          ) {
+            s = "PROCESO_CANCELACION";
+          } else if (satStatus === "PENDIENTE_CANCELAR_SAT") {
+            s = "PENDIENTE_CANCELAR_SAT";
+          } else if (satStatus === "RECHAZADO_SAT") {
+            s = "RECHAZADO_SAT";
+          }
+
           let badgeClass = "bg-slate-100 text-slate-800 border-slate-200";
           let displayLabel = s;
 
@@ -775,20 +783,16 @@ export default function CFDIVault() {
               "bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-300";
           else if (s === "PROCESO_CANCELACION") {
             badgeClass =
-              "bg-amber-50 text-amber-700 border-amber-200 animate-pulse font-black";
-            displayLabel = "EN PROCESO SAT";
+              "bg-amber-100 text-amber-800 border-amber-300 font-black";
+            displayLabel = "EN PROCESO DE CANCELACIÓN";
           } else if (s === "PENDIENTE_CANCELAR_SAT") {
-            badgeClass =
-              "bg-blue-50 text-blue-700 border-blue-200 animate-pulse font-black";
+            badgeClass = "bg-blue-100 text-blue-800 border-blue-300 font-black";
             displayLabel = "EN COLA (REINTENTO)";
-          }
-          //  1. AGREGAMOS EL CASO DE RECHAZO AQUÍ:
-          else if (s === "RECHAZADO_SAT") {
+          } else if (s === "RECHAZADO_SAT") {
             badgeClass = "bg-rose-100 text-rose-800 border-rose-300 font-black";
             displayLabel = "ERROR TIMBRADO";
           }
 
-          //  2. ASEGURAMOS QUE HASERROR SE ACTIVE CON RECHAZADO_SAT PARA QUE SALGA TU ICONITO DE TRIÁNGULO
           const hasError =
             (row.intentos_cancelacion > 0 || s === "RECHAZADO_SAT") &&
             s !== "CANCELADO" &&
@@ -802,7 +806,6 @@ export default function CFDIVault() {
               </Badge>
               {hasError && (
                 <div
-                  // Cambiamos a detalle_sat o sat_error_log según cómo lo hayas dejado en el Schema
                   title={`Mensaje SAT: ${row.detalle_sat || row.sat_error_log || "Alerta de sincronización"}`}
                   className="p-1 bg-rose-100 rounded-full cursor-help animate-pulse"
                 >

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -82,7 +82,6 @@ export type WizardData = {
   origen: string;
   destino: string;
   fecha_programada: Date | undefined;
-
   descripcion_mercancia: string;
   detalle_mercancia: string;
   peso_toneladas: number;
@@ -93,36 +92,32 @@ export type WizardData = {
   cve_material_peligroso: string;
   embalaje: string;
   clase_imo: string;
-
   referencia_cliente: string;
   contenedor_1: string;
   contenedor_2: string;
-
   is_refrigerated_1: boolean;
   motogenerator_1_id: string;
   is_refrigerated_2: boolean;
   motogenerator_2_id: string;
-
   unitId: string;
   remolque1Id: string;
   dollyId: string;
   remolque2Id: string;
   driverId: string;
-
   leg_type: string;
-
   conoceRutaCompleta: boolean;
   unit2Id: string;
   driver2Id: string;
   remolque1Id_2: string;
   dollyId_2: string;
   remolque2Id_2: string;
-
   anticipo_casetas: number;
   anticipo_viaticos: number;
   anticipo_combustible: number;
-
   generarCartaPorte: boolean;
+  tipo_operacion: string;
+  booking_referencia: string;
+  pedimento: string;
 };
 
 export interface DispatchWizardProps {
@@ -194,14 +189,30 @@ function SearchableSelect({
   onSelect,
   placeholder,
   className,
+  onSearch, // <-- NUEVO
+  loading, // <-- NUEVO
 }: {
   items: SearchableItem[];
   value: string;
   onSelect: (val: string) => void;
   placeholder: string;
   className?: string;
+  onSearch?: (val: string) => void; // <-- NUEVO
+  loading?: boolean; // <-- NUEVO
 }) {
   const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(""); // <-- NUEVO
+
+  // <-- NUEVO: Debounce para buscar en la API
+  useEffect(() => {
+    if (onSearch) {
+      const timer = setTimeout(() => {
+        onSearch(searchTerm);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchTerm, onSearch]);
+
   const selectedItem = items.find((item) => item.value === value);
 
   return (
@@ -233,31 +244,47 @@ function SearchableSelect({
         align="start"
         sideOffset={8}
       >
-        <Command>
-          <CommandInput placeholder="Escribe para buscar..." />
+        {/* NUEVO: shouldFilter={!onSearch} desactiva el filtro local si estamos buscando en la API */}
+        <Command shouldFilter={!onSearch}>
+          <CommandInput
+            placeholder="Escribe para buscar..."
+            value={searchTerm}
+            onValueChange={setSearchTerm}
+          />
           <CommandList className="max-h-[280px]">
-            <CommandEmpty />
-            <CommandGroup>
-              {items.map((item) => (
-                <CommandItem
-                  key={item.value}
-                  value={item.label}
-                  onSelect={() => {
-                    onSelect(item.value);
-                    setOpen(false);
-                  }}
-                  className="rounded-xl"
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === item.value ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  {item.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {/* NUEVO: Estado de carga */}
+            {loading && (
+              <div className="p-4 text-sm text-center text-slate-500 flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" /> Buscando en el
+                SAT...
+              </div>
+            )}
+            {!loading && (
+              <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+            )}
+            {!loading && (
+              <CommandGroup>
+                {items.map((item) => (
+                  <CommandItem
+                    key={item.value}
+                    value={item.label}
+                    onSelect={() => {
+                      onSelect(item.value);
+                      setOpen(false);
+                    }}
+                    className="rounded-xl"
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === item.value ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    {item.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -453,6 +480,13 @@ export const DispatchWizard = ({
           tripFromState.legs?.[0]?.anticipo_combustible || 0,
         generarCartaPorte: true,
         conoceRutaCompleta: (tripFromState.legs?.length || 0) > 1,
+        tipo_operacion:
+          tripFromState.tipo_operacion === "exportacion"
+            ? "exportacion"
+            : "importacion",
+        booking_referencia:
+          tripFromState.booking_referencia || tripFromState.referencia || "",
+        pedimento: tripFromState.pedimento || "",
         // Carga dinámica de tramo 2
         unit2Id: tripFromState.legs?.[1]?.unit_id
           ? String(tripFromState.legs[1].unit_id)
@@ -487,6 +521,35 @@ export const DispatchWizard = ({
 
   // === EXTRACCIÓN DINÁMICA DE CATÁLOGOS SAT ===
   const { products: satProducts, fetchCatalog, saveItem } = useSatCatalogs();
+
+  // ---> NUEVO: ESTADOS PARA LA BÚSQUEDA DINÁMICA DE PRODUCTOS SAT
+  const [dynamicSatProducts, setDynamicSatProducts] = useState<any[]>([]);
+  const [isSearchingProducts, setIsSearchingProducts] = useState(false);
+  const [hasInitProducts, setHasInitProducts] = useState(false); // <-- EVITA QUE SE RE-ESCRIBA LA TABLA AL VACIARSE
+
+  // Inicializar los productos con la primera carga (SOLO UNA VEZ)
+  useEffect(() => {
+    if (satProducts?.length > 0 && !hasInitProducts) {
+      setDynamicSatProducts(satProducts);
+      setHasInitProducts(true);
+    }
+  }, [satProducts, hasInitProducts]);
+
+  // Función para buscar en la API mientras el usuario teclea
+  // EL USECALLBACK EVITA EL BUCLE INFINITO DE PETICIONES AL SERVIDOR
+  const handleSearchSatProducts = useCallback(
+    async (term: string) => {
+      setIsSearchingProducts(true);
+      try {
+        const results = await fetchCatalog("sat-products", term);
+        setDynamicSatProducts(results || []);
+      } finally {
+        setIsSearchingProducts(false);
+      }
+    },
+    [fetchCatalog],
+  );
+  // <--- FIN NUEVO
 
   // Estados locales para los catálogos nuevos
   const [catMateriales, setCatMateriales] = useState<any[]>([]);
@@ -528,12 +591,13 @@ export const DispatchWizard = ({
 
   const availableSatProducts = useMemo(
     () =>
-      satProducts.map((p) => ({
+      dynamicSatProducts.map((p) => ({
+        // <-- Cambiado a dynamicSatProducts
         label: `${p.clave} - ${p.descripcion}`,
         value: p.clave,
         ...p,
       })),
-    [satProducts],
+    [dynamicSatProducts], // <-- Cambiado a dynamicSatProducts
   );
 
   // Mapear la info para los CreatableSelects
@@ -542,6 +606,7 @@ export const DispatchWizard = ({
       catMateriales.map((m) => ({
         label: `${m.clave} - ${m.descripcion}`,
         value: m.clave,
+        ...m, // Fix: mapping correctly
       })),
     [catMateriales],
   );
@@ -600,6 +665,11 @@ export const DispatchWizard = ({
     anticipo_viaticos: initialData?.anticipo_viaticos || 0,
     anticipo_combustible: initialData?.anticipo_combustible || 0,
     generarCartaPorte: initialData?.generarCartaPorte ?? true,
+
+    // COMERCIO EXTERIOR
+    tipo_operacion: initialData?.tipo_operacion || "importacion",
+    booking_referencia: initialData?.booking_referencia || "",
+    pedimento: initialData?.pedimento || "",
   });
 
   // Funciones de creación al vuelo para Material Peligroso y Embalaje
@@ -935,6 +1005,12 @@ export const DispatchWizard = ({
         contenedor_1: contenedor_default,
         contenedor_2: isFullTrip ? data.contenedor_2 : null,
         referencia: data.referencia_cliente || null,
+
+        // PAYLOAD COMERCIO EXTERIOR
+        tipo_operacion: data.tipo_operacion,
+        booking_referencia: data.booking_referencia || null,
+        pedimento: data.pedimento || null,
+
         tarifa_base: Number(infoTarifa.base || 0),
         costo_casetas: Number(infoTarifa.casetas || 0),
         status: finalStatus,
@@ -1329,6 +1405,107 @@ export const DispatchWizard = ({
                   </Select>
                 </div>
               </div>
+
+              {/* === SECCIÓN COMERCIO EXTERIOR === */}
+              <div className="flex flex-col gap-4 mt-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-card p-4 shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="flex items-center gap-3 md:col-span-2">
+                    <Switch
+                      checked={data.tipo_operacion === "exportacion"}
+                      onCheckedChange={(checked) =>
+                        setData((prev) => ({
+                          ...prev,
+                          tipo_operacion: checked
+                            ? "exportacion"
+                            : "importacion",
+                          booking_referencia: checked
+                            ? prev.booking_referencia
+                            : "",
+                          pedimento: checked ? prev.pedimento : "",
+                        }))
+                      }
+                    />
+                    <Label
+                      className="text-xs font-black uppercase tracking-widest cursor-pointer"
+                      onClick={() =>
+                        setData((prev) => {
+                          const isExport =
+                            prev.tipo_operacion !== "exportacion";
+                          return {
+                            ...prev,
+                            tipo_operacion: isExport
+                              ? "exportacion"
+                              : "importacion",
+                            booking_referencia: isExport
+                              ? prev.booking_referencia
+                              : "",
+                            pedimento: isExport ? prev.pedimento : "",
+                          };
+                        })
+                      }
+                    >
+                      Manejar como:{" "}
+                      <span
+                        className={
+                          data.tipo_operacion === "exportacion"
+                            ? "text-amber-600 dark:text-amber-500"
+                            : "text-blue-600 dark:text-blue-400"
+                        }
+                      >
+                        {data.tipo_operacion === "exportacion"
+                          ? "Exportación"
+                          : "Importación"}
+                      </span>
+                    </Label>
+                  </div>
+
+                  {data.tipo_operacion === "exportacion" && (
+                    <>
+                      <div className="md:col-span-2">
+                        <p className="text-xs font-bold text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                          Nota: Estos campos se inyectarán en la descripción
+                          para Aduanas (Opcionales).
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5 border-l-2 border-blue-400 pl-3">
+                        <Label variant="brand" className="text-slate-500">
+                          BOOKING / REFERENCIA (Opcional)
+                        </Label>
+                        <Input
+                          placeholder="Ej. BKG-998877"
+                          value={data.booking_referencia}
+                          onChange={(e) =>
+                            setData((p) => ({
+                              ...p,
+                              booking_referencia: e.target.value.toUpperCase(),
+                            }))
+                          }
+                          className="uppercase font-semibold h-10 rounded-xl"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 border-l-2 border-blue-400 pl-3">
+                        <Label variant="brand" className="text-slate-500">
+                          PEDIMENTO (Opcional)
+                        </Label>
+                        <Input
+                          placeholder="Ej. 21  47  3807  8003832"
+                          value={data.pedimento}
+                          onChange={(e) =>
+                            setData((p) => ({
+                              ...p,
+                              pedimento: e.target.value,
+                            }))
+                          }
+                          className="font-semibold h-10 rounded-xl"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+              {/* === FIN COMERCIO EXTERIOR === */}
             </div>
 
             <div
@@ -1430,6 +1607,8 @@ export const DispatchWizard = ({
                     items={availableSatProducts}
                     value={data.sat_clave_producto}
                     placeholder="Buscar producto SAT..."
+                    onSearch={handleSearchSatProducts} // <-- NUEVA PROP
+                    loading={isSearchingProducts} // <-- NUEVA PROP
                     onSelect={(val) => {
                       const prod = availableSatProducts.find(
                         (p) => p.value === val,
@@ -2264,7 +2443,7 @@ export const DispatchWizard = ({
                                 ?.label?.split(" ")[0] || "N/A"}
                             </span>
                           </div>
-                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1">
+                          <div className="flex justify-between border-b border-dashed border-slate-200 dark:border-white/10 pb-1 sm:col-span-2">
                             <span className="text-muted-foreground font-bold">
                               Remolque 2:
                             </span>
@@ -2412,6 +2591,45 @@ export const DispatchWizard = ({
                         {data.embalaje || "S/D"}
                       </span>
                     )}
+
+                    <div className="mt-3 p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-slate-200 dark:border-white/10">
+                      <span className="font-bold text-slate-500 text-[10px] uppercase tracking-widest mb-1 block">
+                        Aduanas / Comce
+                      </span>
+                      <div className="text-xs space-y-0.5">
+                        <p>
+                          <span className="font-semibold text-muted-foreground">
+                            Tipo:
+                          </span>{" "}
+                          <span
+                            className={cn(
+                              "uppercase font-bold",
+                              data.tipo_operacion === "exportacion"
+                                ? "text-amber-600 dark:text-amber-500"
+                                : "text-blue-600 dark:text-blue-400",
+                            )}
+                          >
+                            {data.tipo_operacion}
+                          </span>
+                        </p>
+                        {data.booking_referencia && (
+                          <p>
+                            <span className="font-semibold text-muted-foreground">
+                              Booking:
+                            </span>{" "}
+                            {data.booking_referencia}
+                          </p>
+                        )}
+                        {data.pedimento && (
+                          <p>
+                            <span className="font-semibold text-muted-foreground">
+                              Pedimento:
+                            </span>{" "}
+                            {data.pedimento}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -2426,7 +2644,7 @@ export const DispatchWizard = ({
               <Button
                 variant="outline"
                 className="w-32 rounded-2xl font-black uppercase"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => setCurrentStep(1)}
                 disabled={isStamping}
               >
                 Atrás

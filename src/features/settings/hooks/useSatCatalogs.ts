@@ -12,7 +12,7 @@ export type SatProduct = {
 };
 
 type CatalogMethods = {
-  getAll: () => Promise<any>;
+  getAll: (search?: string) => Promise<any>;
   create: (data: any) => Promise<any>;
   update: (id: number, data: any) => Promise<any>;
   delete: (id: number) => Promise<any>;
@@ -25,7 +25,13 @@ type CatalogMethods = {
 
 // Esta pequeña función genera mágicamente el CRUD para cualquier catálogo SAT
 const createAdapter = (endpointPath: string): CatalogMethods => ({
-  getAll: () => axiosClient.get(`/api/sat/${endpointPath}`).then((r) => r.data),
+  getAll: (search?: string) => {
+    // Si hay búsqueda, la concatenamos; si no, dejamos la ruta limpia
+    const url = search
+      ? `/api/sat/${endpointPath}?search=${encodeURIComponent(search)}`
+      : `/api/sat/${endpointPath}`;
+    return axiosClient.get(url).then((r) => r.data);
+  },
   create: (data) =>
     axiosClient.post(`/api/sat/${endpointPath}`, data).then((r) => r.data),
   update: (id, data) =>
@@ -96,7 +102,8 @@ export const useSatCatalogs = () => {
   // MÉTODOS DINÁMICOS (Para el Gestor Multi-Catálogo)
   // =========================================================
   const fetchCatalog = useCallback(
-    async <T = any>(endpoint: string): Promise<T[]> => {
+    async <T = any>(endpoint: string, search?: string): Promise<T[]> => {
+      // <-- Agregamos search aquí
       if (!CATALOG_ADAPTERS[endpoint]) {
         toast.error(`Catálogo ${endpoint} no configurado.`);
         return [];
@@ -104,7 +111,7 @@ export const useSatCatalogs = () => {
 
       setLoading(true);
       try {
-        const data = await CATALOG_ADAPTERS[endpoint].getAll();
+        const data = await CATALOG_ADAPTERS[endpoint].getAll(search); // <-- Pasamos el search al adapter
         return data as T[];
       } catch (error: any) {
         console.error(`Error fetching ${endpoint}:`, error);

@@ -293,7 +293,7 @@ export function CreateInvoiceModal({
             claveProdServ:
               c.claveProdServ ||
               c.clave_prod_serv ||
-              (invoiceToRefactor.retenciones > 0 ? "78101802" : "84111506"),
+              (invoiceToRefactor.retenciones > 0 ? "78101802" : "78121601"),
             claveUnidad: c.claveUnidad || c.clave_unidad || "E48",
             descripcion:
               c.descripcion || invoiceToRefactor.concepto || "Servicio",
@@ -363,7 +363,7 @@ export function CreateInvoiceModal({
         setConceptos([
           {
             id: "1",
-            claveProdServ: "78101800",
+            claveProdServ: tipoImpuesto === "FLETE" ? "78101802" : "78121601",
             claveUnidad: "E48",
             descripcion: "",
             cantidad: 1,
@@ -406,7 +406,7 @@ export function CreateInvoiceModal({
       ...conceptos,
       {
         id: String(Date.now()),
-        claveProdServ: tipoImpuesto === "FLETE" ? "78101802" : "78101800",
+        claveProdServ: tipoImpuesto === "FLETE" ? "78101802" : "78121601",
         claveUnidad: "E48",
         descripcion: "",
         cantidad: 1,
@@ -500,6 +500,9 @@ export function CreateInvoiceModal({
           ? uuidRelacionado.trim()
           : null,
       tipo_relacion: esRefacturacion ? tipoRelacion : null,
+      viaje_id: invoiceToRefactor
+        ? invoiceToRefactor.viaje_id || invoiceToRefactor.trip_id
+        : null,
     };
 
     try {
@@ -1166,9 +1169,23 @@ export function CreateInvoiceModal({
                           align="start"
                         >
                           <Command>
-                            <CommandInput placeholder="Buscar por número o nombre..." />
+                            <CommandInput
+                              placeholder="Teclea 8 dígitos directos o busca por nombre..."
+                              onValueChange={(value) => {
+                                const cleanCode = value.trim();
+                                // 💡 SOLO si teclea exactamente 8 NÚMEROS se asigna de forma automática
+                                if (/^\d{8}$/.test(cleanCode)) {
+                                  updateConcepto(
+                                    concepto.id,
+                                    "claveProdServ",
+                                    cleanCode,
+                                  );
+                                }
+                              }}
+                            />
                             <CommandEmpty>
-                              No se encontraron coincidencias en el SAT.
+                              No se encontraron coincidencias. Se usará la clave
+                              tecleada.
                             </CommandEmpty>
                             <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
                               {satProducts.map((prod) => (
@@ -1176,18 +1193,13 @@ export function CreateInvoiceModal({
                                   key={prod.id}
                                   value={`${prod.clave} ${prod.descripcion}`}
                                   onSelect={() => {
+                                    // 💡 ÚNICAMENTE actualiza el número de Clave SAT.
+                                    // NUNCA toca la casilla de Descripción.
                                     updateConcepto(
                                       concepto.id,
                                       "claveProdServ",
                                       prod.clave,
                                     );
-                                    if (!concepto.descripcion) {
-                                      updateConcepto(
-                                        concepto.id,
-                                        "descripcion",
-                                        prod.descripcion,
-                                      );
-                                    }
                                     setOpenSatPopoverId(null);
                                   }}
                                 >

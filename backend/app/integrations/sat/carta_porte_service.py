@@ -136,6 +136,15 @@ def normalizar_estado_sat(estado: str) -> str:
     return SAT_ESTADOS_MAP.get(estado_str, estado_str)
 
 
+def xml_clean(val: any) -> str:
+    if val is None:
+        return ""
+    # Escapa símbolos como &, <, >, " para que no rompan el XML (Evita el Error 500 y rechazos del PAC)
+    return html.escape(
+        str(val).replace("\n", " ").replace("\r", "").strip(), quote=True
+    )
+
+
 def _clean_float(val) -> float:
     if val is None:
         return 0.0
@@ -489,10 +498,12 @@ class CartaPorteService:
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' NO existe en los catálogos del SAT.",
+                detail=f"Error Carta Porte: El código postal de destino '{cp_destino_fisico}' NO existe en los catálogos del SAT (tabla SatLocationCode).",
             )
 
-        # Lógica de Materiales Peligrosos
+        # =========================================================
+        # 🛡️ FIX CP155: Lógica Inteligente de Materiales Peligrosos
+        # =========================================================
         clave_mercancia_final = (
             getattr(viaje, "sat_clave_producto", "01010101") or "01010101"
         )
@@ -501,17 +512,64 @@ class CartaPorteService:
             .filter(SatProduct.clave == clave_mercancia_final)
             .first()
         )
-        catalogo_peligroso = (
-            str(producto_sat.es_material_peligroso).strip() if producto_sat else "0,1"
-        )
+
+        # BLINDAJE 1: El producto DEBE existir. No asumimos defaults.
+        if not producto_sat:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error Catálogo SAT: La clave de producto '{clave_mercancia_final}' no existe en la base de datos local. Por favor sincronice los catálogos.",
+            )
+
+        val_db = str(getattr(producto_sat, "es_material_peligroso", "")).strip().lower()
+
+        # BLINDAJE 2: El valor en BD no puede ser nulo o vacío
+        if not val_db or val_db in ["none", "null"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error Integridad SAT: La clave '{clave_mercancia_final}' no tiene definida la bandera de Material Peligroso. Debe ser '0', '1' o '0,1'.",
+            )
 
         usuario_marco_peligroso = getattr(viaje, "es_material_peligroso", False)
-        if catalogo_peligroso == "0":
+
+        # BLINDAJE 3: Evaluación estricta
+        if val_db in ["0", "0.0", "no", "false", "f"]:
+            catalogo_peligroso = "0"
             es_peligroso_final = False
-        elif catalogo_peligroso == "1":
+            if usuario_marco_peligroso:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Incongruencia: Marcaste el viaje como material peligroso, pero la clave SAT '{clave_mercancia_final}' dicta que NO lo es ('0').",
+                )
+
+        elif val_db in ["1", "1.0", "si", "sí", "true", "t", "yes"]:
+            catalogo_peligroso = "1"
             es_peligroso_final = True
-        else:
+
+        elif val_db == "0,1":
+            catalogo_peligroso = "0,1"
+            # Solo aquí respetamos la decisión del usuario
             es_peligroso_final = usuario_marco_peligroso
+
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Valor desconocido '{val_db}' en el catálogo SAT para la clave {clave_mercancia_final}.",
+            )
+
+        # Validación de Clave ONU (CP156)
+        raw_cve = str(getattr(viaje, "cve_material_peligroso", "") or "").upper()
+        match = re.search(r"\b([0-9A-Z]{4})\b", raw_cve)
+
+        if match and catalogo_peligroso != "0" and es_peligroso_final:
+            cve_limpia = match.group(1).zfill(4)
+        else:
+            cve_limpia = ""
+
+        if es_peligroso_final and not cve_limpia:
+            raise HTTPException(
+                status_code=400,
+                detail="Error SAT [CP156]: La carga es material peligroso pero la clave ONU (ej. '1203') es inválida o está vacía.",
+            )
 
         serie_final = serie_forzada or "CP"
         folio_final = (
@@ -519,9 +577,6 @@ class CartaPorteService:
         )
         folio_interno = f"{serie_final}-{folio_final}"
 
-        # =======================================================
-        # SEPARACIÓN DE CONCEPTOS: FACTURA VS CARTA PORTE
-        # =======================================================
         desc_concepto_factura = (
             "FLETE NOMINAL" if is_nominal else "FLETE DE CARGA GENERAL"
         )
@@ -539,7 +594,6 @@ class CartaPorteService:
             re.sub(r"[^A-Z0-9Ñ]", "", raw_rfc.upper().strip()) if raw_rfc else ""
         )
 
-        # Extracción segura de direcciones completas
         direccion_cliente_real = (
             str(
                 getattr(cliente, "direccion_fiscal", "DOMICILIO CONOCIDO")
@@ -558,7 +612,28 @@ class CartaPorteService:
             .strip()[:100]
         )
 
-        return {
+        # =========================================================
+        # 🛡️ FIX CFDI40149: Respetamos datos reales del cliente (incluso con '&')
+        # =========================================================
+        raw_rfc_cli = str(getattr(cliente, "rfc", "") or "").strip().upper()
+        rfc_cli_final = raw_rfc_cli if raw_rfc_cli else "XAXX010101000"
+
+        if rfc_cli_final in ["XAXX010101000", "XEXX010101000"]:
+            cp_cli_final = str(self.emisor_cp).strip()
+            regimen_cli_final = "616"
+            uso_cfdi_final = "S01"
+        else:
+            cp_cli_final = str(getattr(cliente, "codigo_postal_fiscal", "")).strip()
+            regimen_cli_final = str(getattr(cliente, "regimen_fiscal", "601")).strip()
+            uso_cfdi_final = str(getattr(cliente, "uso_cfdi", "G03")).strip()
+
+            if not cp_cli_final or len(cp_cli_final) != 5:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Error Fiscal [CFDI 4.0]: El cliente '{getattr(cliente, 'razon_social', 'N/A')}' no tiene un Código Postal Fiscal de 5 dígitos capturado en el sistema.",
+                )
+
+        data_final = {
             "id_ccp": "CCC" + str(uuid.uuid4()).upper()[3:],
             "serie": serie_final,
             "folio": str(folio_final),
@@ -585,13 +660,13 @@ class CartaPorteService:
             "clave_prod_serv": getattr(viaje, "sat_clave_servicio", "78101802")
             or "78101802",
             # Cliente y Destino
-            "rfc_cliente": getattr(cliente, "rfc", "") or "XAXX010101000",
+            "rfc_cliente": rfc_cli_final,
             "nombre_cliente": getattr(cliente, "razon_social", "PUBLICO EN GENERAL"),
-            "cp_cliente": getattr(cliente, "codigo_postal_fiscal", ""),
+            "cp_cliente": cp_cli_final,
             "direccion_cliente": direccion_cliente_real,
             "cp_destino": cp_destino_fisico,
-            "regimen_cliente": getattr(cliente, "regimen_fiscal", "601"),
-            "uso_cfdi": "G03",
+            "regimen_cliente": regimen_cli_final,
+            "uso_cfdi": uso_cfdi_final,
             # Operación Carta Porte
             "distancia_total": distancia_real,
             "peso_bruto": getattr(viaje, "peso_toneladas", 0) * 1000,
@@ -599,7 +674,7 @@ class CartaPorteService:
             "sat_clave_producto": clave_mercancia_final,
             "es_material_peligroso": es_peligroso_final,
             "flag_peligroso_catalogo": catalogo_peligroso,
-            "cve_material_peligroso": getattr(viaje, "cve_material_peligroso", ""),
+            "cve_material_peligroso": cve_limpia,
             "embalaje": getattr(viaje, "embalaje", ""),
             "descripcion_mercancia": mercancia_real,
             # Unidad + Seguros
@@ -675,24 +750,100 @@ class CartaPorteService:
                 if es_peligroso_final
                 else "Mat. Peligroso: NO"
             ),
+            # COMERCIO EXTERIOR
+            "tipo_operacion": str(
+                getattr(viaje, "tipo_operacion", "nacional") or "nacional"
+            ).lower(),
+            "booking_referencia": getattr(viaje, "booking_referencia", "") or "",
+            "pedimento": getattr(viaje, "pedimento", "") or "",
         }
+
+        # 🐞 IMPRESIÓN DE DIAGNÓSTICO EN CONSOLA
+        import json
+
+        print("\n" + "📦" * 30)
+        print("🔍 [DEBUG CARTA PORTE] DATOS FINALES PROCESADOS PARA XML:")
+        print(
+            f"👉 RFC Cliente: '{data_final['rfc_cliente']}' | CP Destino: '{data_final['cp_destino']}'"
+        )
+        print(
+            f"👉 Domicilio Receptor XML (CP): '{data_final['cp_cliente']}' | Régimen: '{data_final['regimen_cliente']}' | Uso: '{data_final['uso_cfdi']}'"
+        )
+        print(
+            f"👉 Mat. Peligroso Flag Cat: '{data_final['flag_peligroso_catalogo']}' | Es Peligroso XML: {data_final['es_material_peligroso']} | ONU: '{data_final['cve_material_peligroso']}'"
+        )
+        print("📦" * 30 + "\n")
+
+        return data_final
 
     # =========================================================================
     # LÓGICA CARTA PORTE (LOGÍSTICA)
     # =========================================================================
 
     def _armar_xml_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
-
         desc_concepto_xml = html.escape(
             str(d.get("descripcion_concepto", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
         )
+
+        desc_extra = ""
+        if d.get("contenedor_1"):
+            desc_extra += f" - Contenedor: {d['contenedor_1']}"
+        if d.get("contenedor_2"):
+            desc_extra += f" / {d['contenedor_2']}"
+        if d.get("pedimento"):
+            desc_extra += f" - Pedimento: {d['pedimento']}"
+
         desc_mercancia_xml = html.escape(
             str(d.get("descripcion_mercancia", ""))
             .replace(" | ", " - ")
             .replace("|", "-")
+            + desc_extra
         )
+
+        es_exportacion = d.get("tipo_operacion", "nacional") == "exportacion"
+        ref_bkg = (
+            f' Referencia="{xml_clean(d.get("booking_referencia"))}"'
+            if d.get("booking_referencia")
+            else ""
+        )
+
+        mun_emi_attr = (
+            f' Municipio="{self.emisor_municipio}"'
+            if getattr(self, "emisor_municipio", "") not in [None, "", "None"]
+            else ""
+        )
+
+        cp_dest = str(d.get("cp_destino", ""))
+        mun_dest = str(d.get("municipio_destino", ""))
+
+        if cp_dest == "54072" or mun_dest in ["None", "", "null"]:
+            mun_dest_attr = ""
+        else:
+            mun_dest_attr = f' Municipio="{mun_dest}"'
+
+        # ⚡ AQUÍ ESTÁ EL TRUCO: xml_clean EN TODOS LOS RFCs PARA ESCAPAR EL SÍMBOLO & EN XML
+        if es_exportacion:
+            ubicaciones_xml = f"""
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{xml_clean(d['rfc_cliente'])}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}"{ref_bkg} />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{xml_clean(self.emisor_rfc)}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                    <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>"""
+        else:
+            ubicaciones_xml = f"""
+            <cartaporte31:Ubicaciones>
+                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{xml_clean(self.emisor_rfc)}" NombreRemitenteDestinatario="{xml_clean(self.emisor_nombre)}" FechaHoraSalidaLlegada="{d['fecha']}">
+                    <cartaporte31:Domicilio{mun_emi_attr} Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}"{ref_bkg} />
+                </cartaporte31:Ubicacion>
+                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{xml_clean(d['rfc_cliente'])}" NombreRemitenteDestinatario="{xml_clean(d['nombre_cliente'])}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d.get('total_dist_rec', d.get('distancia_total'))}">
+                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO"{mun_dest_attr} Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
+                </cartaporte31:Ubicacion>
+            </cartaporte31:Ubicaciones>"""
 
         relacion_xml = (
             f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{relacion_uuid}" />\n    </cfdi:CfdiRelacionados>'
@@ -700,52 +851,43 @@ class CartaPorteService:
             else ""
         )
 
-        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque", "CTR004")}" Placa="{d.get("placa_remolque_1", "1XXXX99")}" />'
+        remolques_xml = f'<cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque", "CTR004")}" Placa="{xml_clean(d.get("placa_remolque_1", "1XXXX99"))}" />'
         if d.get("placa_remolque_2") and d["placa_remolque_2"] != "1XXXX99":
-            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{d["placa_remolque_2"]}" />'
+            remolques_xml += f'\n                    <cartaporte31:Remolque SubTipoRem="{d.get("subtipo_remolque_2", "CTR004")}" Placa="{xml_clean(d["placa_remolque_2"])}" />'
 
-        # =========================================================
-        # MATERIAL PELIGROSO Y SEGURO AMBIENTAL
-        # =========================================================
         clave_prod_xml = html.escape(str(d.get("sat_clave_producto", "01010101")))
-        flag_cat = str(d.get("flag_peligroso_catalogo", "0,1")).strip()
+        flag_cat = str(d.get("flag_peligroso_catalogo", "0")).strip()
         mat_peligroso_attr = ""
-
-        # 1. Bandera estricta para saber si al final SÍ fue peligroso
         es_peligroso_final_xml = False
 
         if flag_cat == "0":
-            # El SAT prohíbe enviar el atributo si el catálogo dicta 0
             mat_peligroso_attr = ""
+            es_peligroso_final_xml = False
         elif flag_cat == "1":
-            # El SAT exige "Sí" si el catálogo dicta 1
             mat_peligroso_attr = ' MaterialPeligroso="Sí"'
             es_peligroso_final_xml = True
             if d.get("cve_material_peligroso"):
-                mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+                mat_peligroso_attr += f' CveMaterialPeligroso="{xml_clean(d.get("cve_material_peligroso"))}" Embalaje="{xml_clean(d.get("embalaje"))}"'
         else:
-            # Si dicta "0,1", es opcional pero se debe declarar "Sí" o "No"
             es_peligroso_str = "Sí" if d.get("es_material_peligroso") else "No"
             mat_peligroso_attr = f' MaterialPeligroso="{es_peligroso_str}"'
             if es_peligroso_str == "Sí":
                 es_peligroso_final_xml = True
                 if d.get("cve_material_peligroso"):
-                    mat_peligroso_attr += f' CveMaterialPeligroso="{d.get("cve_material_peligroso")}" Embalaje="{d.get("embalaje")}"'
+                    mat_peligroso_attr += f' CveMaterialPeligroso="{xml_clean(d.get("cve_material_peligroso"))}" Embalaje="{xml_clean(d.get("embalaje"))}"'
 
-        # 2. SÓLO agregamos el Seguro Ambiental si la mercancía SÍ fue peligrosa (Regla CP182)
         seguro_ambiental_attr = ""
         if (
             es_peligroso_final_xml
             and d.get("aseguradora_med_ambiente")
             and d.get("poliza_med_ambiente")
         ):
-            seguro_ambiental_attr = f' AseguraMedAmbiente="{d.get("aseguradora_med_ambiente")}" PolizaMedAmbiente="{d.get("poliza_med_ambiente")}"'
-        # =========================================================
+            seguro_ambiental_attr = f' AseguraMedAmbiente="{xml_clean(d.get("aseguradora_med_ambiente"))}" PolizaMedAmbiente="{xml_clean(d.get("poliza_med_ambiente"))}"'
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:cartaporte31="http://www.sat.gob.mx/CartaPorte31" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd http://www.sat.gob.mx/CartaPorte31 http://www.sat.gob.mx/sitio_internet/cfd/CartaPorte/CartaPorte31.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}"  FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="CONTADO" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
-    <cfdi:Emisor Rfc="{self.emisor_rfc}" Nombre="{self.emisor_nombre}" RegimenFiscal="{self.emisor_regimen}" />
-    <cfdi:Receptor Rfc="{d['rfc_cliente']}" Nombre="{d['nombre_cliente']}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
+    <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
+    <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
     <cfdi:Conceptos>
         <cfdi:Concepto ClaveProdServ="{d['clave_prod_serv']}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="02">
             <cfdi:Impuestos>
@@ -760,24 +902,17 @@ class CartaPorteService:
     </cfdi:Impuestos>
     <cfdi:Complemento>
         <cartaporte31:CartaPorte Version="3.1" IdCCP="{d['id_ccp']}" TranspInternac="No" TotalDistRec="{d['distancia_total']}">
-            <cartaporte31:Ubicaciones>
-                <cartaporte31:Ubicacion TipoUbicacion="Origen" RFCRemitenteDestinatario="{self.emisor_rfc}" NombreRemitenteDestinatario="{self.emisor_nombre}" FechaHoraSalidaLlegada="{d['fecha']}">
-                    <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
-                </cartaporte31:Ubicacion>
-                <cartaporte31:Ubicacion TipoUbicacion="Destino" RFCRemitenteDestinatario="{d['rfc_cliente']}" NombreRemitenteDestinatario="{d['nombre_cliente']}" FechaHoraSalidaLlegada="{d['fecha']}" DistanciaRecorrida="{d['distancia_total']}">
-                    <cartaporte31:Domicilio Calle="DOMICILIO CONOCIDO" Municipio="{d['municipio_destino']}" Estado="{d['estado_destino']}" Pais="MEX" CodigoPostal="{d['cp_destino']}" />
-                </cartaporte31:Ubicacion>
-            </cartaporte31:Ubicaciones>
+            {ubicaciones_xml}
             <cartaporte31:Mercancias PesoBrutoTotal="{d['peso_bruto']}" UnidadPeso="KGM" NumTotalMercancias="1">
                 <cartaporte31:Mercancia BienesTransp="{clave_prod_xml}" Descripcion="{desc_mercancia_xml}" Cantidad="1" ClaveUnidad="H87" PesoEnKg="{d['peso_bruto']}" Unidad="pza"{mat_peligroso_attr} />
-                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{d['num_permiso']}">
-                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{d['placas']}" AnioModeloVM="{d['anio_modelo']}" />
-                    <cartaporte31:Seguros AseguraRespCivil="{d['aseguradora']}" PolizaRespCivil="{d['poliza']}"{seguro_ambiental_attr} />
+                <cartaporte31:Autotransporte PermSCT="{d['permiso_sct']}" NumPermisoSCT="{xml_clean(d['num_permiso'])}">
+                    <cartaporte31:IdentificacionVehicular ConfigVehicular="{d['config_vehicular']}" PesoBrutoVehicular="{d['peso_bruto_vehicular']}" PlacaVM="{xml_clean(d['placas'])}" AnioModeloVM="{d['anio_modelo']}" />
+                    <cartaporte31:Seguros AseguraRespCivil="{xml_clean(d['aseguradora'])}" PolizaRespCivil="{xml_clean(d['poliza'])}"{seguro_ambiental_attr} />
                     <cartaporte31:Remolques>{remolques_xml}</cartaporte31:Remolques>
                 </cartaporte31:Autotransporte>
             </cartaporte31:Mercancias>
             <cartaporte31:FiguraTransporte>
-                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{d['rfc_operador']}" NombreFigura="{d['nombre_operador']}" NumLicencia="{d['licencia']}">
+                <cartaporte31:TiposFigura TipoFigura="01" RFCFigura="{xml_clean(d['rfc_operador'])}" NombreFigura="{xml_clean(d['nombre_operador'])}" NumLicencia="{xml_clean(d['licencia'])}">
                     <cartaporte31:Domicilio Municipio="{self.emisor_municipio}" Estado="{self.emisor_estado}" Pais="MEX" CodigoPostal="{self.emisor_cp}" />
                 </cartaporte31:TiposFigura>
             </cartaporte31:FiguraTransporte>
@@ -1141,6 +1276,17 @@ class CartaPorteService:
         try:
             validated_payload = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validated_payload.model_dump()}
+
+            # =====================================================================
+            # 🛡️ FIX AMPERSAND (&): BYPASS PYDANTIC
+            # Si el modelo Pydantic sobreescribió silenciosamente el RFC o Nombre
+            # por culpa del símbolo '&', forzamos a que conserve los valores reales.
+            # =====================================================================
+            if raw_data.get("rfc_cliente"):
+                data["rfc_cliente"] = raw_data["rfc_cliente"]
+            if raw_data.get("nombre_cliente"):
+                data["nombre_cliente"] = raw_data["nombre_cliente"]
+
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1240,6 +1386,17 @@ class CartaPorteService:
         try:
             validated_payload = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validated_payload.model_dump()}
+
+            # =====================================================================
+            # 🛡️ FIX AMPERSAND (&): BYPASS PYDANTIC
+            # Si el modelo Pydantic sobreescribió silenciosamente el RFC o Nombre
+            # por culpa del símbolo '&', forzamos a que conserve los valores reales.
+            # =====================================================================
+            if raw_data.get("rfc_cliente"):
+                data["rfc_cliente"] = raw_data["rfc_cliente"]
+            if raw_data.get("nombre_cliente"):
+                data["nombre_cliente"] = raw_data["nombre_cliente"]
+
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,
@@ -1389,6 +1546,17 @@ class CartaPorteService:
         try:
             validador = SatCfdiPayload(**raw_data)
             data = {**raw_data, **validador.model_dump()}
+
+            # =====================================================================
+            # 🛡️ FIX AMPERSAND (&): BYPASS PYDANTIC
+            # Si el modelo Pydantic sobreescribió silenciosamente el RFC o Nombre
+            # por culpa del símbolo '&', forzamos a que conserve los valores reales.
+            # =====================================================================
+            if raw_data.get("rfc_cliente"):
+                data["rfc_cliente"] = raw_data["rfc_cliente"]
+            if raw_data.get("nombre_cliente"):
+                data["nombre_cliente"] = raw_data["nombre_cliente"]
+
         except ValidationError as e:
             raise HTTPException(
                 status_code=400,

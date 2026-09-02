@@ -523,7 +523,6 @@ class Tire(AuditMixin, Base):
     unit_id = Column(
         Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True
     )
-    posicion = Column(Integer, nullable=True)
 
     estado = Column(
         pg_enum(TireStatus, "tirestatus"),
@@ -577,7 +576,7 @@ class TireHistory(AuditMixin, Base):
     responsable = Column(String(100))
 
     tire = relationship("Tire", back_populates="history")
-    unidad = relationship("Unit", foreign_keys=[unit_id])
+    unidad = relationship("Unit", foreign_keys="[TireHistory.unit_id]")
 
 
 class Operator(AuditMixin, Base):
@@ -680,6 +679,11 @@ class Trip(AuditMixin, Base):
     referencia = Column(String(100), nullable=True)
     contenedor_1 = Column(String(100), nullable=True)
     contenedor_2 = Column(String(100), nullable=True)
+
+    tipo_operacion = Column(String(50), default="nacional", nullable=True)
+    booking_referencia = Column(String(255), nullable=True)
+    pedimento = Column(String(255), nullable=True)
+
     clase_imo = Column(String(50), nullable=True)
     sat_clave_producto = Column(String(20), default="01010101")
     sat_clave_unidad = Column(String(10), default="E48")

@@ -225,7 +225,8 @@
           class="bento-card-header"
           style="color: #0f172a; border-left-color: #cbd5e1"
         >
-          Destino Físico
+          {% if tipo_operacion is defined and tipo_operacion == 'exportacion' %}
+          Origen Físico (Punto de Carga) {% else %} Destino Físico {% endif %}
         </div>
         <table class="grid-table">
           <tr>
@@ -246,7 +247,11 @@
           </tr>
           <tr>
             <td colspan="3">
-              <span class="grid-label">Dirección de Entrega</span>
+              <span class="grid-label">
+                {% if tipo_operacion is defined and tipo_operacion ==
+                'exportacion' %} Dirección de Carga {% else %} Dirección de
+                Entrega {% endif %}
+              </span>
               <span class="text-dark" style="font-size: 6.5pt"
                 >{{ subcliente_direccion }}</span
               >
@@ -337,6 +342,68 @@
         </table>
       </div>
 
+      <!-- UBICACIONES DINÁMICAS SEGLÚN TIPO DE OPERACIÓN -->
+      {% if tipo_operacion is defined and tipo_operacion == 'exportacion' %}
+      <div class="bento-card">
+        <div class="bento-card-header">Ubicación Origen (Salida)</div>
+        <table class="grid-table">
+          <tr>
+            <td width="50%">
+              <span class="grid-label">Remitente</span
+              ><span class="bold text-dark">{{ subcliente_nombre }}</span>
+            </td>
+            <td width="50%">
+              <span class="grid-label">RFC Remitente</span
+              ><span class="bold text-dark">{{ destinatario_rfc }}</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="grid-label">Fecha/Hora Salida</span
+              ><span class="text-dark">{{ fecha_salida }}</span>
+            </td>
+            <td>
+              <span class="grid-label">Domicilio Origen</span
+              ><span class="text-dark">{{ subcliente_direccion }}</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="bento-card">
+        <div
+          class="bento-card-header"
+          style="color: #009740; border-left-color: #009740"
+        >
+          Ubicación Destino (Entrega)
+        </div>
+        <table class="grid-table">
+          <tr>
+            <td width="50%">
+              <span class="grid-label">Destinatario</span
+              ><span class="bold text-dark">RÁPIDOS 3T</span>
+            </td>
+            <td width="50%">
+              <span class="grid-label">RFC Destinatario</span
+              ><span class="bold text-dark">RTX110624KP5</span>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <span class="grid-label">Fecha/Hora Llegada</span
+              ><span class="text-dark">{{ fecha_llegada }}</span>
+            </td>
+            <td>
+              <span class="grid-label">Domicilio Destino</span
+              ><span class="text-dark"
+                >Desarrollo Urbano, Mz 3, Lt. 10 y 11, Col. Renacimiento, 91808
+                Veracruz, Ver.</span
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+      {% else %}
       <div class="bento-card">
         <div class="bento-card-header">Ubicación Origen (Salida)</div>
         <table class="grid-table">
@@ -358,7 +425,7 @@
             <td>
               <span class="grid-label">Domicilio Origen</span
               ><span class="text-dark"
-                >Desarrollo, Mz 3, Lt. 10 y 11, Col. Renacimiento, 91808
+                >Desarrollo Urbano, Mz 3, Lt. 10 y 11, Col. Renacimiento, 91808
                 Veracruz, Ver.</span
               >
             </td>
@@ -396,6 +463,7 @@
           </tr>
         </table>
       </div>
+      {% endif %}
 
       <div class="bento-card">
         <div class="bento-card-header">Identificación Vehicular y Seguros</div>
@@ -486,6 +554,40 @@
           </tr>
         </table>
       </div>
+
+      {% if tipo_operacion is defined and (tipo_operacion == 'importacion' or
+      tipo_operacion == 'exportacion') %}
+      <div class="bento-card">
+        <div
+          class="bento-card-header"
+          style="color: #ea580c; border-left-color: #ea580c"
+        >
+          Comercio Exterior (Aduanas)
+        </div>
+        <table class="grid-table">
+          <tr>
+            <td width="33%">
+              <span class="grid-label">Tipo de Operación</span>
+              <span class="bold text-dark" style="text-transform: uppercase"
+                >{{ tipo_operacion }}</span
+              >
+            </td>
+            <td width="33%">
+              <span class="grid-label">Booking / Referencia</span>
+              <span class="bold text-dark"
+                >{{ booking_referencia if booking_referencia else 'N/A' }}</span
+              >
+            </td>
+            <td width="34%">
+              <span class="grid-label">Pedimento</span>
+              <span class="bold text-dark"
+                >{{ pedimento if pedimento else 'N/A' }}</span
+              >
+            </td>
+          </tr>
+        </table>
+      </div>
+      {% endif %}
 
       <div class="addenda-box">
         <span class="bold text-dark">Addenda:</span><br />

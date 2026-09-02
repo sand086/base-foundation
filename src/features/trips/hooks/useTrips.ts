@@ -17,7 +17,6 @@ export const useTrips = () => {
   const fetchTrips = useCallback(async () => {
     setLoading(true);
     try {
-      // ❄️ CIRUGÍA AQUÍ: Pasamos skip = 0, y limit = 5000 para evitar que la API trunque a 100
       const data = await LogisticsService.readTripsApiLogisticsTripsGet(
         0,
         5000,
@@ -25,11 +24,11 @@ export const useTrips = () => {
       setTrips(data as Trip[]);
     } catch (error) {
       console.error("Error fetching trips:", error);
-      toast({
+      /* toast({
         title: "Error de Sincronización",
         description: "No se pudieron cargar los viajes. Verifica tu conexión.",
         variant: "destructive",
-      });
+      }); */
     } finally {
       setLoading(false);
     }
