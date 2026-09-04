@@ -3,6 +3,6 @@
 /* tslint:disable */
 /* eslint-disable */
 export type Body_upload_unit_document_api_fleet_units__unit_term__documents__doc_type__post = {
-    file: Blob;
+    file: string;
 };
 

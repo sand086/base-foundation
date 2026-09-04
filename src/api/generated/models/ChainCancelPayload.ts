@@ -2,9 +2,11 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SatMassCancelPayload = {
+export type ChainCancelPayload = {
     invoice_ids: Array<number>;
+    correo_notificacion: string;
+    supervisor_email: string;
+    supervisor_password: string;
     motivo?: string;
-    uuid_sustituto?: (string | null);
 };
 

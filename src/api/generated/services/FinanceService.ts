@@ -13,6 +13,7 @@ import type { Body_upload_payment_xml_api_finance_payments_upload_xml_post } fro
 import type { CancelPaymentsPayload } from '../models/CancelPaymentsPayload';
 import type { CFDIActivityTimeline } from '../models/CFDIActivityTimeline';
 import type { CFDIHistoryResponse } from '../models/CFDIHistoryResponse';
+import type { ChainCancelPayload } from '../models/ChainCancelPayload';
 import type { IndirectCategoryCreate } from '../models/IndirectCategoryCreate';
 import type { IndirectCategoryResponse } from '../models/IndirectCategoryResponse';
 import type { IndirectCategoryUpdate } from '../models/IndirectCategoryUpdate';
@@ -700,6 +701,25 @@ export class FinanceService {
             path: {
                 'invoice_id': invoiceId,
             },
+            errors: {
+                422: `Validation Error`,
+            },
+        });
+    }
+    /**
+     * Cancela, verifica en SAT y notifica por correo
+     * @param requestBody
+     * @returns any Successful Response
+     * @throws ApiError
+     */
+    public static chainCancelTripInvoicesApiFinanceStampChainCancelTripPost(
+        requestBody: ChainCancelPayload,
+    ): CancelablePromise<any> {
+        return __request(OpenAPI, {
+            method: 'POST',
+            url: '/api/finance/stamp/chain-cancel-trip',
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 422: `Validation Error`,
             },
