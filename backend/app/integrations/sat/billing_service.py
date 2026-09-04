@@ -394,18 +394,33 @@ class BillingService:
             raise HTTPException(status_code=500, detail=f"Error en Sello SAT: {str(e)}")
 
     def _get_y_avanzar_folio(self, serie: str) -> int:
-        from app.models.models import SystemConfig
+        from app.models.models import SystemConfig, ReceivableInvoice
 
         config_key = f"folio_actual_{serie}"
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
-            .with_for_update(of=SystemConfig)
+            .with_for_update()
             .first()
         )
 
         if not secuencia:
-            nuevo_folio = 1
+            ult_folio = 0
+            registros = (
+                self.db.query(ReceivableInvoice.folio_interno)
+                .filter(ReceivableInvoice.folio_interno.like(f"{serie}-%"))
+                .all()
+            )
+            for (f_int,) in registros:
+                if f_int and "-" in f_int:
+                    try:
+                        num = int(f_int.split("-")[1])
+                        if num > ult_folio:
+                            ult_folio = num
+                    except ValueError:
+                        pass
+
+            nuevo_folio = ult_folio + 1
             secuencia = SystemConfig(
                 key=config_key, value=str(nuevo_folio), grupo="folios", tipo="integer"
             )
@@ -413,6 +428,8 @@ class BillingService:
         else:
             nuevo_folio = int(secuencia.value) + 1
             secuencia.value = str(nuevo_folio)
+
+        self.db.flush()
         return nuevo_folio
 
     def _guardar_xml_disco(self, xml_bytes: bytes, uuid: str):
@@ -756,6 +773,21 @@ class BillingService:
             folio_forzado if folio_forzado else self._get_y_avanzar_folio(serie_final)
         )
         folio_interno = f"{serie_final}-{folio_final}"
+
+        # =========================================================================
+        # 🛡️ CERO RECICLAJE DE FOLIOS: REGLA ATÓMICA ABSOLUTA
+        # =========================================================================
+        factura_duplicada = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.folio_interno == folio_interno)
+            .first()
+        )
+        if factura_duplicada:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El folio {folio_interno} ya existe en el sistema. Prohibido repetir o reciclar folios.",
+            )
+        # =========================================================================
 
         desc_concepto_factura = (
             "FLETE NOMINAL" if is_nominal else "FLETE DE CARGA GENERAL"
@@ -2025,6 +2057,21 @@ class BillingService:
         serie = "F"
         folio_num = self._get_y_avanzar_folio(serie)
         folio_interno = f"{serie}-{folio_num}"
+
+        # =========================================================================
+        # 🛡️ CERO RECICLAJE DE FOLIOS: REGLA ATÓMICA ABSOLUTA
+        # =========================================================================
+        factura_duplicada = (
+            self.db.query(ReceivableInvoice)
+            .filter(ReceivableInvoice.folio_interno == folio_interno)
+            .first()
+        )
+        if factura_duplicada:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El folio {folio_interno} ya existe en el sistema. Prohibido repetir o reciclar folios.",
+            )
+        # =========================================================================
 
         subtotal = float(invoice_data.get("subtotal", 0) or 0)
         iva = float(invoice_data.get("iva", 0) or 0)

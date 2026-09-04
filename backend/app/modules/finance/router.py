@@ -507,6 +507,20 @@ def delete_receivable_invoice(
         if not invoice:
             raise HTTPException(status_code=404, detail="Factura no encontrada")
 
+        # =========================================================================
+        # 🛡️ CANDADO FISCAL: NO ELIMINAR FACTURAS VIVAS EN EL SAT
+        # =========================================================================
+        if invoice.uuid and str(invoice.status_sat).upper() in [
+            "TIMBRADO",
+            "TIMBRADA",
+            "VIGENTE",
+        ]:
+            raise HTTPException(
+                status_code=403,
+                detail="Bloqueo Fiscal: La factura se encuentra ACTIVA (Timbrada) ante el SAT. Debes ejecutar su cancelación fiscal oficial antes de eliminar el registro local.",
+            )
+        # =========================================================================
+
         if invoice.saldo_pendiente < invoice.monto_total:
             raise HTTPException(
                 status_code=400,

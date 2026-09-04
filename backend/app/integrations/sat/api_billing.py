@@ -385,12 +385,11 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     """
 
     verificar_doble_clic(f"real_trip_{trip_id}")
-    # 🟢 1. IMPRIMIR EL INICIO DEL PROCESO
     print("\n" + "=" * 50)
     print(f"📥 [STAMP REAL TRIGGER] PROCESANDO VIAJE ID: {trip_id}")
     print("=" * 50 + "\n")
 
-    service = BillingService(db)  # CORRECTO: Servicio Financiero
+    service = BillingService(db)
 
     from app.models.models import ReceivableInvoice
 
@@ -404,22 +403,14 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     uuid_relacionado = factura_vieja.uuid if factura_vieja else None
 
-    #   NUEVO: Extractor Inteligente de Folio para Reciclaje
-    folio_a_reciclar = None
-    if factura_vieja and factura_vieja.folio_interno:
-        try:
-            # Convierte "CP-13" a 13 entero
-            folio_a_reciclar = int(factura_vieja.folio_interno.split("-")[1])
-        except Exception as e:
-            logger.warning(
-                f"No se pudo extraer folio numérico de {factura_vieja.folio_interno}: {e}"
-            )
+    # ⚠️ ELIMINADO: La lógica que extraía 'folio_a_reciclar' fue removida
+    # para respetar la nueva regla de CERO RECICLAJE de la empresa.
 
     invoice_data = ReceivableInvoiceCreate(
         viaje_id=trip_id,
         is_nominal=False,
         uuid_relacionado=uuid_relacionado,
-        folio_forzado=folio_a_reciclar,  # <-- Inyectamos el folio rescatado
+        folio_forzado=None,  # <-- DEBE SER NONE PARA QUE EL MOTOR GENERE UNO NUEVO Y LIMPIO
     )
 
     try:
@@ -446,7 +437,6 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
         print("\n" + "🚨" * 20)
         print("💥 [STAMP REAL TRIGGER] ERROR INTERNO DETECTADO:")
         traceback.print_exc()

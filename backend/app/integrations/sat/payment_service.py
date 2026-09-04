@@ -223,6 +223,46 @@ class PaymentComplementService:
         with open(self.storage_dir / f"{uuid}.xml", "wb") as f:
             f.write(xml_bytes)
 
+    def _get_y_avanzar_folio(self, serie: str) -> int:
+        from app.models.models import SystemConfig, ReceivableInvoicePayment
+
+        config_key = f"folio_actual_{serie}"
+
+        secuencia = (
+            self.db.query(SystemConfig)
+            .filter(SystemConfig.key == config_key)
+            .with_for_update()
+            .first()
+        )
+
+        if not secuencia:
+            ult_folio = 2559
+            registros = (
+                self.db.query(ReceivableInvoicePayment.folio_complemento)
+                .filter(ReceivableInvoicePayment.folio_complemento.like(f"{serie}-%"))
+                .all()
+            )
+            for (f_comp,) in registros:
+                if f_comp and "-" in f_comp:
+                    try:
+                        num = int(f_comp.split("-")[1])
+                        if num > ult_folio:
+                            ult_folio = num
+                    except ValueError:
+                        pass
+
+            nuevo_folio = ult_folio + 1
+            secuencia = SystemConfig(
+                key=config_key, value=str(nuevo_folio), grupo="folios", tipo="integer"
+            )
+            self.db.add(secuencia)
+        else:
+            nuevo_folio = int(secuencia.value) + 1
+            secuencia.value = str(nuevo_folio)
+
+        self.db.flush()
+        return nuevo_folio
+
     def registrar_pago_y_timbrar_complemento(
         self,
         client_id,
@@ -452,10 +492,8 @@ class PaymentComplementService:
                 else ""
             )
 
-            # 1. Priorizamos la CLABE (Exactamente 18 dígitos)
             if len(clabe_limpia) == 18 and clabe_limpia.isdigit():
                 cuenta_benef = clabe_limpia
-            # 2. Si no hay CLABE, usamos la cuenta (Exactamente 10 dígitos)
             elif len(cta_limpia) == 10 and cta_limpia.isdigit():
                 cuenta_benef = cta_limpia
         # =========================================================================
@@ -473,26 +511,26 @@ class PaymentComplementService:
         )
 
         # =========================================================================
-        # NUEVA LÓGICA DE FOLIOS PERFECTOS: Buscar el último COM- y sumar 1
+        # 🛡️ CERO RECICLAJE DE FOLIOS: REGLA ATÓMICA ABSOLUTA (COM)
         # =========================================================================
-        ultimo_pago = (
+        folio_numero = self._get_y_avanzar_folio("COM")
+        folio_corto = str(folio_numero)
+        folio_complemento_final = f"COM-{folio_corto}"
+
+        # Validar si mágicamente ya existe en BD
+        pago_duplicado = (
             self.db.query(ReceivableInvoicePayment)
-            .filter(ReceivableInvoicePayment.folio_complemento.like("COM-%"))
-            .order_by(ReceivableInvoicePayment.id.desc())
+            .filter(
+                ReceivableInvoicePayment.folio_complemento == folio_complemento_final
+            )
             .first()
         )
 
-        if ultimo_pago and ultimo_pago.folio_complemento:
-            try:
-                # Extraemos el número, ej: "COM-2628" -> "2628" -> 2629
-                ultimo_folio_numero = int(
-                    ultimo_pago.folio_complemento.replace("COM-", "")
-                )
-                folio_corto = str(ultimo_folio_numero + 1)
-            except ValueError:
-                folio_corto = "2560"  # Fallback por si hay basura en la BD
-        else:
-            folio_corto = "2560"  # Número inicial base si la tabla es nueva
+        if pago_duplicado:
+            raise HTTPException(
+                status_code=409,
+                detail=f"El folio {folio_complemento_final} ya existe en el sistema. Prohibido repetir o reciclar folios.",
+            )
         # =========================================================================
 
         datos_pago = {
@@ -541,7 +579,7 @@ class PaymentComplementService:
                     cuenta_deposito=str(cuenta_deposito) if cuenta_deposito else "",
                     complemento_uuid=estatus_inicial_uuid,
                     folio_complemento=(
-                        f"COM-{folio_corto}" if generar_complemento else None
+                        folio_complemento_final if generar_complemento else None
                     ),
                     parcialidad=int(doc_rel["parcialidad"]),
                     saldo_anterior=float(doc_rel["saldo_anterior"]),
@@ -694,7 +732,7 @@ class PaymentComplementService:
 
             for p in pagos_pendientes:
                 p.complemento_uuid = str(complemento_uuid)
-                p.folio_complemento = f"COM-{folio_corto}"
+                p.folio_complemento = folio_complemento_final
                 p.comprobante_url = f"/api/sat/invoice/{complemento_uuid}/pdf"
                 self.db.add(p)
 
