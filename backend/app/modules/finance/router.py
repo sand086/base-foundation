@@ -2337,6 +2337,10 @@ def verify_receivable_invoice_sat_status(
         )
 
 
+import urllib.parse
+from lxml import etree
+
+
 class ChainCancelPayload(BaseModel):
     invoice_ids: List[int]
     correo_notificacion: str
@@ -2351,7 +2355,7 @@ class ChainCancelPayload(BaseModel):
 def chain_cancel_trip_invoices(
     payload: ChainCancelPayload,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(RequirePermission("sat:cancel_cfdi")),
+    current_user: models.User = Depends(RequirePermission("finance:cancel_invoice")),
 ):
     # 1. VALIDACIÓN DE SEGURIDAD HARDCODEADA
     SUPERVISORES_PERMITIDOS = [
@@ -2359,7 +2363,7 @@ def chain_cancel_trip_invoices(
         "trafico2@3t.com.mx",
         "gerencia@3t.com.mx",
     ]
-    CLAVE_AUTORIZACION = "Rapidos3TCancelar!"  # Clave maestra hardcodeada
+    CLAVE_AUTORIZACION = "Rapidos3TCancelar!"  # Clave maestra
 
     email_limpio = payload.supervisor_email.strip().lower()
 
@@ -2386,15 +2390,68 @@ def chain_cancel_trip_invoices(
         if not factura or not factura.uuid:
             continue
 
-        rfc_emisor = getattr(factura, "emisor_rfc", "RTX110624KP5")
-        rfc_receptor = factura.client.rfc if factura.client else "XAXX010101000"
+        # FIX 1: Extracción segura de RFCs (Evita valores None en la URL)
+        rfc_emisor = getattr(factura, "emisor_rfc", None) or "RTX110624KP5"
+        rfc_receptor = (
+            factura.client.rfc if factura.client else None
+        ) or "XAXX010101000"
         total_str = f"{float(factura.monto_total or 0):.2f}"
 
-        # TRUCO: Agregamos &fe=00000000 (8 ceros) para engañar al JS del SAT y forzar el autocompletado
-        link_verificacion = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={factura.uuid}&re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&fe=00000000"
+        # =========================================================================
+        # FIX 3: BÚSQUEDA INSENSIBLE A MAYÚSCULAS/MINÚSCULAS PARA EL SELLO (&fe=)
+        # =========================================================================
+        fe_param = "00000000"
+        xml_path = None
+        uuid_clean = factura.uuid.strip()
+
+        # Rutas candidatas a verificar en disco
+        candidatos_ruta = [
+            factura.xml_url,
+            os.path.join(
+                os.getcwd(),
+                "app",
+                "storage",
+                "xml_timbrados",
+                f"{uuid_clean.upper()}.xml",
+            ),
+            os.path.join(
+                os.getcwd(),
+                "app",
+                "storage",
+                "xml_timbrados",
+                f"{uuid_clean.lower()}.xml",
+            ),
+        ]
+
+        for ruta in candidatos_ruta:
+            if ruta and os.path.exists(ruta):
+                xml_path = ruta
+                break
+
+        # Parseo seguro con lxml
+        if xml_path:
+            try:
+                tree = etree.parse(xml_path)
+                root = tree.getroot()
+                sello = root.get("Sello")
+                if sello:
+                    ultimos_8 = sello[-8:]
+                    fe_param = urllib.parse.quote(ultimos_8)
+            except Exception as e:
+                logger.warning(
+                    f"No se pudo extraer el Sello del XML ID {factura.id}: {e}"
+                )
+
+        # LIGA OFICIAL SAT
+        link_verificacion = (
+            f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx"
+            f"?id={uuid_clean}&re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&fe={fe_param}"
+        )
+        # =========================================================================
+
         estatus_final = "ERROR"
 
-        # Lógica Inteligente de Motivo SAT
+        # Lógica Inteligente de Motivo SAT (01 vs 02)
         motivo_cancelacion = "02"
         uuid_sustituto_sat = None
 
@@ -2412,23 +2469,30 @@ def chain_cancel_trip_invoices(
             db.refresh(factura)
             estatus_final = factura.status_sat
 
-            # 2. REGISTRO EN AUDIT_LOGS
+            # Auditoría
             log_auditoria = models.AuditLog(
-                user_id=current_user.id,  # El usuario que hizo el clic
+                user_id=current_user.id,
                 accion="Autorización de Cancelación SAT",
                 tipo_accion="cancelar_cfdi",
                 modulo="ReceivableInvoice",
-                detalles=f"Cancelación autorizada por el supervisor: {email_limpio}. UUID Cancelado: {factura.uuid} con Motivo {motivo_cancelacion}",
+                detalles=(
+                    f"Cancelación autorizada por el supervisor: {email_limpio}. "
+                    f"UUID Cancelado: {factura.uuid} con Motivo {motivo_cancelacion}"
+                ),
             )
             db.add(log_auditoria)
             db.commit()
 
         except HTTPException as he:
+            # FIX 2: Rollback explícito para no contaminar la sesión si falla la transacción
+            db.rollback()
             if he.status_code == 202:
                 estatus_final = "EN PROCESO (SAT DEMORADO)"
             else:
                 estatus_final = f"RECHAZADO: {he.detail}"
         except Exception as e:
+            # FIX 2: Rollback explícito
+            db.rollback()
             estatus_final = "ERROR DE CONEXIÓN"
 
         resultados_correo.append(

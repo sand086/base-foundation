@@ -1148,14 +1148,20 @@ export function TripDetailsModal({
                                         Casetas
                                       </Label>
                                       {(() => {
+                                        const totalAnticiposCalculado =
+                                          (leg.anticipo_casetas || 0) +
+                                          (leg.anticipo_viaticos || 0) +
+                                          (leg.anticipo_combustible || 0) +
+                                          (leg.otros_anticipos || 0);
+
                                         const displayAnticipos =
                                           leg.leg_type === "entrega_vacio"
                                             ? Math.max(
                                                 0,
-                                                (leg.total_anticipos || 0) -
+                                                totalAnticiposCalculado -
                                                   (leg.anticipo_casetas || 0),
                                               )
-                                            : leg.total_anticipos || 0;
+                                            : totalAnticiposCalculado;
 
                                         return (
                                           <p
