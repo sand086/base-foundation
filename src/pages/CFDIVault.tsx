@@ -82,6 +82,11 @@ export default function CFDIVault() {
   const [payableDetailDrawerOpen, setPayableDetailDrawerOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
+  const [cancelAuthModalOpen, setCancelAuthModalOpen] = useState(false);
+  const [invoiceToCancel, setInvoiceToCancel] = useState<any>(null);
+  const [supervisorEmail, setSupervisorEmail] = useState("");
+  const [supervisorPassword, setSupervisorPassword] = useState("");
+
   // ESTADOS INTELIGENTES DE CONTROL: Jerarquía, Localizador por Parpadeo y Selección Masiva
   const [expandedParents, setExpandedParents] = useState<
     Record<number, boolean>
@@ -89,7 +94,7 @@ export default function CFDIVault() {
   const [blinkQuery, setBlinkQuery] = useState<string>("");
 
   // 🚀 NUEVOS ESTADOS PARA CANCELACIÓN MASIVA
-  const [selectedInvoices, setSelectedInvoices] = useState<any[]>([]);
+  // const [selectedInvoices, setSelectedInvoices] = useState<any[]>([]);
   const [isMassCanceling, setIsMassCanceling] = useState(false);
 
   const { records, isLoading, refetch } = useCfdiVault(activeTab);
@@ -261,73 +266,53 @@ export default function CFDIVault() {
     return folioTarget.includes(query) || uuidTarget.includes(query);
   };
 
-  // 🚀 FUNCIÓN DE CANCELACIÓN MASIVA ACTUALIZADA
-  const handleMassCancel = async () => {
-    if (
-      !window.confirm(
-        `¿Seguro que deseas cancelar ${selectedInvoices.length} documentos?`,
-      )
-    )
+  const handleSingleCancel = async () => {
+    if (!supervisorEmail || !supervisorPassword) {
+      toast.error("El correo y contraseña del supervisor son obligatorios.");
       return;
+    }
 
     setIsMassCanceling(true);
     const toastId = toast.loading(
-      `Procesando cancelación de ${selectedInvoices.length} documentos...`,
+      "Verificando autorización y cancelando en el SAT...",
     );
 
     try {
-      if (activeTab === "PAGO_CLIENTE") {
-        const paymentIds = selectedInvoices.map((inv) => inv.id);
-        await axiosClient.post("/api/finance/receivables/payments/cancel", {
-          payment_ids: paymentIds,
-          motivo: "02", // Cancelación con error, no relacionado
-        });
-        toast.success("Pagos cancelados correctamente y saldo restaurado.", {
-          id: toastId,
-        });
-      } else {
-        // ========================================================
-        // 🚀 NUEVA LÓGICA: ENVIAR ARREGLO DE IDs AL ENDPOINT MASIVO
-        // ========================================================
-        const invoiceIds = selectedInvoices.map((inv) => inv.id);
-
-        // ⚠️ IMPORTANTE: Verifica que este endpoint coincida con cómo
-        // tienes montado el router del SAT en tu main.py
-        // (Suele ser /api/sat/stamp/cancel-mass)
-        const response = await axiosClient.post(`/api/sat/stamp/cancel-mass`, {
-          invoice_ids: invoiceIds,
-          motivo: "02",
-        });
-
-        // Desestructuramos la respuesta del backend
-        const { data } = response.data;
-        const criticalErrors = data.filter((r: any) => r.status === "error");
-        const queued = data.filter((r: any) => r.status === "queued");
-        const success = data.filter((r: any) => r.status === "success");
-
-        if (criticalErrors.length === 0) {
-          toast.success(
-            `Proceso exitoso: ${success.length} canceladas. ${queued.length > 0 ? `(${queued.length} en cola de reintentos por lentitud del SAT)` : ""}`,
-            { id: toastId, duration: 6000 },
-          );
-        } else {
-          toast.warning(
-            `Se enviaron a cancelar, pero hubo ${criticalErrors.length} errores críticos. Revisa la consola o los detalles.`,
-            { id: toastId, duration: 6000 },
-          );
-          console.error("Detalle de errores en cancelación:", criticalErrors);
-        }
-      }
-    } catch (err) {
-      console.error("Error general:", err);
-      toast.error(
-        "Ocurrió un error general de conexión al intentar cancelar.",
+      const response = await axiosClient.post(
+        `/api/finance/stamp/chain-cancel-trip`,
         {
-          id: toastId,
+          invoice_ids: [invoiceToCancel.id],
+          correo_notificacion: "desarrolloSoft@asicomsystems.com.mx", // O puedes pedirlo en el modal
+          supervisor_email: supervisorEmail,
+          supervisor_password: supervisorPassword,
+          motivo: "02",
         },
       );
+
+      const { data } = response.data;
+      const error = data.find(
+        (r: any) =>
+          r.estatus.includes("ERROR") || r.estatus.includes("RECHAZADO"),
+      );
+
+      if (!error) {
+        toast.success("Factura cancelada y verificada exitosamente.", {
+          id: toastId,
+        });
+        setCancelAuthModalOpen(false);
+        setSupervisorEmail("");
+        setSupervisorPassword("");
+      } else {
+        toast.error(`SAT Rechazó la cancelación: ${error.estatus}`, {
+          id: toastId,
+        });
+      }
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.detail || "Error de autorización o conexión.",
+        { id: toastId },
+      );
     } finally {
-      setSelectedInvoices([]);
       setIsMassCanceling(false);
       if (refetch) refetch();
     }
@@ -470,7 +455,7 @@ export default function CFDIVault() {
       )}
 
       {/* 🚀 BOTÓN DINÁMICO DE CANCELACIÓN MASIVA */}
-      {selectedInvoices.length > 0 && (
+      {/*       {selectedInvoices.length > 0 && (
         <Button
           variant="destructive"
           onClick={handleMassCancel}
@@ -485,7 +470,7 @@ export default function CFDIVault() {
           Cancelar {selectedInvoices.length}{" "}
           {selectedInvoices.length === 1 ? "Seleccionada" : "Seleccionadas"}
         </Button>
-      )}
+      )} */}
     </>
   );
 
@@ -966,6 +951,18 @@ export default function CFDIVault() {
                       </DropdownMenuItem>
                     </>
                   )}
+
+                <DropdownMenuSeparator className="my-1 opacity-50" />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setInvoiceToCancel(row);
+                    setCancelAuthModalOpen(true);
+                  }}
+                  className="gap-2 font-bold text-xs cursor-pointer text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-900/30 rounded-md"
+                >
+                  <Trash2 className="h-4 w-4" /> Cancelar CFDI (Requiere
+                  Autorización)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -1012,7 +1009,7 @@ export default function CFDIVault() {
               setActiveTab(val);
               setExpandedParents({});
               // 🚀 LIMPIAMOS LA SELECCIÓN AL CAMBIAR DE PESTAÑA
-              setSelectedInvoices([]);
+              setSelectedInvoice([]);
             }}
             className="w-full"
           >
@@ -1027,7 +1024,7 @@ export default function CFDIVault() {
         </CardHeader>
 
         <CardContent>
-          <EnhancedDataTable
+          {/*    <EnhancedDataTable
             data={hierarchicalRecords}
             columns={columns}
             isLoading={isLoading}
@@ -1046,6 +1043,18 @@ export default function CFDIVault() {
               row.status_sat !== "CANCELADO" &&
               row.status_sat !== "PROCESO_CANCELACION"
             }
+          /> */}
+
+          <EnhancedDataTable
+            data={hierarchicalRecords}
+            columns={columns}
+            isLoading={isLoading}
+            searchPlaceholder="Buscar por uuid, folio..."
+            exportFileName={excelExportName}
+            customFilters={customFiltersUI}
+            onGlobalSearchChange={(value) => setBlinkQuery(value)}
+            enableRowSelection={false}
+            rowKey="id"
           />
         </CardContent>
       </Card>
@@ -1160,6 +1169,74 @@ export default function CFDIVault() {
         }}
         invoice={selectedInvoice}
       />
+
+      {/* 🚀 MODAL DE AUTORIZACIÓN DE CANCELACIÓN */}
+      {cancelAuthModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3 mb-4 text-red-600">
+              <AlertTriangle className="w-6 h-6" />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                Autorización Requerida
+              </h2>
+            </div>
+            <p className="text-sm text-slate-500 mb-6">
+              Estás a punto de cancelar el folio{" "}
+              <b>{invoiceToCancel?.folio_interno || invoiceToCancel?.uuid}</b>.
+              Ingresa credenciales gerenciales para aprobar la cancelación ante
+              el SAT.
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Correo del Supervisor
+                </label>
+                <input
+                  type="email"
+                  value={supervisorEmail}
+                  onChange={(e) => setSupervisorEmail(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="gerencia@3t.com.mx"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Contraseña de Aprobación
+                </label>
+                <input
+                  type="password"
+                  value={supervisorPassword}
+                  onChange={(e) => setSupervisorPassword(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-slate-300 dark:border-slate-700 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => setCancelAuthModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleSingleCancel}
+                disabled={isMassCanceling}
+              >
+                {isMassCanceling ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4 mr-2" />
+                )}
+                Autorizar y Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
