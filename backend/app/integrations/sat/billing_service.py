@@ -395,11 +395,17 @@ class BillingService:
 
     def _get_y_avanzar_folio(self, serie: str) -> int:
         from app.models.models import SystemConfig, ReceivableInvoice
+        from sqlalchemy.orm import (
+            noload,
+        )  # <-- IMPORTANTE: Remueve el LEFT JOIN de auditoría
 
         config_key = f"folio_actual_{serie}"
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
+            .options(
+                noload("*")
+            )  # <-- FIX: Permite el bloqueo FOR UPDATE en PostgreSQL
             .with_for_update()
             .first()
         )
