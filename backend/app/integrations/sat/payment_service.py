@@ -225,12 +225,18 @@ class PaymentComplementService:
 
     def _get_y_avanzar_folio(self, serie: str) -> int:
         from app.models.models import SystemConfig, ReceivableInvoicePayment
+        from sqlalchemy.orm import (
+            noload,
+        )  # <-- IMPORTANTE: Remueve el LEFT JOIN con users
 
         config_key = f"folio_actual_{serie}"
 
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
+            .options(
+                noload("*")
+            )  # <-- FIX: Evita la unión con usuarios auditores en el FOR UPDATE
             .with_for_update()
             .first()
         )
