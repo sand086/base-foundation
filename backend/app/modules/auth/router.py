@@ -596,9 +596,7 @@ def update_user(
     user_id: int,
     payload: schemas.UserUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(
-        get_current_active_user
-    ),  # <--- AUDITORÍA PARAM
+    current_user: models.User = Depends(get_current_active_user),
 ):
     if payload.email:
         existing = crud.get_user_by_email(db, payload.email)
@@ -610,11 +608,21 @@ def update_user(
         if not role:
             raise HTTPException(status_code=404, detail="Rol no encontrado")
 
-    user = crud.update_user(db, user_id, payload, current_user.id)  # <--- AUDITORÍA
+    user = crud.update_user(db, user_id, payload, current_user.id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    # Desencriptar tras actualizar
+    # =========================================================================
+    # 🛠️ FIX: Si la petición incluye una nueva contraseña, actualizar password_hash
+    # =========================================================================
+    if hasattr(payload, "password") and payload.password:
+        user.password_hash = security.get_password_hash(payload.password)
+        user.updated_by_id = current_user.id
+        db.commit()
+        db.refresh(user)
+    # =========================================================================
+
+    # Desencriptar tras actualizar para la respuesta del frontend
     user.password = security.decrypt_password(user.password_hash)
     return user
 

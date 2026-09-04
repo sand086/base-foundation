@@ -75,7 +75,7 @@ def create_user(
 
 def update_user(
     db: Session, user_id: int, payload: schemas.UserUpdate, current_user_id: int
-):  # <--- AUDITORÍA PARAM
+):
     user = (
         db.query(models.User)
         .filter(
@@ -87,9 +87,10 @@ def update_user(
     if not user:
         return None
 
+    # Extraer diccionario respetando campos enviados
     data = payload.model_dump(exclude_unset=True)
 
-    # bloquear auditoría / record_status (se controla por delete)
+    # Bloquear campos de sistema/auditoría
     for k in (
         "created_at",
         "updated_at",
@@ -99,18 +100,21 @@ def update_user(
     ):
         data.pop(k, None)
 
-    # Si el JSON incluye "password", lo extraemos, lo encriptamos y lo pasamos al campo real
+    # Detectar y procesar cambio de contraseña
     if "password" in data:
         raw_password = data.pop("password")
-        # Validamos que no venga vacío
-        if raw_password:
-            data["password_hash"] = get_password_hash(raw_password)
+        if raw_password and str(raw_password).strip():
+            # Genera el hash/encriptación correspondiente
+            user.password_hash = get_password_hash(raw_password.strip())
+            print(
+                f"🔑 [AUDITORÍA] Contraseña de usuario ID {user_id} actualizada exitosamente."
+            )
 
-    # Ahora sí, guardamos todos los datos (incluyendo el hash si se cambió la clave)
+    # Asignar resto de campos dinámicamente
     for k, v in data.items():
         setattr(user, k, v)
 
-    user.updated_by_id = current_user_id  # <--- AUDITORÍA
+    user.updated_by_id = current_user_id
 
     db.add(user)
     db.commit()
