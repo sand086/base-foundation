@@ -2390,7 +2390,8 @@ def chain_cancel_trip_invoices(
         rfc_receptor = factura.client.rfc if factura.client else "XAXX010101000"
         total_str = f"{float(factura.monto_total or 0):.2f}"
 
-        link_verificacion = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={factura.uuid}&re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}"
+        # TRUCO: Agregamos &fe=00000000 (8 ceros) para engañar al JS del SAT y forzar el autocompletado
+        link_verificacion = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={factura.uuid}&re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&fe=00000000"
         estatus_final = "ERROR"
 
         # Lógica Inteligente de Motivo SAT
