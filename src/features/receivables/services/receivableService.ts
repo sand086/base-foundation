@@ -32,6 +32,10 @@ export const receivableService = {
       referencia: paymentData.referencia || "",
       cuenta_deposito:
         paymentData.cuentaDestino || paymentData.cuenta_deposito || "Banco",
+      banco_ordenante: paymentData.banco_ordenante || "",
+      cuenta_ordenante: paymentData.cuenta_ordenante || "",
+      generar_complemento: paymentData.generar_complemento,
+      idempotency_key: paymentData.idempotency_key,
     };
 
     return await FinanceService.registerReceivablePaymentApiFinanceReceivablesInvoiceIdPaymentsPost(
