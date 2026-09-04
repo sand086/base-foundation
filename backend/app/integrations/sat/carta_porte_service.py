@@ -381,11 +381,17 @@ class CartaPorteService:
 
     def _get_y_avanzar_folio(self, serie: str) -> int:
         from app.models.models import SystemConfig, ReceivableInvoice
+        from sqlalchemy.orm import (
+            noload,
+        )  # <-- Agregado para eliminar el LEFT JOIN de auditoría
 
         config_key = f"folio_actual_{serie}"
         secuencia = (
             self.db.query(SystemConfig)
             .filter(SystemConfig.key == config_key)
+            .options(
+                noload("*")
+            )  # <-- FIX: Evita que SQLAlchemy haga el LEFT JOIN con users
             .with_for_update()
             .first()
         )
