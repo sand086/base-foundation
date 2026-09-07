@@ -226,6 +226,82 @@ class EmailService:
             logger.error(f"Error crítico en EmailService: {str(e)}")
             return False
 
+    def send_cancellation_report(self, correo_destino: str, facturas_data: list):
+        """
+        Envía un reporte tabular con el resultado de la cancelación y links al SAT.
+        facturas_data: Lista de dicts con las llaves 'folio', 'uuid', 'estatus', 'link_sat'
+        """
+        if not correo_destino or not facturas_data:
+            logger.warning("Faltan datos o correo para el reporte de cancelación.")
+            return False
+
+        msg = MIMEMultipart("alternative")
+        msg["From"] = f"Rápidos 3T | Auditoría <{self.from_email}>"
+        msg["To"] = correo_destino
+        msg["Subject"] = "Rápidos 3T - Reporte de Cancelación de Viaje"
+
+        # Construcción dinámica de las filas de la tabla
+        filas_html = ""
+        for fac in facturas_data:
+            color_estatus = (
+                "#16a34a" if "CANCELADO" in fac["estatus"].upper() else "#ca8a04"
+            )
+            filas_html += f"""
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">{fac['folio']}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">{fac['uuid']}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; color: {color_estatus}; font-weight: bold;">{fac['estatus']}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e2e8f0;">
+                    <a href="{fac['link_sat']}" target="_blank" style="color: #2563eb; text-decoration: none;">Validar en SAT</a>
+                </td>
+            </tr>
+            """
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: 'Segoe UI', sans-serif; background-color: #f8fafc; padding: 20px;">
+            <div style="max-width: 700px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
+                <div style="background-color: #0f172a; padding: 20px; text-align: center; color: #ffffff;">
+                    <h2 style="margin: 0; letter-spacing: 1px;">REPORTE DE CANCELACIÓN</h2>
+                </div>
+                <div style="padding: 20px;">
+                    <p style="color: #475569;">Se ha procesado la cancelación de las siguientes facturas asociadas al viaje. Haz clic en el enlace para verificar el acuse en el portal de Hacienda.</p>
+                    <table style="width: 100%; border-collapse: collapse; text-align: left; margin-top: 20px;">
+                        <thead>
+                            <tr style="background-color: #f1f5f9; color: #475569; font-size: 12px; text-transform: uppercase;">
+                                <th style="padding: 10px;">Folio</th>
+                                <th style="padding: 10px;">UUID</th>
+                                <th style="padding: 10px;">Estatus Local/SAT</th>
+                                <th style="padding: 10px;">Validación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filas_html}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(html_content, "html"))
+
+        try:
+            server = smtplib.SMTP(self.smtp_host, self.smtp_port)
+            server.starttls()
+            server.login(self.smtp_user, self.smtp_pass)
+            server.send_message(
+                msg, from_addr=self.from_email, to_addrs=[correo_destino]
+            )
+            server.quit()
+            logger.info("Reporte de cancelación masiva enviado exitosamente.")
+            return True
+        except Exception as e:
+            logger.error(f"Error enviando correo de cancelación masiva: {str(e)}")
+            return False
+
     def send_cfdi_email(
         self,
         correo_cliente: str,
@@ -234,22 +310,26 @@ class EmailService:
         uuid: str,
         xml_path: str,
         pdf_path: str,
-        tipo_documento: str = "Complemento de Pago"
+        tipo_documento: str = "Complemento de Pago",
     ):
         """
         Envía Facturas o Complementos de Pago al cliente con sus adjuntos (XML y PDF).
         CANDADO CRÍTICO INTERCEPTOR: Desvía el correo del cliente a desarrollo interno.
         """
         if not uuid or uuid == "PENDIENTE_SAT":
-            logger.warning(f"Abortando envío: El documento {folio_interno} no tiene un UUID válido.")
+            logger.warning(
+                f"Abortando envío: El documento {folio_interno} no tiene un UUID válido."
+            )
             return False
 
         # =========================================================================
         #  CANDADO BÓVEDA: VERIFICACIÓN DE UUID YA ENVIADO
         # =========================================================================
-        base_path = Path(os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[3]))
+        base_path = Path(
+            os.getenv("APP_BASE_PATH", Path(__file__).resolve().parents[3])
+        )
         lock_file = base_path / "storage" / "correos_enviados_uuid.log"
-        
+
         # Asegurar que el directorio exista
         os.makedirs(os.path.dirname(lock_file), exist_ok=True)
 
@@ -262,14 +342,18 @@ class EmailService:
                             f"🛡️ CANDADO ACTIVO: El UUID {uuid} ({folio_interno}) ya fue enviado anteriormente. "
                             "Abortando envío duplicado silenciosamente."
                         )
-                        return True  # Finge éxito para no romper el flujo de la aplicación
+                        return (
+                            True  # Finge éxito para no romper el flujo de la aplicación
+                        )
         except Exception as e:
             logger.error(f"Error al verificar el candado de correos: {e}")
 
         # =========================================================================
         #  CANDADO DESVÍO DE SEGURIDAD (CLIENTE BLOQUEADO 100% PARA FACTURAS/PAGOS)
         # =========================================================================
-        logger.info(f"🛡️ DESVÍO ACTIVO: Bloqueando envío de {tipo_documento} destinado a {correo_cliente}. Redireccionando a desarrollo.")
+        logger.info(
+            f"🛡️ DESVÍO ACTIVO: Bloqueando envío de {tipo_documento} destinado a {correo_cliente}. Redireccionando a desarrollo."
+        )
         correo_cliente = "desarrolloSoft@asicomsystems.com.mx"
 
         # =========================================================================
@@ -278,7 +362,9 @@ class EmailService:
         msg = MIMEMultipart("mixed")
         msg["From"] = f"Rápidos 3T | Facturación <{self.from_email}>"
         msg["To"] = correo_cliente
-        msg["Subject"] = f"Rápidos 3T [AUDITORÍA INTERNA] - {tipo_documento} {folio_interno} generado"
+        msg["Subject"] = (
+            f"Rápidos 3T [AUDITORÍA INTERNA] - {tipo_documento} {folio_interno} generado"
+        )
 
         # Cuerpo del correo
         html_content = f"""
@@ -309,7 +395,7 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         body = MIMEMultipart("alternative")
         body.attach(MIMEText(html_content, "html"))
         msg.attach(body)
@@ -318,16 +404,24 @@ class EmailService:
         if os.path.exists(xml_path):
             with open(xml_path, "rb") as f:
                 xml_attachment = MIMEApplication(f.read(), _subtype="xml")
-                xml_attachment.add_header("Content-Disposition", "attachment", filename=os.path.basename(xml_path))
+                xml_attachment.add_header(
+                    "Content-Disposition",
+                    "attachment",
+                    filename=os.path.basename(xml_path),
+                )
                 msg.attach(xml_attachment)
         else:
             logger.warning(f"No se encontró el archivo XML en la ruta: {xml_path}")
-        
+
         # Adjuntar PDF de forma segura
         if os.path.exists(pdf_path):
             with open(pdf_path, "rb") as f:
                 pdf_attachment = MIMEApplication(f.read(), _subtype="pdf")
-                pdf_attachment.add_header("Content-Disposition", "attachment", filename=os.path.basename(pdf_path))
+                pdf_attachment.add_header(
+                    "Content-Disposition",
+                    "attachment",
+                    filename=os.path.basename(pdf_path),
+                )
                 msg.attach(pdf_attachment)
         else:
             logger.warning(f"No se encontró el archivo PDF en la ruta: {pdf_path}")
@@ -337,16 +431,22 @@ class EmailService:
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
             server.starttls()
             server.login(self.smtp_user, self.smtp_pass)
-            server.send_message(msg, from_addr=self.from_email, to_addrs=[correo_cliente])
+            server.send_message(
+                msg, from_addr=self.from_email, to_addrs=[correo_cliente]
+            )
             server.quit()
-            
+
             try:
                 with open(lock_file, "a") as f:
                     f.write(f"{uuid}\n")
             except Exception as file_e:
-                logger.error(f"Fallo al escribir en el log de correos enviados: {file_e}")
+                logger.error(
+                    f"Fallo al escribir en el log de correos enviados: {file_e}"
+                )
 
-            logger.info(f"✅ CFDI desviado a desarrollo exitosamente. Cliente protegido. (UUID: {uuid})")
+            logger.info(
+                f"✅ CFDI desviado a desarrollo exitosamente. Cliente protegido. (UUID: {uuid})"
+            )
             return True
         except Exception as e:
             logger.error(f"❌ Error enviando correo de CFDI: {str(e)}")

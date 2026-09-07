@@ -386,12 +386,11 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     """
 
     verificar_doble_clic(f"real_trip_{trip_id}")
-    # 🟢 1. IMPRIMIR EL INICIO DEL PROCESO
     print("\n" + "=" * 50)
     print(f"📥 [STAMP REAL TRIGGER] PROCESANDO VIAJE ID: {trip_id}")
     print("=" * 50 + "\n")
 
-    service = BillingService(db)  # CORRECTO: Servicio Financiero
+    service = BillingService(db)
 
     from app.models.models import ReceivableInvoice
 
@@ -405,22 +404,14 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
 
     uuid_relacionado = factura_vieja.uuid if factura_vieja else None
 
-    #   NUEVO: Extractor Inteligente de Folio para Reciclaje
-    folio_a_reciclar = None
-    if factura_vieja and factura_vieja.folio_interno:
-        try:
-            # Convierte "CP-13" a 13 entero
-            folio_a_reciclar = int(factura_vieja.folio_interno.split("-")[1])
-        except Exception as e:
-            logger.warning(
-                f"No se pudo extraer folio numérico de {factura_vieja.folio_interno}: {e}"
-            )
+    # ⚠️ ELIMINADO: La lógica que extraía 'folio_a_reciclar' fue removida
+    # para respetar la nueva regla de CERO RECICLAJE de la empresa.
 
     invoice_data = ReceivableInvoiceCreate(
         viaje_id=trip_id,
         is_nominal=False,
         uuid_relacionado=uuid_relacionado,
-        folio_forzado=folio_a_reciclar,  # <-- Inyectamos el folio rescatado
+        folio_forzado=None,  # <-- DEBE SER NONE PARA QUE EL MOTOR GENERE UNO NUEVO Y LIMPIO
     )
 
     try:
@@ -447,7 +438,6 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
-        # 🔴 2. IMPRIMIR EL ERROR EXACTO CON LÍNEA DE CÓDIGO
         print("\n" + "🚨" * 20)
         print("💥 [STAMP REAL TRIGGER] ERROR INTERNO DETECTADO:")
         traceback.print_exc()
@@ -484,7 +474,10 @@ def generar_factura_final(
 
             factura_vieja = (
                 db.query(ReceivableInvoice)
-                .filter(ReceivableInvoice.uuid == invoice_data.uuid_relacionado)
+                .filter(
+                    ReceivableInvoice.uuid == invoice_data.uuid_relacionado,
+                    ReceivableInvoice.is_nominal == True,
+                )
                 .first()
             )
             if factura_vieja:
@@ -857,66 +850,6 @@ def get_sat_retry_queue(
 def process_sat_retry_queue(limit: int = 10, db: Session = Depends(get_db)):
     service = BillingService(db)
     return service.procesar_sat_retry_queue(limit=limit)
-
-
-# ==============================================================
-# NUEVO: ENDPOINT PARA CANCELACIÓN MASIVA (1 o N FACTURAS)
-# ==============================================================
-class SatMassCancelPayload(BaseModel):
-    invoice_ids: List[int]
-    motivo: str = "02"
-    uuid_sustituto: Optional[str] = None
-
-
-@router.post("/stamp/cancel-mass", response_model=dict)
-def cancel_mass_invoices_in_sat(
-    payload: SatMassCancelPayload,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(RequirePermission("sat:cancel_cfdi")),
-):
-    """
-    Endpoint para CANCELAR 1 o N facturas en el SAT.
-    Delega al servicio inteligente. Si el PAC falla (Timeout/500),
-    el servicio lo manda automáticamente al SatRetryQueue.
-    """
-    service = BillingService(db)
-    resultados = []
-    errores = 0
-
-    for inv_id in payload.invoice_ids:
-        try:
-            # Reutilizamos tu método maestro de cancelación
-            res = service.cancelar_factura_sat(
-                invoice_id=inv_id,
-                motivo=payload.motivo,
-                uuid_sustituto=payload.uuid_sustituto,
-            )
-            resultados.append({"id": inv_id, "status": "success", "detalle": res})
-
-        except HTTPException as he:
-            # Si tu servicio lanza un 202, significa que ya lo metió al RetryQueue
-            if he.status_code == 202:
-                resultados.append(
-                    {"id": inv_id, "status": "queued", "detalle": he.detail}
-                )
-            else:
-                errores += 1
-                resultados.append(
-                    {"id": inv_id, "status": "error", "detalle": he.detail}
-                )
-
-        except Exception as e:
-            errores += 1
-            custom_error = parse_sat_error(e)
-            resultados.append(
-                {"id": inv_id, "status": "error", "detalle": custom_error}
-            )
-
-    return {
-        "status": "success" if errores == 0 else "partial",
-        "message": f"Proceso finalizado. Fallos críticos: {errores}",
-        "data": resultados,
-    }
 
 
 @router.post("/stamp/payment", summary="Generar Complemento de Pago")

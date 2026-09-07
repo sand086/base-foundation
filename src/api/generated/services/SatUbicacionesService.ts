@@ -281,13 +281,22 @@ export class SatUbicacionesService {
     }
     /**
      * Get Location Codes
+     * @param search
      * @returns SatPostalCodeResponse Successful Response
      * @throws ApiError
      */
-    public static getLocationCodesApiSatSatLocationCodesGet(): CancelablePromise<Array<SatPostalCodeResponse>> {
+    public static getLocationCodesApiSatSatLocationCodesGet(
+        search: string = '',
+    ): CancelablePromise<Array<SatPostalCodeResponse>> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/sat/sat-location-codes',
+            query: {
+                'search': search,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

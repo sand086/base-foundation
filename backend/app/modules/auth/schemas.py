@@ -254,6 +254,7 @@ class UserUpdate(BaseModel):
     preferencias: Optional[Dict[str, Any]] = None
     is_2fa_enabled: Optional[bool] = None
     last_login: Optional[datetime] = None
+    password: Optional[str] = None
 
     model_config = ConfigDict(extra="ignore")
 

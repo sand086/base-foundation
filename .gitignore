@@ -113,4 +113,5 @@ docker/
 # ARCHIVOS OCULTOS
 # =========================
 .*
-!.gitignore
+!.gitignore*.csv
+*.txt

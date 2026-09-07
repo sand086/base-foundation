@@ -14,5 +14,6 @@ export type UserUpdate = {
     preferencias?: (Record<string, any> | null);
     is_2fa_enabled?: (boolean | null);
     last_login?: (string | null);
+    password?: (string | null);
 };
 

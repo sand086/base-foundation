@@ -42,6 +42,7 @@ export type { CancelPaymentsPayload } from './models/CancelPaymentsPayload';
 export type { CFDIActivityTimeline } from './models/CFDIActivityTimeline';
 export type { CFDIHistoryRecord } from './models/CFDIHistoryRecord';
 export type { CFDIHistoryResponse } from './models/CFDIHistoryResponse';
+export type { ChainCancelPayload } from './models/ChainCancelPayload';
 export type { ClientCreate } from './models/ClientCreate';
 export type { ClientLite } from './models/ClientLite';
 export type { ClientResponse } from './models/ClientResponse';
@@ -133,7 +134,6 @@ export type { SatHazardousMaterialCreate } from './models/SatHazardousMaterialCr
 export type { SatHazardousMaterialResponse } from './models/SatHazardousMaterialResponse';
 export type { SatLocationCreate } from './models/SatLocationCreate';
 export type { SatLocationResponse } from './models/SatLocationResponse';
-export type { SatMassCancelPayload } from './models/SatMassCancelPayload';
 export type { SatNeighborhoodCreate } from './models/SatNeighborhoodCreate';
 export type { SatNeighborhoodResponse } from './models/SatNeighborhoodResponse';
 export type { SatPermitTypeCreate } from './models/SatPermitTypeCreate';

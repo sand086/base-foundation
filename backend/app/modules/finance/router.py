@@ -507,6 +507,20 @@ def delete_receivable_invoice(
         if not invoice:
             raise HTTPException(status_code=404, detail="Factura no encontrada")
 
+        # =========================================================================
+        # 🛡️ CANDADO FISCAL: NO ELIMINAR FACTURAS VIVAS EN EL SAT
+        # =========================================================================
+        if invoice.uuid and str(invoice.status_sat).upper() in [
+            "TIMBRADO",
+            "TIMBRADA",
+            "VIGENTE",
+        ]:
+            raise HTTPException(
+                status_code=403,
+                detail="Bloqueo Fiscal: La factura se encuentra ACTIVA (Timbrada) ante el SAT. Debes ejecutar su cancelación fiscal oficial antes de eliminar el registro local.",
+            )
+        # =========================================================================
+
         if invoice.saldo_pendiente < invoice.monto_total:
             raise HTTPException(
                 status_code=400,
@@ -2351,6 +2365,189 @@ def verify_receivable_invoice_sat_status(
             status_code=500,
             detail=f"Fallo la conexión o el parseo del WebService del SAT: {str(e)}",
         )
+
+
+import urllib.parse
+from lxml import etree
+
+
+class ChainCancelPayload(BaseModel):
+    invoice_ids: List[int]
+    correo_notificacion: str
+    supervisor_email: str
+    supervisor_password: str
+    motivo: str = "02"
+
+
+@router.post(
+    "/stamp/chain-cancel-trip", summary="Cancela, verifica en SAT y notifica por correo"
+)
+def chain_cancel_trip_invoices(
+    payload: ChainCancelPayload,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(RequirePermission("finance:cancel_invoice")),
+):
+    # 1. VALIDACIÓN DE SEGURIDAD HARDCODEADA
+    SUPERVISORES_PERMITIDOS = [
+        "desarrollosoft@asicomsystems.com.mx",
+        "trafico2@3t.com.mx",
+        "gerencia@3t.com.mx",
+        "contabilidad@3t.com.mx",
+        "Jmartinez@3t.com.mx",
+    ]
+    CLAVE_AUTORIZACION = "Rapidos3TCancelar!"  # Clave maestra
+
+    email_limpio = payload.supervisor_email.strip().lower()
+
+    if email_limpio not in SUPERVISORES_PERMITIDOS:
+        raise HTTPException(
+            status_code=403, detail="Usuario no autorizado para aprobar cancelaciones."
+        )
+
+    if payload.supervisor_password != CLAVE_AUTORIZACION:
+        raise HTTPException(
+            status_code=401, detail="Contraseña de autorización incorrecta."
+        )
+
+    from app.integrations.sat.billing_service import BillingService
+    from app.integrations.email.email_service import EmailService
+
+    sat_service = BillingService(db)
+    email_service = EmailService(db)
+
+    resultados_correo = []
+
+    for inv_id in payload.invoice_ids:
+        factura = db.query(models.ReceivableInvoice).filter_by(id=inv_id).first()
+        if not factura or not factura.uuid:
+            continue
+
+        # FIX 1: Extracción segura de RFCs (Evita valores None en la URL)
+        rfc_emisor = getattr(factura, "emisor_rfc", None) or "RTX110624KP5"
+        rfc_receptor = (
+            factura.client.rfc if factura.client else None
+        ) or "XAXX010101000"
+        total_str = f"{float(factura.monto_total or 0):.2f}"
+
+        # =========================================================================
+        # FIX 3: BÚSQUEDA INSENSIBLE A MAYÚSCULAS/MINÚSCULAS PARA EL SELLO (&fe=)
+        # =========================================================================
+        fe_param = "00000000"
+        xml_path = None
+        uuid_clean = factura.uuid.strip()
+
+        # Rutas candidatas a verificar en disco
+        candidatos_ruta = [
+            factura.xml_url,
+            os.path.join(
+                os.getcwd(),
+                "app",
+                "storage",
+                "xml_timbrados",
+                f"{uuid_clean.upper()}.xml",
+            ),
+            os.path.join(
+                os.getcwd(),
+                "app",
+                "storage",
+                "xml_timbrados",
+                f"{uuid_clean.lower()}.xml",
+            ),
+        ]
+
+        for ruta in candidatos_ruta:
+            if ruta and os.path.exists(ruta):
+                xml_path = ruta
+                break
+
+        # Parseo seguro con lxml
+        if xml_path:
+            try:
+                tree = etree.parse(xml_path)
+                root = tree.getroot()
+                sello = root.get("Sello")
+                if sello:
+                    ultimos_8 = sello[-8:]
+                    fe_param = urllib.parse.quote(ultimos_8)
+            except Exception as e:
+                logger.warning(
+                    f"No se pudo extraer el Sello del XML ID {factura.id}: {e}"
+                )
+
+        # LIGA OFICIAL SAT
+        link_verificacion = (
+            f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx"
+            f"?id={uuid_clean}&re={rfc_emisor}&rr={rfc_receptor}&tt={total_str}&fe={fe_param}"
+        )
+        # =========================================================================
+
+        estatus_final = "ERROR"
+
+        # Lógica Inteligente de Motivo SAT (01 vs 02)
+        motivo_cancelacion = "02"
+        uuid_sustituto_sat = None
+
+        if factura.is_nominal and factura.uuid_relacionado:
+            motivo_cancelacion = "01"
+            uuid_sustituto_sat = factura.uuid_relacionado
+
+        try:
+            # Ejecutar Cancelación al PAC
+            sat_service.cancelar_factura_sat(
+                invoice_id=inv_id,
+                motivo=motivo_cancelacion,
+                uuid_sustituto=uuid_sustituto_sat,
+            )
+            db.refresh(factura)
+            estatus_final = factura.status_sat
+
+            # Auditoría
+            log_auditoria = models.AuditLog(
+                user_id=current_user.id,
+                accion="Autorización de Cancelación SAT",
+                tipo_accion="cancelar_cfdi",
+                modulo="ReceivableInvoice",
+                detalles=(
+                    f"Cancelación autorizada por el supervisor: {email_limpio}. "
+                    f"UUID Cancelado: {factura.uuid} con Motivo {motivo_cancelacion}"
+                ),
+            )
+            db.add(log_auditoria)
+            db.commit()
+
+        except HTTPException as he:
+            # FIX 2: Rollback explícito para no contaminar la sesión si falla la transacción
+            db.rollback()
+            if he.status_code == 202:
+                estatus_final = "EN PROCESO (SAT DEMORADO)"
+            else:
+                estatus_final = f"RECHAZADO: {he.detail}"
+        except Exception as e:
+            # FIX 2: Rollback explícito
+            db.rollback()
+            estatus_final = "ERROR DE CONEXIÓN"
+
+        resultados_correo.append(
+            {
+                "folio": factura.folio_interno or f"ID-{factura.id}",
+                "uuid": factura.uuid,
+                "estatus": estatus_final,
+                "link_sat": link_verificacion,
+            }
+        )
+
+    correo_enviado = False
+    if resultados_correo:
+        correo_enviado = email_service.send_cancellation_report(
+            correo_destino=payload.correo_notificacion, facturas_data=resultados_correo
+        )
+
+    return {
+        "status": "success",
+        "message": "Autorización validada y cadena de cancelación ejecutada.",
+        "correo_enviado": correo_enviado,
+        "data": resultados_correo,
+    }
 
 
 @router.get("/export/statement/supplier/{supplier_id}")

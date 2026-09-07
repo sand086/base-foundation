@@ -16,6 +16,6 @@ export type Body_create_fuel_log_api_fleet_fuel_logs_post = {
     odometro?: number;
     is_motogenerator?: boolean;
     horometro?: (number | null);
-    file?: Blob;
+    file?: string;
 };
 

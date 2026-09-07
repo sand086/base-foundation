@@ -344,7 +344,28 @@ const RolesPermissions: React.FC = () => {
       modules.forEach((m) => {
         const id = m.id.toLowerCase();
         const englishKey = translationMap[id] || id;
-        const val = permsData[id] || permsData[englishKey];
+
+        let val = permsData[id] || permsData[englishKey];
+
+        // Buscar fallbacks en el objeto si está bajo 'finance' o 'sat'
+        if ((id === "receivables" || id === "cxc") && permsData.finance) {
+          val = {
+            ...(typeof permsData.finance === "object" ? permsData.finance : {}),
+            ...(typeof val === "object" ? val : {}),
+          };
+        }
+
+        if (
+          (id === "cfdi_vault" ||
+            id === "historico" ||
+            id === "historico_cfdi") &&
+          permsData.sat
+        ) {
+          val = {
+            ...(typeof permsData.sat === "object" ? permsData.sat : {}),
+            ...(typeof val === "object" ? val : {}),
+          };
+        }
 
         if (isAll) {
           out[id] = {
@@ -365,9 +386,20 @@ const RolesPermissions: React.FC = () => {
         } else if (typeof val === "object" && val !== null) {
           out[id] = {
             read: !!(val.read || val.ver || val.view),
-            create: !!(val.create || val.crear), // <-- INYECTADO
+            create: !!(
+              val.create ||
+              val.crear ||
+              val.refactor ||
+              val.stamp_cfdi
+            ),
             update: !!(val.update || val.editar || val.edit),
-            delete: !!(val.delete || val.eliminar || val.cancel),
+            delete: !!(
+              val.delete ||
+              val.eliminar ||
+              val.cancel ||
+              val.cancel_invoice ||
+              val.cancel_cfdi
+            ),
             export: !!(val.export || val.exportar),
           };
         }
@@ -431,22 +463,41 @@ const RolesPermissions: React.FC = () => {
 
     setIsSaving(true);
     try {
-      // 3. INYECCIÓN DE ALIAS PARA COMPATIBILIDAD CON BACKEND
       const finalPerms: Record<string, any> = {};
 
       Object.keys(draftPermisos).forEach((mod) => {
         const p = draftPermisos[mod];
-        finalPerms[mod] = {
+
+        // Objeto enriquecido con todos los aliases requeridos por FastAPI
+        const permObj = {
           read: p.read,
           view: p.read,
           create: p.create,
-          refactor: p.create, // <-- Si puede crear, puede refacturar
+          refactor: p.create,
+          stamp_cfdi: p.create, // Permite timbrar CFDI en módulo SAT
           update: p.update,
           edit: p.update,
           delete: p.delete,
-          cancel: p.delete, // <-- Si puede eliminar, puede cancelar
+          cancel: p.delete,
+          cancel_invoice: p.delete, // Requerido para 'finance:cancel_invoice'
+          cancel_cfdi: p.delete, // Requerido para 'sat:cancel_cfdi'
           export: p.export,
         };
+
+        finalPerms[mod] = permObj;
+
+        // INYECCIÓN DE MÓDULOS ALIAS PARA EL BACKEND
+        if (mod === "receivables" || mod === "cxc") {
+          finalPerms["finance"] = { ...permObj };
+        }
+
+        if (
+          mod === "cfdi_vault" ||
+          mod === "historico" ||
+          mod === "historico_cfdi"
+        ) {
+          finalPerms["sat"] = { ...permObj };
+        }
       });
 
       let success = false;
@@ -462,6 +513,9 @@ const RolesPermissions: React.FC = () => {
 
       if (success) {
         setShowRoleEditor(false);
+        toast.success(
+          "Rol y permisos sincronizados correctamente con el backend",
+        );
       }
     } finally {
       setIsSaving(false);
