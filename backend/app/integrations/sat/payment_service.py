@@ -441,7 +441,11 @@ class PaymentComplementService:
 
             pagos_previos = (
                 self.db.query(ReceivableInvoicePayment)
-                .filter_by(invoice_id=factura.id)
+                .filter(
+                    ReceivableInvoicePayment.invoice_id == factura.id,
+                    ReceivableInvoicePayment.record_status == "A",
+                    ReceivableInvoicePayment.estatus != "CANCELADO",
+                )
                 .count()
             )
             parcialidad = pagos_previos + 1

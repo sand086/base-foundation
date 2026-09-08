@@ -761,7 +761,11 @@ def register_receivable_payment(
         # Calculamos parcialidad e importes financieros (vital para cuando se timbre en la Fase 2)
         pagos_previos = (
             db.query(models.ReceivableInvoicePayment)
-            .filter_by(invoice_id=invoice.id)
+            .filter(
+                models.ReceivableInvoicePayment.invoice_id == invoice.id,
+                models.ReceivableInvoicePayment.record_status == "A",
+                models.ReceivableInvoicePayment.estatus != "CANCELADO",
+            )
             .count()
         )
         parcialidad = pagos_previos + 1
