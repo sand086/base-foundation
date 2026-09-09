@@ -1847,62 +1847,118 @@ def cancel_receivable_payments(
     sat_service = PaymentComplementService(db)
     resultados = []
 
+    # Set para evitar mandar a cancelar al SAT el mismo XML múltiples veces
+    uuids_procesados = set()
+
     for pid in payload.payment_ids:
         try:
-            pago = db.query(models.ReceivableInvoicePayment).filter_by(id=pid).first()
-            if not pago or pago.estatus == "CANCELADO":
+            pago_inicial = (
+                db.query(models.ReceivableInvoicePayment).filter_by(id=pid).first()
+            )
+            if not pago_inicial or pago_inicial.estatus == "CANCELADO":
                 continue
 
-            if pago.complemento_uuid:
+            # 1. Identificar TODOS los pagos hermanos del mismo REP (Lote)
+            if pago_inicial.complemento_uuid and pago_inicial.complemento_uuid not in [
+                "PENDIENTE_SAT",
+                "RECHAZADO_SAT",
+                "NO TIMBRADO",
+            ]:
+                pagos_hermanos = (
+                    db.query(models.ReceivableInvoicePayment)
+                    .filter_by(complemento_uuid=pago_inicial.complemento_uuid)
+                    .all()
+                )
+            elif pago_inicial.folio_complemento:
+                pagos_hermanos = (
+                    db.query(models.ReceivableInvoicePayment)
+                    .filter_by(folio_complemento=pago_inicial.folio_complemento)
+                    .all()
+                )
+            else:
+                pagos_hermanos = [pago_inicial]
+
+            uuid_lote = pago_inicial.complemento_uuid
+
+            # Si el UUID ya fue procesado en este ciclo, saltamos, porque sus hermanos ya sufrieron rollback
+            if uuid_lote and uuid_lote in uuids_procesados:
+                continue
+
+            # 2. Tomar "fotografía" de los estatus ANTES de llamar al PAC
+            # (Porque el PAC actualiza el estatus internamente y hace un db.commit)
+            estados_previos = {p.id: p.estatus for p in pagos_hermanos}
+
+            estatus_sat_general = "CANCELADO"
+            mensaje_sat = "Cancelado Localmente (No timbrado)"
+
+            # 3. Cancelar ante el SAT (Una sola vez por Lote)
+            if uuid_lote and uuid_lote not in [
+                "PENDIENTE_SAT",
+                "RECHAZADO_SAT",
+                "NO TIMBRADO",
+            ]:
                 res = sat_service.cancelar_pago_sat(
                     payment_id=pid, motivo=payload.motivo
                 )
                 mensaje_sat = res.get("mensaje", "Cancelado en SAT")
-            else:
-                pago.estatus = "CANCELADO"
+                estatus_sat_general = res.get("estado_sat", "CANCELADO")
+                uuids_procesados.add(uuid_lote)
+
+            # 4. Aplicar Rollback Financiero a TODOS los pagos hermanos
+            for pago in pagos_hermanos:
+                estado_original = estados_previos.get(pago.id)
+
+                # Si un hermano ya había sido cancelado en el pasado, no le hacemos doble rollback
+                if estado_original in ["CANCELADO", "PROCESO_CANCELACION"]:
+                    pago.estatus = estatus_sat_general
+                    pago.motivo_cancelacion = payload.motivo
+                    continue
+
+                # Actualizamos estatus
+                pago.estatus = estatus_sat_general
                 pago.motivo_cancelacion = payload.motivo
                 pago.fecha_cancelacion = datetime.now()
-                mensaje_sat = "Cancelado Localmente (No timbrado)"
 
-            # FIX: Matemáticas seguras para evitar que el Rollback falle
-            invoice = (
-                db.query(models.ReceivableInvoice)
-                .filter_by(id=pago.invoice_id)
-                .with_for_update(of=models.ReceivableInvoice)  # <--- FIX AQUÍ
-                .first()
-            )
-            if invoice:
-                invoice.saldo_pendiente = float(invoice.saldo_pendiente or 0) + float(
-                    pago.monto
-                )
-                if invoice.saldo_pendiente >= float(invoice.monto_total or 0):
-                    invoice.estatus = models.InvoiceStatus.PENDIENTE
-                else:
-                    invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
-                invoice.updated_by_id = current_user.id
-
-            # Retirar dinero de tesorería solo si tiene cuenta válida
-            if pago.cuenta_deposito and str(pago.cuenta_deposito).strip().isdigit():
-                cuenta = (
-                    db.query(models.BankAccount)
-                    .filter_by(id=int(pago.cuenta_deposito))
-                    .with_for_update(of=models.BankAccount)  # <--- FIX AQUÍ
+                # Restaurar saldo de la factura correspondiente a este pago
+                invoice = (
+                    db.query(models.ReceivableInvoice)
+                    .filter_by(id=pago.invoice_id)
+                    .with_for_update(of=models.ReceivableInvoice)
                     .first()
                 )
-                if cuenta:
-                    cuenta.saldo = float(cuenta.saldo or 0) - float(pago.monto)
-                    cuenta.updated_by_id = current_user.id
-                    reverso = models.BankMovement(
-                        bank_account_id=cuenta.id,
-                        tipo="egreso",
-                        monto=float(pago.monto),
-                        concepto=f"Reverso Cancelación REP {pago.complemento_uuid or pago.id}",
-                        referencia=f"CANC-{pago.id}",
-                        origen_modulo="CxC",
-                        created_by_id=current_user.id,
-                        fecha=datetime.now(),
+                if invoice:
+                    invoice.saldo_pendiente = float(
+                        invoice.saldo_pendiente or 0
+                    ) + float(pago.monto)
+                    if invoice.saldo_pendiente >= float(invoice.monto_total or 0):
+                        invoice.estatus = models.InvoiceStatus.PENDIENTE
+                    else:
+                        invoice.estatus = models.InvoiceStatus.PAGO_PARCIAL
+                    invoice.updated_by_id = current_user.id
+
+                # Retirar dinero de tesorería de este pago
+                if pago.cuenta_deposito and str(pago.cuenta_deposito).strip().isdigit():
+                    cuenta = (
+                        db.query(models.BankAccount)
+                        .filter_by(id=int(pago.cuenta_deposito))
+                        .with_for_update(of=models.BankAccount)
+                        .first()
                     )
-                    db.add(reverso)
+                    if cuenta:
+                        cuenta.saldo = float(cuenta.saldo or 0) - float(pago.monto)
+                        cuenta.updated_by_id = current_user.id
+
+                        reverso = models.BankMovement(
+                            bank_account_id=cuenta.id,
+                            tipo="egreso",
+                            monto=float(pago.monto),
+                            concepto=f"Reverso Cancelación REP {pago.complemento_uuid or pago.folio_complemento or pago.id}",
+                            referencia=f"CANC-{pago.id}",
+                            origen_modulo="CxC",
+                            created_by_id=current_user.id,
+                            fecha=datetime.now(),
+                        )
+                        db.add(reverso)
 
             db.commit()
             resultados.append({"id": pid, "status": "success", "mensaje": mensaje_sat})
