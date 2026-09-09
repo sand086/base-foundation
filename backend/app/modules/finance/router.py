@@ -2379,9 +2379,8 @@ def chain_cancel_trip_invoices(
     SUPERVISORES_PERMITIDOS = [
         "desarrollosoft@asicomsystems.com.mx",
         "trafico2@3t.com.mx",
-        "gerencia@3t.com.mx",
         "contabilidad@3t.com.mx",
-        "Jmartinez@3t.com.mx",
+        "jmartinez@3t.com.mx",
     ]
     CLAVE_AUTORIZACION = "Rapidos3TCancelar!"  # Clave maestra
 
