@@ -1868,7 +1868,7 @@ def cancel_receivable_payments(
             invoice = (
                 db.query(models.ReceivableInvoice)
                 .filter_by(id=pago.invoice_id)
-                .with_for_update()
+                .with_for_update(of=models.ReceivableInvoice)  # <--- FIX AQUÍ
                 .first()
             )
             if invoice:
@@ -1886,7 +1886,7 @@ def cancel_receivable_payments(
                 cuenta = (
                     db.query(models.BankAccount)
                     .filter_by(id=int(pago.cuenta_deposito))
-                    .with_for_update()
+                    .with_for_update(of=models.BankAccount)  # <--- FIX AQUÍ
                     .first()
                 )
                 if cuenta:
