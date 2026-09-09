@@ -608,22 +608,14 @@ def update_user(
         if not role:
             raise HTTPException(status_code=404, detail="Rol no encontrado")
 
+    # AQUÍ CRUD.PY YA SE ENCARGA DE GUARDAR LA CONTRASEÑA CORRECTAMENTE
     user = crud.update_user(db, user_id, payload, current_user.id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    # =========================================================================
-    # 🛠️ FIX: Si la petición incluye una nueva contraseña, actualizar password_hash
-    # =========================================================================
-    if hasattr(payload, "password") and payload.password:
-        user.password_hash = security.get_password_hash(payload.password)
-        user.updated_by_id = current_user.id
-        db.commit()
-        db.refresh(user)
-    # =========================================================================
+    # ❌ BORRA EL BLOQUE QUE DECÍA: "🛠️ FIX: Si la petición incluye una nueva contraseña..."
+    # ❌ BORRA LA LÍNEA: user.password = security.decrypt_password(user.password_hash)
 
-    # Desencriptar tras actualizar para la respuesta del frontend
-    user.password = security.decrypt_password(user.password_hash)
     return user
 
 
