@@ -853,7 +853,7 @@ export default function Receivables() {
                     !isInProcess &&
                     canCancel)) && (
                   <>
-                    <DropdownMenuSeparator className="my-1 border-rose-100 dark:border-rose-900/30" />
+                    {/*      <DropdownMenuSeparator className="my-1 border-rose-100 dark:border-rose-900/30" />
                     <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest text-rose-500/70 px-2 py-1.5">
                       Zona de Peligro
                     </DropdownMenuLabel>
@@ -870,9 +870,9 @@ export default function Receivables() {
                           }}
                           className="gap-2 font-bold text-xs cursor-pointer text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30 rounded-md"
                         >
-                          {/* <Trash2 className="h-4 w-4" /> Cancelar Factura */}
+                          { <Trash2 className="h-4 w-4" /> Cancelar Factura }
                         </DropdownMenuItem>
-                      )}
+                      )} */}
                   </>
                 )}
               </DropdownMenuContent>
