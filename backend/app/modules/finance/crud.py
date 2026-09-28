@@ -1943,6 +1943,10 @@ def get_cfdi_vault_records(
 
             if "CANCELAD" in val_estatus or "SUSTITUID" in val_estatus or is_deleted:
                 status_fiscal = "CANCELADO"
+            elif val_estatus in {"TIMBRANDO", "CONCILIACION_REQUERIDA"}:
+                status_fiscal = val_estatus
+            elif val_estatus == "ERROR_VALIDACION":
+                status_fiscal = "ERROR_VALIDACION"
             elif val_estatus == "PROCESO_CANCELACION":
                 status_fiscal = "PROCESO_CANCELACION"  # <--- INYECTAR ESTA VALIDACIÓN
             elif getattr(r, "complemento_uuid", None):

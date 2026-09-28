@@ -101,6 +101,14 @@ backend/*.xlsx
 backend/.env
 backend/.env.*
 
+# Docker local/dev
+.dockerignore
+Dockerfile
+backend/Dockerfile
+docker-compose*.yml
+docker-compose*.yaml
+docker/
+
 # =========================
 # ARCHIVOS OCULTOS
 # =========================

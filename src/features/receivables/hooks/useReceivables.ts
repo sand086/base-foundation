@@ -165,10 +165,22 @@ export const useReceivables = () => {
 
     registerMultiplePaymentRep: async (payload: any) => {
       try {
-        await registerMultiPaymentRepMut.mutateAsync(payload);
-        toast.success(
-          "Pago registrado y Complemento (REP) timbrado con éxito.",
-        );
+        const response = await registerMultiPaymentRepMut.mutateAsync(payload);
+        const responseData = response?.data || {};
+        const batchStatus = responseData?.data?.batch_status;
+
+        if (response?.status === 202 || batchStatus === "CONCILIACION_REQUERIDA") {
+          toast.warning(
+            responseData?.detail ||
+              "El REP quedó en conciliación. No se reintentará automáticamente para evitar duplicidad.",
+          );
+        } else if (batchStatus === "SOLO_COBRO") {
+          toast.success("Cobro registrado sin timbrar complemento REP.");
+        } else {
+          toast.success(
+            "Pago registrado y Complemento (REP) timbrado con éxito.",
+          );
+        }
         return true;
       } catch (error: any) {
         toast.error(
