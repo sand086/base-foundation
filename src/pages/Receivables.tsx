@@ -870,7 +870,7 @@ export default function Receivables() {
                           }}
                           className="gap-2 font-bold text-xs cursor-pointer text-rose-600 dark:text-rose-500 focus:bg-rose-50 dark:focus:bg-rose-950/30 rounded-md"
                         >
-                          <Trash2 className="h-4 w-4" /> Cancelar Factura
+                          {/* <Trash2 className="h-4 w-4" /> Cancelar Factura */}
                         </DropdownMenuItem>
                       )}
                   </>
@@ -1060,7 +1060,6 @@ export default function Receivables() {
           )}
         </div>
       </PageHeader>
-
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="border-l-4 border-l-blue-600 shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5">
@@ -1119,7 +1118,6 @@ export default function Receivables() {
           </CardContent>
         </Card>
       </div>
-
       <Card className="shadow-2xl border-none overflow-hidden bg-transparent relative z-0">
         <CardContent className="p-0 bg-white dark:bg-slate-950 [&_thead]:bg-slate-50/80 dark:[&_thead]:bg-slate-900/80 [&_thead]:backdrop-blur-xl [&_th]:bg-transparent [&_th]:border-b [&_th]:border-slate-200 dark:[&_th]:border-white/10 [&_th]:text-[10px] [&_th]:font-black [&_th]:uppercase [&_th]:tracking-[0.2em] [&_th]:text-slate-500 dark:[&_th]:text-slate-400">
           <EnhancedDataTable
@@ -1139,7 +1137,6 @@ export default function Receivables() {
           />
         </CardContent>
       </Card>
-
       {/* BARRA FLOTANTE CON ACCIONES MASIVAS */}
       {selectedRows.length > 0 && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300 ease-out">
@@ -1168,7 +1165,7 @@ export default function Receivables() {
                 Generar REP
               </Button>
 
-              {canCancel && (
+              {/*  {canCancel && (
                 <Button
                   onClick={() => {
                     setInvoiceToCancel(null);
@@ -1180,12 +1177,11 @@ export default function Receivables() {
                   <Ban className="w-4 h-4 mr-2" />
                   Cancelar Lote
                 </Button>
-              )}
+              )} */}
             </div>
           </div>
         </div>
       )}
-
       <CreateInvoiceModal
         open={isCreateModalOpen}
         onOpenChange={(open) => {
@@ -1195,7 +1191,6 @@ export default function Receivables() {
         onSubmit={handleCreateInvoice}
         importedServices={importedServices}
       />
-
       <CreateInvoiceModal
         open={isRefactorModalOpen}
         onOpenChange={(isOpen) => {
@@ -1205,7 +1200,6 @@ export default function Receivables() {
         invoiceToRefactor={invoiceToRefactor}
         onSubmit={handleCreateInvoice}
       />
-
       <InvoiceDetailSheet
         open={isDetailSheetOpen}
         onOpenChange={setIsDetailSheetOpen}
@@ -1230,7 +1224,6 @@ export default function Receivables() {
         }}
         onCancelPayments={handleCancelPayments}
       />
-
       <ClientRegisterPaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
@@ -1239,7 +1232,7 @@ export default function Receivables() {
         clientId={invoicesToPay[0]?.client_id || invoicesToPay[0]?.client?.id}
         onSubmit={handleRegisterPayment}
       />
-
+      Acciones CP-19278 INTERFREIGHT DE MEXICO $39,547.20 MXN $39,547.20 28/
       {(() => {
         const clientName =
           selectedClientId === "all"
@@ -1256,7 +1249,6 @@ export default function Receivables() {
           />
         );
       })()}
-
       <AlertDialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-2xl flex-col max-h-[90vh] overflow-hidden p-0 border-none shadow-2xl animate-modal-show bg-white/90 dark:bg-brand-navy/95 backdrop-blur-xl rounded-2xl">
           <AlertDialogHeader className="p-6 sm:p-8 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-white/10 shrink-0 relative overflow-hidden z-10">
@@ -1411,7 +1403,6 @@ export default function Receivables() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
       <AgingExportModal
         open={isAgingModalOpen}
         onOpenChange={setIsAgingModalOpen}
