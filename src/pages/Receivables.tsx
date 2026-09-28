@@ -1232,7 +1232,6 @@ export default function Receivables() {
         clientId={invoicesToPay[0]?.client_id || invoicesToPay[0]?.client?.id}
         onSubmit={handleRegisterPayment}
       />
-      Acciones CP-19278 INTERFREIGHT DE MEXICO $39,547.20 MXN $39,547.20 28/
       {(() => {
         const clientName =
           selectedClientId === "all"
