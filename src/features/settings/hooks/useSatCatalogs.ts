@@ -58,7 +58,8 @@ const CATALOG_ADAPTERS: Record<string, CatalogMethods> = {
   "sat-location-codes": createAdapter("sat-location-codes"),
 };
 
-export const useSatCatalogs = () => {
+// 1. AÑADIMOS searchTerm COMO PARÁMETRO OPCIONAL
+export const useSatCatalogs = (searchTerm: string = "") => {
   const [products, setProducts] = useState<SatProduct[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -68,14 +69,15 @@ export const useSatCatalogs = () => {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await CATALOG_ADAPTERS["sat-products"].getAll();
+      // 2. PASAMOS EL searchTerm AL ADAPTER
+      const data = await CATALOG_ADAPTERS["sat-products"].getAll(searchTerm);
       setProducts(data as SatProduct[]);
     } catch (error) {
       console.error("Error fetching SAT products:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [searchTerm]); // 3. AGREGAMOS searchTerm A LAS DEPENDENCIAS
 
   useEffect(() => {
     fetchProducts();
@@ -103,7 +105,6 @@ export const useSatCatalogs = () => {
   // =========================================================
   const fetchCatalog = useCallback(
     async <T = any>(endpoint: string, search?: string): Promise<T[]> => {
-      // <-- Agregamos search aquí
       if (!CATALOG_ADAPTERS[endpoint]) {
         toast.error(`Catálogo ${endpoint} no configurado.`);
         return [];
@@ -111,7 +112,7 @@ export const useSatCatalogs = () => {
 
       setLoading(true);
       try {
-        const data = await CATALOG_ADAPTERS[endpoint].getAll(search); // <-- Pasamos el search al adapter
+        const data = await CATALOG_ADAPTERS[endpoint].getAll(search);
         return data as T[];
       } catch (error: any) {
         console.error(`Error fetching ${endpoint}:`, error);
