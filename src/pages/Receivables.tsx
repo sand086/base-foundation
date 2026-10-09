@@ -134,6 +134,7 @@ export default function Receivables() {
   const [selectedRows, setSelectedRows] = useState<ReceivableInvoice[]>([]);
 
   // FORMATEO DE DATOS DE LA API
+  // FORMATEO DE DATOS DE LA API
   const formattedInvoices = useMemo(() => {
     let dataArray = [];
     if (Array.isArray(receivables)) {
@@ -145,6 +146,16 @@ export default function Receivables() {
         (receivables as any).results ||
         [];
     }
+
+    // 🛡️ BLINDAJE ANTI-DUPLICADOS: Asegura que cada factura se cuente solo una vez
+    const uniqueMap = new Map();
+    dataArray.forEach((inv: any) => {
+      if (inv && inv.id && !uniqueMap.has(inv.id)) {
+        uniqueMap.set(inv.id, inv);
+      }
+    });
+    // Reemplazamos dataArray solo con los valores únicos
+    dataArray = Array.from(uniqueMap.values());
 
     return dataArray
       .filter((inv: any) => {
