@@ -11,7 +11,9 @@ logging.getLogger("weasyprint").setLevel(logging.ERROR)
 
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
+from app.core.config import settings
 
 # 1. importacion de Routers de Dominios (Módulos)
 from app.modules.auth.router import router as auth_router
@@ -48,10 +50,13 @@ app.mount("/api/static", StaticFiles(directory="app/uploads"), name="static")
 
 api_router = APIRouter(prefix="/api")
 
+# Compresión de respuestas grandes (listados JSON)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especifica tus dominios reales
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

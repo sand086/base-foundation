@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "tms_db"
     POSTGRES_PORT: str = "5432"
 
+    # Orígenes CORS separados por coma ("*" = todos)
+    CORS_ORIGINS: str = "*"
+
     # URL construida automáticamente o leída desde .env
     DATABASE_URL: Optional[str] = None
 
@@ -33,8 +36,12 @@ class Settings(BaseSettings):
         if not self.DATABASE_URL:
             self.DATABASE_URL = f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "../.env"),
         case_sensitive=True,
         extra="ignore",  # Ignora variables extra en el .env
     )

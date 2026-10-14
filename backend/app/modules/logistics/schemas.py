@@ -283,7 +283,19 @@ class TripTimelineEventResponse(TripTimelineEventBase):
 # =========================================================
 
 from app.models.models import TripStatus, TripLegType
-from app.modules.fleet.schemas import UnitResponse, OperatorResponse
+from app.modules.fleet.schemas import UnitBase, OperatorResponse
+
+
+# Unidad para listados de viajes: igual que UnitResponse pero SIN `tires`
+# (las llantas disparaban una consulta por unidad y inflaban el JSON).
+class TripUnitSlim(UnitBase):
+    id: int
+    record_status: RecordStatus
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    created_by_id: Optional[int] = None
+    updated_by_id: Optional[int] = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TripLegBase(ORMBase):
@@ -319,7 +331,7 @@ class TripLegResponse(TripLegBase):
     trip_id: int
     last_update: datetime | None = None
 
-    unit: Optional[UnitResponse] = None
+    unit: Optional[TripUnitSlim] = None
     operator: Optional[OperatorResponse] = None
 
     timeline_events: List[TripTimelineEventResponse] = Field(default_factory=list)
@@ -412,6 +424,7 @@ class TripCreate(TripBase):
 class TariffBasicInfo(ORMBase):
     id: int
     tipo_unidad: str
+    sueldo_operador: Optional[float] = None
 
 
 # ==========================================
@@ -473,7 +486,20 @@ class ReceivableInvoiceLite(ORMBase):
     document_history: List[DocumentHistoryResponse] = Field(default_factory=list)
 
 
-from app.modules.clients.schemas import ClientResponse
+from app.modules.clients.schemas import ClientBase, SubClientBase
+
+
+# Versiones ligeras para listados de viajes: sin sub_clients/tarifas anidadas
+# (cada cliente pesaba ~120 KB y se repetía en cada viaje).
+class TripClientSlim(ClientBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TripSubClientSlim(SubClientBase):
+    id: int
+    client_id: int
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TripResponse(TripBase):
@@ -481,13 +507,14 @@ class TripResponse(TripBase):
     public_id: Optional[str] = None
     uuid_fiscal: Optional[str] = None
 
-    client: Optional[ClientResponse] = None
+    client: Optional[TripClientSlim] = None
+    sub_client: Optional[TripSubClientSlim] = None
     tariff: Optional[TariffBasicInfo] = None
-    remolque_1: Optional[UnitResponse] = None
-    dolly: Optional[UnitResponse] = None
-    remolque_2: Optional[UnitResponse] = None
-    motogenerator_1_unit: Optional[UnitResponse] = None
-    motogenerator_2_unit: Optional[UnitResponse] = None
+    remolque_1: Optional[TripUnitSlim] = None
+    dolly: Optional[TripUnitSlim] = None
+    remolque_2: Optional[TripUnitSlim] = None
+    motogenerator_1_unit: Optional[TripUnitSlim] = None
+    motogenerator_2_unit: Optional[TripUnitSlim] = None
 
     legs: List[TripLegResponse] = Field(default_factory=list)
     receivable_invoices: List[ReceivableInvoiceLite] = Field(default_factory=list)

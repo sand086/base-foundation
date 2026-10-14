@@ -29,7 +29,13 @@ SQLALCHEMY_DATABASE_URL = (
 
 # 4. Crear el motor
 try:
-    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
     # Prueba de conexión rápida para fallar temprano si hay error
     with engine.connect() as connection:
         print("--> ÉXITO: Conexión a Base de Datos establecida.")

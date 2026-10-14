@@ -525,12 +525,21 @@ def delete_template(
 
 
 @router.get("/trips", response_model=List[schemas.TripResponse])
-def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_trips(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     return crud.get_trips(db, skip, limit)
 
 
 @router.get("/trips/{trip_id}", response_model=schemas.TripResponse)
-def read_trip(trip_id: int, db: Session = Depends(get_db)):
+def read_trip(
+    trip_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
     trip = crud.get_trip(db, str(trip_id))
     if not trip:
         raise HTTPException(status_code=404, detail="Viaje no encontrado")

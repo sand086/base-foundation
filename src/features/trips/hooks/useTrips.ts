@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogisticsService } from "@/api/generated";
 import { ApiError } from "@/api/generated/core/ApiError";
 import { useToast } from "@/components/ui/use-toast";
@@ -9,30 +10,37 @@ import {
   TripTimelineEventCreatePayload,
 } from "@/features/trips/types";
 
+export const TRIPS_QUERY_KEY = ["trips"] as const;
+
 export const useTrips = () => {
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const [actionLoading, setActionLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchTrips = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await LogisticsService.readTripsApiLogisticsTripsGet(
+  // Una sola descarga compartida por todos los componentes que usan useTrips.
+  const {
+    data: trips = [],
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: TRIPS_QUERY_KEY,
+    queryFn: async () =>
+      (await LogisticsService.readTripsApiLogisticsTripsGet(
         0,
         5000,
-      );
-      setTrips(data as Trip[]);
+      )) as Trip[],
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+  const loading = isFetching || actionLoading;
+
+  const fetchTrips = useCallback(async () => {
+    try {
+      await refetch();
     } catch (error) {
       console.error("Error fetching trips:", error);
-      /* toast({
-        title: "Error de Sincronización",
-        description: "No se pudieron cargar los viajes. Verifica tu conexión.",
-        variant: "destructive",
-      }); */
-    } finally {
-      setLoading(false);
     }
-  }, [toast]);
+  }, [refetch]);
 
   const createTrip = async (tripData: TripCreatePayload) => {
     try {
@@ -307,7 +315,7 @@ export const useTrips = () => {
 
   const unhookTrip = async (tripId: string) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       await LogisticsService.unhookTripInYardApiLogisticsTripsTripIdUnhookPost(
         Number(tripId),
       );
@@ -332,13 +340,9 @@ export const useTrips = () => {
       });
       return false;
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchTrips();
-  }, [fetchTrips]);
 
   return {
     trips,

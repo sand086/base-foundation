@@ -82,6 +82,7 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
         db.query(models.Trip)
         .options(
             joinedload(models.Trip.client),
+            joinedload(models.Trip.sub_client),
             joinedload(models.Trip.tariff),
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
@@ -116,6 +117,7 @@ def get_trip(db: Session, trip_id: str):
         db.query(models.Trip)
         .options(
             joinedload(models.Trip.client),
+            joinedload(models.Trip.sub_client),
             joinedload(models.Trip.tariff),
             joinedload(models.Trip.remolque_1),
             joinedload(models.Trip.dolly),
