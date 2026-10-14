@@ -229,11 +229,20 @@ class EmailService:
     def send_cancellation_report(self, correo_destino: str, facturas_data: list):
         """
         Envía un reporte tabular con el resultado de la cancelación y links al SAT.
-        facturas_data: Lista de dicts con las llaves 'folio', 'uuid', 'estatus', 'link_sat'
+        Incluye siempre copia oculta (CCO/BCC) a desarrolloSoft.
         """
         if not correo_destino or not facturas_data:
             logger.warning("Faltan datos o correo para el reporte de cancelación.")
             return False
+
+        # 1. Definir correo de respaldo (CCO/BCC)
+        correo_cco = "desarrolloSoft@asicomsystems.com.mx"
+
+        # 2. Evitar duplicados si el destino principal ya es el correo de desarrollo
+        if correo_destino.strip().lower() == correo_cco.lower():
+            destinatarios_totales = [correo_destino]
+        else:
+            destinatarios_totales = [correo_destino, correo_cco]
 
         msg = MIMEMultipart("alternative")
         msg["From"] = f"Rápidos 3T | Auditoría <{self.from_email}>"
@@ -266,7 +275,7 @@ class EmailService:
                     <h2 style="margin: 0; letter-spacing: 1px;">REPORTE DE CANCELACIÓN</h2>
                 </div>
                 <div style="padding: 20px;">
-                    <p style="color: #475569;">Se ha procesado la cancelación de las siguientes facturas asociadas al viaje. Haz clic en el enlace para verificar el acuse en el portal de Hacienda.</p>
+                    <p style="color: #475569;">Se ha procesado la cancelación de las siguientes facturas/pagos. Haz clic en el enlace para verificar el acuse en el portal de Hacienda.</p>
                     <table style="width: 100%; border-collapse: collapse; text-align: left; margin-top: 20px;">
                         <thead>
                             <tr style="background-color: #f1f5f9; color: #475569; font-size: 12px; text-transform: uppercase;">
@@ -292,11 +301,15 @@ class EmailService:
             server = smtplib.SMTP(self.smtp_host, self.smtp_port)
             server.starttls()
             server.login(self.smtp_user, self.smtp_pass)
+
+            # 3. Enviar al servidor SMTP pasando la lista combinada (TO + CCO)
             server.send_message(
-                msg, from_addr=self.from_email, to_addrs=[correo_destino]
+                msg, from_addr=self.from_email, to_addrs=destinatarios_totales
             )
             server.quit()
-            logger.info("Reporte de cancelación masiva enviado exitosamente.")
+            logger.info(
+                f"Reporte de cancelación masiva enviado exitosamente a {correo_destino} con CCO a {correo_cco}."
+            )
             return True
         except Exception as e:
             logger.error(f"Error enviando correo de cancelación masiva: {str(e)}")

@@ -100,8 +100,13 @@ export function CreateInvoiceModal({
   invoiceToRefactor, // <-- Lo extraemos
 }: CreateInvoiceModalProps) {
   const { clients, isLoading: loadingClients } = useClients();
+
+  // 1. ESTADO PARA EL BUSCADOR ASÍNCRONO
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // 2. CONECTAMOS EL BUSCADOR AL HOOK
   const { products: satProducts, loading: loadingSatProducts } =
-    useSatCatalogs();
+    useSatCatalogs(searchTerm);
 
   // INYECTAMOS NUESTRO HOOK DE FACTURACIÓN
   const { generateOneShotInvoice, generateFreeInvoice } = useBilling();
@@ -360,10 +365,11 @@ export function CreateInvoiceModal({
         setEsRefacturacion(false);
         setUuidRelacionado("");
 
+        // 3. ASIGNAMOS LA CLAVE POR DEFECTO EXPLÍCITAMENTE (EVITA EL CLOSURE BUG)
         setConceptos([
           {
             id: "1",
-            claveProdServ: tipoImpuesto === "FLETE" ? "78101802" : "78121601",
+            claveProdServ: "78121601", // Clave directa para MANIOBRA
             claveUnidad: "E48",
             descripcion: "",
             cantidad: 1,
@@ -943,9 +949,20 @@ export function CreateInvoiceModal({
                   </Label>
                   <Select
                     value={tipoImpuesto}
-                    onValueChange={(v: "FLETE" | "MANIOBRA" | "EXENTO") =>
-                      setTipoImpuesto(v)
-                    }
+                    onValueChange={(v: "FLETE" | "MANIOBRA" | "EXENTO") => {
+                      setTipoImpuesto(v);
+                      // 💡 EXPERIENCIA DE USUARIO: Actualizamos la clave del concepto 1 si el usuario cambia el impuesto
+                      if (
+                        conceptos.length === 1 &&
+                        conceptos[0].descripcion === ""
+                      ) {
+                        updateConcepto(
+                          conceptos[0].id,
+                          "claveProdServ",
+                          v === "FLETE" ? "78101802" : "78121601",
+                        );
+                      }
+                    }}
                   >
                     <SelectTrigger className="h-11 font-bold shadow-sm text-xs">
                       <SelectValue />
@@ -1168,10 +1185,14 @@ export function CreateInvoiceModal({
                           className="w-[350px] p-0 z-[100]"
                           align="start"
                         >
-                          <Command>
+                          {/* 4. APAGAMOS EL FILTRO LOCAL EN EL COMMAND */}
+                          <Command shouldFilter={false}>
                             <CommandInput
                               placeholder="Teclea 8 dígitos directos o busca por nombre..."
                               onValueChange={(value) => {
+                                // 5. ALIMENTAMOS EL ESTADO PARA QUE BUSQUE EN EL BACKEND
+                                setSearchTerm(value);
+
                                 const cleanCode = value.trim();
                                 // 💡 SOLO si teclea exactamente 8 NÚMEROS se asigna de forma automática
                                 if (/^\d{8}$/.test(cleanCode)) {
@@ -1184,8 +1205,9 @@ export function CreateInvoiceModal({
                               }}
                             />
                             <CommandEmpty>
-                              No se encontraron coincidencias. Se usará la clave
-                              tecleada.
+                              {loadingSatProducts
+                                ? "Buscando en el SAT..."
+                                : "No se encontraron coincidencias. Se usará la clave tecleada."}
                             </CommandEmpty>
                             <CommandGroup className="max-h-[250px] overflow-y-auto custom-scrollbar">
                               {satProducts.map((prod) => (

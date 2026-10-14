@@ -652,6 +652,127 @@ class BillingService:
                 errores.append(f"{fac.folio_interno}: {str(e)}")
         return {"status": "success", "reconstruidos": exitos, "errores": errores}
 
+    def regenerar_pdf_factura(self, invoice_id: int):
+        """
+        Lee el XML oficial del disco duro y reconstruye el PDF garantizando
+        que los datos sean 100% idénticos a los sellados por el SAT.
+        """
+        from app.models.models import ReceivableInvoice
+        from lxml import etree
+        import qrcode
+        from io import BytesIO
+
+        factura = self.db.query(ReceivableInvoice).filter(ReceivableInvoice.id == invoice_id).first()
+        if not factura or not factura.uuid:
+            raise ValueError(f"Factura ID {invoice_id} no encontrada o sin UUID timbrado.")
+
+        # 1. Buscar XML en el servidor
+        xml_path_upper = self.storage_dir / f"{factura.uuid.upper()}.xml"
+        xml_path_lower = self.storage_dir / f"{factura.uuid.lower()}.xml"
+        xml_path = xml_path_upper if xml_path_upper.exists() else xml_path_lower
+
+        if not xml_path.exists():
+            raise ValueError(f"No se encontró el XML físico en: {xml_path}")
+
+        with open(xml_path, "rb") as f:
+            cfdi_bytes = f.read()
+
+        # 2. Parsear el XML
+        root = etree.fromstring(cfdi_bytes)
+        ns = {
+            "cfdi": "http://www.sat.gob.mx/cfd/4",
+            "tfd": "http://www.sat.gob.mx/TimbreFiscalDigital",
+            "cartaporte31": "http://www.sat.gob.mx/CartaPorte31"
+        }
+
+        tfd_nodes = root.xpath("//tfd:TimbreFiscalDigital", namespaces=ns)
+        if not tfd_nodes:
+            raise ValueError("El XML no contiene el nodo de TimbreFiscalDigital")
+        
+        tfd_node = tfd_nodes[0]
+        s_sat = tfd_node.get("SelloSAT", "")
+        c_sat = tfd_node.get("NoCertificadoSAT", "")
+        s_emi = root.xpath("//cfdi:Comprobante/@Sello", namespaces=ns)[0]
+        fecha_timbrado = tfd_node.get("FechaTimbrado")
+        
+        cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{factura.uuid}|{fecha_timbrado}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
+
+        total_float = float(root.get("Total", 0))
+        if HAS_NUM2WORDS:
+            entero = int(total_float)
+            decimales = int(round((total_float - entero) * 100))
+            texto = num2words(entero, lang="es").upper()
+            if texto == "UNO": texto = "UN"
+            importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
+        else:
+            importe_letra = f"({total_float:,.2f} MXN)"
+
+        # 3. Extraer info para el Código QR
+        rfc_emisor = root.xpath("//cfdi:Emisor/@Rfc", namespaces=ns)[0]
+        rfc_receptor = root.xpath("//cfdi:Receptor/@Rfc", namespaces=ns)[0]
+        
+        qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={factura.uuid}&re={rfc_emisor}&rr={rfc_receptor}&tt={total_float:.2f}&fe={s_emi[-8:]}"
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(qr_string)
+        qr.make(fit=True)
+        buffer = BytesIO()
+        qr.make_image(fill_color="black", back_color="white").save(buffer, format="PNG")
+
+        # 4. Extraer los conceptos directo del XML
+        conceptos_render = []
+        for c in root.xpath("//cfdi:Conceptos/cfdi:Concepto", namespaces=ns):
+            conceptos_render.append({
+                "clave": c.get("ClaveProdServ"),
+                "cantidad": c.get("Cantidad"),
+                "unidad": c.get("ClaveUnidad"),
+                "descripcion": c.get("Descripcion"),
+                "precio": float(c.get("ValorUnitario")),
+                "importe": float(c.get("Importe")),
+            })
+
+        subtotal = float(root.get("SubTotal", 0))
+        impuestos_node = root.xpath("//cfdi:Comprobante/cfdi:Impuestos", namespaces=ns)
+        iva = float(impuestos_node[0].get("TotalImpuestosTrasladados", 0)) if impuestos_node and impuestos_node[0].get("TotalImpuestosTrasladados") else 0.0
+        retenciones = float(impuestos_node[0].get("TotalImpuestosRetenidos", 0)) if impuestos_node and impuestos_node[0].get("TotalImpuestosRetenidos") else 0.0
+
+        # 5. Armar el diccionario para la plantilla PDF
+        d = {
+            "serie": root.get("Serie", ""),
+            "folio": root.get("Folio", ""),
+            "folio_interno": factura.folio_interno,
+            "fecha": root.get("Fecha"),
+            "fecha_sat_con_hora": fecha_timbrado,
+            "subtotal": subtotal,
+            "iva": iva,
+            "retenciones": retenciones,
+            "total": total_float,
+            "forma_pago": root.get("FormaPago", "99"),
+            "metodo_pago": root.get("MetodoPago", "PPD"),
+            "moneda": root.get("Moneda", "MXN"),
+            "rfc_cliente": rfc_receptor,
+            "nombre_cliente": root.xpath("//cfdi:Receptor/@Nombre", namespaces=ns)[0],
+            "cp_cliente": root.xpath("//cfdi:Receptor/@DomicilioFiscalReceptor", namespaces=ns)[0],
+            "regimen_cliente": root.xpath("//cfdi:Receptor/@RegimenFiscalReceptor", namespaces=ns)[0],
+            "uso_cfdi": root.xpath("//cfdi:Receptor/@UsoCFDI", namespaces=ns)[0],
+            "conceptos": conceptos_render,
+            "leyenda_legal": self.leyenda_legal_db,
+        }
+
+        # 6. Llamar al motor de diseño para crear el archivo .pdf
+        self._generar_pdf_con_diseno(
+            d,
+            factura.uuid,
+            buffer.getvalue(),
+            s_sat,
+            s_emi,
+            c_sat,
+            cadena_original_tfd,
+            importe_letra
+        )
+
+        return {"status": "success", "message": f"PDF reconstruido exitosamente para {factura.folio_interno}"}
+
+
     def _obtener_datos_completos(
         self, viaje_id: int, buscar_tramo_carretera: bool = False
     ):
@@ -1288,42 +1409,38 @@ class BillingService:
         total_str = f"{_clean_float(d.get('total', d.get('monto_total', 0))):,.2f}"
 
         conceptos_render = []
-        if (
-            d.get("conceptos")
-            and isinstance(d["conceptos"], list)
-            and len(d["conceptos"]) > 0
-        ):
-            for c in d["conceptos"]:
-                conceptos_render.append(
-                    {
-                        "clave": c.get("claveProdServ") or "78121601",
-                        "cantidad": str(c.get("cantidad", "1.00")),
-                        "unidad": c.get("claveUnidad", "E48"),
-                        "descripcion": c.get("descripcion", ""),
-                        "detalles_extra": f"Folio: {d.get('folio_interno', d.get('folio', ''))}",
-                        "precio": f"{float(c.get('precioUnitario', c.get('importe', 0))):,.2f}",
-                        "importe": f"{float(c.get('importe', 0)):,.2f}",
-                    }
-                )
-        else:
+        for c in d.get("conceptos", []):
+            precio_val = c.get("precio_unitario") or c.get("precioUnitario") or c.get("precio") or c.get("importe", 0)
+            importe_val = c.get("importe", 0)
+            
+            conceptos_render.append({
+                "clave": c.get("clave_prod_serv") or c.get("claveProdServ") or c.get("clave") or "84111506",
+                "cantidad": str(c.get("cantidad", "1.00")),
+                "unidad": c.get("clave_unidad") or c.get("claveUnidad") or c.get("unidad") or "E48",
+                "descripcion": c.get("descripcion", ""),
+                "detalles_extra": f"Folio: {d.get('folio_interno', d.get('folio', ''))}",
+                "precio": f"{_clean_float(precio_val):,.2f}",
+                "importe": f"{_clean_float(importe_val):,.2f}",
+            })
+            
+        if not conceptos_render:
             conceptos_render = [
                 {
                     "clave": d.get("clave_prod_serv", "78101802"),
                     "cantidad": "1.00",
-                    "unidad": (
-                        "ACT"
-                        if "Pago" in d.get("descripcion_concepto", "")
-                        else "E48 - SRV"
-                    ),
-                    "descripcion": d.get(
-                        "descripcion_concepto_pdf",
-                        d.get("descripcion_concepto", "PAGO"),
-                    ),
+                    "unidad": "ACT" if "Pago" in d.get("descripcion_concepto", "") else "E48 - SRV",
+                    "descripcion": d.get("descripcion_concepto_pdf", d.get("descripcion_concepto", "PAGO")),
                     "detalles_extra": f"Folio: {d.get('folio', '')}",
                     "precio": subtotal_str,
                     "importe": subtotal_str,
                 }
             ]
+        
+        
+        
+        
+        
+        
 
         es_pel_pdf = "Sí" if d.get("es_material_peligroso") else "No"
         info_material_peligroso = f"Material Peligroso: {es_pel_pdf}"
@@ -1656,65 +1773,57 @@ class BillingService:
             )
 
     def _armar_xml_libre_sin_sello(self, d: dict, relacion_uuid: str = None) -> str:
-        desc_concepto_xml = html.escape(
-            str(d.get("descripcion_concepto", "SERVICIOS DE LOGISTICA Y TRANSPORTE"))
-            .replace(" | ", " - ")
-            .replace("|", "-")
-        )
-
         relacion_xml = ""
         if relacion_uuid:
-            relacion_xml = f'\n    <cfdi:CfdiRelacionados TipoRelacion="04">\n        <cfdi:CfdiRelacionado UUID="{str(relacion_uuid).strip()}" />\n    </cfdi:CfdiRelacionados>'
+            relacion_xml = f'\n    <cfdi:CfdiRelacionados TipoRelacion="{d.get("tipo_relacion", "04")}">\n        <cfdi:CfdiRelacionado UUID="{str(relacion_uuid).strip()}" />\n    </cfdi:CfdiRelacionados>'
 
         subtotal_float = float(d["subtotal"])
         iva_float = float(d["iva"])
         ret_float = float(d["retenciones"])
 
-        # 1. Armar nodos de impuestos a nivel CONCEPTO
-        concepto_traslados = ""
-        concepto_retenciones = ""
+        # 1. Armar nodos de impuestos a nivel CONCEPTO iterando el arreglo
+        conceptos_xml = ""
+        for c in d.get("conceptos", []):
+            imp_c = float(c.get("importe", 0))
+            iva_c = imp_c * 0.16 if iva_float > 0 else 0
+            ret_c = imp_c * 0.04 if ret_float > 0 else 0
 
-        if iva_float > 0:
-            concepto_traslados = f'<cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados>'
-        if ret_float > 0:
-            concepto_retenciones = f'<cfdi:Retenciones><cfdi:Retencion Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{d["retenciones"]}" /></cfdi:Retenciones>'
+            traslados_xml = f'<cfdi:Traslados><cfdi:Traslado Base="{imp_c:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_c:.2f}" /></cfdi:Traslados>' if iva_c > 0 else ""
+            retenciones_xml = f'<cfdi:Retenciones><cfdi:Retencion Base="{imp_c:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.040000" Importe="{ret_c:.2f}" /></cfdi:Retenciones>' if ret_c > 0 else ""
 
-        concepto_impuestos = ""
-        if concepto_traslados or concepto_retenciones:
-            concepto_impuestos = f"<cfdi:Impuestos>\n                {concepto_traslados}\n                {concepto_retenciones}\n            </cfdi:Impuestos>"
+            impuestos_xml = ""
+            if traslados_xml or retenciones_xml:
+                impuestos_xml = f"<cfdi:Impuestos>\n                {traslados_xml}\n                {retenciones_xml}\n            </cfdi:Impuestos>"
+
+            obj_imp = "02" if impuestos_xml else "01"
+            
+            # Tolerancia a diferentes formatos
+            clave = html.escape(str(c.get("clave_prod_serv", c.get("claveProdServ", c.get("clave", "84111506")))))
+            unidad = html.escape(str(c.get("clave_unidad", c.get("claveUnidad", c.get("unidad", "E48")))))
+            desc = html.escape(str(c.get("descripcion", "Servicio")).replace(" | ", " - ").replace("|", "-"))
+            cant = float(c.get("cantidad", 1))
+            pu = float(c.get("precio_unitario", c.get("precioUnitario", c.get("precio", imp_c))))
+
+            conceptos_xml += f"""
+        <cfdi:Concepto ClaveProdServ="{clave}" NoIdentificacion="001" Cantidad="{cant:.2f}" ClaveUnidad="{unidad}" Unidad="SRV" Descripcion="{desc}" ValorUnitario="{pu:.2f}" Importe="{imp_c:.2f}" ObjetoImp="{obj_imp}">
+            {impuestos_xml}
+        </cfdi:Concepto>"""
 
         # 2. Armar nodos de impuestos a nivel GLOBAL (Totales)
-        global_traslados = ""
-        global_retenciones = ""
-
-        if iva_float > 0:
-            global_traslados = f'<cfdi:Traslados><cfdi:Traslado Base="{d["subtotal"]}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{d["iva"]}" /></cfdi:Traslados>'
-        if ret_float > 0:
-            global_retenciones = f'<cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{d["retenciones"]}" /></cfdi:Retenciones>'
+        global_traslados = f'<cfdi:Traslados><cfdi:Traslado Base="{subtotal_float:.2f}" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="{iva_float:.2f}" /></cfdi:Traslados>' if iva_float > 0 else ""
+        global_retenciones = f'<cfdi:Retenciones><cfdi:Retencion Impuesto="002" Importe="{ret_float:.2f}" /></cfdi:Retenciones>' if ret_float > 0 else ""
 
         global_impuestos = ""
         if global_traslados or global_retenciones:
-            attr_ret = (
-                f' TotalImpuestosRetenidos="{d["retenciones"]}"'
-                if ret_float > 0
-                else ""
-            )
-            attr_tras = (
-                f' TotalImpuestosTrasladados="{d["iva"]}"' if iva_float > 0 else ""
-            )
+            attr_ret = f' TotalImpuestosRetenidos="{ret_float:.2f}"' if ret_float > 0 else ""
+            attr_tras = f' TotalImpuestosTrasladados="{iva_float:.2f}"' if iva_float > 0 else ""
             global_impuestos = f"<cfdi:Impuestos{attr_ret}{attr_tras}>\n        {global_retenciones}\n        {global_traslados}\n    </cfdi:Impuestos>"
-
-        # 3. Determinar Objeto de Impuesto (02 = Sí, 01 = No)
-        objeto_imp = "02" if (iva_float > 0 or ret_float > 0) else "01"
 
         return f"""<?xml version="1.0" encoding="UTF-8"?>
 <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" Version="4.0" Fecha="{d['fecha']}" Serie="{d['serie']}" Folio="{d['folio']}" FormaPago="{d.get('forma_pago', '99')}" CondicionesDePago="{d.get('condiciones_pago', 'CONTADO')}" SubTotal="{d['subtotal']}" Moneda="{d.get('moneda', 'MXN')}" TipoCambio="1" Total="{d['total']}" TipoDeComprobante="I" Exportacion="01" MetodoPago="{d.get('metodo_pago', 'PPD')}" LugarExpedicion="{self.emisor_cp}">{relacion_xml}
     <cfdi:Emisor Rfc="{xml_clean(self.emisor_rfc)}" Nombre="{xml_clean(self.emisor_nombre)}" RegimenFiscal="{self.emisor_regimen}" />
     <cfdi:Receptor Rfc="{xml_clean(d['rfc_cliente'])}" Nombre="{xml_clean(d['nombre_cliente'])}" DomicilioFiscalReceptor="{d['cp_cliente']}" RegimenFiscalReceptor="{d['regimen_cliente']}" UsoCFDI="{d['uso_cfdi']}" />
-    <cfdi:Conceptos>
-        <cfdi:Concepto ClaveProdServ="{d.get('clave_prod_serv') or '78121601'}" NoIdentificacion="001" Cantidad="1.00" ClaveUnidad="E48" Unidad="SRV" Descripcion="{desc_concepto_xml}" ValorUnitario="{d['subtotal']}" Importe="{d['subtotal']}" ObjetoImp="{objeto_imp}">
-            {concepto_impuestos}
-        </cfdi:Concepto>
+    <cfdi:Conceptos>{conceptos_xml}
     </cfdi:Conceptos>
     {global_impuestos}
 </cfdi:Comprobante>""".strip()
@@ -2083,6 +2192,17 @@ class BillingService:
         iva = float(invoice_data.get("iva", 0) or 0)
         retenciones = float(invoice_data.get("retenciones", 0) or 0)
         total = subtotal + iva - retenciones
+        # Asegurarnos de usar los conceptos que vienen de React
+        conceptos_payload = invoice_data.get("conceptos", [])
+        if not conceptos_payload:
+            conceptos_payload = [{
+                "clave": clave_sat,
+                "descripcion": concepto_texto,
+                "cantidad": "1.00",
+                "unidad": "E48",
+                "precio": f"{subtotal:.2f}",
+                "importe": f"{subtotal:.2f}",
+            }]
 
         # DICCIONARIO CRUZO PARA EL XML Y EL PDF
         data = {
@@ -2094,44 +2214,24 @@ class BillingService:
             "iva": f"{iva:.2f}",
             "retenciones": f"{retenciones:.2f}",
             "total": f"{total:.2f}",
-            "forma_pago": invoice_data.get("forma_pago")
-            or getattr(cliente, "forma_pago", "99")
-            or "99",
-            "metodo_pago": invoice_data.get("metodo_pago")
-            or getattr(cliente, "metodo_pago", "PPD")
-            or "PPD",
-            "moneda": invoice_data.get("moneda")
-            or getattr(cliente, "moneda", "MXN")
-            or "MXN",
+            "forma_pago": invoice_data.get("forma_pago") or getattr(cliente, "forma_pago", "99") or "99",
+            "metodo_pago": invoice_data.get("metodo_pago") or getattr(cliente, "metodo_pago", "PPD") or "PPD",
+            "moneda": invoice_data.get("moneda") or getattr(cliente, "moneda", "MXN") or "MXN",
             "tc": "1",
             "tipo_comprobante": "I",
-            "condiciones_pago": (
-                f"EN {cliente.dias_credito or 0} DIAS"
-                if (cliente.dias_credito or 0) > 0
-                else "CONTADO"
-            ),
-            # --- MANDAMOS EL TEXTO EN TODAS LAS VARIABLES POSIBLES PARA QUE EL PDF NO FALLE ---
+            "condiciones_pago": f"EN {cliente.dias_credito or 0} DIAS" if (cliente.dias_credito or 0) > 0 else "CONTADO",
             "descripcion_concepto": concepto_texto,
             "concepto": concepto_texto,
-            "conceptos": [
-                {
-                    "clave": clave_sat,
-                    "descripcion": concepto_texto,
-                    "cantidad": "1.00",
-                    "unidad": "E48 - SRV",
-                    "precio": f"{subtotal:.2f}",
-                    "importe": f"{subtotal:.2f}",
-                }
-            ],
-            # ----------------------------------------------------------------------------------
-            "clave_prod_serv": clave_sat,
+            "conceptos": conceptos_payload,
             "rfc_cliente": rfc_cliente,
             "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
             "cp_cliente": cp_cliente,
             "regimen_cliente": regimen_cliente,
             "uso_cfdi": uso_cfdi,
+            "tipo_relacion": invoice_data.get("tipo_relacion", "04")
         }
-
+        
+        
         dias_credito = cliente.dias_credito or 0
         from datetime import date, timedelta
         from decimal import Decimal

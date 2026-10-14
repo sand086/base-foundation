@@ -278,34 +278,69 @@ export default function CFDIVault() {
     );
 
     try {
-      const response = await axiosClient.post(
-        `/api/finance/stamp/chain-cancel-trip`,
-        {
-          invoice_ids: [invoiceToCancel.id],
-          correo_notificacion: "desarrolloSoft@asicomsystems.com.mx", // O puedes pedirlo en el modal
-          supervisor_email: supervisorEmail,
-          supervisor_password: supervisorPassword,
-          motivo: "02",
-        },
-      );
+      // ====================================================================
+      // 1. SI ESTAMOS EN LA PESTAÑA DE PAGOS (CANCELAR REP)
+      // ====================================================================
+      if (activeTab === "PAGO_CLIENTE") {
+        const response = await axiosClient.post(
+          `/api/finance/receivables/payments/cancel`,
+          {
+            payment_ids: [invoiceToCancel.id],
+            motivo: "02",
+          },
+        );
 
-      const { data } = response.data;
-      const error = data.find(
-        (r: any) =>
-          r.estatus.includes("ERROR") || r.estatus.includes("RECHAZADO"),
-      );
+        const resultados = response.data.resultados || [];
+        const error = resultados.find(
+          (r: any) => r.status === "error" || r.mensaje?.includes("ERROR"),
+        );
 
-      if (!error) {
-        toast.success("Factura cancelada y verificada exitosamente.", {
-          id: toastId,
-        });
-        setCancelAuthModalOpen(false);
-        setSupervisorEmail("");
-        setSupervisorPassword("");
-      } else {
-        toast.error(`SAT Rechazó la cancelación: ${error.estatus}`, {
-          id: toastId,
-        });
+        if (!error) {
+          toast.success("Complemento de Pago cancelado exitosamente.", {
+            id: toastId,
+          });
+          setCancelAuthModalOpen(false);
+          setSupervisorEmail("");
+          setSupervisorPassword("");
+        } else {
+          toast.error(`SAT Rechazó la cancelación: ${error.mensaje}`, {
+            id: toastId,
+          });
+        }
+      }
+      // ====================================================================
+      // 2. SI ESTAMOS EN FACTURAS / CARTAS PORTE (CANCELAR FACTURA)
+      // ====================================================================
+      else {
+        const response = await axiosClient.post(
+          `/api/finance/stamp/chain-cancel-trip`,
+          {
+            invoice_ids: [invoiceToCancel.id],
+            correo_notificacion: "desarrolloSoft@asicomsystems.com.mx",
+            supervisor_email: supervisorEmail,
+            supervisor_password: supervisorPassword,
+            motivo: "02",
+          },
+        );
+
+        const { data } = response.data;
+        const error = data.find(
+          (r: any) =>
+            r.estatus.includes("ERROR") || r.estatus.includes("RECHAZADO"),
+        );
+
+        if (!error) {
+          toast.success("Factura cancelada y verificada exitosamente.", {
+            id: toastId,
+          });
+          setCancelAuthModalOpen(false);
+          setSupervisorEmail("");
+          setSupervisorPassword("");
+        } else {
+          toast.error(`SAT Rechazó la cancelación: ${error.estatus}`, {
+            id: toastId,
+          });
+        }
       }
     } catch (err: any) {
       toast.error(

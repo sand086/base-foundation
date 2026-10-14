@@ -48,7 +48,7 @@ export const useUsers = () => {
     ultimoAcceso: user.last_login
       ? new Date(user.last_login).toLocaleDateString()
       : "Nunca",
-    password: user.password,
+    password: undefined,
   });
 
   const fetchUsers = useCallback(async () => {
@@ -86,7 +86,17 @@ export const useUsers = () => {
   // Usamos "UserUpdate" y nos aseguramos de que el id sea 'number'
   const updateUser = async (id: string, data: UserUpdate) => {
     try {
-      await AuthenticationService.updateUserApiAuthUserIdPut(Number(id), data);
+      const payload: UserUpdate = { ...data };
+
+      // Si la contraseña viene vacía, no la enviamos a la API
+      if (!payload.password || payload.password.trim() === "") {
+        delete payload.password;
+      }
+
+      await AuthenticationService.updateUserApiAuthUserIdPut(
+        Number(id),
+        payload,
+      );
       toast.success("Usuario actualizado");
       fetchUsers();
       return true;
