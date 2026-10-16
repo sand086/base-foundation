@@ -277,7 +277,7 @@ class PaymentComplementService:
         counter = (
             self.db.query(SatFolioCounter)
             .filter(SatFolioCounter.series == series)
-            .with_for_update()
+            .with_for_update(of=SatFolioCounter)
             .first()
         )
         if not counter:
@@ -327,7 +327,7 @@ class PaymentComplementService:
                     == operation_fingerprint,
                 )
             )
-            .with_for_update()
+            .with_for_update(of=ReceivablePaymentBatch)
             .first()
         )
 
@@ -874,7 +874,7 @@ class PaymentComplementService:
             batch = (
                 self.db.query(ReceivablePaymentBatch)
                 .filter(ReceivablePaymentBatch.id == batch.id)
-                .with_for_update()
+                .with_for_update(of=ReceivablePaymentBatch)
                 .first()
             )
             if batch:
@@ -1496,7 +1496,7 @@ class PaymentComplementService:
             batch = (
                 self.db.query(ReceivablePaymentBatch)
                 .filter(ReceivablePaymentBatch.id == batch.id)
-                .with_for_update()
+                .with_for_update(of=ReceivablePaymentBatch)
                 .first()
             )
             batch.complemento_uuid = complemento_uuid
@@ -1530,7 +1530,7 @@ class PaymentComplementService:
                 batch = (
                     self.db.query(ReceivablePaymentBatch)
                     .filter(ReceivablePaymentBatch.id == batch.id)
-                    .with_for_update()
+                    .with_for_update(of=ReceivablePaymentBatch)
                     .first()
                 )
                 if not batch:
@@ -1577,7 +1577,7 @@ class PaymentComplementService:
             batch = (
                 self.db.query(ReceivablePaymentBatch)
                 .filter(ReceivablePaymentBatch.id == batch.id)
-                .with_for_update()
+                .with_for_update(of=ReceivablePaymentBatch)
                 .first()
             )
             pagos_lote = (
@@ -2015,7 +2015,7 @@ class PaymentComplementService:
         batch = (
             self.db.query(ReceivablePaymentBatch)
             .filter(ReceivablePaymentBatch.folio_complemento == folio_complemento)
-            .with_for_update()
+            .with_for_update(of=ReceivablePaymentBatch)
             .first()
         )
         if batch:
@@ -2414,7 +2414,7 @@ class PaymentComplementService:
                 batch = (
                     self.db.query(ReceivablePaymentBatch)
                     .filter(ReceivablePaymentBatch.id == batch.id)
-                    .with_for_update()
+                    .with_for_update(of=ReceivablePaymentBatch)
                     .first()
                 )
                 pagos_confirmados = (
