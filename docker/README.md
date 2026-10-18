@@ -8,6 +8,8 @@ docker compose -f docker-compose.dev.yml up --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 # QA (necesita prod arriba):
 docker compose --env-file .env.qa -f docker-compose.qa.yml up -d --build
+# Actualizar QA tras subir cambios al repo (pull + rebuild + up): ./scripts/deploy-qa.sh [rama] [--migrate]
+# Actualizar PROD (respaldo de BD + pull + rebuild + up; confirma solo en terminal interactiva): ./scripts/deploy-prod.sh [rama] [--migrate] [--no-backup] [--yes]
 ```
 
 - **BD**: el servicio `db` arranca vacío. Nada migra ni siembra solo. Opciones (manuales):
