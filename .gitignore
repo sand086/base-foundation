@@ -112,3 +112,6 @@ backend/.env.*
 !.env.prod.example
 !.env.qa.example
 !.dockerignore
+
+# Respaldos de BD generados por scripts/deploy-prod.sh
+backups/
