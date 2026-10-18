@@ -1,0 +1,99 @@
+# QA: misma app, pero con su propia base (qa_tms_db), PAC en modo QA y volúmenes propios.
+# Reutiliza el Postgres del stack de prod (servicio "db"), por eso prod debe estar arriba:
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#   docker compose --env-file .env.qa   -f docker-compose.qa.yml   up -d --build
+# DB_USER / DB_PASSWORD en .env.qa deben ser los mismos que en .env.prod (es el mismo servidor).
+# Las bases se crean VACÍAS: importa tu dump en cada una. Entra por http://host:${FRONTEND_PORT:?define FRONTEND_PORT en .env.qa}
+name: tms3t-qa
+
+services:
+  # Crea qa_tms_db si no existe (idempotente; sirve también si el volumen db_data ya existía).
+  # Las bases se crean VACÍAS: importa tu dump en cada una.
+  db_qa_init:
+    image: postgres:16-alpine
+    restart: "no"
+    networks: [prod]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env.qa}
+    command: >
+      sh -c "psql -h db -U ${DB_USER:?define DB_USER en .env.qa} -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME:?define DB_NAME en .env.qa}'\" | grep -q 1
+      || psql -h db -U ${DB_USER:?define DB_USER en .env.qa} -d postgres -c 'CREATE DATABASE ${DB_NAME:?define DB_NAME en .env.qa}'"
+
+  backend_qa:
+    build:
+      context: ./backend
+    restart: always
+    networks: [default, prod]
+    depends_on:
+      db_qa_init:
+        condition: service_completed_successfully
+    environment:
+      ENVIRONMENT: QA
+      TZ: ${TZ:?define TZ en .env.qa}
+      DB_SERVER: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:?define DB_USER en .env.qa}
+      DB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env.qa}
+      DB_NAME: ${DB_NAME:?define DB_NAME en .env.qa}
+      SECRET_KEY: ${SECRET_KEY:?define SECRET_KEY en .env.qa}
+      GOOGLE_RECAPTCHA_V3_SECRET_KEY: ${GOOGLE_RECAPTCHA_V3_SECRET_KEY?define GOOGLE_RECAPTCHA_V3_SECRET_KEY en .env.qa (puede ir vacía)}
+      PAC_USER_QA: ${PAC_USER_QA?define PAC_USER_QA en .env.qa (puede ir vacía)}
+      PAC_PASS_QA: ${PAC_PASS_QA?define PAC_PASS_QA en .env.qa (puede ir vacía)}
+      CERT_DIR: /data/certs
+      STORAGE_DIR: /data/storage/xml_timbrados
+    volumes:
+      - uploads_qa_data:/app/app/uploads
+      - certs_qa_data:/data/certs
+      - storage_qa_data:/data/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend_qa:
+    build:
+      context: .
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?define VITE_API_BASE_URL en .env.qa}
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL?define VITE_BACKEND_URL en .env.qa (puede ir vacía)}
+        VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY: ${VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY?define VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY en .env.qa (puede ir vacía)}
+        VITE_GEOAPIFY_API_KEY: ${VITE_GEOAPIFY_API_KEY?define VITE_GEOAPIFY_API_KEY en .env.qa (puede ir vacía)}
+    restart: always
+    environment:
+      BACKEND_UPSTREAM: backend_qa:8000
+    depends_on:
+      backend_qa:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:?define FRONTEND_PORT en .env.qa}:80"
+
+  # Opt-in: docker compose --env-file .env.qa -f docker-compose.qa.yml --profile tools run --rm migrate_qa
+  migrate_qa:
+    profiles: ["tools"]
+    build:
+      context: ./backend
+    networks: [prod]
+    command: sh -c 'DATABASE_URL="postgresql://$$DB_USER:$$DB_PASSWORD@db:5432/$$DB_NAME" alembic upgrade head'
+    depends_on:
+      db_qa_init:
+        condition: service_completed_successfully
+    environment:
+      DB_USER: ${DB_USER:?define DB_USER en .env.qa}
+      DB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env.qa}
+      DB_NAME: ${DB_NAME:?define DB_NAME en .env.qa}
+      DB_SERVER: db
+      DB_PORT: 5432
+
+networks:
+  default:
+  prod:
+    name: tms3t-prod-net
+    external: true
+
+volumes:
+  uploads_qa_data:
+  certs_qa_data:
+  storage_qa_data:

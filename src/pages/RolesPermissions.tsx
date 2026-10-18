@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -151,7 +152,7 @@ function getAuthToken(): string | null {
 }
 
 async function fetchMeUser(): Promise<MeUser | null> {
-  const API_BASE = (import.meta as any)?.env?.VITE_API_BASE_URL ?? "";
+  const API_BASE = API_ORIGIN;
   const token = getAuthToken();
 
   if (!API_BASE || !token) return null;

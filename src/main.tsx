@@ -4,10 +4,11 @@ import "./App.css";
 
 // 1. Importas la configuración global
 import { OpenAPI } from "./api/generated";
+import { API_ORIGIN } from "./lib/apiConfig";
 
 // 2. Configurar la BASE usando el ENV
 // Usamos VITE_API_BASE_URL para que OpenAPI sepa a dónde mandar los JSON
-OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+OpenAPI.BASE = API_ORIGIN;
 
 // Logs de seguridad para que veas en la consola si detectó bien tu .env
 console.log(" Entorno:", import.meta.env.MODE);

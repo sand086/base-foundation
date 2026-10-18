@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -191,7 +192,7 @@ const Users = () => {
       render: (_, user) => {
         const avatarUrl = user.avatar?.startsWith("http")
           ? user.avatar
-          : `${import.meta.env.VITE_API_BASE_URL?.replace(/\/api$/, "") || ""}${user.avatar}`;
+          : `${API_ORIGIN}${user.avatar}`;
 
         return (
           <div className="flex items-center gap-4 py-1">

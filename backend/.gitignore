@@ -17,3 +17,4 @@ app/storage/
 # archivos ocultos
 .*
 !.gitignore
+!.dockerignore
