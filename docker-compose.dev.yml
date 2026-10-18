@@ -1,0 +1,120 @@
+# DESARROLLO: hot reload en back (uvicorn --reload) y front (vite HMR), código montado como volumen.
+#   docker compose -f docker-compose.dev.yml up --build
+# Las variables salen de ./.env (ver .env.example).
+name: ${COMPOSE_PROJECT_NAME:-tms3t}-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?define DB_USER en .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env}
+      POSTGRES_DB: ${DB_NAME:-tms_db}
+      TZ: ${TZ:-America/Mexico_City}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-QA}
+      TZ: ${TZ:-America/Mexico_City}
+      DB_SERVER: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-tms_db}
+      SECRET_KEY: ${SECRET_KEY:-}
+      GOOGLE_RECAPTCHA_V3_SECRET_KEY: ${GOOGLE_RECAPTCHA_V3_SECRET_KEY:-}
+      PAC_USER_QA: ${PAC_USER_QA:-}
+      PAC_PASS_QA: ${PAC_PASS_QA:-}
+      PAC_USER_PROD: ${PAC_USER_PROD:-}
+      PAC_PASS_PROD: ${PAC_PASS_PROD:-}
+      CERT_DIR: /data/certs
+    volumes:
+      - ./backend/app:/app/app          
+      - ./backend/app/certs:/data/certs
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+      VITE_BACKEND_URL: ${VITE_BACKEND_URL:-}
+      VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY: ${VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY:-}
+      VITE_GEOAPIFY_API_KEY: ${VITE_GEOAPIFY_API_KEY:-}
+      VITE_PROXY_TARGET: http://backend:8000
+      CHOKIDAR_USEPOLLING: "true"       # HMR fiable con bind mounts en Windows/macOS
+    volumes:
+      - .:/app
+      - /app/node_modules               # node_modules del contenedor (no el de Windows)
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+
+  n8n:
+    image: n8nio/n8n:1.100.1
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/seed.sh"]
+    environment:
+      TZ: ${TZ:-America/Mexico_City}
+      GENERIC_TIMEZONE: ${TZ:-America/Mexico_City}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
+      N8N_SECURE_COOKIE: "false"        # dev por http
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_RUNNERS_ENABLED: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n        # n8n usa su propio SQLite aquí: NO toca la BD de la app
+      - ./docker/n8n/workflows:/workflows:ro
+      - ./docker/n8n/seed.sh:/seed.sh:ro
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+
+  # Opt-in (no corre solo): docker compose -f docker-compose.dev.yml --profile tools run --rm migrate
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: ./backend
+    command: sh -c 'DATABASE_URL="postgresql://$$DB_USER:$$DB_PASSWORD@db:5432/$$DB_NAME" alembic upgrade head'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-tms_db}
+      DB_SERVER: db
+      DB_PORT: 5432
+
+volumes:
+  db_data:
+  certs_data:
+  n8n_data:

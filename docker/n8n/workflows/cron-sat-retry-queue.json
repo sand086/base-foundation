@@ -1,0 +1,30 @@
+{
+  "id": "cron-sat-retry-queue",
+  "name": "SAT - Procesar cola de reintentos (cada 5 min)",
+  "active": false,
+  "versionId": "cron-sat-retry-queue-v1",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "*/5 * * * *" } ] } },
+      "id": "cron-sat-retry-queue-trigger",
+      "name": "Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [ 0, 0 ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://backend:8000/api/sat/retry-queue/process?limit=10",
+        "options": { "timeout": 300000 }
+      },
+      "id": "cron-sat-retry-queue-http",
+      "name": "Llamar backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 240, 0 ]
+    }
+  ],
+  "connections": { "Cron": { "main": [ [ { "node": "Llamar backend", "type": "main", "index": 0 } ] ] } },
+  "settings": { "executionOrder": "v1", "timezone": "America/Mexico_City" }
+}

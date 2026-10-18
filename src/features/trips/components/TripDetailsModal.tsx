@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -482,8 +483,7 @@ export function TripDetailsModal({
   const handleDownloadPDF = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando PDF...");
     try {
-      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const baseURL = rawBaseURL.replace(/\/$/, "");
+      const baseURL = API_ORIGIN;
       const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/pdf`;
 
       const link = document.createElement("a");
@@ -504,8 +504,7 @@ export function TripDetailsModal({
   const handleDownloadXML = (uuidToDownload: string) => {
     const toastId = toast.loading("Descargando XML...");
     try {
-      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const baseURL = rawBaseURL.replace(/\/$/, "");
+      const baseURL = API_ORIGIN;
       const fileUrl = `${baseURL}/api/sat/invoice/${uuidToDownload}/xml`;
 
       const link = document.createElement("a");

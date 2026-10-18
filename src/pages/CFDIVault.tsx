@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -877,8 +878,7 @@ export default function CFDIVault() {
           const downloadFile = (type: "pdf" | "xml") => {
             let fileUrl = "";
             if (row.uuid) {
-              const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "";
-              const baseURL = rawBaseURL.replace(/\/$/, "");
+              const baseURL = API_ORIGIN;
               fileUrl = `${baseURL}/api/sat/invoice/${row.uuid}/${type}`;
             } else {
               fileUrl =

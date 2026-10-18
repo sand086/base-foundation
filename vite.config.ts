@@ -7,9 +7,12 @@ import svgr from "vite-plugin-svgr";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const backendUrl = env.VITE_API_BASE_URL
-    ? env.VITE_API_BASE_URL.replace("/api", "")
-    : "http://localhost:8000";
+  // VITE_PROXY_TARGET (docker: http://backend:8000) tiene prioridad; si no, se deriva de VITE_API_BASE_URL.
+  const backendUrl =
+    env.VITE_PROXY_TARGET ||
+    (env.VITE_API_BASE_URL && /^https?:\/\//.test(env.VITE_API_BASE_URL)
+      ? env.VITE_API_BASE_URL.replace("/api", "")
+      : "http://localhost:8000");
 
   return {
     server: {
