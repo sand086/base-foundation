@@ -2,7 +2,7 @@
 #   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 # (QA vive en docker-compose.qa.yml con .env.qa y reutiliza el Postgres de este stack.)
 # Requiere en ./.env.prod: DB_USER, DB_PASSWORD, SECRET_KEY, N8N_ENCRYPTION_KEY (ver .env.example).
-# Detrás de un proxy TLS (Caddy/Traefik/nginx del host) apuntando a FRONTEND_PORT.
+# Detrás de un nginx del host con TLS que apunta a 127.0.0.1:FRONTEND_PORT (3000).
 name: tms3t-prod
 
 services:
@@ -70,7 +70,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:?define FRONTEND_PORT en .env.prod}:80"
+      - "127.0.0.1:${FRONTEND_PORT:?define FRONTEND_PORT en .env.prod}:80"   # solo loopback: el nginx del host (TLS) lo publica
 
   n8n:
     image: n8nio/n8n:1.100.1

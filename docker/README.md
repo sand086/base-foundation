@@ -4,7 +4,7 @@
 cp .env.example .env            # y rellena DB_USER, DB_PASSWORD, SECRET_KEY, N8N_ENCRYPTION_KEY…
 # Dev (hot reload):  front :8080  back :8000  n8n :5678  db 127.0.0.1:${DB_HOST_PORT}
 docker compose -f docker-compose.dev.yml up --build
-# Prod:              solo nginx (:FRONTEND_PORT) público; db/back internos; n8n en 127.0.0.1
+# Prod:              solo nginx en 127.0.0.1:FRONTEND_PORT (3000 prod, 3100 QA); el nginx del host lo publica con TLS; db/back internos; n8n en 127.0.0.1
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 # QA (necesita prod arriba):
 docker compose --env-file .env.qa -f docker-compose.qa.yml up -d --build
