@@ -1,8 +1,8 @@
 # QA: misma app, pero con su propia base (qa_tms_db), PAC en modo QA y volúmenes propios.
 # Reutiliza el Postgres del stack de prod (servicio "db"), por eso prod debe estar arriba:
-#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
-#   docker compose --env-file .env.qa   -f docker-compose.qa.yml   up -d --build
-# DB_USER / DB_PASSWORD en .env.qa deben ser los mismos que en .env.prod (es el mismo servidor).
+#   (en /opt/app/3tapp) docker compose -f docker-compose.prod.yml up -d --build
+#   (en /opt/app/3tapp-qa) docker compose -f docker-compose.qa.yml up -d --build
+# DB_USER / DB_PASSWORD en el .env de QA deben ser los mismos que en el de prod (es el mismo servidor).
 # Las bases se crean VACÍAS: importa tu dump en cada una. Se publica solo en 127.0.0.1:FRONTEND_PORT (3100); entra por el nginx del host.
 name: tms3t-qa
 
@@ -41,6 +41,7 @@ services:
       PAC_PASS_QA: ${PAC_PASS_QA?define PAC_PASS_QA en .env.qa (puede ir vacía)}
       CERT_DIR: /data/certs
       STORAGE_DIR: /data/storage/xml_timbrados
+      APP_BASE_PATH: /app/app           # templates/ viven en /app/app; sin esto payment_service/email_service buscan en /app
     volumes:
       - uploads_qa_data:/app/app/uploads
       - certs_qa_data:/data/certs
@@ -70,7 +71,7 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_PORT:?define FRONTEND_PORT en .env.qa}:80"   # solo loopback: el nginx del host (TLS) lo publica
 
-  # Opt-in: docker compose --env-file .env.qa -f docker-compose.qa.yml --profile tools run --rm migrate_qa
+  # Opt-in: docker compose -f docker-compose.qa.yml --profile tools run --rm migrate_qa
   migrate_qa:
     profiles: ["tools"]
     build:
