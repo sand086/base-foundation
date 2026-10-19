@@ -73,7 +73,7 @@ services:
       - "127.0.0.1:${FRONTEND_PORT:?define FRONTEND_PORT en .env.prod}:80"   # solo loopback: el nginx del host (TLS) lo publica
 
   n8n:
-    image: n8nio/n8n:1.100.1
+    image: n8nio/n8n:2.43.7
     restart: always
     depends_on:
       backend:
