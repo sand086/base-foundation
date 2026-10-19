@@ -78,7 +78,7 @@ services:
       - "${FRONTEND_PORT:-8080}:8080"
 
   n8n:
-    image: n8nio/n8n:1.100.1
+    image: n8nio/n8n:2.43.7
     restart: unless-stopped
     depends_on:
       backend:
