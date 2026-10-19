@@ -40,7 +40,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { FUEL_CONFIG } from "../types";
-import { useTrips } from "@/features/trips/hooks/useTrips";
+import { useTripsSummary } from "@/features/trips/hooks/useTripsSummary";
 import { useUnits } from "@/features/units/hooks/useUnits";
 
 /** =========================
@@ -297,7 +297,10 @@ export function AddTicketModal({
   onSubmit,
   initialData,
 }: AddTicketModalProps) {
-  const { trips = [] } = useTrips();
+  // Mismos estatus que filtra activeTrips más abajo, ahora resuelto en el servidor.
+  const { trips = [] } = useTripsSummary({
+    status: "entregado,en_transito,cerrado,liquidado",
+  });
   const { unidades, fetchLastOdometer } = useUnits();
 
   // Estados de vinculación

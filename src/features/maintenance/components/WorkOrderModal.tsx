@@ -55,7 +55,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 // Hooks de tu aplicación
 import { useMaintenance } from "@/features/maintenance/hooks/useMaintenance";
 import { useUnits } from "@/features/units/hooks/useUnits";
-import { useTrips } from "@/features/trips/hooks/useTrips";
+import { useTripsSummary } from "@/features/trips/hooks/useTripsSummary";
 import { InventoryItem } from "@/features/inventory/types";
 import { WorkOrder } from "@/features/maintenance/types";
 
@@ -114,7 +114,10 @@ export const WorkOrderModal = ({
 }: WorkOrderModalProps) => {
   const { inventory, mechanics } = useMaintenance();
   const { unidades } = useUnits();
-  const { trips } = useTrips();
+  // Solo viajes no cerrados/liquidados: es lo único que muestra el selector (activeTripsForUnit).
+  const { trips } = useTripsSummary({
+    status: "creado,en_transito,detenido,retraso,entregado,accidente,bloqueado",
+  });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedParts, setSelectedParts] = useState<SelectedPart[]>([]);

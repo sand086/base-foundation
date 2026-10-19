@@ -85,7 +85,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 // IMPORTAMOS LOS VIAJES PARA REVISAR EL ESTATUS
-import { useTrips } from "@/features/trips/hooks/useTrips";
+import { useTripsSummary } from "@/features/trips/hooks/useTripsSummary";
 
 interface SubTicket {
   id: string;
@@ -113,7 +113,7 @@ const legTypeLabels: Record<string, string> = {
 
 const FuelLoads = () => {
   // INYECTAMOS USTRIPS PARA EL BLINDAJE
-  const { trips } = useTrips();
+  const { trips } = useTripsSummary();
 
   const [units, setUnits] = useState<Unit[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
