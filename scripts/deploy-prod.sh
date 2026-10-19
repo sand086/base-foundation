@@ -7,11 +7,11 @@
 #   ./scripts/deploy-prod.sh --no-pull       # solo rebuild (cuando ya copiaste el código a mano)
 #   ./scripts/deploy-prod.sh --no-backup     # omite el respaldo previo de la BD
 #   ./scripts/deploy-prod.sh --yes           # fuerza saltar la confirmación aunque haya terminal
-# Requisitos: .env.prod lleno. Las imágenes llevan el código adentro: sin rebuild no hay cambios.
+# Requisitos: .env lleno. Las imágenes llevan el código adentro: sin rebuild no hay cambios.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-COMPOSE=(docker compose --env-file .env.prod -f docker-compose.prod.yml)
+COMPOSE=(docker compose -f docker-compose.prod.yml)
 BRANCH=""; MIGRATE=0; PULL=1; BACKUP=1; ASSUME_YES=0
 for arg in "$@"; do
   case "$arg" in
@@ -24,7 +24,7 @@ for arg in "$@"; do
   esac
 done
 
-[ -f .env.prod ] || { echo "Falta .env.prod (copia .env.prod.example y llénalo)" >&2; exit 1; }
+[ -f .env ] || { echo "Falta .env (copia .env.prod.example y llénalo)" >&2; exit 1; }
 
 # Solo pregunta en terminal interactiva; desde CI/SSH sin TTY (GitHub Actions) corre directo.
 if [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ]; then

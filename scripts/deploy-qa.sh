@@ -5,11 +5,11 @@
 #   ./scripts/deploy-qa.sh qa              # cambia a la rama "qa" antes de actualizar
 #   ./scripts/deploy-qa.sh qa --migrate    # además corre alembic upgrade head sobre qa_tms_db
 #   ./scripts/deploy-qa.sh --no-pull       # solo rebuild (cuando ya copiaste el código a mano)
-# Requisitos: .env.qa lleno y el stack de prod arriba (QA usa su Postgres y su red).
+# Requisitos: .env lleno y el stack de prod arriba (QA usa su Postgres y su red).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-COMPOSE=(docker compose --env-file .env.qa -f docker-compose.qa.yml)
+COMPOSE=(docker compose -f docker-compose.qa.yml)
 BRANCH=""; MIGRATE=0; PULL=1
 for arg in "$@"; do
   case "$arg" in
@@ -20,7 +20,7 @@ for arg in "$@"; do
   esac
 done
 
-[ -f .env.qa ] || { echo "Falta .env.qa (copia .env.qa.example y llénalo)" >&2; exit 1; }
+[ -f .env ] || { echo "Falta .env (copia .env.qa.example y llénalo)" >&2; exit 1; }
 docker network inspect tms3t-prod-net >/dev/null 2>&1 \
   || { echo "No existe la red tms3t-prod-net: levanta primero prod (docker-compose.prod.yml)" >&2; exit 1; }
 

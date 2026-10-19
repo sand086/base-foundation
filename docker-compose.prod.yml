@@ -1,7 +1,7 @@
 # PRODUCCIÓN: imágenes construidas (sin volúmenes de código), solo nginx expuesto al público.
-#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
-# (QA vive en docker-compose.qa.yml con .env.qa y reutiliza el Postgres de este stack.)
-# Requiere en ./.env.prod: DB_USER, DB_PASSWORD, SECRET_KEY, N8N_ENCRYPTION_KEY (ver .env.example).
+#   docker compose -f docker-compose.prod.yml up -d --build
+# (QA vive en docker-compose.qa.yml con su propio .env y reutiliza el Postgres de este stack.)
+# Requiere en ./.env: DB_USER, DB_PASSWORD, SECRET_KEY, N8N_ENCRYPTION_KEY (ver .env.example).
 # Detrás de un nginx del host con TLS que apunta a 127.0.0.1:FRONTEND_PORT (3000).
 name: tms3t-prod
 
@@ -45,9 +45,11 @@ services:
       PAC_USER_PROD: ${PAC_USER_PROD?define PAC_USER_PROD en .env.prod (puede ir vacía)}
       PAC_PASS_PROD: ${PAC_PASS_PROD?define PAC_PASS_PROD en .env.prod (puede ir vacía)}
       CERT_DIR: /data/certs
+      APP_BASE_PATH: /app/app           # templates/ y storage/ viven en /app/app; sin esto payment_service/email_service buscan en /app
     volumes:
       - uploads_data:/app/app/uploads
       - certs_data:/data/certs
+      - storage_data:/app/app/storage   # XML/PDF timbrados y candado de correos: sobreviven a cada deploy
     # Sin "ports": el público entra por nginx (/api). n8n lo llama por la red interna.
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:8000/"]
@@ -120,4 +122,5 @@ volumes:
   db_data:
   uploads_data:
   certs_data:
+  storage_data:
   n8n_data:
