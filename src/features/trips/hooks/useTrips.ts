@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LogisticsService } from "@/api/generated";
 import { ApiError } from "@/api/generated/core/ApiError";
 import { useToast } from "@/components/ui/use-toast";
@@ -9,30 +10,56 @@ import {
   TripTimelineEventCreatePayload,
 } from "@/features/trips/types";
 
+export const TRIPS_QUERY_KEY = ["trips"] as const;
+
+// Referencia estable: un [] nuevo por render dispararía los useEffect/useMemo de quien dependa de `trips`.
+const NO_TRIPS: Trip[] = [];
+
 export const useTrips = () => {
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  // `loading` es POR INSTANCIA, como antes: algunas pantallas (StandByTrips) cambian a un spinner completo
+  // cuando loading=true, así que un refresco lanzado desde otro componente no debe activarlo aquí.
+  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const fetchTrips = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await LogisticsService.readTripsApiLogisticsTripsGet(
+  // Caché compartida: todos los componentes que usan useTrips() comparten UNA sola petición
+  // (antes cada instancia pedía los 5000 viajes por su cuenta al montarse).
+  const tripsQuery = useQuery({
+    queryKey: TRIPS_QUERY_KEY,
+    queryFn: async () =>
+      (await LogisticsService.readTripsApiLogisticsTripsGet(
         0,
         5000,
-      );
-      setTrips(data as Trip[]);
-    } catch (error) {
-      console.error("Error fetching trips:", error);
-      /* toast({
-        title: "Error de Sincronización",
-        description: "No se pudieron cargar los viajes. Verifica tu conexión.",
-        variant: "destructive",
-      }); */
+      )) as Trip[],
+    // Margen corto: absorbe varios componentes que montan casi a la vez (y el doble montaje de StrictMode),
+    // pero un componente que monta después vuelve a pedir datos frescos, igual que antes.
+    staleTime: 5_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  const trips = tripsQuery.data ?? NO_TRIPS;
+  // isLoading = primera carga sin datos; refreshing = refresco pedido por ESTA instancia.
+  const loading = tripsQuery.isLoading || refreshing || actionLoading;
+
+  // Invalida por prefijo: refresca el listado completo y también los resúmenes (useTripsSummary) que estén montados.
+  const fetchTrips = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await queryClient.invalidateQueries({ queryKey: TRIPS_QUERY_KEY });
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  }, [toast]);
+  }, [queryClient]);
+
+  // Para sondeos periódicos: si ya hay una carga en curso, no la canceles ni la reinicies.
+  // invalidateQueries reinicia la petición en vuelo; con un listado que tarda más que el intervalo,
+  // el sondeo impediría que la carga llegara a terminar. Tras una acción del usuario usa fetchTrips().
+  const fetchTripsIfIdle = useCallback(async () => {
+    if (queryClient.isFetching({ queryKey: TRIPS_QUERY_KEY }) > 0) return;
+    await fetchTrips();
+  }, [queryClient, fetchTrips]);
 
   const createTrip = async (tripData: TripCreatePayload) => {
     try {
@@ -307,7 +334,7 @@ export const useTrips = () => {
 
   const unhookTrip = async (tripId: string) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       await LogisticsService.unhookTripInYardApiLogisticsTripsTripIdUnhookPost(
         Number(tripId),
       );
@@ -332,19 +359,16 @@ export const useTrips = () => {
       });
       return false;
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
-
-  useEffect(() => {
-    fetchTrips();
-  }, [fetchTrips]);
 
   return {
     trips,
     loading,
     unhookTrip,
     fetchTrips,
+    fetchTripsIfIdle,
     createTrip,
     createNextLeg,
     updateTripStatus,

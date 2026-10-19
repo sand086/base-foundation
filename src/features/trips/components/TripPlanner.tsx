@@ -218,6 +218,7 @@ export const TripPlanner = () => {
     deleteTrip,
     createNextLeg,
     fetchTrips,
+    fetchTripsIfIdle,
     unhookTrip,
   } = useTrips();
 
@@ -256,14 +257,13 @@ export const TripPlanner = () => {
   const [tableKey, setTableKey] = useState(Date.now());
 
   useEffect(() => {
-    fetchTrips();
-
+    // Sin fetchTrips() inicial: useTrips() ya carga los viajes al montar. Aquí solo el refresco periódico.
     const interval = setInterval(() => {
-      fetchTrips();
+      fetchTripsIfIdle();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchTrips]);
+  }, [fetchTripsIfIdle]);
 
   const handleNextLegSubmit = async (tripId: string, payload: any) => {
     const res = await createNextLeg(tripId, payload);
