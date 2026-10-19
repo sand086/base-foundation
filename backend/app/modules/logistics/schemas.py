@@ -497,6 +497,39 @@ class TripResponse(TripBase):
     updated_at: Optional[datetime] = None
 
 
+# ---------------------------------------------------------
+# RESUMEN LIGERO (selectores, validaciones, conteos): sin bitácora, combustible,
+# facturas, operadores ni historial de documentos. Ver GET /trips/summary.
+# ---------------------------------------------------------
+
+
+class UnitLite(ORMBase):
+    id: int
+    numero_economico: Optional[str] = None
+    placas: Optional[str] = None
+
+
+class TripLegSummary(TripLegBase):
+    id: int
+    trip_id: int
+    unit: Optional[UnitLite] = None
+    record_status: RecordStatus
+
+
+class TripSummary(TripBase):
+    id: int
+    public_id: Optional[str] = None
+    uuid_fiscal: Optional[str] = None
+
+    motogenerator_1_unit: Optional[UnitLite] = None
+    motogenerator_2_unit: Optional[UnitLite] = None
+
+    legs: List[TripLegSummary] = Field(default_factory=list)
+
+    record_status: RecordStatus
+    created_at: Optional[datetime] = None
+
+
 class TripTimelineEventUpdate(ORMBase):
     time: Optional[datetime] = None
     event: Optional[str] = Field(default=None, max_length=500)

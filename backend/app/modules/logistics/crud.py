@@ -10,9 +10,9 @@ import traceback  # <-- PARA IMPRIMIR EL ERROR EXACTO EN CONSOLA
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from fastapi.responses import Response
-from sqlalchemy.orm import Session, contains_eager, joinedload, selectinload
+from sqlalchemy.orm import Session, contains_eager, joinedload, noload, selectinload
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, or_  # <-- NUEVO: Agregado or_ para la consulta masiva
+from sqlalchemy import String, func, or_  # <-- NUEVO: Agregado or_ para la consulta masiva
 from jinja2 import Environment, FileSystemLoader
 
 from app.db.database import get_db
@@ -77,8 +77,93 @@ def get_osrm_distance(origen: str, destino: str) -> float:
 # CRUD TRIPS (GET, CREATE, UPDATE, DELETE)
 # =====================================================================
 
-def get_trips(db: Session, skip: int = 0, limit: int = 100):
-    return (
+def _apply_trip_filters(
+    query,
+    statuses: Optional[List[models.TripStatus]] = None,
+    client_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    search: Optional[str] = None,
+):
+    """Filtros opcionales compartidos por el listado completo y el resumen. Sin argumentos no filtra nada."""
+    if statuses:
+        # Comparación como texto: el enum de Postgres puede no tener todos los valores del enum de Python
+        # (p. ej. "bloqueado" no existe en tripstatus) y un IN con enum fallaría con 500.
+        query = query.filter(
+            models.Trip.status.cast(String).in_([s.value for s in statuses])
+        )
+    if client_id:
+        query = query.filter(models.Trip.client_id == client_id)
+    if date_from:
+        query = query.filter(models.Trip.start_date >= date_from)
+    if date_to:
+        # inclusivo: hasta el final del día indicado
+        query = query.filter(models.Trip.start_date < date_to + timedelta(days=1))
+    if search and search.strip():
+        term = search.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        like = f"%{term}%"
+        query = query.filter(
+            or_(
+                models.Trip.public_id.ilike(like),
+                models.Trip.referencia.ilike(like),
+                models.Trip.contenedor_1.ilike(like),
+                models.Trip.contenedor_2.ilike(like),
+                models.Trip.origin.ilike(like),
+                models.Trip.destination.ilike(like),
+                models.Trip.route_name.ilike(like),
+            )
+        )
+    return query
+
+
+def get_trips_summary(
+    db: Session,
+    skip: int = 0,
+    limit: int = 500,
+    statuses: Optional[List[models.TripStatus]] = None,
+    client_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    search: Optional[str] = None,
+):
+    """Viajes con sus tramos pero SIN bitácora, combustible, facturas ni operadores.
+    noload en created_by/updated_by evita los LEFT JOIN a users del AuditMixin (lazy="joined")."""
+    query = (
+        db.query(models.Trip)
+        .options(
+            noload(models.Trip.created_by),
+            noload(models.Trip.updated_by),
+            joinedload(models.Trip.motogenerator_1_unit).options(
+                noload(models.Unit.created_by), noload(models.Unit.updated_by)
+            ),
+            joinedload(models.Trip.motogenerator_2_unit).options(
+                noload(models.Unit.created_by), noload(models.Unit.updated_by)
+            ),
+            selectinload(models.Trip.legs).options(
+                noload(models.TripLeg.created_by),
+                noload(models.TripLeg.updated_by),
+                joinedload(models.TripLeg.unit).options(
+                    noload(models.Unit.created_by), noload(models.Unit.updated_by)
+                ),
+            ),
+        )
+        .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
+    )
+    query = _apply_trip_filters(query, statuses, client_id, date_from, date_to, search)
+    return query.order_by(models.Trip.id.desc()).offset(skip).limit(limit).all()
+
+
+def get_trips(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    statuses: Optional[List[models.TripStatus]] = None,
+    client_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    search: Optional[str] = None,
+):
+    query = (
         db.query(models.Trip)
         .options(
             joinedload(models.Trip.client),
@@ -99,11 +184,9 @@ def get_trips(db: Session, skip: int = 0, limit: int = 100):
             selectinload(models.Trip.receivable_invoices).joinedload(models.ReceivableInvoice.factura_padre),
         )
         .filter(models.Trip.record_status != RecordStatus.ELIMINADO)
-        .order_by(models.Trip.id.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
     )
+    query = _apply_trip_filters(query, statuses, client_id, date_from, date_to, search)
+    return query.order_by(models.Trip.id.desc()).offset(skip).limit(limit).all()
 
 
 def get_trip(db: Session, trip_id: str):

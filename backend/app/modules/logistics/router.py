@@ -524,9 +524,69 @@ def delete_template(
 # =========================================================
 
 
+def _parse_trip_statuses(raw: Optional[str]) -> Optional[List[models.TripStatus]]:
+    """'en_transito,entregado' -> [TripStatus.EN_TRANSITO, TripStatus.ENTREGADO]; vacío -> sin filtro."""
+    if not raw:
+        return None
+    try:
+        return [models.TripStatus(s.strip().lower()) for s in raw.split(",") if s.strip()]
+    except ValueError:
+        validos = ", ".join(s.value for s in models.TripStatus)
+        raise HTTPException(
+            status_code=422, detail=f"Estatus inválido en el filtro. Válidos: {validos}"
+        )
+
+
 @router.get("/trips", response_model=List[schemas.TripResponse])
-def read_trips(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return crud.get_trips(db, skip, limit)
+def read_trips(
+    skip: int = 0,
+    limit: int = Query(100, ge=1, le=5000),
+    status_in: Optional[str] = Query(
+        None, alias="status", description="Estatus separados por coma"
+    ),
+    client_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    q: Optional[str] = Query(None, description="Busca en folio, referencia, contenedores y ruta"),
+    db: Session = Depends(get_db),
+):
+    return crud.get_trips(
+        db,
+        skip,
+        limit,
+        statuses=_parse_trip_statuses(status_in),
+        client_id=client_id,
+        date_from=date_from,
+        date_to=date_to,
+        search=q,
+    )
+
+
+# Debe declararse ANTES de /trips/{trip_id}, o "summary" se interpretaría como un trip_id.
+@router.get("/trips/summary", response_model=List[schemas.TripSummary])
+def read_trips_summary(
+    skip: int = 0,
+    limit: int = Query(500, ge=1, le=5000),
+    status_in: Optional[str] = Query(
+        None, alias="status", description="Estatus separados por coma"
+    ),
+    client_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    q: Optional[str] = Query(None, description="Busca en folio, referencia, contenedores y ruta"),
+    db: Session = Depends(get_db),
+):
+    """Listado ligero: viajes + tramos, sin bitácora, combustible, facturas ni operadores."""
+    return crud.get_trips_summary(
+        db,
+        skip,
+        limit,
+        statuses=_parse_trip_statuses(status_in),
+        client_id=client_id,
+        date_from=date_from,
+        date_to=date_to,
+        search=q,
+    )
 
 
 @router.get("/trips/{trip_id}", response_model=schemas.TripResponse)
