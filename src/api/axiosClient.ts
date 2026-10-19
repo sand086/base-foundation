@@ -1,8 +1,9 @@
 import axios from "axios";
 import { toast } from "sonner";
+import { API_URL } from "@/lib/apiConfig";
 
 // Base URL desde variables de entorno
-const baseURL = import.meta.env.VITE_API_BASE_URL || "/api";
+const baseURL = API_URL;
 
 const axiosClient = axios.create({
   baseURL,
@@ -17,6 +18,10 @@ const axiosClient = axios.create({
 // Inyecta el Access Token (el de 12 horas) en cada llamada
 axiosClient.interceptors.request.use(
   (config) => {
+    // baseURL ya termina en /api: evitamos /api/api si la ruta lo trae.
+    if (config.url && !/^https?:\/\//.test(config.url)) {
+      config.url = config.url.replace(/^\/?api(?=\/|\?|$)/, "");
+    }
     const token = localStorage.getItem("access_token");
     if (token && token !== "null" && token !== "undefined" && config.headers) {
       config.headers.set("Authorization", `Bearer ${token}`);

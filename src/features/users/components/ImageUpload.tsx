@@ -1,4 +1,5 @@
 // src/components/usuarios/ImageUpload.tsx
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { useState, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -24,9 +25,7 @@ const getFullImageUrl = (path?: string) => {
   ) {
     return path;
   }
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "/api";
-  const serverBase = apiBase.replace(/\/api$/, "");
-  return `${serverBase}${path}`;
+  return `${API_ORIGIN}${path}`;
 };
 
 export function ImageUpload({

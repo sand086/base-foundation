@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import {
   Bell,
   Search,
@@ -43,8 +44,7 @@ const getFullImageUrl = (path?: string) => {
     path.startsWith("data:")
   )
     return path;
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "/api";
-  return `${apiBase.replace(/\/api$/, "")}${path}`;
+  return `${API_ORIGIN}${path}`;
 };
 
 export function AppHeader({

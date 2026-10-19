@@ -1,0 +1,123 @@
+# PRODUCCIÓN: imágenes construidas (sin volúmenes de código), solo nginx expuesto al público.
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# (QA vive en docker-compose.qa.yml con .env.qa y reutiliza el Postgres de este stack.)
+# Requiere en ./.env.prod: DB_USER, DB_PASSWORD, SECRET_KEY, N8N_ENCRYPTION_KEY (ver .env.example).
+# Detrás de un nginx del host con TLS que apunta a 127.0.0.1:FRONTEND_PORT (3000).
+name: tms3t-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:?define DB_USER en .env.prod}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env.prod}
+      POSTGRES_DB: ${DB_NAME:?define DB_NAME en .env.prod}
+      TZ: ${TZ:?define TZ en .env.prod}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Sin "ports": la BD solo es alcanzable desde la red interna de compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: PROD                 # fijo: un .env con ENVIRONMENT=QA no debe volver QA a producción
+      TZ: ${TZ:?define TZ en .env.prod}
+      DB_SERVER: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:?define DB_USER en .env.prod}
+      DB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env.prod}
+      DB_NAME: ${DB_NAME:?define DB_NAME en .env.prod}
+      SECRET_KEY: ${SECRET_KEY:?define SECRET_KEY en .env.prod}
+      GOOGLE_RECAPTCHA_V3_SECRET_KEY: ${GOOGLE_RECAPTCHA_V3_SECRET_KEY?define GOOGLE_RECAPTCHA_V3_SECRET_KEY en .env.prod (puede ir vacía)}
+      PAC_USER_QA: ${PAC_USER_QA?define PAC_USER_QA en .env.prod (puede ir vacía)}
+      PAC_PASS_QA: ${PAC_PASS_QA?define PAC_PASS_QA en .env.prod (puede ir vacía)}
+      PAC_USER_PROD: ${PAC_USER_PROD?define PAC_USER_PROD en .env.prod (puede ir vacía)}
+      PAC_PASS_PROD: ${PAC_PASS_PROD?define PAC_PASS_PROD en .env.prod (puede ir vacía)}
+      CERT_DIR: /data/certs
+    volumes:
+      - uploads_data:/app/app/uploads
+      - certs_data:/data/certs
+    # Sin "ports": el público entra por nginx (/api). n8n lo llama por la red interna.
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      target: prod
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:?define VITE_API_BASE_URL en .env.prod}
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL?define VITE_BACKEND_URL en .env.prod (puede ir vacía)}
+        VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY: ${VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY?define VITE_GOOGLE_RECAPTCHA_V3_SITE_KEY en .env.prod (puede ir vacía)}
+        VITE_GEOAPIFY_API_KEY: ${VITE_GEOAPIFY_API_KEY?define VITE_GEOAPIFY_API_KEY en .env.prod (puede ir vacía)}
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:?define FRONTEND_PORT en .env.prod}:80"   # solo loopback: el nginx del host (TLS) lo publica
+
+  n8n:
+    image: n8nio/n8n:2.43.7
+    restart: always
+    depends_on:
+      backend:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/seed.sh"]
+    environment:
+      TZ: ${TZ:?define TZ en .env.prod}
+      GENERIC_TIMEZONE: ${TZ:?define TZ en .env.prod}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?define N8N_ENCRYPTION_KEY en .env.prod}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:?define N8N_WEBHOOK_URL en .env.prod}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_RUNNERS_ENABLED: "true"
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"    # horas: conserva 7 días de historial de crones
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./docker/n8n/workflows:/workflows:ro
+      - ./docker/n8n/seed.sh:/seed.sh:ro
+    ports:
+      - "127.0.0.1:${N8N_PORT:?define N8N_PORT en .env.prod}:5678"   # solo loopback: accede por túnel SSH o proxy con auth
+
+  # Opt-in: docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: ./backend
+    command: sh -c 'DATABASE_URL="postgresql://$$DB_USER:$$DB_PASSWORD@db:5432/$$DB_NAME" alembic upgrade head'
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_USER: ${DB_USER:?define DB_USER en .env.prod}
+      DB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en .env.prod}
+      DB_NAME: ${DB_NAME:?define DB_NAME en .env.prod}
+      DB_SERVER: db
+      DB_PORT: 5432
+
+# Red con nombre fijo: docker-compose.qa.yml se une a ella para llegar al servicio "db".
+networks:
+  default:
+    name: tms3t-prod-net
+
+volumes:
+  db_data:
+  uploads_data:
+  certs_data:
+  n8n_data:

@@ -11,9 +11,11 @@ import { BYPASS_AUTH } from "@/lib/utils";
 
 //  1. IMPORTAR EL OBJETO OpenAPI GENERADO
 import { OpenAPI } from "@/api/generated/core/OpenAPI";
+import { API_ORIGIN } from "@/lib/apiConfig";
 
 // Configuración global de la base de la API
-OpenAPI.BASE = import.meta.env.VITE_API_BASE_URL || "";
+// Las rutas generadas ya incluyen "/api", así que la BASE no debe terminar en /api.
+OpenAPI.BASE = API_ORIGIN;
 
 interface AuthContextType {
   user: User | null;

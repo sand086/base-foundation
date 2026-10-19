@@ -4,6 +4,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -181,8 +182,7 @@ export function InvoicePayablesDetailSheet({
   const handleDownloadUrl = (url: string, filename: string) => {
     const toastId = toast.loading(`Descargando ${filename}...`);
     try {
-      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const baseURL = rawBaseURL.replace(/\/$/, "");
+      const baseURL = API_ORIGIN;
       const fileUrl = url.startsWith("http")
         ? url
         : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;

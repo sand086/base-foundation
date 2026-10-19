@@ -4,6 +4,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { API_ORIGIN } from "@/lib/apiConfig";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -264,8 +265,7 @@ export function InvoiceDetailSheet({
       toast.error("No hay un UUID válido para descargar del SAT.");
       return;
     }
-    const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-    const baseURL = rawBaseURL.replace(/\/$/, "");
+    const baseURL = API_ORIGIN;
     const timestamp = new Date().getTime();
 
     const fileUrl = `${baseURL}/api/sat/invoice/${targetUuid}/${type}?t=${timestamp}`;
@@ -279,8 +279,7 @@ export function InvoiceDetailSheet({
     type: "pdf" | "xml" | "acuse",
     customFolio: string,
   ) => {
-    const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-    const baseURL = rawBaseURL.replace(/\/$/, "");
+    const baseURL = API_ORIGIN;
     const fileUrl = url.startsWith("http")
       ? url
       : `${baseURL}${url.startsWith("/") ? url : "/" + url}`;
@@ -331,8 +330,7 @@ export function InvoiceDetailSheet({
     setIsRebuilding(true);
 
     try {
-      const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "/api";
-      const baseURL = rawBaseURL.replace(/\/$/, "");
+      const baseURL = API_ORIGIN;
 
       const res = await fetch(`${baseURL}/api/sat/rebuild-pdf/${inv.id}`);
 

@@ -1,0 +1,30 @@
+{
+  "id": "cron-sync-cancelled-invoices",
+  "name": "SAT - Planchar facturas canceladas (diario 02:30, INACTIVO por defecto)",
+  "active": false,
+  "versionId": "cron-sync-cancelled-invoices-v1",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [ { "field": "cronExpression", "expression": "30 2 * * *" } ] } },
+      "id": "cron-sync-cancelled-invoices-trigger",
+      "name": "Cron",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [ 0, 0 ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://backend:8000/api/finance/sync-cancelled-invoices",
+        "options": { "timeout": 300000 }
+      },
+      "id": "cron-sync-cancelled-invoices-http",
+      "name": "Llamar backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [ 240, 0 ]
+    }
+  ],
+  "connections": { "Cron": { "main": [ [ { "node": "Llamar backend", "type": "main", "index": 0 } ] ] } },
+  "settings": { "executionOrder": "v1", "timezone": "America/Mexico_City" }
+}
