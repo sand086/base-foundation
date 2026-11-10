@@ -963,7 +963,7 @@ class BillingService:
             "total": f"{total:.2f}",
             "forma_pago": getattr(cliente, "forma_pago", "99") or "99",
             "metodo_pago": getattr(cliente, "metodo_pago", "PPD") or "PPD",
-            "moneda": getattr(cliente, "moneda", "MXN") or "MXN",
+            "moneda": getattr(cliente, "moneda", "MXN").value if hasattr(getattr(cliente, "moneda", "MXN"), "value") else str(getattr(cliente, "moneda", "MXN") or "MXN").split(".")[-1],
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": (
@@ -2204,6 +2204,10 @@ class BillingService:
                 "importe": f"{subtotal:.2f}",
             }]
 
+        # Limpieza de Moneda para CFDI
+        raw_moneda = invoice_data.get("moneda") or getattr(cliente, "moneda", "MXN") or "MXN"
+        moneda_limpia = raw_moneda.value if hasattr(raw_moneda, "value") else str(raw_moneda).split(".")[-1]
+
         # DICCIONARIO CRUZO PARA EL XML Y EL PDF
         data = {
             "serie": serie,
@@ -2216,7 +2220,7 @@ class BillingService:
             "total": f"{total:.2f}",
             "forma_pago": invoice_data.get("forma_pago") or getattr(cliente, "forma_pago", "99") or "99",
             "metodo_pago": invoice_data.get("metodo_pago") or getattr(cliente, "metodo_pago", "PPD") or "PPD",
-            "moneda": invoice_data.get("moneda") or getattr(cliente, "moneda", "MXN") or "MXN",
+            "moneda": moneda_limpia,
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": f"EN {cliente.dias_credito or 0} DIAS" if (cliente.dias_credito or 0) > 0 else "CONTADO",
