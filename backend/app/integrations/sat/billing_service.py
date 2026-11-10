@@ -1887,7 +1887,7 @@ class BillingService:
                 "metodo_pago": factura.metodo_pago
                 or getattr(cliente, "metodo_pago", "PPD")
                 or "PPD",
-                "moneda": str(factura.moneda).split(".")[-1] if factura.moneda else "MXN",
+                "moneda": factura.moneda or "MXN",
                 "condiciones_pago": (
                     f"EN {cliente.dias_credito or 0} DIAS"
                     if getattr(cliente, "dias_credito", 0) > 0
