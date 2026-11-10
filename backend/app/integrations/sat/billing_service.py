@@ -1887,7 +1887,7 @@ class BillingService:
                 "metodo_pago": factura.metodo_pago
                 or getattr(cliente, "metodo_pago", "PPD")
                 or "PPD",
-                "moneda": factura.moneda or "MXN",
+                "moneda": str(factura.moneda).split(".")[-1] if factura.moneda else "MXN",
                 "condiciones_pago": (
                     f"EN {cliente.dias_credito or 0} DIAS"
                     if getattr(cliente, "dias_credito", 0) > 0
@@ -1901,7 +1901,6 @@ class BillingService:
                 "regimen_cliente": cliente.regimen_fiscal or "601",
                 "uso_cfdi": cliente.uso_cfdi or "G03",
             }
-
             try:
                 resultado_pac = self._importar_factura_libre_ws(
                     data, relacion_uuid=factura.uuid_relacionado
