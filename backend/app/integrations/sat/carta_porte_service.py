@@ -684,7 +684,7 @@ class CartaPorteService:
             "total": f"{total:.2f}",
             "forma_pago": getattr(cliente, "forma_pago", "99") or "99",
             "metodo_pago": getattr(cliente, "metodo_pago", "PPD") or "PPD",
-            "moneda": getattr(cliente, "moneda", "MXN") or "MXN",
+            "moneda": str(getattr(cliente, "moneda", "MXN") or "MXN").split(".")[-1],
             "tc": "1",
             "tipo_comprobante": "I",
             "condiciones_pago": (
