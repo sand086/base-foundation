@@ -1894,7 +1894,17 @@ class BillingService:
                     else "CONTADO"
                 ),
                 "descripcion_concepto": factura.concepto,
-                "clave_prod_serv": "84111506",  # Ajustable según tu sistema de factura libre
+                "clave_prod_serv": "84111506",
+                "conceptos": [
+                    {
+                        "clave": "84111506",
+                        "descripcion": factura.concepto or "SERVICIOS",
+                        "cantidad": "1.00",
+                        "unidad": "E48",
+                        "precio": f"{factura.subtotal:.2f}",
+                        "importe": f"{factura.subtotal:.2f}",
+                    }
+                ],
                 "rfc_cliente": (cliente.rfc or "XAXX010101000").strip().upper(),
                 "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
                 "cp_cliente": cliente.codigo_postal_fiscal or self.emisor_cp,
