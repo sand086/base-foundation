@@ -1876,15 +1876,21 @@ class BillingService:
             # Buscamos la clave guardada en la factura, si no existe usamos el default 84111506
             clave_sat = getattr(factura, "sat_clave_servicio", getattr(factura, "clave_prod_serv", "84111506")) or "84111506"
 
+            # 🛠️ FIX CFDI40119: Recalcular el total redondeando a 2 decimales cada concepto primero
+            sub_r = round(float(factura.subtotal), 2)
+            iva_r = round(float(factura.iva), 2)
+            ret_r = round(float(factura.retenciones), 2)
+            total_r = sub_r + iva_r - ret_r
+
             data = {
                 "serie": serie_forzada,
                 "folio": folio_forzado,
                 "folio_interno": factura.folio_interno,
                 "fecha": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-                "subtotal": f"{factura.subtotal:.2f}",
-                "iva": f"{factura.iva:.2f}",
-                "retenciones": f"{factura.retenciones:.2f}",
-                "total": f"{factura.monto_total:.2f}",
+                "subtotal": f"{sub_r:.2f}",
+                "iva": f"{iva_r:.2f}",
+                "retenciones": f"{ret_r:.2f}",
+                "total": f"{total_r:.2f}",
                 "forma_pago": factura.forma_pago
                 or getattr(cliente, "forma_pago", "99")
                 or "99",
@@ -1905,8 +1911,8 @@ class BillingService:
                         "descripcion": factura.concepto or "SERVICIOS",
                         "cantidad": "1.00",
                         "unidad": "E48",
-                        "precio": f"{factura.subtotal:.2f}",
-                        "importe": f"{factura.subtotal:.2f}",
+                        "precio": f"{sub_r:.2f}",
+                        "importe": f"{sub_r:.2f}",
                     }
                 ],
                 "rfc_cliente": (cliente.rfc or "XAXX010101000").strip().upper(),
