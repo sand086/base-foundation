@@ -1872,6 +1872,10 @@ class BillingService:
         # CASO A: Es una FACTURA LIBRE (No está ligada a un viaje)
         if not factura.viaje_id:
             cliente = factura.client
+            
+            # Buscamos la clave guardada en la factura, si no existe usamos el default 84111506
+            clave_sat = getattr(factura, "sat_clave_servicio", getattr(factura, "clave_prod_serv", "84111506")) or "84111506"
+
             data = {
                 "serie": serie_forzada,
                 "folio": folio_forzado,
@@ -1894,7 +1898,17 @@ class BillingService:
                     else "CONTADO"
                 ),
                 "descripcion_concepto": factura.concepto,
-                "clave_prod_serv": "84111506",  # Ajustable según tu sistema de factura libre
+                "clave_prod_serv": clave_sat,
+                "conceptos": [
+                    {
+                        "clave": clave_sat,
+                        "descripcion": factura.concepto or "SERVICIOS",
+                        "cantidad": "1.00",
+                        "unidad": "E48",
+                        "precio": f"{factura.subtotal:.2f}",
+                        "importe": f"{factura.subtotal:.2f}",
+                    }
+                ],
                 "rfc_cliente": (cliente.rfc or "XAXX010101000").strip().upper(),
                 "nombre_cliente": cliente.razon_social or "PUBLICO EN GENERAL",
                 "cp_cliente": cliente.codigo_postal_fiscal or self.emisor_cp,
