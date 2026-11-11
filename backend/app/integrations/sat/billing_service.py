@@ -1777,9 +1777,13 @@ class BillingService:
         if relacion_uuid:
             relacion_xml = f'\n    <cfdi:CfdiRelacionados TipoRelacion="{d.get("tipo_relacion", "04")}">\n        <cfdi:CfdiRelacionado UUID="{str(relacion_uuid).strip()}" />\n    </cfdi:CfdiRelacionados>'
 
-        subtotal_float = float(d["subtotal"])
-        iva_float = float(d["iva"])
-        ret_float = float(d["retenciones"])
+        # 🛠️ FIX CFDI40119 BLINDADO: Redondear a 2 decimales y forzar el Total matemático exacto
+        subtotal_float = round(float(d["subtotal"]), 2)
+        iva_float = round(float(d["iva"]), 2)
+        ret_float = round(float(d["retenciones"]), 2)
+        
+        total_calculado = round(subtotal_float + iva_float - ret_float, 2)
+        d["total"] = f"{total_calculado:.2f}"
 
         # 1. Armar nodos de impuestos a nivel CONCEPTO iterando el arreglo
         conceptos_xml = ""
