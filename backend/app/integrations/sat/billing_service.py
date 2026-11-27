@@ -2500,6 +2500,64 @@ class BillingService:
             raise HTTPException(
                 status_code=500, detail=f"Error timbrando factura final en BD: {str(e)}"
             )
+            
+            
+    def _resolver_motivo_cancelacion(
+        self,
+        factura: ReceivableInvoice,
+        motivo_solicitado: str = "02",
+        uuid_sustituto_solicitado: str = None,
+    ) -> tuple[str, Optional[str]]:
+        """
+        Resuelve de forma segura el motivo SAT (01 vs 02) y el UUID sustituto:
+        - Si viene refacturación explícita (motivo="01" + uuid_sustituto válido) -> ("01", uuid_sustituto)
+        - Si existe en BD una factura REAL VIGENTE con uuid_relacionado == factura.uuid -> ("01", factura_real.uuid)
+        - Si no existe coincidencia vigente -> ("02", None)
+        """
+        from sqlalchemy import func
+
+        estatus_vigentes = ("TIMBRADA", "TIMBRADO", "VIGENTE")
+        uuid_actual = (factura.uuid or "").strip().upper()
+        sustituto_param = (uuid_sustituto_solicitado or "").strip() or None
+        monto = Decimal(str(factura.monto_total or 0))
+        es_carta_porte_nominal = bool(factura.is_nominal) or monto <= Decimal("1.12")
+
+        # 1. Respetar refacturación explícita (ej. /stamp/free-invoice, /stamp/one-shot, /stamp-real)
+        if motivo_solicitado == "01" and sustituto_param and sustituto_param.upper() != uuid_actual:
+            logger.info(
+                f"[MOTIVO 01 EXPLÍCITO] CFDI {factura.folio_interno} sustituido por UUID: {sustituto_param}."
+            )
+            return "01", sustituto_param
+
+        # 2. Buscar en BD una factura REAL VIGENTE que relacione a este UUID (Relación 04)
+        factura_sustituta = (
+            self.db.query(ReceivableInvoice)
+            .filter(
+                func.upper(func.trim(ReceivableInvoice.uuid_relacionado)) == uuid_actual,
+                ReceivableInvoice.is_nominal == False,
+                ReceivableInvoice.record_status != "E",
+                ReceivableInvoice.status_sat.in_(estatus_vigentes),
+                ReceivableInvoice.uuid.isnot(None),
+                ReceivableInvoice.id != factura.id,
+            )
+            .order_by(ReceivableInvoice.id.desc())
+            .first()
+        )
+
+        if factura_sustituta and factura_sustituta.uuid:
+            uuid_real = factura_sustituta.uuid.strip()
+            if uuid_real.upper() != uuid_actual:
+                logger.info(
+                    f"[AUTO-MOTIVO 01] CFDI {factura.folio_interno} ({'CP Nominal' if es_carta_porte_nominal else 'Factura'}) "
+                    f"sustituido por {factura_sustituta.folio_interno} (UUID: {uuid_real})."
+                )
+                return "01", uuid_real
+
+        # 3. Sin coincidencia vigente en BD -> siempre Motivo 02 sin sustituto
+        logger.info(
+            f"[AUTO-MOTIVO 02] Sin factura sustituta vigente para {factura.folio_interno}. Se cancelará con Motivo 02."
+        )
+        return "02", None
 
     def cancelar_factura_sat(
         self, invoice_id: int, motivo: str = "02", uuid_sustituto: str = None
@@ -2520,56 +2578,11 @@ class BillingService:
         if not factura or not factura.uuid:
             raise ValueError("Factura no encontrada o no tiene UUID timbrado.")
 
-        # =========================================================================
-        # 🧠 REGLA INTELIGENTE 1: VALIDACIÓN MULTI-CP Y ANTI-ERROR 621
-        # =========================================================================
-        motivo_final = motivo
-        uuid_sustituto_final = uuid_sustituto
-
-        if factura.is_nominal and factura.viaje_id:
-            conteo_cps = (
-                self.db.query(ReceivableInvoice)
-                .filter(
-                    ReceivableInvoice.viaje_id == factura.viaje_id,
-                    ReceivableInvoice.is_nominal == True,
-                    ReceivableInvoice.record_status == "A",
-                )
-                .count()
-            )
-
-            if conteo_cps > 1:
-                logger.warning(
-                    f"[AUTO-CORRECCIÓN] Viaje {factura.viaje_id} tiene {conteo_cps} CPs. Forzando Motivo 02 para evitar bloqueo SAT."
-                )
-                motivo_final = "02"
-                uuid_sustituto_final = None
-            else:
-                if motivo == "01" and not uuid_sustituto_final:
-                    padre = (
-                        self.db.query(ReceivableInvoice)
-                        .filter(
-                            ReceivableInvoice.viaje_id == factura.viaje_id,
-                            ReceivableInvoice.is_nominal == False,
-                            ReceivableInvoice.status_sat == "TIMBRADA",
-                        )
-                        .first()
-                    )
-
-                    if padre and padre.uuid:
-                        uuid_sustituto_final = padre.uuid
-                    else:
-                        logger.warning(
-                            f"[AUTO-CORRECCIÓN] No hay Factura Real vigente para CP {factura.folio_interno}. Forzando Motivo 02 para evitar Error 621."
-                        )
-                        motivo_final = "02"
-                        uuid_sustituto_final = None
-
-        elif motivo == "01" and not uuid_sustituto_final:
-            logger.warning(
-                f"[AUTO-CORRECCIÓN] Factura {factura.folio_interno} pidió Motivo 01 sin UUID sustituto. Forzando Motivo 02."
-            )
-            motivo_final = "02"
-            uuid_sustituto_final = None
+        motivo_final, uuid_sustituto_final = self._resolver_motivo_cancelacion(
+            factura=factura,
+            motivo_solicitado=motivo,
+            uuid_sustituto_solicitado=uuid_sustituto,
+        )
 
         logger.info(
             f"Iniciando CANCELACIÓN SAT del UUID: {factura.uuid} con Motivo: {motivo_final}"
@@ -2747,9 +2760,9 @@ class BillingService:
         for factura in facturas_pendientes:
             try:
                 self.cancelar_factura_sat(
-                    factura.id,
-                    factura.motivo_cancelacion or "01",
-                    factura.uuid_relacionado or "",
+                    invoice_id=factura.id,
+                    motivo=factura.motivo_cancelacion or "02",
+                    uuid_sustituto=None,
                 )
                 self.db.refresh(factura)
                 resultados.append(

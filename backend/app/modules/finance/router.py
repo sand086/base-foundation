@@ -2487,7 +2487,7 @@ def chain_cancel_trip_invoices(
 
     resultados_correo = []
 
-    for inv_id in payload.invoice_ids:
+    for inv_id in sorted(payload.invoice_ids):
         factura = db.query(models.ReceivableInvoice).filter_by(id=inv_id).first()
         if not factura or not factura.uuid:
             continue
@@ -2553,23 +2553,16 @@ def chain_cancel_trip_invoices(
 
         estatus_final = "ERROR"
 
-        # Lógica Inteligente de Motivo SAT (01 vs 02)
-        motivo_cancelacion = "02"
-        uuid_sustituto_sat = None
-
-        if factura.is_nominal and factura.uuid_relacionado:
-            motivo_cancelacion = "01"
-            uuid_sustituto_sat = factura.uuid_relacionado
-
         try:
-            # Ejecutar Cancelación al PAC
+            # Ejecutar Cancelación al PAC (BillingService resuelve automáticamente Motivo 01 vs 02)
             sat_service.cancelar_factura_sat(
                 invoice_id=inv_id,
-                motivo=motivo_cancelacion,
-                uuid_sustituto=uuid_sustituto_sat,
+                motivo=payload.motivo or "02",
+                uuid_sustituto=None,
             )
             db.refresh(factura)
             estatus_final = factura.status_sat
+            motivo_aplicado = factura.motivo_cancelacion or "02"
 
             # Auditoría
             log_auditoria = models.AuditLog(
@@ -2579,7 +2572,7 @@ def chain_cancel_trip_invoices(
                 modulo="ReceivableInvoice",
                 detalles=(
                     f"Cancelación autorizada por el supervisor: {email_limpio}. "
-                    f"UUID Cancelado: {factura.uuid} con Motivo {motivo_cancelacion}"
+                    f"UUID Cancelado: {factura.uuid} con Motivo {motivo_aplicado}"
                 ),
             )
             db.add(log_auditoria)

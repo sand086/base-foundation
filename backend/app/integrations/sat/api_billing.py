@@ -423,11 +423,11 @@ def stamp_real_trip(trip_id: int, db: Session = Depends(get_db)):
             )
 
         if factura_vieja:
-            service.cancelar_factura_nominal(
-                invoice_id=factura_vieja.id,
-                motivo="01",
-                uuid_sustituto=factura_final.uuid,
-            )
+            service.cancelar_factura_sat(
+                    invoice_id=factura_vieja.id,
+                    motivo="01",
+                    uuid_sustituto=factura_final.uuid,
+                )
 
         print("✅ [STAMP REAL TRIGGER] ¡Timbrado Exitoso! UUID:", factura_final.uuid)
         return {
@@ -481,7 +481,7 @@ def generar_factura_final(
                 .first()
             )
             if factura_vieja:
-                service.cancelar_factura_nominal(
+                service.cancelar_factura_sat(
                     invoice_id=factura_vieja.id,
                     motivo="01",
                     uuid_sustituto=factura_final.uuid,
