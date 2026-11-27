@@ -203,6 +203,9 @@
             <td width="20%">
               <span class="grid-label">Moneda</span>
               <span class="bold text-dark">{{ moneda }}</span>
+              {% if moneda and moneda != 'MXN' %}
+              <div style="font-size: 6.5pt; color: #64748b">T.C.: {{ tc }}</div>
+              {% endif %}
             </td>
             <td width="25%">
               <span class="grid-label">Forma de Pago</span>

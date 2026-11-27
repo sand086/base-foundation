@@ -133,6 +133,7 @@ export function CreateInvoiceModal({
 
   const [diasCredito, setDiasCredito] = useState(30);
   const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
+  const [tipoCambio, setTipoCambio] = useState("1");
   const [fechaEmision, setFechaEmision] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -266,7 +267,16 @@ export function CreateInvoiceModal({
           invoiceToRefactor.client?.rfc || invoiceToRefactor.cliente_rfc || "",
         );
 
-        setMoneda(invoiceToRefactor.moneda === "USD" ? "USD" : "MXN");
+        const isUsd = invoiceToRefactor.moneda === "USD";
+        setMoneda(isUsd ? "USD" : "MXN");
+        setTipoCambio(
+          isUsd
+            ? String(
+                invoiceToRefactor.tipo_cambio || invoiceToRefactor.tc || "",
+              )
+            : "1",
+        );
+
         setMetodoPago(invoiceToRefactor.metodo_pago === "PUE" ? "PUE" : "PPD");
         setFormaPago(invoiceToRefactor.forma_pago || "99");
 
@@ -360,6 +370,8 @@ export function CreateInvoiceModal({
         setRegimenEditable("601");
         setUsoCfdiEditable("G03");
         setTipoImpuesto("MANIOBRA");
+        setMoneda("MXN");
+        setTipoCambio("1");
 
         // Limpiamos refacturación
         setEsRefacturacion(false);
@@ -475,6 +487,14 @@ export function CreateInvoiceModal({
       return;
     }
 
+    if (moneda === "USD" && (!tipoCambio || Number(tipoCambio) <= 1)) {
+      toast.error("Falta el Tipo de Cambio", {
+        description:
+          "Para facturar en USD debes ingresar el Tipo de Cambio oficial (mayor a 1, ej. 20.15).",
+      });
+      return;
+    }
+
     // 🔒 1. ACTIVAMOS EL CANDADO Y MOSTRAMOS LOADING
     setIsLocalStamping(true);
     const toastId = toast.loading(
@@ -496,6 +516,7 @@ export function CreateInvoiceModal({
       retenciones: retenciones,
       monto_total: montoTotal,
       moneda,
+      tipo_cambio: moneda === "MXN" ? 1 : Number(tipoCambio),
       fecha_emision: fechaEmision,
       fecha_vencimiento: fechaVencimiento,
       dias_credito: diasCredito,
@@ -995,7 +1016,10 @@ export function CreateInvoiceModal({
                   </Label>
                   <Select
                     value={moneda}
-                    onValueChange={(v: "MXN" | "USD") => setMoneda(v)}
+                    onValueChange={(v: "MXN" | "USD") => {
+                      setMoneda(v);
+                      setTipoCambio(v === "MXN" ? "1" : "");
+                    }}
                   >
                     <SelectTrigger className="h-11 font-bold shadow-sm">
                       <SelectValue />
@@ -1011,6 +1035,23 @@ export function CreateInvoiceModal({
                   </Select>
                 </div>
               </div>
+
+              {moneda === "USD" && (
+                <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                  <Label className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+                    Tipo de Cambio (DOF) *
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    min="1.01"
+                    value={tipoCambio}
+                    onChange={(e) => setTipoCambio(e.target.value)}
+                    placeholder="Ej. 20.1500"
+                    className="h-11 font-mono font-bold shadow-sm border-amber-300 focus:border-amber-500"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                 <div className="space-y-2">
