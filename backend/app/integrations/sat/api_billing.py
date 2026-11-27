@@ -32,6 +32,7 @@ from app.modules.auth.router import RequirePermission
 
 import time
 import threading
+import requests
 
 # ==============================================================
 # ESCUDO ANTI-DOBLE CLIC (RACE CONDITIONS)
@@ -926,6 +927,8 @@ def reconstruir_pdf_factura(invoice_id: int, db: Session = Depends(get_db)):
         )
 
 
+
+
 @router.get("/rebuild-all-pdfs")
 def rebuild_all_pdfs(db: Session = Depends(get_db)):
     try:
@@ -934,3 +937,72 @@ def rebuild_all_pdfs(db: Session = Depends(get_db)):
         return resultado
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+_tc_cache = {"valor": None, "fecha": None, "fuente": None, "timestamp": 0.0}
+
+
+@router.get("/exchange-rate", summary="Obtener Tipo de Cambio USD/MXN del día")
+def get_daily_exchange_rate():
+    ahora = time.time()
+    if _tc_cache["valor"] and (ahora - _tc_cache["timestamp"]) < 14400:
+        return {
+            "tipo_cambio": _tc_cache["valor"],
+            "fecha": _tc_cache["fecha"],
+            "fuente": _tc_cache["fuente"],
+        }
+
+    banxico_token = os.getenv("BANXICO_TOKEN", "").strip()
+
+    if banxico_token:
+        try:
+            url = "https://www.banxico.org.mx/SieAPIRest/service/v1/series/SF60653/datos/oportuno"
+            resp = requests.get(
+                url, headers={"Bmx-Token": banxico_token}, timeout=5
+            )
+            if resp.status_code == 200:
+                dato = resp.json()["bmx"]["series"][0]["datos"][0]
+                valor = round(float(dato["dato"]), 4)
+                _tc_cache.update(
+                    {
+                        "valor": valor,
+                        "fecha": dato["fecha"],
+                        "fuente": "Banxico (DOF)",
+                        "timestamp": ahora,
+                    }
+                )
+                return {
+                    "tipo_cambio": valor,
+                    "fecha": dato["fecha"],
+                    "fuente": "Banxico (DOF)",
+                }
+        except Exception:
+            pass
+
+    try:
+        resp = requests.get(
+            "https://api.frankfurter.app/latest?from=USD&to=MXN", timeout=5
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            valor = round(float(data["rates"]["MXN"]), 4)
+            _tc_cache.update(
+                {
+                    "valor": valor,
+                    "fecha": data.get("date", ""),
+                    "fuente": "Referencia de mercado (verificar DOF)",
+                    "timestamp": ahora,
+                }
+            )
+            return {
+                "tipo_cambio": valor,
+                "fecha": data.get("date", ""),
+                "fuente": "Referencia de mercado (verificar DOF)",
+            }
+    except Exception:
+        pass
+
+    raise HTTPException(
+        status_code=503,
+        detail="No se pudo consultar el tipo de cambio automáticamente. Ingrésalo manualmente.",
+    )
