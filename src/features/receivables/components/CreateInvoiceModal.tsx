@@ -48,6 +48,7 @@ import { useClients } from "@/features/clients/hooks/useClients";
 // IMPORTAMOS LOS HOOKS
 import { useSatCatalogs } from "@/features/settings/hooks/useSatCatalogs";
 import { useBilling } from "@/features/receivables/hooks/useBilling";
+import axiosClient from "@/api/axiosClient";
 
 interface SmartInvoiceConcept {
   id: string;
@@ -134,6 +135,8 @@ export function CreateInvoiceModal({
   const [diasCredito, setDiasCredito] = useState(30);
   const [moneda, setMoneda] = useState<"MXN" | "USD">("MXN");
   const [tipoCambio, setTipoCambio] = useState("1");
+  const [tcSugeridoInfo, setTcSugeridoInfo] = useState<string | null>(null);
+  const [loadingTc, setLoadingTc] = useState(false);
   const [fechaEmision, setFechaEmision] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -149,6 +152,36 @@ export function CreateInvoiceModal({
   >("MANIOBRA");
 
   const [conceptos, setConceptos] = useState<SmartInvoiceConcept[]>([]);
+
+  useEffect(() => {
+    if (!open || moneda !== "USD") {
+      setTcSugeridoInfo(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchTipoCambio = async () => {
+      setLoadingTc(true);
+      try {
+        const { data } = await axiosClient.get("/api/sat/exchange-rate");
+        if (!cancelled && data?.tipo_cambio) {
+          setTipoCambio((prev) =>
+            !prev || prev === "1" ? String(data.tipo_cambio) : prev,
+          );
+          setTcSugeridoInfo(`${data.fuente} (${data.fecha})`);
+        }
+      } catch {
+        if (!cancelled) setTcSugeridoInfo(null);
+      } finally {
+        if (!cancelled) setLoadingTc(false);
+      }
+    };
+
+    fetchTipoCambio();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, moneda]);
 
   const selectedClient = useMemo(
     () => clients.find((c) => c.id.toString() === clienteId),
@@ -1047,9 +1080,18 @@ export function CreateInvoiceModal({
                     min="1.01"
                     value={tipoCambio}
                     onChange={(e) => setTipoCambio(e.target.value)}
-                    placeholder="Ej. 20.1500"
+                    placeholder={
+                      loadingTc
+                        ? "Consultando tipo de cambio..."
+                        : "Ej. 19.7040"
+                    }
                     className="h-11 font-mono font-bold shadow-sm border-amber-300 focus:border-amber-500"
                   />
+                  {tcSugeridoInfo && (
+                    <p className="text-[10px] text-muted-foreground font-medium">
+                      Sugerido: {tcSugeridoInfo} — editable.
+                    </p>
+                  )}
                 </div>
               )}
 
