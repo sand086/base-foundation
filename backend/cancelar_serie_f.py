@@ -22,7 +22,7 @@ logger = logging.getLogger("cancelacion_forzada_cp")
 # =====================================================================
 
 UUIDS_REINTENTO = [
-    {"uuid": "A3CD98E4-28F7-451B-A1C1-C6BE36B0FCCF", "motivo": "02"},
+    {"uuid": "A3CD98E4-28F7-451B-A1C1-C6BE36B0FCCF", "motivo": "01"  },
     {"uuid": "C94538BB-9197-4275-BA90-9143D04772B4", "motivo": "02"},
     {"uuid": "EE4687D3-764E-4C7F-B520-2BEB33671A19", "motivo": "02"},
     {"uuid": "64DB3F21-521E-4DF2-880B-8022928B8601", "motivo": "02"},
@@ -68,7 +68,7 @@ def disparar_cancelacion_sat():
                 motivo = item["motivo"]
 
                 # =======================================================================
-                # 🛡️ BLOQUEO DE SEGURIDAD EXTREMO: Validar que el monto sea STRICTAMENTE $1.12
+                #  BLOQUEO DE SEGURIDAD EXTREMO: Validar que el monto sea STRICTAMENTE $1.12
                 # =======================================================================
                 documento_seguridad = (
                     db.query(ReceivableInvoice)

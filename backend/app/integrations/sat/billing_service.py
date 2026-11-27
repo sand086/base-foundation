@@ -174,6 +174,32 @@ def _clean_float(val) -> float:
         return 0.0
 
 
+def formatear_importe_letra(total_float: float, moneda: str = "MXN") -> str:
+    moneda_clean = str(moneda or "MXN").strip().upper()
+    if "." in moneda_clean:
+        moneda_clean = moneda_clean.split(".")[-1]
+
+    catalogo_monedas = {
+        "MXN": ("PESO", "PESOS", "MXN"),
+        "USD": ("DÓLAR", "DÓLARES", "USD"),
+        "EUR": ("EURO", "EUROS", "EUR"),
+    }
+    singular, plural, sufijo = catalogo_monedas.get(
+        moneda_clean, (moneda_clean, moneda_clean, moneda_clean)
+    )
+
+    if HAS_NUM2WORDS:
+        entero = int(total_float)
+        decimales = int(round((total_float - entero) * 100))
+        texto = num2words(entero, lang="es").upper()
+        if texto == "UNO":
+            texto = "UN"
+        etiqueta = singular if entero == 1 else plural
+        return f"({texto} {etiqueta} {decimales:02d}/100 {sufijo})"
+
+    return f"({total_float:,.2f} {sufijo})"
+
+
 def get_sat_trailer_code(tipo: str) -> str:
     if not tipo:
         return "CTR004"
@@ -605,7 +631,7 @@ class BillingService:
             "metodo_pago": d.get("metodo_pago", "PPD"),
             "tipo_comprobante": "I (Ingreso)",
             "moneda": d.get("moneda", "MXN"),
-            "tc": "1",
+            "tc": str(d.get("tc", "1")),
             "forma_pago": d.get("forma_pago", "99"),
             "condiciones_pago": d.get("condiciones_pago", "CONTADO"),
             "cert_sat": c_sat,
@@ -698,14 +724,8 @@ class BillingService:
         cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{factura.uuid}|{fecha_timbrado}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
         total_float = float(root.get("Total", 0))
-        if HAS_NUM2WORDS:
-            entero = int(total_float)
-            decimales = int(round((total_float - entero) * 100))
-            texto = num2words(entero, lang="es").upper()
-            if texto == "UNO": texto = "UN"
-            importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
-        else:
-            importe_letra = f"({total_float:,.2f} MXN)"
+        moneda_xml = root.get("Moneda", "MXN")
+        importe_letra = formatear_importe_letra(total_float, moneda_xml)
 
         # 3. Extraer info para el Código QR
         rfc_emisor = root.xpath("//cfdi:Emisor/@Rfc", namespaces=ns)[0]
@@ -749,6 +769,7 @@ class BillingService:
             "forma_pago": root.get("FormaPago", "99"),
             "metodo_pago": root.get("MetodoPago", "PPD"),
             "moneda": root.get("Moneda", "MXN"),
+            "tc": root.get("TipoCambio", "1"),
             "rfc_cliente": rfc_receptor,
             "nombre_cliente": root.xpath("//cfdi:Receptor/@Nombre", namespaces=ns)[0],
             "cp_cliente": root.xpath("//cfdi:Receptor/@DomicilioFiscalReceptor", namespaces=ns)[0],
@@ -1306,15 +1327,7 @@ class BillingService:
                 cadena_original_tfd = f"||{tfd_node.get('Version', '1.1')}|{uuid_timbrado}|{tfd_node.get('FechaTimbrado')}|{tfd_node.get('RfcProvCertif')}|{tfd_node.get('SelloCFD')}|{c_sat}||"
 
                 total_float = _clean_float(data.get("total", 0))
-                if HAS_NUM2WORDS:
-                    entero = int(total_float)
-                    decimales = int(round((total_float - entero) * 100))
-                    texto = num2words(entero, lang="es").upper()
-                    if texto == "UNO":
-                        texto = "UN"
-                    importe_letra = f"({texto} PESO{'S' if entero != 1 else ''} {decimales:02d}/100 MXN)"
-                else:
-                    importe_letra = f"({total_float:,.2f} MXN)"
+                importe_letra = formatear_importe_letra(total_float, data.get("moneda", "MXN"))
 
                 qr_string = f"https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id={uuid_timbrado}&re={self.emisor_rfc}&rr={data.get('rfc_cliente', '')}&tt={total_float:.2f}&fe={s_emi[-8:]}"
                 qr = qrcode.QRCode(version=1, box_size=10, border=2)
@@ -2229,7 +2242,25 @@ class BillingService:
 
         # Limpieza de Moneda para CFDI
         raw_moneda = invoice_data.get("moneda") or getattr(cliente, "moneda", "MXN") or "MXN"
-        moneda_limpia = raw_moneda.value if hasattr(raw_moneda, "value") else str(raw_moneda).split(".")[-1]
+        moneda_limpia = (
+            raw_moneda.value if hasattr(raw_moneda, "value") else str(raw_moneda).split(".")[-1]
+        ).strip().upper()
+
+        # Validación de Tipo de Cambio (SAT CFDI 4.0)
+        raw_tc = invoice_data.get("tipo_cambio") or invoice_data.get("tc")
+        if moneda_limpia == "MXN":
+            tc_final = "1"
+        else:
+            try:
+                tc_num = float(raw_tc)
+            except (TypeError, ValueError):
+                tc_num = 0.0
+            if tc_num <= 1.0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Para facturar en {moneda_limpia} es obligatorio enviar un Tipo de Cambio válido mayor a 1 (ej. 20.15).",
+                )
+            tc_final = f"{tc_num:.4f}".rstrip("0").rstrip(".")
 
         # DICCIONARIO CRUZO PARA EL XML Y EL PDF
         data = {
@@ -2244,7 +2275,7 @@ class BillingService:
             "forma_pago": invoice_data.get("forma_pago") or getattr(cliente, "forma_pago", "99") or "99",
             "metodo_pago": invoice_data.get("metodo_pago") or getattr(cliente, "metodo_pago", "PPD") or "PPD",
             "moneda": moneda_limpia,
-            "tc": "1",
+            "tc": tc_final,
             "tipo_comprobante": "I",
             "condiciones_pago": f"EN {cliente.dias_credito or 0} DIAS" if (cliente.dias_credito or 0) > 0 else "CONTADO",
             "descripcion_concepto": concepto_texto,
